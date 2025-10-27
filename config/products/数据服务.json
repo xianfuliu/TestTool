@@ -1,0 +1,191 @@
+{
+  "enable_encryption": false,
+  "encrypt_url": "",
+  "decrypt_url": "",
+  "schedule_tasks": [],
+  "layout": [
+    {
+      "default": "",
+      "key": "name",
+      "label": "姓名",
+      "priority": 1,
+      "type": "field"
+    },
+    {
+      "default": "",
+      "key": "id_card",
+      "label": "身份证号",
+      "priority": 2,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "phone",
+      "label": "手机号",
+      "priority": 3,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "proPClass",
+      "label": "数据源",
+      "options": [
+        {
+          "text": "同盾",
+          "value": "tongdun"
+        },
+        {
+          "text": "朴道",
+          "value": "puDao"
+        },
+        {
+          "text": "洞侦",
+          "value": "dongZhen"
+        },
+        {
+          "text": "百融",
+          "value": "brgroup"
+        }
+      ],
+      "priority": 4,
+      "type": "combo"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "proSClass",
+      "label": "产品子类",
+      "options": [
+        {
+          "text": "同盾-朴道-综合信贷行为画像t1(换签版)",
+          "value": "daiqianshenhe_t1"
+        },
+        {
+          "text": "朴道-司法风险个人画像(换签版_汇法)",
+          "value": "port_court_count_ex"
+        },
+        {
+          "text": "朴道-欺诈风险评分进阶版(换签版)",
+          "value": "score_fraud_risk_plus_ex_100000990"
+        },
+        {
+          "text": "朴道-支付行为画像及评分(换签版)",
+          "value": "port_pay_behavior_ex_fmlh"
+        },
+        {
+          "text": "朴道-综合定制风险分(换签版)-璞玉分82P",
+          "value": "unif_mult_risk_score_ex_puyu_score82p"
+        },
+        {
+          "text": "朴道-综合定制风险分(换签版)-万象分71",
+          "value": "unif_mult_risk_score_ex_v1.0_s3853"
+        },
+        {
+          "text": "朴道-姓名身份证手机号三要素核验详版(标准版)",
+          "value": "veri_cell_vthreedetail_st"
+        },
+        {
+          "text": "朴道-在网时长携号版(标准版)",
+          "value": "veri_cell_onlinetimetransfer_st"
+        },
+        {
+          "text": "朴道-在网状态携号版(标准版)",
+          "value": "veri_cell_onlinestatetransfer_st"
+        },
+        {
+          "text": "百融-借贷意向四合一接口（万达）",
+          "value": "apply4FourInOneWd"
+        },
+        {
+          "text": "百融-特殊名单验证（万达）",
+          "value": "SpecialList_cWd"
+        },
+        {
+          "text": "百融-融安云网分-标准款（万达）",
+          "value": "scoreywstdWd"
+        },
+        {
+          "text": "百融-号码状态核查（万达）",
+          "value": "PhoneStatusWd"
+        },
+        {
+          "text": "百融-非银小额线上现金贷客群评分（万达）",
+          "value": "scorepettycashv1Wd"
+        },
+        {
+          "text": "洞侦-洞侦",
+          "value": "BHDTSC01454"
+        }
+      ],
+      "priority": 5,
+      "type": "combo"
+    },
+    {
+      "name": "数据服务",
+      "priority": 6,
+      "type": "interface"
+    }
+  ],
+  "interfaces": {
+    "数据服务": {
+      "conditional_body": {
+        "cases": {
+          "brgroup": {
+            "orgCode": "test1",
+            "proPClass": "{proPClass}",
+            "proSClass": "{proSClass}",
+            "reqData": {
+              "cell": "13986671110",
+              "id": "140502198811102244",
+              "name": "测试一"
+            }
+          },
+          "dongZhen": {
+            "orgCode": "test1",
+            "proPClass": "{proPClass}",
+            "proSClass": "{proSClass}",
+            "reqData": {
+              "businessType": "1",
+              "certNo": "450324199601034014",
+              "mobile": "13535121597",
+              "name": "林临",
+              "queryReason": "1"
+            }
+          },
+          "puDao": {
+            "orgCode": "test1",
+            "proPClass": "{proPClass}",
+            "proSClass": "{proSClass}",
+            "reqData": {
+              "certName": "陈灿林",
+              "certNo": "420204196904184538",
+              "mobile": "13800000001",
+              "qryRsn": "0"
+            }
+          },
+          "tongdun": {
+            "orgCode": "test1",
+            "proPClass": "{proPClass}",
+            "proSClass": "{proSClass}",
+            "reqData": {
+              "certName": "张一",
+              "certNo": "110104196001010029",
+              "mobile": "13800000002",
+              "qryRsn": "0"
+            }
+          }
+        },
+        "field": "proPClass"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "https://dsadmin-test.hqrzdb.com/stage-api/api/executeV2"
+    }
+  }
+}

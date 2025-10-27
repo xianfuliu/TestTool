@@ -1,0 +1,51 @@
+{
+  "enable_encryption": false,
+  "encrypt_url": "",
+  "decrypt_url": "",
+  "schedule_tasks": [],
+  "layout": [
+    {
+      "type": "field",
+      "key": "name",
+      "label": "姓名",
+      "priority": 1,
+      "default": ""
+    },
+    {
+      "type": "field",
+      "key": "id_card",
+      "label": "身份证号",
+      "priority": 2,
+      "default": ""
+    },
+    {
+      "type": "field",
+      "key": "phone",
+      "label": "手机号",
+      "priority": 3,
+      "default": ""
+    },
+    {
+      "type": "interface",
+      "name": "默认接口",
+      "priority": 4
+    }
+  ],
+  "interfaces": {
+    "默认接口": {
+      "url": "http://api.example.com/default",
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body_template": {
+        "requestId": "{request_id}",
+        "userInfo": {
+          "name": "{name}",
+          "idCard": "{id_card}",
+          "phone": "{phone}"
+        }
+      }
+    }
+  }
+}

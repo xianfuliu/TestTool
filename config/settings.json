@@ -1,0 +1,9 @@
+{
+  "features": {
+    "interface_automation": true
+  },
+  "app": {
+    "name": "测试工具",
+    "version": "1.0.0"
+  }
+}

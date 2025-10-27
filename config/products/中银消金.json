@@ -1,0 +1,482 @@
+{
+  "enable_encryption": true,
+  "encrypt_url": "https://xj-api-test.hqrzdb.com/stage-api/test/hl/zyEncrypt",
+  "decrypt_url": "https://xj-api-test.hqrzdb.com/stage-api/test/hl/zyDecrypt",
+  "schedule_tasks": [
+    {
+      "id": 147,
+      "jobGroup": "DEFAULT",
+      "name": "中银影像件下载"
+    },
+    {
+      "id": 146,
+      "jobGroup": "DEFAULT",
+      "name": "查询中科金结果"
+    }
+  ],
+  "layout": [
+    {
+      "key": "name",
+      "label": "姓名",
+      "priority": 1,
+      "type": "field"
+    },
+    {
+      "key": "id_card",
+      "label": "身份证号",
+      "priority": 2,
+      "type": "field"
+    },
+    {
+      "key": "phone",
+      "label": "手机号",
+      "priority": 3,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "bank_card_no",
+      "label": "银行卡号",
+      "priority": 4,
+      "type": "field"
+    },
+    {
+      "key": "channelMark",
+      "label": "产品",
+      "options": [
+        {
+          "text": "BOC",
+          "value": "01"
+        },
+        {
+          "text": "iQIYI",
+          "value": "02"
+        },
+        {
+          "text": "ANT",
+          "value": "03"
+        }
+      ],
+      "priority": 5,
+      "type": "combo"
+    },
+    {
+      "name": "准入",
+      "priority": 6,
+      "type": "interface"
+    },
+    {
+      "name": "授信申请",
+      "priority": 7,
+      "type": "interface"
+    },
+    {
+      "name": "影像件上传",
+      "priority": 8,
+      "type": "interface"
+    },
+    {
+      "name": "授信结果查询",
+      "priority": 9,
+      "type": "interface"
+    },
+    {
+      "key": "zkj_amt",
+      "label": "中科金审批金额",
+      "priority": 10,
+      "type": "field"
+    },
+    {
+      "key": "zkj_lpr",
+      "label": "中科金审批利率",
+      "priority": 11,
+      "type": "field"
+    },
+    {
+      "key": "credit_status",
+      "label": "终审状态",
+      "options": [
+        {
+          "text": "终审通过",
+          "value": "S"
+        },
+        {
+          "text": "终审拒绝",
+          "value": "F"
+        }
+      ],
+      "priority": 12,
+      "type": "combo"
+    },
+    {
+      "name": "终审结果通知",
+      "priority": 13,
+      "type": "interface"
+    },
+    {
+      "name": "证件信息更新",
+      "priority": 14,
+      "type": "interface"
+    },
+    {
+      "data_type": "int",
+      "default": "1000",
+      "key": "applAmt",
+      "label": "金额",
+      "priority": 15,
+      "type": "field"
+    },
+    {
+      "default": "3",
+      "key": "applTnr",
+      "label": "期数",
+      "priority": 16,
+      "type": "field"
+    },
+    {
+      "key": "repayType",
+      "label": "还款方式",
+      "options": [
+        {
+          "text": "等额本息",
+          "value": "3"
+        },
+        {
+          "text": "等额本金-不支持",
+          "value": "4"
+        },
+        {
+          "text": "等本等息-不支持",
+          "value": "13"
+        }
+      ],
+      "priority": 17,
+      "type": "combo"
+    },
+    {
+      "default": "22",
+      "key": "loanPurpose",
+      "label": "借款用途",
+      "options": [
+        {
+          "text": "家用电器",
+          "value": "11"
+        },
+        {
+          "text": "手机数码",
+          "value": "12"
+        },
+        {
+          "text": "旅游",
+          "value": "13"
+        },
+        {
+          "text": "装修",
+          "value": "14"
+        },
+        {
+          "text": "教育",
+          "value": "15"
+        },
+        {
+          "text": "婚庆",
+          "value": "16"
+        },
+        {
+          "text": "租房",
+          "value": "17"
+        },
+        {
+          "text": "家具家居",
+          "value": "18"
+        },
+        {
+          "text": "健康医疗",
+          "value": "19"
+        },
+        {
+          "text": "其他",
+          "value": "20"
+        },
+        {
+          "text": "支付保费",
+          "value": "21"
+        },
+        {
+          "text": "个人日常消费",
+          "value": "22"
+        },
+        {
+          "text": "医疗美容",
+          "value": "23"
+        },
+        {
+          "text": "生活用品",
+          "value": "24"
+        },
+        {
+          "text": "出境留学",
+          "value": "25"
+        }
+      ],
+      "priority": 18,
+      "type": "combo"
+    },
+    {
+      "default": "01",
+      "key": "loan_num",
+      "label": "借款笔数",
+      "priority": 19,
+      "type": "field"
+    },
+    {
+      "name": "借款申请",
+      "priority": 20,
+      "type": "interface"
+    },
+    {
+      "name": "借款结果查询",
+      "priority": 21,
+      "type": "interface"
+    },
+    {
+      "key": "guaranteeNo",
+      "label": "花旗借据号",
+      "priority": 22,
+      "type": "field"
+    },
+    {
+      "key": "loan_status",
+      "label": "放款状态",
+      "options": [
+        {
+          "text": "放款成功",
+          "value": "S"
+        },
+        {
+          "text": "放款失败",
+          "value": "F"
+        }
+      ],
+      "priority": 23,
+      "type": "combo"
+    },
+    {
+      "name": "放款结果通知",
+      "priority": 24,
+      "type": "interface"
+    }
+  ],
+  "interfaces": {
+    "准入": {
+      "body_template": {
+        "custid": "ZY{request_id}",
+        "idNumber": "{id_card}",
+        "mobileNo": "{phone}",
+        "userName": "{name}"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unQryAllowUser"
+    },
+    "授信申请": {
+      "body_template": {
+        "applyAmt": 0,
+        "applyNo": "{request_id}",
+        "applyTime": "{request_id}",
+        "extraInfo": {
+          "channelMark": "{channelMark}",
+          "faceTime": "{request_id}",
+          "faceType": "yuncong"
+        },
+        "userInfo": {
+          "address": "云南省昆明市东川区汤丹镇新塘村委会新塘小组16号",
+          "certNo": "{id_card}",
+          "certType": "101",
+          "certValidEnd": "20200406",
+          "certValidStart": "20400406",
+          "custId": "ZY{request_id}",
+          "custName": "{name}",
+          "emergList": [
+            {
+              "emergCertNo": "",
+              "emergName": "好几斤",
+              "emergRelation": "CHILDREN",
+              "emergTel": "13791646646"
+            }
+          ],
+          "gender": "1",
+          "inctry": "156",
+          "liveAddArea": "东城区",
+          "liveAddCity": "北京市",
+          "liveAddProvince": "北京市",
+          "liveAddress": "减减肥劲夫劲夫那你都没",
+          "monthIncome": "5",
+          "phone": "{phone}",
+          "workInfo": {
+            "occupation": "1"
+          }
+        }
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unCoopAppl"
+    },
+    "影像件上传": {
+      "body_template": {
+        "applyNo": "{request_id}",
+        "dateStr": "{date}"
+      },
+      "enable_encryption": false,
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/test/hl/uploadFile"
+    },
+    "授信结果查询": {
+      "body_template": {
+        "applyNo": "{request_id}"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {
+        "zkj_amt": "crdtAmt",
+        "zkj_lpr": "crdtRate"
+      },
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unQryCoopApplResult"
+    },
+    "终审结果通知": {
+      "conditional_body": {
+        "cases": {
+          "F": {
+            "applyNo": "{request_id}",
+            "errCode": "D99",
+            "errMsg": "资方授信审批拒绝",
+            "status": "{credit_status}"
+          },
+          "S": {
+            "applyNo": "{request_id}",
+            "crdtAmt": "25000.00",
+            "crdtNo": "CL{dateTime}",
+            "dayRate": 0.010822,
+            "effeDate": "{date}",
+            "expiDate": "20950903",
+            "intRate": "23.725000",
+            "status": "{credit_status}"
+          }
+        },
+        "field": "credit_status"
+      },
+      "field_types": {
+        "crdtAmt": "float",
+        "dayRate": "float",
+        "intRate": "float"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unNotifyFinalApplResult"
+    },
+    "证件信息更新": {
+      "body_template": {
+        "applyNo": "{request_id}",
+        "applyTime": "{date}",
+        "certNo": "{id_card}",
+        "name": "{name}"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unUpdateCert"
+    },
+    "借款申请": {
+      "body_template": {
+        "acctName": "{name}",
+        "applAmt": "{applAmt}",
+        "applTnr": "{applTnr}",
+        "applyNo": "{request_id}",
+        "applyTime": "{dateTime}",
+        "channelMark": "{channelMark}",
+        "custId": "ZY{request_id}",
+        "loanPurpose": "{loanPurpose}",
+        "payMode": "0",
+        "paymentApplyNo": "LN{request_id}{loan_num}",
+        "repayCard": "{bank_card_no}",
+        "repayType": "{repayType}"
+      },
+      "field_types": {
+        "applAmt": "int"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unCoopLoanAppl"
+    },
+    "借款结果查询": {
+      "body_template": {
+        "paymentApplyNo": "LN{request_id}{loan_num}"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {
+        "guaranteeNo": "guaranteeNo"
+      },
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unQryCoopLoanApplResult"
+    },
+    "放款结果通知": {
+      "conditional_body": {
+        "cases": {
+          "F": {
+            "channelMark": "{channelMark}",
+            "errCode": "D99",
+            "errMsg": "资方放款失败",
+            "paymentApplyNo": "LN{request_id}{loan_num}",
+            "status": "{loan_status}"
+          },
+          "S": {
+            "applTnr": "{applTnr}",
+            "channelMark": "{channelMark}",
+            "contractNO": "CONTRACT{dateTime}",
+            "intRate": 3.95,
+            "loanAmt": "{applAmt}",
+            "loanDate": "{date}",
+            "loanEndDate": "20260903",
+            "loanNo": "ZYLOAN{dateTime}",
+            "loanTime": "{dateTime}",
+            "lprFloatPoint": 50.0,
+            "lprRate": 3.45,
+            "lprValidDate": "{date}",
+            "paySignNum": "SIGN{dateTime}",
+            "paymentApplyNo": "LN{request_id}{loan_num}",
+            "repytp": "{repayType}",
+            "status": "{loan_status}"
+          }
+        },
+        "field": "loan_status"
+      },
+      "field_types": {
+        "loanAmt": "int"
+      },
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unNotifyLendResult"
+    }
+  }
+}

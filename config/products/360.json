@@ -1,0 +1,505 @@
+{
+  "enable_encryption": false,
+  "encrypt_url": "",
+  "decrypt_url": "",
+  "schedule_tasks": [],
+  "layout": [
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "partner",
+      "label": "渠道",
+      "options": [
+        {
+          "text": "智信A-蓝海",
+          "value": "ICE_HQLH2_V2"
+        },
+        {
+          "text": "智信D-蓝海",
+          "value": "ICE_HQLH2_VD"
+        },
+        {
+          "text": "real24",
+          "value": "ICE_HQLH_V2R"
+        },
+        {
+          "text": "智信A-长银",
+          "value": "ICE_HQCY2_V2"
+        }
+      ],
+      "priority": 1,
+      "type": "combo"
+    },
+    {
+      "default": "",
+      "key": "name",
+      "label": "姓名",
+      "priority": 2,
+      "type": "field"
+    },
+    {
+      "default": "",
+      "key": "id_card",
+      "label": "身份证号",
+      "priority": 3,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "phone",
+      "label": "手机号",
+      "priority": 4,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "bank_card_no",
+      "label": "银行卡号",
+      "priority": 5,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "id_card_start_time",
+      "label": "有效期开始",
+      "priority": 6,
+      "show_in_ui": false,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "id_card_end_time",
+      "label": "有效期结束",
+      "priority": 7,
+      "show_in_ui": false,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "face_base64",
+      "label": "人脸",
+      "priority": 8,
+      "show_in_ui": false,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "id_card_front_base64",
+      "label": "身份证正面",
+      "priority": 9,
+      "show_in_ui": false,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "id_card_back_base64",
+      "label": "身份证反面",
+      "priority": 10,
+      "show_in_ui": false,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "channelCode",
+      "label": "支付渠道",
+      "options": [
+        {
+          "text": "宝付",
+          "value": "baofu"
+        },
+        {
+          "text": "易宝",
+          "value": "yeepay"
+        }
+      ],
+      "priority": 11,
+      "type": "combo"
+    },
+    {
+      "data_type": "string",
+      "default": "1202508252020052770017382282",
+      "key": "channelSignNo",
+      "label": "商户号",
+      "options": [
+        {
+          "text": "易宝",
+          "value": "2547288"
+        },
+        {
+          "text": "宝付",
+          "value": "1202508252020052770017382282"
+        }
+      ],
+      "priority": 12,
+      "type": "combo"
+    },
+    {
+      "name": "查蓝海时间",
+      "priority": 13,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "loanTime",
+      "label": "蓝海时间",
+      "priority": 14,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "1000",
+      "key": "loanAmt",
+      "label": "金额",
+      "priority": 15,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "12",
+      "key": "term",
+      "label": "期数",
+      "priority": 16,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "06",
+      "key": "loanPurpose",
+      "label": "借款用途",
+      "options": [
+        {
+          "text": "装修房屋",
+          "value": "01"
+        },
+        {
+          "text": "购置大宗消费品",
+          "value": "02"
+        },
+        {
+          "text": "支付教育支出",
+          "value": "03"
+        },
+        {
+          "text": "支付医疗支出",
+          "value": "04"
+        },
+        {
+          "text": "支付旅游支出",
+          "value": "05"
+        },
+        {
+          "text": "支付其他消费款",
+          "value": "06"
+        }
+      ],
+      "priority": 17,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "data_type": "string",
+      "default": "0.00066667",
+      "key": "dayRate",
+      "label": "日利率",
+      "priority": 18,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "0.24",
+      "key": "irrYearRate",
+      "label": "年利率",
+      "priority": 19,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "01",
+      "key": "loan_num",
+      "label": "借款笔数",
+      "priority": 20,
+      "type": "field"
+    },
+    {
+      "name": "借款申请",
+      "priority": 21,
+      "type": "interface"
+    },
+    {
+      "name": "借款结果查询",
+      "priority": 22,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "partnerLoanNo",
+      "label": "花旗借款单号",
+      "priority": 23,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "repayType",
+      "label": "还款类型",
+      "options": [
+        {
+          "text": "按期还款",
+          "value": "1"
+        },
+        {
+          "text": "提前结清",
+          "value": "2"
+        },
+        {
+          "text": "按金额还款",
+          "value": "3"
+        }
+      ],
+      "priority": 24,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "repayTime",
+      "label": "还款时间",
+      "priority": 25,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "1",
+      "key": "rpyTerm",
+      "label": "还款期数",
+      "priority": 26,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "还款试算",
+      "priority": 27,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "repayAmt",
+      "label": "还款金额",
+      "priority": 28,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "prinAmt",
+      "label": "本金",
+      "priority": 29,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "intAmt",
+      "label": "利息",
+      "priority": 30,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "0",
+      "key": "ointAmt",
+      "label": "罚息",
+      "priority": 31,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "ALL",
+      "key": "serviceFeeRpyFlag",
+      "label": "服务费模式",
+      "options": [
+        {
+          "text": "全部",
+          "value": "ALL"
+        },
+        {
+          "text": "仅服务费",
+          "value": "ONLY"
+        }
+      ],
+      "priority": 32,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "data_type": "string",
+      "default": "01",
+      "key": "repay_num",
+      "label": "还款笔数",
+      "priority": 33,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "线上还款申请",
+      "priority": 34,
+      "type": "interface"
+    },
+    {
+      "name": "还款结果查询",
+      "priority": 35,
+      "type": "interface"
+    },
+    {
+      "name": "修改蓝海还款计划",
+      "priority": 36,
+      "type": "interface"
+    }
+  ],
+  "interfaces": {
+    "查蓝海时间": {
+      "body_template": {},
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "GET",
+      "response_mapping": {
+        "loanTime": "data.business_date"
+      },
+      "url": "https://lhtest.ebanktest.com.cn/icfs1/api/businessdate?env=SIT4"
+    },
+    "借款申请": {
+      "body_template": {
+        "businessRequest": {
+          "input": "{\"userId\":\"SUR{request_id}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"loanTime\":\"{loanTime}\",\"loanAmt\":\"{loanAmt}\",\"loanPurpose\":\"{loanPurpose}\",\"term\":\"{term}\",\"repayMethod\":\"01\",\"dayRate\":\"{dayRate}\",\"irrYearRate\":\"{irrYearRate}\",\"userInfo\":{\"idCardNo\":\"{id_card}\",\"mobile\":\"{phone}\",\"name\":\"{name}\",\"marriage\":\"90\",\"job\":\"6\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"idCardOcrInfo\":{\"nameOCR\":\"{name}\",\"idCardNoOCR\":\"{id_card}\",\"beginTimeOCR\":\"{id_card_start_time}\",\"duetimeOCR\":\"{id_card_end_time}\",\"addressOCR\":\"辽宁省营口市大石桥市时柔街道生君小区131号楼508\",\"sexOCR\":\"F\",\"ethnicOCR\":\"高山\",\"issueOrgOCR\":\"大石桥市公安局\",\"positive\":\"{id_card_front_base64}\",\"negative\":\"{id_card_back_base64}\"},\"faceInfo\":{\"assayTime\":\"20250912101210\",\"assayType\":\"FACEAA\",\"best\":\"{face_base64}\"},\"contactInfoList\":[{\"contactRelationship\":\"PARENT\",\"contactName\":\"冀先霞\",\"contactPhone\":\"17820690370\"},{\"contactRelationship\":\"CHILDREN\",\"contactName\":\"谢风希\",\"contactPhone\":\"15847680022\"}],\"geoInfo\":{\"latitude\":\"28.535275875038835\",\"longitude\":\"114.45406872359285\"},\"extInfo\":{\"custFlag\":\"1100001010011000001110000\",\"custLevel\":null},\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"}}",
+          "partner": "{partner}",
+          "requestNo": "d5bd475b-b6b1-40cc-a066-83c7cde14a40",
+          "requestTime": "1757643572115",
+          "version": "1"
+        },
+        "method": "applyLoan",
+        "productForm": "support",
+        "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
+        "userId": "SUR3274900229"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {
+        "partnerLoanNo": "data.businessResponse.output|loanApplyNo"
+      },
+      "url": "http://192.168.0.47:8096/invoke"
+    },
+    "借款结果查询": {
+      "body_template": {
+        "businessRequest": {
+          "input": "{\"loanApplyNo\":\"SLN{request_id}{loan_num}\"}",
+          "partner": "{partner}",
+          "requestNo": "3fbf3998-0806-4fdd-892b-f099ca7c7c10",
+          "requestTime": "1757662560657",
+          "version": "1"
+        },
+        "method": "queryLoanResult",
+        "productForm": "support",
+        "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
+        "userId": "{userId}"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "http://192.168.0.47:8096/invoke"
+    },
+    "线上还款申请": {
+      "body_template": {
+        "businessRequest": {
+          "input": "{\"userId\":\"{userId}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{repayTime}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"200.00\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\"}",
+          "partner": "{partner}",
+          "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
+          "requestTime": "1775531455763",
+          "version": "1"
+        },
+        "method": "applyRepayment",
+        "productForm": "support",
+        "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
+        "userId": null
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "http://192.168.0.47:8096/invoke"
+    },
+    "还款结果查询": {
+      "body_template": {
+        "businessRequest": {
+          "input": "{\"repayApplyNo\":\"{repayApplyNo}\"}",
+          "partner": "{partner}",
+          "requestNo": "b686f29e-1f75-4cb9-b7a9-56a91a9a1b36",
+          "requestTime": "1773114672163",
+          "version": "1"
+        },
+        "method": "queryRepayResult",
+        "productForm": "support",
+        "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
+        "userId": "{userId}"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "http://192.168.0.47:8096/invoke"
+    },
+    "还款试算": {
+      "body_template": {
+        "requestId": "{request_id}"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": ""
+    },
+    "修改蓝海还款计划": {
+      "body_template": {
+        "requestId": "{request_id}"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "GET",
+      "response_mapping": {},
+      "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplanrevise?executeBizDate=-1&invoice={name}&env=SIT4"
+    }
+  }
+}

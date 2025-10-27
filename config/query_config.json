@@ -1,0 +1,191 @@
+{
+  "database_connections": {
+    "business_db": {
+      "host": "192.168.1.100",
+      "port": "3306",
+      "username": "business_user",
+      "password": "business_pass",
+      "database": "business_db"
+    },
+    "hq_xiaojin": {
+      "host": "47.106.192.83",
+      "port": "3306",
+      "username": "xvdba",
+      "password": "xvdba@2022",
+      "database": "cfloan_biz"
+    },
+    "default_db": {
+      "host": "47.106.192.83",
+      "port": "3306",
+      "username": "xvdba",
+      "password": "xvdba@2022",
+      "database": "cfloan_biz"
+    },
+    "business_db11": {
+      "host": "192.168.1.10011",
+      "port": "330611",
+      "username": "business_user11",
+      "password": "business_pass11",
+      "database": "business_db11"
+    }
+  },
+  "sql_queries": {
+    "query_user_info": {
+      "display_name": "查询用户信息",
+      "db_connection": "default_db",
+      "sql": "SELECT user_id, user_name, mobile, id_card, create_time FROM user_info WHERE mobile = '{mobile}' OR id_card = '{id_card}' LIMIT 100",
+      "required_params": [],
+      "output_fields": {
+        "id": "主键",
+        "product_no": "产品编号",
+        "loan_no": "借据号",
+        "guarantor_loan_no": "融担进件申请流水号",
+        "loan_apply_no": "哈啰侧进件申请流水",
+        "cap_loan_no": "资方放款流水号",
+        "trans_date": "还款提交日期",
+        "trans_date_ymd": "trans_date_ymd",
+        "repay_end_date": "还款终态日期",
+        "install_term": "还款指定期数",
+        "repay_type": "还款场景",
+        "repayment_type": "还款类型",
+        "repayment_state": "还款状态",
+        "repay_amt": "实还总金额",
+        "repay_principal": "实还本金",
+        "repay_interest": "实还利息",
+        "repay_fee": "实还费用",
+        "repay_overdue_interest": "实还罚息",
+        "repay_penalty_fee": "实还违约金",
+        "due_repay_amt": "应还总金额",
+        "due_repay_principal": "应还本金",
+        "due_repay_interest": "应还利息",
+        "due_repay_fee": "应还费用",
+        "due_repay_overdue_interest": "应还罚息",
+        "due_repay_penalty_fee": "应还违约金",
+        "reduction_amt": "减免总金额",
+        "reduction_principal": "减免本金",
+        "reduction_interest": "减免利息",
+        "reduction_fee": "减免费用",
+        "reduction_overdue_interest": "减免罚息",
+        "reduction_penalty_fee": "减免违约金",
+        "repay_seq_no": "还款流水号",
+        "repay_behavior": "还款行为",
+        "order_status": "订单状态",
+        "create_time": "创建时间",
+        "update_time": "修改时间",
+        "repay_other_fee": "实还担保咨询费",
+        "due_repay_other_fee": "应还担保咨询费",
+        "reduction_other_fee": "减免担保咨询费"
+      }
+    },
+    "query_credit_info": {
+      "display_name": "查询授信信息",
+      "db_connection": "hq_xiaojin",
+      "sql": "SELECT id, guarantor_loan_no, loan_apply_no, open_id, order_type, loan_purpose, term, repay_method, order_status, order_desc, apply_time, apply_status, apply_channel, cap_code, product_no, hq_examine_time, zf_examine_time, create_time, update_time, module_type FROM cfloan_biz.hl_loan_app_info WHERE guarantor_loan_no = {guarantor_loan_no} LIMIT 100",
+      "required_params": [
+        "guarantor_loan_no"
+      ],
+      "output_fields": {
+        "id": "主键",
+        "guarantor_loan_no": "融担进件申请流水号",
+        "loan_apply_no": "哈啰侧进件申请流水",
+        "open_id": "哈啰侧用户id",
+        "order_type": "订单类型，loan（借款）credit（授信）",
+        "loan_purpose": "借款用途",
+        "term": "贷款周期",
+        "repay_method": "还款方式",
+        "order_status": "进件申请状态",
+        "order_desc": "进件结果描述",
+        "apply_time": "申请时间",
+        "apply_status": "申请状态",
+        "apply_channel": "进件渠道",
+        "cap_code": "资金方编码",
+        "product_no": "产品编号",
+        "hq_examine_time": "花旗审批时间",
+        "zf_examine_time": "资方审批时间",
+        "create_time": "创建时间",
+        "update_time": "修改时间",
+        "module_type": "融担模式"
+      }
+    },
+    "query_loan_info": {
+      "display_name": "查询借款信息",
+      "db_connection": "hq_xiaojin",
+      "sql": "SELECT id, user_id, loan_no, guarantor_loan_no, loan_apply_no, cap_loan_no, busi_date, busi_date_ym, first_term_date, first_overdue_days, first_overdue_amt, pay_time, pay_date, due_date, paid_off_date, loan_amt, loan_term, loan_status, compensate_status, paid_principal, paid_int_fee, paid_handling_fee, paid_svc_fee, paid_late_fee, paid_overdue_fee, paid_guaranteed_fee, repay_type, year_rate, cap_rate, asset_side, cap_code, product_no, channel, guaranteed_rate, equity_fee, funding_party, create_time, update_time, overdue_days, top_overdue_term, hist_overdue_nums, hist_overdue_count, unpaid_principal, overdue_unpaid_principal, buy_back, buy_back_date, reduction_principal, reduction_interest, reduction_fee, reduction_overdue_interest, reduction_penalty_fee, reduction_guaranteed_fee, module_type, order_status, order_paid_off_date, paid_other_fee, reduction_other_fee, guaranteed_other_fee_rate, alter_comp_principal, today_guaranteed_fee_total, last_loan_balance_change_date, comp_principal, extension_status, extension_date, amc_flag FROM cfloan_biz.hl_loan_info WHERE guarantor_loan_no = '{guarantor_loan_no}' LIMIT 100",
+      "required_params": [
+        "guarantor_loan_no"
+      ],
+      "output_fields": {}
+    },
+    "query_repay_info": {
+      "display_name": "查询还款信息",
+      "db_connection": "hq_xiaojin",
+      "sql": "SELECT id, product_no, loan_no, guarantor_loan_no, loan_apply_no, cap_loan_no, trans_date, trans_date_ymd, repay_end_date, install_term, repay_type, repayment_type, repayment_state, repay_amt, repay_principal, repay_interest, repay_fee, repay_overdue_interest, repay_penalty_fee, due_repay_amt, due_repay_principal, due_repay_interest, due_repay_fee, due_repay_overdue_interest, due_repay_penalty_fee, reduction_amt, reduction_principal, reduction_interest, reduction_fee, reduction_overdue_interest, reduction_penalty_fee, repay_seq_no, repay_behavior, order_status, create_time, update_time, repay_other_fee, due_repay_other_fee, reduction_other_fee FROM cfloan_biz.hl_repay_record WHERE ggg = '{ggg}' LIMIT 100",
+      "required_params": [
+        "ggg"
+      ],
+      "output_fields": {
+        "id": "主键",
+        "product_no": "产品编号",
+        "loan_no": "借据号",
+        "guarantor_loan_no": "融担进件申请流水号",
+        "loan_apply_no": "哈啰侧进件申请流水",
+        "cap_loan_no": "资方放款流水号",
+        "trans_date": "还款提交日期",
+        "trans_date_ymd": "trans_date_ymd",
+        "repay_end_date": "还款终态日期",
+        "install_term": "还款指定期数",
+        "repay_type": "还款场景",
+        "repayment_type": "还款类型",
+        "repayment_state": "还款状态",
+        "repay_amt": "实还总金额",
+        "repay_principal": "实还本金",
+        "repay_interest": "实还利息",
+        "repay_fee": "实还费用",
+        "repay_overdue_interest": "实还罚息",
+        "repay_penalty_fee": "实还违约金",
+        "due_repay_amt": "应还总金额",
+        "due_repay_principal": "应还本金",
+        "due_repay_interest": "应还利息",
+        "due_repay_fee": "应还费用",
+        "due_repay_overdue_interest": "应还罚息",
+        "due_repay_penalty_fee": "应还违约金",
+        "reduction_amt": "减免总金额",
+        "reduction_principal": "减免本金",
+        "reduction_interest": "减免利息",
+        "reduction_fee": "减免费用",
+        "reduction_overdue_interest": "减免罚息",
+        "reduction_penalty_fee": "减免违约金",
+        "repay_seq_no": "还款流水号",
+        "repay_behavior": "还款行为",
+        "order_status": "订单状态",
+        "create_time": "创建时间",
+        "update_time": "修改时间",
+        "repay_other_fee": "实还担保咨询费",
+        "due_repay_other_fee": "应还担保咨询费",
+        "reduction_other_fee": "减免担保咨询费"
+      }
+    }
+  },
+  "input_fields": {
+    "mobile": {
+      "label": "手机号",
+      "placeholder": "请输入手机号"
+    },
+    "id_card": {
+      "label": "身份证号",
+      "placeholder": "请输入身份证号"
+    },
+    "credit_no": {
+      "label": "授信单号",
+      "placeholder": "请输入授信单号"
+    },
+    "loan_no": {
+      "label": "借款单号",
+      "placeholder": "请输入借款单号"
+    },
+    "guarantor_loan_no": {
+      "label": "担保贷款号",
+      "placeholder": "请输入担保贷款号"
+    }
+  }
+}

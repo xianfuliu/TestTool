@@ -1,0 +1,13 @@
+{
+  "products": {
+    "中银消金": "config/products/中银消金.json",
+    "产品B": "config/products/产品B.json",
+    "数据服务": "config/products/数据服务.json",
+    "360": "config/products/360.json"
+  },
+  "default_product": "中银消金",
+  "locked_products": [
+    "撒发的发订单3213奥德赛",
+    "中银消金"
+  ]
+}
