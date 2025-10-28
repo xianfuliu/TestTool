@@ -316,6 +316,9 @@ class ApiToolTab(QWidget):
         self.product_combo.setFixedWidth(150)
         first_row_layout.addWidget(self.product_combo)
 
+        # 增加间距（添加固定宽度的空白）
+        first_row_layout.addSpacing(35)
+
         # 请求流水
         first_row_layout.addWidget(QLabel("请求流水:"))
         self.request_id_input = QLineEdit()
@@ -327,6 +330,9 @@ class ApiToolTab(QWidget):
         self.update_request_id_btn.clicked.connect(self.update_request_id)
         self.update_request_id_btn.setFixedWidth(80)
         first_row_layout.addWidget(self.update_request_id_btn)
+
+        # 增加间距（添加固定宽度的空白）
+        first_row_layout.addSpacing(35)
 
         # 定时任务控件
         first_row_layout.addWidget(QLabel("定时任务:"))
@@ -350,10 +356,16 @@ class ApiToolTab(QWidget):
 
         first_row_layout.addWidget(self.execute_schedule_btn)
 
+        # 增加间距（添加固定宽度的空白）
+        first_row_layout.addSpacing(35)
+
         # 发送请求复选框
         self.auto_request_checkbox = QCheckBox("发送请求")
         self.auto_request_checkbox.setChecked(True)
         first_row_layout.addWidget(self.auto_request_checkbox)
+
+        # 添加弹性空间，将右侧控件推到最右边
+        first_row_layout.addStretch(1)
 
         # 配置管理按钮
         self.config_manage_btn = QPushButton("配置管理")
@@ -408,7 +420,7 @@ class ApiToolTab(QWidget):
         self.request_body_edit.setFont(QFont("Consolas", 10))
         layout.addWidget(self.request_body_edit, 2)
 
-        # 手动请求按钮 - 修改：初始状态为启用
+        # 手动请求按钮
         self.manual_request_btn = QPushButton("发送请求")
         self.manual_request_btn.clicked.connect(self.send_manual_request)
         self.manual_request_btn.setEnabled(True)  # 始终启用
@@ -1166,7 +1178,7 @@ class ApiToolTab(QWidget):
 
         # 5. 处理复杂模板（日期时间、随机数等）
         if any(pattern in processed for pattern in
-               ["{dateTime", "{date", "{random:"]):
+               ["{dateTime", "{date", "{time", "{random:"]):
             processed = TemplateProcessor.process_template(processed)
 
         print(f"替换后的URL/headers: {processed}")

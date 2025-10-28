@@ -24,6 +24,11 @@ class TemplateProcessor:
             current_date = datetime.now().strftime("%Y%m%d")
             result = result.replace("{date}", current_date)
 
+        # 处理日期 {time} - 使用当前时间
+        if "{time}" in result:
+            current_time = datetime.now().strftime("%H%M%S")
+            result = result.replace("{time}", current_time)
+
         # 处理自定义格式的日期时间 {dateTime:format}
         if "{dateTime:" in result:
             matches = re.findall(r'\{dateTime:([^}]+)\}', result)

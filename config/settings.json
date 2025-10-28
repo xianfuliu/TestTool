@@ -1,6 +1,6 @@
 {
   "features": {
-    "interface_automation": true
+    "interface_automation": false
   },
   "app": {
     "name": "测试工具",
