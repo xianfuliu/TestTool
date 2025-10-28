@@ -634,8 +634,6 @@ class ConfigManagementDialog(QDialog):
             dialog.setFixedSize(450, 550)
         elif item_type == "interface":
             dialog.setFixedSize(350, 200)
-        elif item_type == "fixed_variable":  # 新增固定变量
-            dialog.setFixedSize(350, 200)
         else:  # field
             dialog.setFixedSize(350, 300)
 
@@ -653,8 +651,7 @@ class ConfigManagementDialog(QDialog):
         type_mapping = {
             "field": "字段",
             "combo": "下拉框",
-            "interface": "接口",
-            "fixed_variable": "固定变量"  # 新增固定变量
+            "interface": "接口"
         }
         type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
         type_value.setStyleSheet("font-weight: bold; color: blue;")
@@ -669,7 +666,7 @@ class ConfigManagementDialog(QDialog):
         form_layout.setHorizontalSpacing(8)
 
         # 根据类型显示不同的字段（全部只读）
-        if item_type in ["field", "combo", "fixed_variable"]:  # 修改：包含fixed_variable
+        if item_type in ["field", "combo"]:
             # 键（只读）
             key_edit = QLineEdit()
             key_edit.setText(item_data.get("key", ""))
@@ -923,8 +920,6 @@ class ConfigManagementDialog(QDialog):
                             display_text += " [隐藏]"
                     elif item_type == "interface":
                         display_text = f"接口: {item_name}"
-                    elif item_type == "fixed_variable":
-                        display_text = f"固定变量: {item_label} ({item_key})"
                     else:
                         display_text = f"未知: {item}"
 
@@ -1578,7 +1573,6 @@ class ConfigManagementDialog(QDialog):
         self.add_type_combo.addItem("字段", "field")
         self.add_type_combo.addItem("下拉框", "combo")
         self.add_type_combo.addItem("接口", "interface")
-        self.add_type_combo.addItem("固定变量", "fixed_variable")  # 新增固定变量类型
         self.add_type_combo.setFixedWidth(120)
         self.add_type_combo.currentTextChanged.connect(self.on_add_type_changed)
         type_layout.addWidget(self.add_type_combo)
@@ -1836,8 +1830,7 @@ class ConfigManagementDialog(QDialog):
         type_mapping = {
             "字段": "field",
             "下拉框": "combo",
-            "接口": "interface",
-            "固定变量": "fixed_variable"
+            "接口": "interface"
         }
         actual_type = type_mapping.get(item_type, item_type)
 
@@ -1845,13 +1838,12 @@ class ConfigManagementDialog(QDialog):
         is_field_or_combo = actual_type in ["field", "combo"]
         is_interface = actual_type == "interface"
         is_combo = actual_type == "combo"
-        is_fixed_variable = actual_type == "fixed_variable"
 
-        # 键/名称和标签 - 字段、下拉框和固定变量都显示
-        self.add_key_label.setVisible(is_field_or_combo or is_fixed_variable)
-        self.add_key_edit.setVisible(is_field_or_combo or is_fixed_variable)
-        self.add_label_label.setVisible(is_field_or_combo or is_fixed_variable)
-        self.add_label_edit.setVisible(is_field_or_combo or is_fixed_variable)
+        # 键/名称和标签 - 仅字段和下拉框显示
+        self.add_key_label.setVisible(is_field_or_combo)
+        self.add_key_edit.setVisible(is_field_or_combo)
+        self.add_label_label.setVisible(is_field_or_combo)
+        self.add_label_edit.setVisible(is_field_or_combo)
 
         # 接口名称 - 仅接口显示
         self.add_interface_name_label.setVisible(is_interface)
@@ -1861,11 +1853,11 @@ class ConfigManagementDialog(QDialog):
         self.add_data_type_label.setVisible(is_field_or_combo)
         self.add_data_type_combo.setVisible(is_field_or_combo)
 
-        # 默认值 - 字段、下拉框和固定变量都显示
-        self.add_default_label.setVisible(is_field_or_combo or is_fixed_variable)
-        self.add_default_edit.setVisible(is_field_or_combo or is_fixed_variable)
+        # 默认值 - 仅字段和下拉框显示
+        self.add_default_label.setVisible(is_field_or_combo)
+        self.add_default_edit.setVisible(is_field_or_combo)
 
-        # 是否展示到前端 - 仅字段和下拉框显示，固定变量不显示
+        # 是否展示到前端 - 仅字段和下拉框显示
         self.add_show_in_ui_label.setVisible(is_field_or_combo)
         self.add_show_in_ui_checkbox.setVisible(is_field_or_combo)
 
@@ -1873,7 +1865,7 @@ class ConfigManagementDialog(QDialog):
         self.add_options_group.setVisible(is_combo)
 
         # 清空字段
-        if not (is_field_or_combo or is_fixed_variable):
+        if not is_field_or_combo:
             self.add_key_edit.clear()
             self.add_label_edit.clear()
         if not is_interface:
@@ -2037,8 +2029,6 @@ class ConfigManagementDialog(QDialog):
             dialog.setFixedSize(450, 580)  # 下拉框需要更多空间显示选项
         elif item_type == "interface":
             dialog.setFixedSize(350, 200)  # 接口类型只需要接口名称，更小
-        elif item_type == "fixed_variable":  # 固定变量类型
-            dialog.setFixedSize(350, 250)  # 固定变量只需要键、标签和默认值
         else:  # field
             dialog.setFixedSize(350, 330)  # 字段类型适中
 
@@ -2058,7 +2048,6 @@ class ConfigManagementDialog(QDialog):
             "field": "字段",
             "combo": "下拉框",
             "interface": "接口",
-            "fixed_variable": "固定变量"  # 新增固定变量映射
         }
 
         type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
@@ -2113,25 +2102,6 @@ class ConfigManagementDialog(QDialog):
             interface_name_edit.setText(item_data.get("name", ""))
             interface_name_edit.setFixedWidth(250)
             form_layout.addRow("接口名称:", interface_name_edit)
-
-        elif item_type == "fixed_variable":  # 新增固定变量编辑
-            # 键
-            key_edit = QLineEdit()
-            key_edit.setText(item_data.get("key", ""))
-            key_edit.setFixedWidth(250)
-            form_layout.addRow("键:", key_edit)
-
-            # 标签
-            label_edit = QLineEdit()
-            label_edit.setText(item_data.get("label", ""))
-            label_edit.setFixedWidth(250)
-            form_layout.addRow("标签:", label_edit)
-
-            # 默认值
-            default_edit = QLineEdit()
-            default_edit.setText(item_data.get("default", ""))
-            default_edit.setFixedWidth(250)
-            form_layout.addRow("默认值:", default_edit)
 
         layout.addLayout(form_layout)
 
@@ -2341,7 +2311,7 @@ class ConfigManagementDialog(QDialog):
 
         def on_ok():
             # 根据类型校验必填字段
-            if item_type in ["field", "combo", "fixed_variable"]:  # 修改：包含fixed_variable
+            if item_type in ["field", "combo"]:
                 key = key_edit.text().strip()
                 label = label_edit.text().strip()
 
@@ -2437,14 +2407,6 @@ class ConfigManagementDialog(QDialog):
                 display_text = f"{'字段' if item_type == 'field' else '下拉框'}: {label_edit.text().strip()} ({key_edit.text().strip()})"
                 if not show_in_ui_checkbox.isChecked():
                     display_text += " [隐藏]"
-
-            elif item_type == "fixed_variable":  # 新增固定变量处理
-                item_data.update({
-                    "key": key_edit.text().strip(),
-                    "label": label_edit.text().strip(),
-                    "default": default_edit.text().strip()
-                })
-                display_text = f"固定变量: {label_edit.text().strip()} ({key_edit.text().strip()})"
 
             elif item_type == "interface":
                 old_interface_name = item_data.get("name", "")

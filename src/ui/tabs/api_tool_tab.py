@@ -46,7 +46,7 @@ class ApiToolTab(QWidget):
             'id_card_back_base64',
             'face_base64'
         ]
-        # 变量池 - 存储所有变量（包括固定变量、响应映射变量等）
+        # 变量池 - 存储所有变量（包括响应映射变量等）
         self.variable_pool = {}
         # 初始化变量池
         self.init_variable_pool()
@@ -506,12 +506,6 @@ class ApiToolTab(QWidget):
                             combo_box.setCurrentIndex(0)
                     self.combo_boxes[item["key"]] = combo_box
 
-                elif item["type"] == "fixed_variable":
-                    # 对于固定变量，直接添加到变量池，不创建控件
-                    fixed_key = item["key"]
-                    fixed_value = item.get("default", "")
-                    self.variable_pool[fixed_key] = fixed_value
-
             # 然后，填充测试数据到所有字段（包括隐藏字段）（不包括Base64字段，因为它们现在通过变量池处理）
             for item in layout_config:
                 if item["type"] == "field" and item["key"] in self.field_inputs:
@@ -656,14 +650,6 @@ class ApiToolTab(QWidget):
         current_item_count = 0
 
         for item in sorted_layout:
-            # 处理固定变量类型 - 不创建UI控件，直接添加到变量池
-            if item["type"] == "fixed_variable":
-                fixed_key = item["key"]
-                fixed_value = item.get("default", "")
-                self.variable_pool[fixed_key] = fixed_value
-                print(f"加载固定变量: {fixed_key} = {fixed_value}")
-                continue  # 跳过UI创建
-
             # 检查是否需要在UI中显示（仅对字段和下拉框类型）
             if item["type"] in ["field", "combo"]:
                 # 默认值为True，保持向后兼容
@@ -705,6 +691,7 @@ class ApiToolTab(QWidget):
 
                     # 跳过UI显示，继续下一个元素
                     continue
+
             if current_item_count >= max_items_per_row:
                 # 当前行已满，创建新行
                 main_layout.addLayout(current_row_layout)
@@ -1129,7 +1116,7 @@ class ApiToolTab(QWidget):
         self.response_body_edit.setPlainText("请求中...")
 
     def replace_variables_in_string(self, text):
-        """替换字符串中的变量占位符"""
+        """替换字符串中的变量占位符 - 优化版：仅Base64变量从变量池获取，其他都从输入框获取"""
         if not isinstance(text, str):
             return text
 
@@ -1138,30 +1125,27 @@ class ApiToolTab(QWidget):
         # 调试：打印原始文本
         print(f"替换URL/headers变量: {text}")
 
-        # 1. 先处理变量池中的变量（包括固定变量和Base64变量）
-        for var_key, var_value in self.variable_pool.items():
-            placeholder = "{" + var_key + "}"
-            if placeholder in processed:
-                str_value = str(var_value) if var_value is not None else ""
-                processed = processed.replace(placeholder, str_value)
-                print(f"替换变量池变量 {var_key}: 长度={len(str_value)}")
+        # 1. 仅处理变量池中的三个Base64变量
+        for var_key in self.BASE64_VARIABLE_KEYS:
+            if var_key in self.variable_pool:
+                placeholder = "{" + var_key + "}"
+                if placeholder in processed:
+                    var_value = self.variable_pool[var_key]
+                    str_value = str(var_value) if var_value is not None else ""
+                    processed = processed.replace(placeholder, str_value)
+                    print(f"替换Base64变量 {var_key}: 长度={len(str_value)}")
 
-                # 特别调试Base64变量
-                if var_key in self.BASE64_VARIABLE_KEYS:
+                    # 特别调试Base64变量
                     print(f"Base64变量 {var_key} 前10字符: {str_value[:10]}...")
 
-        # 2. 处理请求ID
+        # 2. 处理请求ID（从输入框获取）
         if "{request_id}" in processed:
             request_id_value = self.request_id_input.text()
             processed = processed.replace("{request_id}", request_id_value)
             print(f"替换request_id: {request_id_value}")
 
-        # 3. 处理普通字段（跳过Base64字段）
+        # 3. 处理普通字段（全部从输入框获取，不跳过任何字段）
         for field_key, field_input in self.field_inputs.items():
-            # 如果是Base64字段，跳过输入框替换（因为已经通过变量池处理了）
-            if field_key in self.BASE64_VARIABLE_KEYS:
-                continue
-
             placeholder = "{" + field_key + "}"
             if placeholder in processed:
                 field_value = field_input.text()
