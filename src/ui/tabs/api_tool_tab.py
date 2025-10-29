@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QGroupBox,
@@ -16,6 +17,7 @@ from src.ui.dialogs.config_management_dialog import ConfigManagementDialog
 from src.utils.resource_utils import resource_path
 from src.utils.api_worker import ApiWorker
 from src.utils.schedule_executor import ScheduleExecutor
+from src.utils.sql_worker import SQLWorker
 from src.utils.template_processor import TemplateProcessor
 import jsonpath_ng
 
@@ -30,6 +32,7 @@ class ApiToolTab(QWidget):
         self.id_card_image_generator = IdCardImageGenerator(parent)
         self.api_config = {"products": {}}  # 存储所有产品配置
         self.products_config = {}  # 存储产品文件映射
+        self.sql_buttons = {}  # 新增SQL按钮字典
         self.current_product = None
         self.current_interface = None
         self.field_inputs = {}
@@ -626,10 +629,12 @@ class ApiToolTab(QWidget):
 
         self.field_inputs.clear()
         self.combo_boxes.clear()  # 清空下拉框字典
+        self.sql_buttons.clear()  # 清空SQL按钮字典
 
         # 获取布局配置
         layout_config = product_config.get("layout", [])
         interfaces_config = product_config.get("interfaces", {})
+        sqls_config = product_config.get("sqls", {})  # 新增SQL配置
 
         # 按优先级排序
         sorted_layout = sorted(layout_config, key=lambda x: x.get("priority", 999))
@@ -816,6 +821,27 @@ class ApiToolTab(QWidget):
                     # 添加到当前行
                     current_row_layout.addWidget(interface_btn)
 
+            elif item["type"] == "sql":  # 新增SQL类型处理
+                # 创建SQL按钮 - 根据文本内容自适应宽度
+                sql_name = item["name"]
+                if sql_name in sqls_config:
+                    sql_btn = QPushButton(sql_name)
+                    # 设置固定的大小策略，不拉伸
+                    sql_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                    sql_btn.setMinimumWidth(80)  # 设置最小宽度
+                    sql_btn.setMaximumWidth(200)  # 设置最大宽度
+
+                    # 根据按钮文本调整宽度
+                    self.adjust_button_width(sql_btn)
+
+                    sql_btn.clicked.connect(lambda checked, name=sql_name: self.on_sql_clicked(name))
+
+                    # 保存SQL按钮引用
+                    self.sql_buttons[sql_name] = sql_btn
+
+                    # 添加到当前行
+                    current_row_layout.addWidget(sql_btn)
+
             current_item_count += 1
 
         # 添加最后一行
@@ -828,6 +854,9 @@ class ApiToolTab(QWidget):
 
         # 将主部件添加到滚动区域
         self.combined_layout.addWidget(main_widget)
+
+        # 初始调整所有元素的宽度
+        self.adjust_all_elements_width()
 
     def adjust_field_width(self, field_input, text):
         """根据输入框内容调整宽度 - 统一处理所有字段"""
@@ -886,7 +915,7 @@ class ApiToolTab(QWidget):
         for combo_box in self.combo_boxes.values():
             self.adjust_combo_width(combo_box)
 
-        # 调整所有按钮的宽度
+        # 调整所有按钮的宽度（包括接口按钮和SQL按钮）
         for i in range(self.combined_layout.count()):
             item = self.combined_layout.itemAt(i)
             if item and item.widget():
@@ -919,6 +948,92 @@ class ApiToolTab(QWidget):
         # 如果启用了发送请求，直接发送请求
         if self.auto_request_checkbox.isChecked():
             self.send_request(interface_config, request_body)
+
+    def on_sql_clicked(self, sql_name):
+        """SQL按钮点击事件"""
+        if not self.current_product:
+            QMessageBox.warning(self, "警告", "请先选择产品")
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            sql_config = product_config["sqls"][sql_name]
+
+            # 执行SQL查询
+            self.execute_sql_query(sql_name, sql_config)
+
+        except KeyError as e:
+            QMessageBox.warning(self, "错误", f"SQL配置不存在: {sql_name}")
+            return
+
+    def execute_sql_query(self, sql_name, sql_config):
+        """执行SQL查询"""
+        try:
+            # 获取数据库连接参数
+            db_config = sql_config["database"]
+            sql_statement = sql_config["sql"]
+
+            # 替换SQL中的变量
+            processed_sql = self.replace_variables_in_string(sql_statement)
+
+            # 验证SQL是否为SELECT语句
+            if not re.match(r'^\s*SELECT\s', processed_sql, re.IGNORECASE):
+                Toast.warning(self, "警告", "仅支持SELECT查询语句")
+                return
+
+            # 在工作线程中执行SQL
+            self.sql_worker = SQLWorker(sql_name, db_config, processed_sql)
+            self.sql_worker.finished.connect(lambda query_name, message, result_data:
+                                             self.on_sql_finished(sql_name, sql_config, result_data))
+            self.sql_worker.error.connect(lambda query_name, error_message:
+                                          self.on_sql_error(sql_name, error_message))
+            self.sql_worker.start()
+
+            # 显示加载状态
+            self.response_body_edit.setPlainText(f"执行SQL查询中: {sql_name}...")
+
+        except Exception as e:
+            Toast.critical(self, "错误", f"执行SQL失败: {str(e)}")
+
+    def on_sql_finished(self, sql_name, sql_config, result_data):
+        """SQL查询完成"""
+        try:
+            if not result_data:
+                self.response_body_edit.setPlainText("SQL查询成功，但未返回数据")
+                return
+
+            # 显示查询结果
+            formatted_result = json.dumps(result_data, ensure_ascii=False, indent=2)
+            self.response_body_edit.setPlainText(f"SQL查询成功:\n{formatted_result}")
+
+            # 将查询结果存储到变量池中，供请求体使用
+            self.process_sql_output(sql_name, sql_config, result_data)
+
+        except Exception as e:
+            self.response_body_edit.setPlainText(f"处理SQL结果时出错: {str(e)}")
+
+    def on_sql_error(self, sql_name, error_message):
+        """SQL查询错误"""
+        self.response_body_edit.setPlainText(f"SQL查询失败:\n{error_message}")
+
+    def process_sql_output(self, sql_name, sql_config, result_data):
+        """处理SQL输出结果，填充到变量池"""
+        if not result_data:
+            return
+
+        # 获取第一条记录（假设只需要第一条记录）
+        first_record = result_data[0] if result_data else {}
+
+        # 获取输出字段配置
+        output_fields = sql_config.get("output_fields", [])
+
+        for field_config in output_fields:
+            field_name = field_config["field"]
+            if field_name in first_record:
+                variable_name = field_name
+                self.variable_pool[variable_name] = first_record[field_name]
+
+                print(f"SQL输出变量 '{variable_name}' = '{first_record[field_name]}'")
 
     def generate_request_body(self, interface_config):
         """生成请求体 - 支持类型转换、条件模板和变量池"""
@@ -1116,7 +1231,7 @@ class ApiToolTab(QWidget):
         self.response_body_edit.setPlainText("请求中...")
 
     def replace_variables_in_string(self, text):
-        """替换字符串中的变量占位符 - 优化版：仅Base64变量从变量池获取，其他都从输入框获取"""
+        """替换字符串中的变量占位符 - 优化版：支持SQL变量"""
         if not isinstance(text, str):
             return text
 
@@ -1160,7 +1275,22 @@ class ApiToolTab(QWidget):
                 processed = processed.replace(placeholder, combo_value)
                 print(f"替换下拉框 {combo_key}: {combo_value}")
 
-        # 5. 处理复杂模板（日期时间、随机数等）
+        # 5. 处理SQL输出变量
+        # SQL输出变量的格式为：{sql_name_field_name}
+        import re
+        sql_var_pattern = r'\{(\w+)_(\w+)\}'
+        matches = re.findall(sql_var_pattern, processed)
+
+        for sql_name, field_name in matches:
+            variable_name = f"{sql_name}_{field_name}"
+            if variable_name in self.variable_pool:
+                placeholder = "{" + variable_name + "}"
+                var_value = self.variable_pool[variable_name]
+                str_value = str(var_value) if var_value is not None else ""
+                processed = processed.replace(placeholder, str_value)
+                print(f"替换SQL变量 {variable_name}: {str_value}")
+
+        # 6. 处理复杂模板（日期时间、随机数等）
         if any(pattern in processed for pattern in
                ["{dateTime", "{date", "{time", "{random:"]):
             processed = TemplateProcessor.process_template(processed)

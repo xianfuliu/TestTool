@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QTableWidgetItem, QSpacerItem)
 from PyQt5.QtCore import Qt, pyqtSignal
 from src.ui.dialogs.interface_config_dialog import InterfaceConfigDialog
+from src.ui.dialogs.sql_config_dialog import SQLConfigDialog
 from src.ui.widgets.toast_tips import Toast
 from src.utils.resource_utils import resource_path
 
@@ -312,6 +313,36 @@ class ConfigManagementDialog(QDialog):
 
         self.detail_layout.addWidget(interface_group)
 
+        # SQL配置（新增）
+        sql_group = QGroupBox("SQL配置")
+        sql_group.setContentsMargins(8, 12, 8, 8)
+        self.sql_layout = QVBoxLayout(sql_group)
+        self.sql_layout.setSpacing(8)
+
+        self.sql_list = QListWidget()
+        self.sql_list.setFixedHeight(120)  # 固定高度
+
+        sql_btn_layout = QHBoxLayout()
+        sql_btn_layout.setSpacing(8)
+
+        self.edit_sql_btn = QPushButton("编辑")
+        self.edit_sql_btn.clicked.connect(self.edit_sql)
+        self.edit_sql_btn.setFixedWidth(80)
+
+        self.view_sql_btn = QPushButton("查看")
+        self.view_sql_btn.clicked.connect(self.view_sql)
+        self.view_sql_btn.setFixedWidth(80)
+
+        sql_btn_layout.addWidget(self.edit_sql_btn)
+        sql_btn_layout.addWidget(self.view_sql_btn)
+        sql_btn_layout.addStretch()
+
+        self.sql_layout.addWidget(QLabel("提示：SQL通过布局配置中的SQL类型项自动生成和管理"))
+        self.sql_layout.addWidget(self.sql_list)
+        self.sql_layout.addLayout(sql_btn_layout)
+
+        self.detail_layout.addWidget(sql_group)
+
         self.detail_layout.addStretch()
         self.scroll_area.setWidget(self.scroll_widget)
         layout.addWidget(self.scroll_area)
@@ -522,6 +553,10 @@ class ConfigManagementDialog(QDialog):
         self.edit_interface_btn.setEnabled(enabled)
         self.view_interface_btn.setEnabled(True)  # 查看按钮始终可用
 
+        # SQL配置相关控件
+        self.edit_sql_btn.setEnabled(enabled)
+        self.view_sql_btn.setEnabled(True)  # 查看按钮始终可用
+
         # 特别注意：产品下拉框和滚动区域始终保持可用
         self.detail_product_combo.setEnabled(True)
         self.scroll_area.setEnabled(True)  # 确保滚动区域始终可用
@@ -540,262 +575,6 @@ class ConfigManagementDialog(QDialog):
             self.schedule_list.setSelectionMode(QListWidget.SingleSelection)
             self.layout_list.setSelectionMode(QListWidget.SingleSelection)
             self.interface_list.setSelectionMode(QListWidget.SingleSelection)
-
-    def view_schedule_task(self):
-        """查看定时任务详情"""
-        current_row = self.schedule_list.currentRow()
-        if current_row < 0:
-            Toast.warning(self, "警告", "请先选择要查看的定时任务")
-            return
-
-        current_item = self.schedule_list.item(current_row)
-        task_data = current_item.data(Qt.UserRole)
-
-        if not task_data:
-            Toast.warning(self, "警告", "选中的定时任务数据格式错误")
-            return
-
-        # 使用编辑任务的对话框，但设置为只读模式
-        dialog = QDialog(self)
-        dialog.setWindowTitle("查看定时任务")
-        dialog.setModal(True)
-        dialog.setFixedSize(350, 250)
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(10)
-        layout.setContentsMargins(15, 15, 15, 15)
-
-        # 创建表单布局
-        form_layout = QFormLayout()
-        form_layout.setSpacing(8)
-        form_layout.setVerticalSpacing(8)
-        form_layout.setHorizontalSpacing(10)
-
-        # 任务ID（只读）
-        task_id_edit = QLineEdit()
-        task_id_edit.setText(str(task_data["id"]))
-        task_id_edit.setReadOnly(True)
-        task_id_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
-        task_id_edit.setFixedWidth(250)
-        form_layout.addRow("任务ID:", task_id_edit)
-
-        # 任务名称（只读）
-        task_name_edit = QLineEdit()
-        task_name_edit.setText(task_data["name"])
-        task_name_edit.setReadOnly(True)
-        task_name_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
-        task_name_edit.setFixedWidth(250)
-        form_layout.addRow("任务名称:", task_name_edit)
-
-        # 任务组（只读）
-        task_group_edit = QLineEdit()
-        task_group_edit.setText(task_data.get("jobGroup", "DEFAULT"))
-        task_group_edit.setReadOnly(True)
-        task_group_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
-        task_group_edit.setFixedWidth(250)
-        form_layout.addRow("任务组:", task_group_edit)
-
-        layout.addLayout(form_layout)
-
-        # 按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-
-        close_btn = QPushButton("关闭")
-        close_btn.setFixedWidth(80)
-        close_btn.clicked.connect(dialog.accept)
-
-        button_layout.addStretch()
-        button_layout.addWidget(close_btn)
-        layout.addLayout(button_layout)
-
-        dialog.exec_()
-
-    def view_layout_item(self):
-        """查看布局项详情"""
-        current_row = self.layout_list.currentRow()
-        if current_row < 0:
-            Toast.warning(self, "警告", "请先选择要查看的布局项")
-            return
-
-        current_item = self.layout_list.item(current_row)
-        item_data = current_item.data(Qt.UserRole)
-
-        if not item_data:
-            Toast.warning(self, "警告", "选中的布局项数据格式错误")
-            return
-
-        # 使用编辑布局项的对话框，但设置为只读模式
-        dialog = QDialog(self)
-        dialog.setWindowTitle("查看布局项")
-        dialog.setModal(True)
-
-        item_type = item_data.get("type")
-        if item_type == "combo":
-            dialog.setFixedSize(450, 550)
-        elif item_type == "interface":
-            dialog.setFixedSize(350, 200)
-        else:  # field
-            dialog.setFixedSize(350, 300)
-
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 12, 12, 12)
-
-        # 类型显示（只读）
-        type_layout = QHBoxLayout()
-        type_layout.setSpacing(5)
-        type_label = QLabel("类型:")
-        type_label.setFixedWidth(30)
-        type_layout.addWidget(type_label)
-
-        type_mapping = {
-            "field": "字段",
-            "combo": "下拉框",
-            "interface": "接口"
-        }
-        type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
-        type_value.setStyleSheet("font-weight: bold; color: blue;")
-        type_layout.addWidget(type_value)
-        type_layout.addStretch()
-        layout.addLayout(type_layout)
-
-        # 创建表单布局
-        form_layout = QFormLayout()
-        form_layout.setSpacing(6)
-        form_layout.setVerticalSpacing(6)
-        form_layout.setHorizontalSpacing(8)
-
-        # 根据类型显示不同的字段（全部只读）
-        if item_type in ["field", "combo"]:
-            # 键（只读）
-            key_edit = QLineEdit()
-            key_edit.setText(item_data.get("key", ""))
-            key_edit.setReadOnly(True)
-            key_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
-            key_edit.setFixedWidth(250)
-            form_layout.addRow("键:", key_edit)
-
-            # 标签（只读）
-            label_edit = QLineEdit()
-            label_edit.setText(item_data.get("label", ""))
-            label_edit.setReadOnly(True)
-            label_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
-            label_edit.setFixedWidth(250)
-            form_layout.addRow("标签:", label_edit)
-
-            # 数据类型（只读）- 仅字段和下拉框显示
-            if item_type in ["field", "combo"]:
-                data_type_combo = QComboBox()
-                data_type_combo.addItems(["string", "int", "float", "bool"])
-                data_type_combo.setCurrentText(item_data.get("data_type", "string"))
-                data_type_combo.setEnabled(False)
-                data_type_combo.setFixedWidth(120)
-                form_layout.addRow("数据类型:", data_type_combo)
-
-            # 默认值（只读）
-            default_edit = QLineEdit()
-            default_edit.setText(item_data.get("default", ""))
-            default_edit.setReadOnly(True)
-            default_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
-            default_edit.setFixedWidth(250)
-            form_layout.addRow("默认值:", default_edit)
-
-            # 是否展示到前端（只读）- 仅字段和下拉框显示
-            if item_type in ["field", "combo"]:
-                show_in_ui_label = QLabel("是" if item_data.get("show_in_ui", True) else "否")
-                show_in_ui_label.setStyleSheet("font-weight: bold; color: blue;")
-                form_layout.addRow("展示到前端:", show_in_ui_label)
-
-        elif item_type == "interface":
-            # 接口名称（只读）
-            interface_name_edit = QLineEdit()
-            interface_name_edit.setText(item_data.get("name", ""))
-            interface_name_edit.setReadOnly(True)
-            interface_name_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
-            interface_name_edit.setFixedWidth(250)
-            form_layout.addRow("接口名称:", interface_name_edit)
-
-        layout.addLayout(form_layout)
-
-        # 下拉框枚举配置 - 仅下拉框显示（只读）
-        if item_type == "combo":
-            options_group = QGroupBox("下拉框枚举配置")
-            options_group.setContentsMargins(8, 8, 8, 8)
-            options_layout = QVBoxLayout(options_group)
-            options_layout.setSpacing(6)
-
-            # 枚举表格（只读）
-            options_table = QTableWidget()
-            options_table.setColumnCount(2)
-            options_table.setHorizontalHeaderLabels(["显示文本", "值"])
-            options_table.horizontalHeader().setStretchLastSection(True)
-            options_table.setMaximumHeight(180)
-            options_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 禁止编辑
-
-            # 设置列宽
-            options_table.setColumnWidth(0, 150)
-            options_table.setColumnWidth(1, 150)
-
-            # 填充现有选项
-            options = item_data.get("options", [])
-            for option in options:
-                row = options_table.rowCount()
-                options_table.insertRow(row)
-                options_table.setItem(row, 0, QTableWidgetItem(option.get("text", "")))
-                options_table.setItem(row, 1, QTableWidgetItem(option.get("value", "")))
-
-            options_layout.addWidget(options_table)
-            layout.addWidget(options_group)
-
-        # 按钮布局
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-
-        close_btn = QPushButton("关闭")
-        close_btn.setFixedWidth(80)
-        close_btn.clicked.connect(dialog.accept)
-
-        button_layout.addStretch()
-        button_layout.addWidget(close_btn)
-        layout.addLayout(button_layout)
-
-        dialog.exec_()
-
-    def view_interface(self):
-        """查看接口详情"""
-        current_row = self.interface_list.currentRow()
-        if current_row < 0:
-            Toast.warning(self, "警告", "请先选择要查看的接口")
-            return
-
-        current_item = self.interface_list.item(current_row)
-        interface_name = current_item.text()
-        interface_config = current_item.data(Qt.UserRole)
-
-        # 打开接口配置对话框，但设置为只读模式
-        dialog = InterfaceConfigDialog(interface_name, interface_config, self)
-
-        # 设置对话框为只读模式
-        dialog.setWindowTitle(f"查看接口 - {interface_name}")
-
-        # 禁用所有可编辑控件
-        for widget in dialog.findChildren((QLineEdit, QTextEdit, QComboBox, QCheckBox)):
-            if isinstance(widget, QLineEdit):
-                widget.setReadOnly(True)
-                widget.setStyleSheet("background-color: #f0f0f0; color: #666;")
-            elif isinstance(widget, QTextEdit):
-                widget.setReadOnly(True)
-                widget.setStyleSheet("background-color: #f0f0f0; color: #666;")
-            elif isinstance(widget, QComboBox):
-                widget.setEnabled(False)
-            elif isinstance(widget, QCheckBox):
-                widget.setEnabled(False)
-
-        # 隐藏保存按钮，只显示关闭按钮
-        dialog.save_btn.setVisible(False)
-        dialog.cancel_btn.setText("关闭")
-
-        dialog.exec_()
 
     def set_group_enabled(self, widget, enabled):
         """设置控件组的启用状态"""
@@ -920,6 +699,8 @@ class ConfigManagementDialog(QDialog):
                             display_text += " [隐藏]"
                     elif item_type == "interface":
                         display_text = f"接口: {item_name}"
+                    elif item_type == "sql":
+                        display_text = f"SQL: {item_name}"
                     else:
                         display_text = f"未知: {item}"
 
@@ -933,6 +714,13 @@ class ConfigManagementDialog(QDialog):
                     item = QListWidgetItem(interface_name)
                     item.setData(Qt.UserRole, interface_config)  # 保存完整接口数据
                     self.interface_list.addItem(item)
+
+                # 更新SQL配置
+                self.sql_list.clear()
+                for sql_name, sql_config in product_config.get("sqls", {}).items():
+                    item = QListWidgetItem(sql_name)
+                    item.setData(Qt.UserRole, sql_config)
+                    self.sql_list.addItem(item)
 
         except Exception as e:
             Toast.critical(self, "错误", f"加载产品详情配置失败: {str(e)}")
@@ -1550,6 +1338,75 @@ class ConfigManagementDialog(QDialog):
         if reply == QMessageBox.Yes:
             self.schedule_list.takeItem(current_row)
 
+    def view_schedule_task(self):
+        """查看定时任务详情"""
+        current_row = self.schedule_list.currentRow()
+        if current_row < 0:
+            Toast.warning(self, "警告", "请先选择要查看的定时任务")
+            return
+
+        current_item = self.schedule_list.item(current_row)
+        task_data = current_item.data(Qt.UserRole)
+
+        if not task_data:
+            Toast.warning(self, "警告", "选中的定时任务数据格式错误")
+            return
+
+        # 使用编辑任务的对话框，但设置为只读模式
+        dialog = QDialog(self)
+        dialog.setWindowTitle("查看定时任务")
+        dialog.setModal(True)
+        dialog.setFixedSize(350, 250)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 创建表单布局
+        form_layout = QFormLayout()
+        form_layout.setSpacing(8)
+        form_layout.setVerticalSpacing(8)
+        form_layout.setHorizontalSpacing(10)
+
+        # 任务ID（只读）
+        task_id_edit = QLineEdit()
+        task_id_edit.setText(str(task_data["id"]))
+        task_id_edit.setReadOnly(True)
+        task_id_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+        task_id_edit.setFixedWidth(250)
+        form_layout.addRow("任务ID:", task_id_edit)
+
+        # 任务名称（只读）
+        task_name_edit = QLineEdit()
+        task_name_edit.setText(task_data["name"])
+        task_name_edit.setReadOnly(True)
+        task_name_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+        task_name_edit.setFixedWidth(250)
+        form_layout.addRow("任务名称:", task_name_edit)
+
+        # 任务组（只读）
+        task_group_edit = QLineEdit()
+        task_group_edit.setText(task_data.get("jobGroup", "DEFAULT"))
+        task_group_edit.setReadOnly(True)
+        task_group_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+        task_group_edit.setFixedWidth(250)
+        form_layout.addRow("任务组:", task_group_edit)
+
+        layout.addLayout(form_layout)
+
+        # 按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+
+        close_btn = QPushButton("关闭")
+        close_btn.setFixedWidth(80)
+        close_btn.clicked.connect(dialog.accept)
+
+        button_layout.addStretch()
+        button_layout.addWidget(close_btn)
+        layout.addLayout(button_layout)
+
+        dialog.exec_()
+
     def add_layout_item(self):
         """添加布局项 - 优化版，样式与编辑项统一"""
         dialog = QDialog(self)
@@ -1573,6 +1430,7 @@ class ConfigManagementDialog(QDialog):
         self.add_type_combo.addItem("字段", "field")
         self.add_type_combo.addItem("下拉框", "combo")
         self.add_type_combo.addItem("接口", "interface")
+        self.add_type_combo.addItem("SQL", "sql")  # 新增SQL类型
         self.add_type_combo.setFixedWidth(120)
         self.add_type_combo.currentTextChanged.connect(self.on_add_type_changed)
         type_layout.addWidget(self.add_type_combo)
@@ -1607,6 +1465,15 @@ class ConfigManagementDialog(QDialog):
         self.add_interface_name_label.setVisible(False)
         self.add_interface_name_edit.setVisible(False)
         form_layout.addRow(self.add_interface_name_label, self.add_interface_name_edit)
+
+        # SQL名称 - 仅SQL显示
+        self.add_sql_name_label = QLabel("SQL名称:")
+        self.add_sql_name_edit = QLineEdit()
+        self.add_sql_name_edit.setPlaceholderText("SQL名称")
+        self.add_sql_name_edit.setFixedWidth(250)
+        self.add_sql_name_label.setVisible(False)
+        self.add_sql_name_edit.setVisible(False)
+        form_layout.addRow(self.add_sql_name_label, self.add_sql_name_edit)
 
         # 数据类型 - 字段和下拉框显示
         self.add_data_type_label = QLabel("数据类型:")
@@ -1691,12 +1558,13 @@ class ConfigManagementDialog(QDialog):
             key = self.add_key_edit.text().strip()
             label = self.add_label_edit.text().strip()
             interface_name = self.add_interface_name_edit.text().strip()
+            sql_name = self.add_sql_name_edit.text().strip()
             data_type = self.add_data_type_combo.currentText()
             default_value = self.add_default_edit.text().strip()
             show_in_ui = self.add_show_in_ui_checkbox.isChecked()
 
             # 验证必填字段
-            if item_type in ["field", "combo", "fixed_variable"]:  # 修改：包含fixed_variable
+            if item_type in ["field", "combo"]:
                 if not key:
                     Toast.warning(dialog, "警告", "请输入键")
                     return
@@ -1712,6 +1580,16 @@ class ConfigManagementDialog(QDialog):
                 for i in range(self.interface_list.count()):
                     if self.interface_list.item(i).text() == interface_name:
                         Toast.warning(dialog, "警告", "接口名称已存在")
+                        return
+            elif item_type == "sql":  # 新增SQL类型验证
+                if not sql_name:
+                    Toast.warning(dialog, "警告", "请输入SQL名称")
+                    return
+
+                # 检查SQL名称是否已存在
+                for i in range(self.sql_list.count()):
+                    if self.sql_list.item(i).text() == sql_name:
+                        Toast.warning(dialog, "警告", "SQL名称已存在")
                         return
 
             # 构建布局项数据
@@ -1760,14 +1638,6 @@ class ConfigManagementDialog(QDialog):
                 if not show_in_ui:
                     display_text += " [隐藏]"
 
-            elif item_type == "fixed_variable":  # 新增固定变量处理
-                item_data.update({
-                    "key": key,
-                    "label": label,
-                    "default": default_value
-                })
-                display_text = f"固定变量: {label} ({key})"
-
             elif item_type == "interface":
                 item_data.update({
                     "name": interface_name
@@ -1776,6 +1646,15 @@ class ConfigManagementDialog(QDialog):
 
                 # 自动在接口配置中生成默认接口
                 self.add_default_interface(interface_name)
+
+            elif item_type == "sql":  # 新增SQL类型处理
+                item_data.update({
+                    "name": sql_name
+                })
+                display_text = f"SQL: {sql_name}"
+
+                # 自动在SQL配置中生成默认SQL配置
+                self.add_default_sql_config(sql_name)
 
             # 添加到列表
             item = QListWidgetItem(display_text)
@@ -1796,214 +1675,6 @@ class ConfigManagementDialog(QDialog):
         self.on_add_type_changed(self.add_type_combo.currentText())
 
         dialog.exec_()
-
-    def add_default_interface(self, interface_name):
-        """为布局中的接口项生成默认接口配置"""
-        # 创建默认接口配置 - 通用请求模板
-        default_interface_config = {
-            "url": "",
-            "method": "POST",
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body_template": {
-                "requestId": "{request_id}"
-            },
-            "response_mapping": {},
-            "field_types": {}
-        }
-
-        # 检查接口是否已存在
-        for i in range(self.interface_list.count()):
-            if self.interface_list.item(i).text() == interface_name:
-                # 接口已存在，不重复添加
-                return
-
-        # 添加到接口列表
-        item = QListWidgetItem(interface_name)
-        item.setData(Qt.UserRole, default_interface_config)
-        self.interface_list.addItem(item)
-
-    def on_add_type_changed(self, item_type):
-        """添加布局项类型改变事件 - 修复版"""
-        # 获取实际的类型值（如果是中文显示，需要映射到英文）
-        type_mapping = {
-            "字段": "field",
-            "下拉框": "combo",
-            "接口": "interface"
-        }
-        actual_type = type_mapping.get(item_type, item_type)
-
-        # 显示/隐藏相关字段
-        is_field_or_combo = actual_type in ["field", "combo"]
-        is_interface = actual_type == "interface"
-        is_combo = actual_type == "combo"
-
-        # 键/名称和标签 - 仅字段和下拉框显示
-        self.add_key_label.setVisible(is_field_or_combo)
-        self.add_key_edit.setVisible(is_field_or_combo)
-        self.add_label_label.setVisible(is_field_or_combo)
-        self.add_label_edit.setVisible(is_field_or_combo)
-
-        # 接口名称 - 仅接口显示
-        self.add_interface_name_label.setVisible(is_interface)
-        self.add_interface_name_edit.setVisible(is_interface)
-
-        # 数据类型 - 仅字段和下拉框显示
-        self.add_data_type_label.setVisible(is_field_or_combo)
-        self.add_data_type_combo.setVisible(is_field_or_combo)
-
-        # 默认值 - 仅字段和下拉框显示
-        self.add_default_label.setVisible(is_field_or_combo)
-        self.add_default_edit.setVisible(is_field_or_combo)
-
-        # 是否展示到前端 - 仅字段和下拉框显示
-        self.add_show_in_ui_label.setVisible(is_field_or_combo)
-        self.add_show_in_ui_checkbox.setVisible(is_field_or_combo)
-
-        # 下拉框枚举配置 - 仅下拉框显示
-        self.add_options_group.setVisible(is_combo)
-
-        # 清空字段
-        if not is_field_or_combo:
-            self.add_key_edit.clear()
-            self.add_label_edit.clear()
-        if not is_interface:
-            self.add_interface_name_edit.clear()
-
-    def add_option_item(self):
-        """添加下拉框选项"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("添加选项")
-        dialog.setModal(True)
-        dialog.setFixedSize(300, 150)
-        layout = QFormLayout(dialog)
-
-        text_edit = QLineEdit()
-        text_edit.setPlaceholderText("显示文本")
-        text_edit.setFixedWidth(200)  # 固定宽度
-        layout.addRow("显示文本:", text_edit)
-
-        value_edit = QLineEdit()
-        value_edit.setPlaceholderText("值")
-        value_edit.setFixedWidth(200)  # 固定宽度
-        layout.addRow("值:", value_edit)
-
-        button_layout = QHBoxLayout()
-        ok_btn = QPushButton("确定")
-        ok_btn.setFixedWidth(80)  # 固定宽度
-
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setFixedWidth(80)  # 固定宽度
-
-        def on_ok():
-            text = text_edit.text().strip()
-            value = value_edit.text().strip()
-
-            if not text:
-                Toast.warning(dialog, "警告", "请输入显示文本")
-                return
-            if not value:
-                Toast.warning(dialog, "警告", "请输入值")
-                return
-
-            # 检查值是否重复
-            for row in range(self.add_options_table.rowCount()):
-                existing_value = self.add_options_table.item(row, 1).text()
-                if existing_value == value:
-                    Toast.warning(dialog, "警告", "值已存在")
-                    return
-
-            # 添加到表格
-            row = self.add_options_table.rowCount()
-            self.add_options_table.insertRow(row)
-            self.add_options_table.setItem(row, 0, QTableWidgetItem(text))
-            self.add_options_table.setItem(row, 1, QTableWidgetItem(value))
-
-            dialog.accept()
-
-        ok_btn.clicked.connect(on_ok)
-        cancel_btn.clicked.connect(dialog.reject)
-
-        button_layout.addWidget(ok_btn)
-        button_layout.addWidget(cancel_btn)
-        layout.addRow(button_layout)
-
-        dialog.exec_()
-
-    def edit_option_item(self):
-        """编辑下拉框选项"""
-        current_row = self.add_options_table.currentRow()
-        if current_row < 0:
-            Toast.warning(self, "警告", "请先选择要编辑的选项")
-            return
-
-        current_text = self.add_options_table.item(current_row, 0).text()
-        current_value = self.add_options_table.item(current_row, 1).text()
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle("编辑选项")
-        dialog.setModal(True)
-        dialog.setFixedSize(300, 150)
-        layout = QFormLayout(dialog)
-
-        text_edit = QLineEdit()
-        text_edit.setText(current_text)
-        text_edit.setFixedWidth(200)  # 固定宽度
-        layout.addRow("显示文本:", text_edit)
-
-        value_edit = QLineEdit()
-        value_edit.setText(current_value)
-        value_edit.setFixedWidth(200)  # 固定宽度
-        layout.addRow("值:", value_edit)
-
-        button_layout = QHBoxLayout()
-        ok_btn = QPushButton("确定")
-        ok_btn.setFixedWidth(80)  # 固定宽度
-
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setFixedWidth(80)  # 固定宽度
-
-        def on_ok():
-            text = text_edit.text().strip()
-            value = value_edit.text().strip()
-
-            if not text:
-                Toast.warning(dialog, "警告", "请输入显示文本")
-                return
-            if not value:
-                Toast.warning(dialog, "警告", "请输入值")
-                return
-
-            # 检查值是否重复（排除当前行）
-            for row in range(self.add_options_table.rowCount()):
-                if row == current_row:
-                    continue
-                existing_value = self.add_options_table.item(row, 1).text()
-                if existing_value == value:
-                    Toast.warning(dialog, "警告", "值已存在")
-                    return
-
-            # 更新表格
-            self.add_options_table.setItem(current_row, 0, QTableWidgetItem(text))
-            self.add_options_table.setItem(current_row, 1, QTableWidgetItem(value))
-
-            dialog.accept()
-
-        ok_btn.clicked.connect(on_ok)
-        cancel_btn.clicked.connect(dialog.reject)
-
-        button_layout.addWidget(ok_btn)
-        button_layout.addWidget(cancel_btn)
-        layout.addRow(button_layout)
-
-        dialog.exec_()
-
-    def remove_option_item(self):
-        """删除下拉框选项"""
-        current_row = self.add_options_table.currentRow()
-        if current_row >= 0:
-            self.add_options_table.removeRow(current_row)
 
     def edit_layout_item(self):
         """编辑布局项 - 修复固定变量编辑问题"""
@@ -2027,7 +1698,7 @@ class ConfigManagementDialog(QDialog):
         item_type = item_data.get("type")
         if item_type == "combo":
             dialog.setFixedSize(450, 580)  # 下拉框需要更多空间显示选项
-        elif item_type == "interface":
+        elif item_type == "interface" or item_type == "sql":  # SQL类型与接口类型大小相同
             dialog.setFixedSize(350, 200)  # 接口类型只需要接口名称，更小
         else:  # field
             dialog.setFixedSize(350, 330)  # 字段类型适中
@@ -2048,6 +1719,7 @@ class ConfigManagementDialog(QDialog):
             "field": "字段",
             "combo": "下拉框",
             "interface": "接口",
+            "sql": "SQL"  # 新增SQL类型
         }
 
         type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
@@ -2102,6 +1774,13 @@ class ConfigManagementDialog(QDialog):
             interface_name_edit.setText(item_data.get("name", ""))
             interface_name_edit.setFixedWidth(250)
             form_layout.addRow("接口名称:", interface_name_edit)
+
+        elif item_type == "sql":  # 新增SQL类型编辑
+            # SQL名称
+            sql_name_edit = QLineEdit()
+            sql_name_edit.setText(item_data.get("name", ""))
+            sql_name_edit.setFixedWidth(250)
+            form_layout.addRow("SQL名称:", sql_name_edit)
 
         layout.addLayout(form_layout)
 
@@ -2319,7 +1998,7 @@ class ConfigManagementDialog(QDialog):
                     data_type = data_type_combo.currentText()
                     default_value = default_edit.text().strip()
                     show_in_ui = show_in_ui_checkbox.isChecked()
-                else:  # fixed_variable
+                else:
                     default_value = default_edit.text().strip()
 
                 # 必填校验
@@ -2381,6 +2060,23 @@ class ConfigManagementDialog(QDialog):
                             Toast.warning(dialog, "警告", "接口名称已存在")
                             return
 
+            elif item_type == "sql":  # 新增SQL类型编辑
+                old_sql_name = item_data.get("name", "")
+                new_sql_name = sql_name_edit.text().strip()
+
+                # 必填校验
+                if not new_sql_name:
+                    Toast.warning(dialog, "警告", "请输入SQL名称")
+                    return
+
+                # 如果SQL名称发生变化，检查是否重复
+                if old_sql_name != new_sql_name:
+                    # 检查新名称是否已存在
+                    for i in range(self.sql_list.count()):
+                        if self.sql_list.item(i).text() == new_sql_name:
+                            Toast.warning(dialog, "警告", "SQL名称已存在")
+                            return
+
             # 更新布局项数据
             if item_type in ["field", "combo"]:
                 item_data.update({
@@ -2424,6 +2120,23 @@ class ConfigManagementDialog(QDialog):
                     "name": new_interface_name
                 })
                 display_text = f"接口: {new_interface_name}"
+
+            elif item_type == "sql":  # 新增SQL类型更新
+                old_sql_name = item_data.get("name", "")
+                new_sql_name = sql_name_edit.text().strip()
+
+                # 如果SQL名称发生变化，需要更新SQL列表
+                if old_sql_name != new_sql_name:
+                    # 更新SQL列表中的名称
+                    for i in range(self.sql_list.count()):
+                        if self.sql_list.item(i).text() == old_sql_name:
+                            self.sql_list.item(i).setText(new_sql_name)
+                            break
+
+                item_data.update({
+                    "name": new_sql_name
+                })
+                display_text = f"SQL: {new_sql_name}"
 
             # 更新列表显示
             current_item.setText(display_text)
@@ -2478,8 +2191,394 @@ class ConfigManagementDialog(QDialog):
                     self.interface_list.takeItem(i)
                     break
 
+        # 如果是SQL类型，同步删除SQL配置
+        elif item_data and item_data.get("type") == "sql":
+            sql_name = item_data.get("name")
+            # 在SQL列表中查找并删除对应的SQL
+            for i in range(self.sql_list.count()):
+                if self.sql_list.item(i).text() == sql_name:
+                    self.sql_list.takeItem(i)
+                    break
+
         # 删除布局项
         self.layout_list.takeItem(current_row)
+
+    def view_layout_item(self):
+        """查看布局项详情"""
+        current_row = self.layout_list.currentRow()
+        if current_row < 0:
+            Toast.warning(self, "警告", "请先选择要查看的布局项")
+            return
+
+        current_item = self.layout_list.item(current_row)
+        item_data = current_item.data(Qt.UserRole)
+
+        if not item_data:
+            Toast.warning(self, "警告", "选中的布局项数据格式错误")
+            return
+
+        # 使用编辑布局项的对话框，但设置为只读模式
+        dialog = QDialog(self)
+        dialog.setWindowTitle("查看布局项")
+        dialog.setModal(True)
+
+        item_type = item_data.get("type")
+        if item_type == "combo":
+            dialog.setFixedSize(450, 550)
+        elif item_type == "interface" or item_type == "sql":  # SQL类型与接口类型大小相同
+            dialog.setFixedSize(350, 200)
+        else:  # field
+            dialog.setFixedSize(350, 300)
+
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+
+        # 类型显示（只读）
+        type_layout = QHBoxLayout()
+        type_layout.setSpacing(5)
+        type_label = QLabel("类型:")
+        type_label.setFixedWidth(30)
+        type_layout.addWidget(type_label)
+
+        type_mapping = {
+            "field": "字段",
+            "combo": "下拉框",
+            "interface": "接口",
+            "sql": "SQL"  # 新增SQL类型
+        }
+        type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
+        type_value.setStyleSheet("font-weight: bold; color: blue;")
+        type_layout.addWidget(type_value)
+        type_layout.addStretch()
+        layout.addLayout(type_layout)
+
+        # 创建表单布局
+        form_layout = QFormLayout()
+        form_layout.setSpacing(6)
+        form_layout.setVerticalSpacing(6)
+        form_layout.setHorizontalSpacing(8)
+
+        # 根据类型显示不同的字段（全部只读）
+        if item_type in ["field", "combo"]:
+            # 键（只读）
+            key_edit = QLineEdit()
+            key_edit.setText(item_data.get("key", ""))
+            key_edit.setReadOnly(True)
+            key_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            key_edit.setFixedWidth(250)
+            form_layout.addRow("键:", key_edit)
+
+            # 标签（只读）
+            label_edit = QLineEdit()
+            label_edit.setText(item_data.get("label", ""))
+            label_edit.setReadOnly(True)
+            label_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            label_edit.setFixedWidth(250)
+            form_layout.addRow("标签:", label_edit)
+
+            # 数据类型（只读）- 仅字段和下拉框显示
+            if item_type in ["field", "combo"]:
+                data_type_combo = QComboBox()
+                data_type_combo.addItems(["string", "int", "float", "bool"])
+                data_type_combo.setCurrentText(item_data.get("data_type", "string"))
+                data_type_combo.setEnabled(False)
+                data_type_combo.setFixedWidth(120)
+                form_layout.addRow("数据类型:", data_type_combo)
+
+            # 默认值（只读）
+            default_edit = QLineEdit()
+            default_edit.setText(item_data.get("default", ""))
+            default_edit.setReadOnly(True)
+            default_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            default_edit.setFixedWidth(250)
+            form_layout.addRow("默认值:", default_edit)
+
+            # 是否展示到前端（只读）- 仅字段和下拉框显示
+            if item_type in ["field", "combo"]:
+                show_in_ui_label = QLabel("是" if item_data.get("show_in_ui", True) else "否")
+                show_in_ui_label.setStyleSheet("font-weight: bold; color: blue;")
+                form_layout.addRow("展示到前端:", show_in_ui_label)
+
+        elif item_type == "interface":
+            # 接口名称（只读）
+            interface_name_edit = QLineEdit()
+            interface_name_edit.setText(item_data.get("name", ""))
+            interface_name_edit.setReadOnly(True)
+            interface_name_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            interface_name_edit.setFixedWidth(250)
+            form_layout.addRow("接口名称:", interface_name_edit)
+
+        elif item_type == "sql":  # 新增SQL类型查看
+            # SQL名称（只读）
+            sql_name_edit = QLineEdit()
+            sql_name_edit.setText(item_data.get("name", ""))
+            sql_name_edit.setReadOnly(True)
+            sql_name_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            sql_name_edit.setFixedWidth(250)
+            form_layout.addRow("SQL名称:", sql_name_edit)
+
+        layout.addLayout(form_layout)
+
+        # 下拉框枚举配置 - 仅下拉框显示（只读）
+        if item_type == "combo":
+            options_group = QGroupBox("下拉框枚举配置")
+            options_group.setContentsMargins(8, 8, 8, 8)
+            options_layout = QVBoxLayout(options_group)
+            options_layout.setSpacing(6)
+
+            # 枚举表格（只读）
+            options_table = QTableWidget()
+            options_table.setColumnCount(2)
+            options_table.setHorizontalHeaderLabels(["显示文本", "值"])
+            options_table.horizontalHeader().setStretchLastSection(True)
+            options_table.setMaximumHeight(180)
+            options_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 禁止编辑
+
+            # 设置列宽
+            options_table.setColumnWidth(0, 150)
+            options_table.setColumnWidth(1, 150)
+
+            # 填充现有选项
+            options = item_data.get("options", [])
+            for option in options:
+                row = options_table.rowCount()
+                options_table.insertRow(row)
+                options_table.setItem(row, 0, QTableWidgetItem(option.get("text", "")))
+                options_table.setItem(row, 1, QTableWidgetItem(option.get("value", "")))
+
+            options_layout.addWidget(options_table)
+            layout.addWidget(options_group)
+
+        # 按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(10)
+
+        close_btn = QPushButton("关闭")
+        close_btn.setFixedWidth(80)
+        close_btn.clicked.connect(dialog.accept)
+
+        button_layout.addStretch()
+        button_layout.addWidget(close_btn)
+        layout.addLayout(button_layout)
+
+        dialog.exec_()
+
+    def on_add_type_changed(self, item_type):
+        """添加布局项类型改变事件 - 修复版"""
+        # 获取实际的类型值（如果是中文显示，需要映射到英文）
+        type_mapping = {
+            "字段": "field",
+            "下拉框": "combo",
+            "接口": "interface",
+            "SQL": "sql"  # 新增SQL类型
+        }
+        actual_type = type_mapping.get(item_type, item_type)
+
+        # 显示/隐藏相关字段
+        is_field_or_combo = actual_type in ["field", "combo"]
+        is_interface = actual_type == "interface"
+        is_sql = actual_type == "sql"  # 新增SQL类型判断
+        is_combo = actual_type == "combo"
+
+        # 键/名称和标签 - 仅字段和下拉框显示
+        self.add_key_label.setVisible(is_field_or_combo)
+        self.add_key_edit.setVisible(is_field_or_combo)
+        self.add_label_label.setVisible(is_field_or_combo)
+        self.add_label_edit.setVisible(is_field_or_combo)
+
+        # 接口名称 - 仅接口显示
+        self.add_interface_name_label.setVisible(is_interface)
+        self.add_interface_name_edit.setVisible(is_interface)
+
+        # SQL名称 - 仅SQL显示
+        self.add_sql_name_label.setVisible(is_sql)
+        self.add_sql_name_edit.setVisible(is_sql)
+
+        # 数据类型 - 仅字段和下拉框显示
+        self.add_data_type_label.setVisible(is_field_or_combo)
+        self.add_data_type_combo.setVisible(is_field_or_combo)
+
+        # 默认值 - 仅字段和下拉框显示
+        self.add_default_label.setVisible(is_field_or_combo)
+        self.add_default_edit.setVisible(is_field_or_combo)
+
+        # 是否展示到前端 - 仅字段和下拉框显示
+        self.add_show_in_ui_label.setVisible(is_field_or_combo)
+        self.add_show_in_ui_checkbox.setVisible(is_field_or_combo)
+
+        # 下拉框枚举配置 - 仅下拉框显示
+        self.add_options_group.setVisible(is_combo)
+
+        # 清空字段
+        if not is_field_or_combo:
+            self.add_key_edit.clear()
+            self.add_label_edit.clear()
+        if not is_interface:
+            self.add_interface_name_edit.clear()
+        if not is_sql:
+            self.add_sql_name_edit.clear()
+
+    def add_option_item(self):
+        """添加下拉框选项"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("添加选项")
+        dialog.setModal(True)
+        dialog.setFixedSize(300, 150)
+        layout = QFormLayout(dialog)
+
+        text_edit = QLineEdit()
+        text_edit.setPlaceholderText("显示文本")
+        text_edit.setFixedWidth(200)  # 固定宽度
+        layout.addRow("显示文本:", text_edit)
+
+        value_edit = QLineEdit()
+        value_edit.setPlaceholderText("值")
+        value_edit.setFixedWidth(200)  # 固定宽度
+        layout.addRow("值:", value_edit)
+
+        button_layout = QHBoxLayout()
+        ok_btn = QPushButton("确定")
+        ok_btn.setFixedWidth(80)  # 固定宽度
+
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setFixedWidth(80)  # 固定宽度
+
+        def on_ok():
+            text = text_edit.text().strip()
+            value = value_edit.text().strip()
+
+            if not text:
+                Toast.warning(dialog, "警告", "请输入显示文本")
+                return
+            if not value:
+                Toast.warning(dialog, "警告", "请输入值")
+                return
+
+            # 检查值是否重复
+            for row in range(self.add_options_table.rowCount()):
+                existing_value = self.add_options_table.item(row, 1).text()
+                if existing_value == value:
+                    Toast.warning(dialog, "警告", "值已存在")
+                    return
+
+            # 添加到表格
+            row = self.add_options_table.rowCount()
+            self.add_options_table.insertRow(row)
+            self.add_options_table.setItem(row, 0, QTableWidgetItem(text))
+            self.add_options_table.setItem(row, 1, QTableWidgetItem(value))
+
+            dialog.accept()
+
+        ok_btn.clicked.connect(on_ok)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        button_layout.addWidget(ok_btn)
+        button_layout.addWidget(cancel_btn)
+        layout.addRow(button_layout)
+
+        dialog.exec_()
+
+    def edit_option_item(self):
+        """编辑下拉框选项"""
+        current_row = self.add_options_table.currentRow()
+        if current_row < 0:
+            Toast.warning(self, "警告", "请先选择要编辑的选项")
+            return
+
+        current_text = self.add_options_table.item(current_row, 0).text()
+        current_value = self.add_options_table.item(current_row, 1).text()
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("编辑选项")
+        dialog.setModal(True)
+        dialog.setFixedSize(300, 150)
+        layout = QFormLayout(dialog)
+
+        text_edit = QLineEdit()
+        text_edit.setText(current_text)
+        text_edit.setFixedWidth(200)  # 固定宽度
+        layout.addRow("显示文本:", text_edit)
+
+        value_edit = QLineEdit()
+        value_edit.setText(current_value)
+        value_edit.setFixedWidth(200)  # 固定宽度
+        layout.addRow("值:", value_edit)
+
+        button_layout = QHBoxLayout()
+        ok_btn = QPushButton("确定")
+        ok_btn.setFixedWidth(80)  # 固定宽度
+
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setFixedWidth(80)  # 固定宽度
+
+        def on_ok():
+            text = text_edit.text().strip()
+            value = value_edit.text().strip()
+
+            if not text:
+                Toast.warning(dialog, "警告", "请输入显示文本")
+                return
+            if not value:
+                Toast.warning(dialog, "警告", "请输入值")
+                return
+
+            # 检查值是否重复（排除当前行）
+            for row in range(self.add_options_table.rowCount()):
+                if row == current_row:
+                    continue
+                existing_value = self.add_options_table.item(row, 1).text()
+                if existing_value == value:
+                    Toast.warning(dialog, "警告", "值已存在")
+                    return
+
+            # 更新表格
+            self.add_options_table.setItem(current_row, 0, QTableWidgetItem(text))
+            self.add_options_table.setItem(current_row, 1, QTableWidgetItem(value))
+
+            dialog.accept()
+
+        ok_btn.clicked.connect(on_ok)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        button_layout.addWidget(ok_btn)
+        button_layout.addWidget(cancel_btn)
+        layout.addRow(button_layout)
+
+        dialog.exec_()
+
+    def remove_option_item(self):
+        """删除下拉框选项"""
+        current_row = self.add_options_table.currentRow()
+        if current_row >= 0:
+            self.add_options_table.removeRow(current_row)
+
+    def add_default_interface(self, interface_name):
+        """为布局中的接口项生成默认接口配置"""
+        # 创建默认接口配置 - 通用请求模板
+        default_interface_config = {
+            "url": "",
+            "method": "POST",
+            "headers": {
+                "Content-Type": "application/json"
+            },
+            "body_template": {
+                "requestId": "{request_id}"
+            },
+            "response_mapping": {},
+            "field_types": {}
+        }
+
+        # 检查接口是否已存在
+        for i in range(self.interface_list.count()):
+            if self.interface_list.item(i).text() == interface_name:
+                # 接口已存在，不重复添加
+                return
+
+        # 添加到接口列表
+        item = QListWidgetItem(interface_name)
+        item.setData(Qt.UserRole, default_interface_config)
+        self.interface_list.addItem(item)
 
     def edit_interface(self):
         """编辑接口"""
@@ -2498,6 +2597,123 @@ class ConfigManagementDialog(QDialog):
             # 更新接口配置
             current_item.setData(Qt.UserRole, dialog.interface_config)
             Toast.information(self, "成功", f"接口 '{interface_name}' 配置已更新")
+
+    def view_interface(self):
+        """查看接口详情"""
+        current_row = self.interface_list.currentRow()
+        if current_row < 0:
+            Toast.warning(self, "警告", "请先选择要查看的接口")
+            return
+
+        current_item = self.interface_list.item(current_row)
+        interface_name = current_item.text()
+        interface_config = current_item.data(Qt.UserRole)
+
+        # 打开接口配置对话框，但设置为只读模式
+        dialog = InterfaceConfigDialog(interface_name, interface_config, self)
+
+        # 设置对话框为只读模式
+        dialog.setWindowTitle(f"查看接口 - {interface_name}")
+
+        # 禁用所有可编辑控件
+        for widget in dialog.findChildren((QLineEdit, QTextEdit, QComboBox, QCheckBox)):
+            if isinstance(widget, QLineEdit):
+                widget.setReadOnly(True)
+                widget.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            elif isinstance(widget, QTextEdit):
+                widget.setReadOnly(True)
+                widget.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            elif isinstance(widget, QComboBox):
+                widget.setEnabled(False)
+            elif isinstance(widget, QCheckBox):
+                widget.setEnabled(False)
+
+        # 隐藏保存按钮，只显示关闭按钮
+        dialog.save_btn.setVisible(False)
+        dialog.cancel_btn.setText("关闭")
+
+        dialog.exec_()
+
+    def add_default_sql_config(self, sql_name):
+        """为布局中的SQL项生成默认SQL配置"""
+        default_sql_config = {
+            "database": {
+                "host": "47.106.192.83",
+                "port": 3306,
+                "user": "xvdba",
+                "password": "xvdba@2022",
+                "database": "cfloan_biz"
+            },
+            "sql": "",
+            "output_fields": []
+        }
+
+        # 检查SQL是否已存在
+        for i in range(self.sql_list.count()):
+            if self.sql_list.item(i).text() == sql_name:
+                # SQL已存在，不重复添加
+                return
+
+        # 添加到SQL列表
+        item = QListWidgetItem(sql_name)
+        item.setData(Qt.UserRole, default_sql_config)
+        self.sql_list.addItem(item)
+
+    def edit_sql(self):
+        """编辑SQL配置"""
+        current_row = self.sql_list.currentRow()
+        if current_row < 0:
+            Toast.warning(self, "警告", "请先选择要编辑的SQL")
+            return
+
+        current_item = self.sql_list.item(current_row)
+        sql_name = current_item.text()
+        sql_config = current_item.data(Qt.UserRole)
+
+        # 打开SQL配置对话框
+        from src.ui.dialogs.sql_config_dialog import SQLConfigDialog
+        dialog = SQLConfigDialog(sql_name, sql_config, self)
+        if dialog.exec_() == QDialog.Accepted:
+            # 更新SQL配置
+            current_item.setData(Qt.UserRole, dialog.get_config())
+            Toast.information(self, "成功", f"SQL '{sql_name}' 配置已更新")
+
+    def view_sql(self):
+        """查看SQL详情"""
+        current_row = self.sql_list.currentRow()
+        if current_row < 0:
+            Toast.warning(self, "警告", "请先选择要查看的SQL")
+            return
+
+        current_item = self.sql_list.item(current_row)
+        sql_name = current_item.text()
+        sql_config = current_item.data(Qt.UserRole)
+
+        # 打开SQL配置对话框，但设置为只读模式
+        from src.ui.dialogs.sql_config_dialog import SQLConfigDialog
+        dialog = SQLConfigDialog(sql_name, sql_config, self)
+        dialog.setWindowTitle(f"查看SQL - {sql_name}")
+
+        # 禁用所有可编辑控件
+        for widget in dialog.findChildren((QLineEdit, QTextEdit, QComboBox, QPushButton, QTableWidget)):
+            if isinstance(widget, QLineEdit):
+                widget.setReadOnly(True)
+                widget.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            elif isinstance(widget, QTextEdit):
+                widget.setReadOnly(True)
+                widget.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            elif isinstance(widget, QComboBox):
+                widget.setEnabled(False)
+            elif isinstance(widget, QPushButton):
+                widget.setEnabled(False)
+            elif isinstance(widget, QTableWidget):
+                widget.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        # 隐藏保存按钮，只显示关闭按钮
+        dialog.save_btn.setVisible(False)
+        dialog.cancel_btn.setText("关闭")
+
+        dialog.exec_()
 
     def save_all_config(self):
         """保存所有配置"""
@@ -2544,7 +2760,8 @@ class ConfigManagementDialog(QDialog):
                 "decrypt_url": self.detail_decrypt_url_edit.text().strip(),
                 "schedule_tasks": [],
                 "layout": [],
-                "interfaces": {}
+                "interfaces": {},
+                "sqls": {}  # 新增SQL配置
             }
 
             # 保存定时任务
@@ -2579,6 +2796,13 @@ class ConfigManagementDialog(QDialog):
                         },
                         "body_template": {}
                     }
+
+            # 保存SQL配置
+            for i in range(self.sql_list.count()):
+                sql_name = self.sql_list.item(i).text()
+                sql_data = self.sql_list.item(i).data(Qt.UserRole)
+                if sql_data:
+                    product_config["sqls"][sql_name] = sql_data
 
             os.makedirs(os.path.dirname(product_config_file), exist_ok=True)
 

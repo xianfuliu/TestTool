@@ -366,18 +366,65 @@
       "type": "field"
     },
     {
-      "name": "线上还款申请",
+      "data_type": "string",
+      "default": "BANK",
+      "key": "paymentType",
+      "label": "还款支付方式",
+      "options": [
+        {
+          "text": "银行卡",
+          "value": "BANK"
+        },
+        {
+          "text": "支付宝",
+          "value": "ALIPAY"
+        }
+      ],
       "priority": 36,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "name": "查询蓝海借据号",
+      "priority": 37,
+      "type": "sql"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "cap_loan_no",
+      "label": "蓝海借据号",
+      "priority": 38,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "查询蓝海还款计划",
+      "priority": 39,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "executeBizDate",
+      "label": "操作天数",
+      "priority": 40,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "修改蓝海还款计划",
+      "priority": 41,
+      "type": "interface"
+    },
+    {
+      "name": "线上还款申请",
+      "priority": 42,
       "type": "interface"
     },
     {
       "name": "还款结果查询",
-      "priority": 37,
-      "type": "interface"
-    },
-    {
-      "name": "修改蓝海还款计划",
-      "priority": 38,
+      "priority": 43,
       "type": "interface"
     }
   ],
@@ -465,7 +512,7 @@
     "线上还款申请": {
       "body_template": {
         "businessRequest": {
-          "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{repayTime}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"200.00\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\"}",
+          "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{repayTime}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"200.00\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType \":\"{paymentType}\"}",
           "partner": "{partner}",
           "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
           "requestTime": "1775531455763",
@@ -516,7 +563,7 @@
       },
       "method": "GET",
       "response_mapping": {},
-      "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplanrevise?executeBizDate=-1&invoice={name}&env=SIT4"
+      "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplanrevise?executeBizDate=-1&invoice={cap_loan_no}&env=SIT4"
     },
     "奇富切日": {
       "body_template": {
@@ -542,6 +589,34 @@
         "qifu_time": "data.SERVER_DATE.ruleValue"
       },
       "url": "http://192.168.0.47:8096/rule/all"
+    },
+    "查询蓝海还款计划": {
+      "body_template": {},
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "GET",
+      "response_mapping": {},
+      "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplan?loanid={cap_loan_no}&env=SIT4"
+    }
+  },
+  "sqls": {
+    "查询蓝海借据号": {
+      "database": {
+        "database": "cfloan_biz",
+        "host": "47.106.192.83",
+        "password": "xvdba@2022",
+        "port": 3306,
+        "user": "xvdba"
+      },
+      "output_fields": [
+        {
+          "description": "资方借款编号",
+          "field": "cap_loan_no"
+        }
+      ],
+      "sql": "SELECT cap_loan_no FROM hl_loan_info h WHERE guarantor_loan_no in (\"{partnerLoanNo}\")ORDER BY id DESC LIMIT 1;"
     }
   }
 }
