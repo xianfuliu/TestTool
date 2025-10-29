@@ -137,11 +137,30 @@
       "type": "field"
     },
     {
+      "name": "查询奇富时间",
+      "priority": 14,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "qifu_time",
+      "label": "360时间",
+      "priority": 15,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "奇富切日",
+      "priority": 16,
+      "type": "interface"
+    },
+    {
       "data_type": "string",
       "default": "1000",
       "key": "loanAmt",
       "label": "金额",
-      "priority": 14,
+      "priority": 17,
       "type": "field"
     },
     {
@@ -149,7 +168,7 @@
       "default": "12",
       "key": "term",
       "label": "期数",
-      "priority": 15,
+      "priority": 18,
       "type": "field"
     },
     {
@@ -183,7 +202,7 @@
           "value": "06"
         }
       ],
-      "priority": 16,
+      "priority": 19,
       "show_in_ui": true,
       "type": "combo"
     },
@@ -192,7 +211,7 @@
       "default": "0.00065700",
       "key": "dayRate",
       "label": "日利率",
-      "priority": 17,
+      "priority": 20,
       "show_in_ui": true,
       "type": "field"
     },
@@ -201,7 +220,7 @@
       "default": "0.239805",
       "key": "irrYearRate",
       "label": "年利率",
-      "priority": 18,
+      "priority": 21,
       "show_in_ui": true,
       "type": "field"
     },
@@ -210,17 +229,12 @@
       "default": "01",
       "key": "loan_num",
       "label": "借款笔数",
-      "priority": 19,
+      "priority": 22,
       "type": "field"
     },
     {
       "name": "借款申请",
-      "priority": 20,
-      "type": "interface"
-    },
-    {
-      "name": "借款结果查询",
-      "priority": 21,
+      "priority": 23,
       "type": "interface"
     },
     {
@@ -228,7 +242,7 @@
       "default": "",
       "key": "partnerLoanNo",
       "label": "花旗借款单号",
-      "priority": 22,
+      "priority": 24,
       "show_in_ui": true,
       "type": "field"
     },
@@ -237,27 +251,46 @@
       "default": "",
       "key": "loanApplyNo",
       "label": "360借据号",
-      "priority": 23,
-      "show_in_ui": true,
-      "type": "field"
-    },
-    {
-      "name": "查询奇富时间",
-      "priority": 24,
-      "type": "interface"
-    },
-    {
-      "data_type": "string",
-      "default": "",
-      "key": "qifu_time",
-      "label": "360时间",
       "priority": 25,
       "show_in_ui": true,
       "type": "field"
     },
     {
-      "name": "奇富切日",
+      "name": "借款结果查询",
       "priority": 26,
+      "type": "interface"
+    },
+    {
+      "name": "查询蓝海借据号",
+      "priority": 27,
+      "type": "sql"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "cap_loan_no",
+      "label": "蓝海借据号",
+      "priority": 28,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "查询蓝海还款计划",
+      "priority": 29,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "executeBizDate",
+      "label": "操作天数",
+      "priority": 30,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "修改蓝海还款计划",
+      "priority": 31,
       "type": "interface"
     },
     {
@@ -279,25 +312,16 @@
           "value": "3"
         }
       ],
-      "priority": 27,
+      "priority": 32,
       "show_in_ui": true,
       "type": "combo"
-    },
-    {
-      "data_type": "string",
-      "default": "",
-      "key": "repayTime",
-      "label": "还款时间",
-      "priority": 28,
-      "show_in_ui": true,
-      "type": "field"
     },
     {
       "data_type": "string",
       "default": "1",
       "key": "rpyTerm",
       "label": "还款期数",
-      "priority": 29,
+      "priority": 33,
       "show_in_ui": true,
       "type": "field"
     },
@@ -306,7 +330,7 @@
       "default": "",
       "key": "repayAmt",
       "label": "还款金额",
-      "priority": 30,
+      "priority": 34,
       "show_in_ui": true,
       "type": "field"
     },
@@ -315,7 +339,7 @@
       "default": "",
       "key": "prinAmt",
       "label": "本金",
-      "priority": 31,
+      "priority": 35,
       "show_in_ui": true,
       "type": "field"
     },
@@ -324,7 +348,7 @@
       "default": "",
       "key": "intAmt",
       "label": "利息",
-      "priority": 32,
+      "priority": 36,
       "show_in_ui": true,
       "type": "field"
     },
@@ -333,7 +357,16 @@
       "default": "0",
       "key": "ointAmt",
       "label": "罚息",
-      "priority": 33,
+      "priority": 37,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "0",
+      "key": "serviceFeeAmt",
+      "label": "服务费",
+      "priority": 38,
       "show_in_ui": true,
       "type": "field"
     },
@@ -352,7 +385,7 @@
           "value": "ONLY"
         }
       ],
-      "priority": 34,
+      "priority": 39,
       "show_in_ui": true,
       "type": "combo"
     },
@@ -361,7 +394,7 @@
       "default": "01",
       "key": "repay_num",
       "label": "还款笔数",
-      "priority": 35,
+      "priority": 40,
       "show_in_ui": true,
       "type": "field"
     },
@@ -380,45 +413,12 @@
           "value": "ALIPAY"
         }
       ],
-      "priority": 36,
+      "priority": 41,
       "show_in_ui": true,
       "type": "combo"
     },
     {
-      "name": "查询蓝海借据号",
-      "priority": 37,
-      "type": "sql"
-    },
-    {
-      "data_type": "string",
-      "default": "",
-      "key": "cap_loan_no",
-      "label": "蓝海借据号",
-      "priority": 38,
-      "show_in_ui": true,
-      "type": "field"
-    },
-    {
-      "name": "查询蓝海还款计划",
-      "priority": 39,
-      "type": "interface"
-    },
-    {
-      "data_type": "string",
-      "default": "",
-      "key": "executeBizDate",
-      "label": "操作天数",
-      "priority": 40,
-      "show_in_ui": true,
-      "type": "field"
-    },
-    {
-      "name": "修改蓝海还款计划",
-      "priority": 41,
-      "type": "interface"
-    },
-    {
-      "name": "线上还款申请",
+      "name": "还款申请",
       "priority": 42,
       "type": "interface"
     },
@@ -503,25 +503,40 @@
         "Content-Type": "application/json"
       },
       "method": "POST",
-      "response_mapping": {
-        "intAmt": "data.businessResponse.output|planInfoList[0].intAmt",
-        "prinAmt": "data.businessResponse.output|planInfoList[0].prinAmt"
-      },
+      "response_mapping": {},
       "url": "http://192.168.0.47:8096/invoke"
     },
-    "线上还款申请": {
-      "body_template": {
-        "businessRequest": {
-          "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{repayTime}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"200.00\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType \":\"{paymentType}\"}",
-          "partner": "{partner}",
-          "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
-          "requestTime": "1775531455763",
-          "version": "1"
+    "还款申请": {
+      "conditional_body": {
+        "cases": {
+          "baofu": {
+            "businessRequest": {
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"1202508252020052770017382282\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"{serviceFeeAmt}\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"{serviceFeeRpyFlag}\",\"paymentType\":\"{paymentType}\"}",
+              "partner": "{partner}",
+              "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
+              "requestTime": "1775531455763",
+              "version": "1"
+            },
+            "method": "applyRepayment",
+            "productForm": "support",
+            "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
+            "userId": null
+          },
+          "yeepay": {
+            "businessRequest": {
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"2547288\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"200.00\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"{serviceFeeRpyFlag}\",\"paymentType\":\"{paymentType}\"}",
+              "partner": "{partner}",
+              "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
+              "requestTime": "1775531455763",
+              "version": "1"
+            },
+            "method": "applyRepayment",
+            "productForm": "support",
+            "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
+            "userId": null
+          }
         },
-        "method": "applyRepayment",
-        "productForm": "support",
-        "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
-        "userId": null
+        "field": "channelCode"
       },
       "field_types": {},
       "headers": {
@@ -534,7 +549,7 @@
     "还款结果查询": {
       "body_template": {
         "businessRequest": {
-          "input": "{\"repayApplyNo\":\"{repayApplyNo}\"}",
+          "input": "{\"repayApplyNo\":\"SRA{request_id}{repay_num}\"}",
           "partner": "{partner}",
           "requestNo": "b686f29e-1f75-4cb9-b7a9-56a91a9a1b36",
           "requestTime": "1773114672163",
@@ -563,7 +578,7 @@
       },
       "method": "GET",
       "response_mapping": {},
-      "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplanrevise?executeBizDate=-1&invoice={cap_loan_no}&env=SIT4"
+      "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplanrevise?executeBizDate={executeBizDate}&invoice={cap_loan_no}&env=SIT4"
     },
     "奇富切日": {
       "body_template": {
@@ -597,7 +612,12 @@
         "Content-Type": "application/json"
       },
       "method": "GET",
-      "response_mapping": {},
+      "response_mapping": {
+        "intAmt": "data[0].pre_repay_interest",
+        "ointAmt": "data[0].pre_repay_overdue_fee",
+        "prinAmt": "data[0].pre_repay_principal",
+        "repayAmt": "data[0].pre_repay_amount"
+      },
       "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplan?loanid={cap_loan_no}&env=SIT4"
     }
   },

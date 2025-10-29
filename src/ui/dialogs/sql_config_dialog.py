@@ -1,10 +1,7 @@
-import json
 import re
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QGroupBox, QFormLayout, QTextEdit,
-                             QTableWidget, QTableWidgetItem, QComboBox, QMessageBox,
-                             QScrollArea, QWidget, QHeaderView, QTabWidget)
-from PyQt5.QtCore import Qt
+                             QTableWidget, QTableWidgetItem, QScrollArea, QWidget)
 from src.ui.widgets.toast_tips import Toast
 from src.utils.sql_worker import SQLWorker
 

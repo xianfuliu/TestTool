@@ -33,6 +33,11 @@ class ApiToolTab(QWidget):
         self.api_config = {"products": {}}  # 存储所有产品配置
         self.products_config = {}  # 存储产品文件映射
         self.sql_buttons = {}  # 新增SQL按钮字典
+        self.sql_worker = None  # 新增SQL工作线程
+        # 新增：记录最后一次SQL查询的时间戳
+        self.last_sql_execution_time = None
+        # 新增：记录各字段的最后更新时间
+        self.field_last_update_time = {}
         self.current_product = None
         self.current_interface = None
         self.field_inputs = {}
@@ -509,35 +514,38 @@ class ApiToolTab(QWidget):
                             combo_box.setCurrentIndex(0)
                     self.combo_boxes[item["key"]] = combo_box
 
-            # 然后，填充测试数据到所有字段（包括隐藏字段）（不包括Base64字段，因为它们现在通过变量池处理）
+            # 然后，只填充那些当前值为空或等于默认值的字段（保留用户修改的值）
             for item in layout_config:
                 if item["type"] == "field" and item["key"] in self.field_inputs:
                     field_key = item["key"]
                     field_input = self.field_inputs[field_key]
+                    current_value = field_input.text()
+                    default_value = item.get("default", "")
 
                     # 跳过Base64字段，因为它们已经通过变量池处理
                     if field_key in self.BASE64_VARIABLE_KEYS:
                         continue
 
-                    # 使用测试数据填充字段
-                    if field_key == "name":
-                        field_input.setText(test_data["name"])
-                    elif field_key == "id_card":
-                        field_input.setText(test_data["id_number"])
-                    elif field_key == "phone":
-                        field_input.setText(test_data["phone"])
-                    elif field_key == "bank_card_no":
-                        field_input.setText(test_data["bank_card_number"])
-                    elif field_key == "id_card_start_time":
-                        field_input.setText(test_data["id_card_start_time"])
-                    elif field_key == "id_card_end_time":
-                        field_input.setText(test_data["id_card_end_time"])
-                    elif field_key in test_data:
-                        # 对于其他字段，如果测试数据中有对应的键，则使用测试数据
-                        field_input.setText(str(test_data[field_key]))
-                    # 其他字段保持默认值，不进行覆盖
+                    # 只有在字段为空或等于默认值时才填充测试数据
+                    if not current_value or current_value == default_value:
+                        # 使用测试数据填充字段
+                        if field_key == "name":
+                            field_input.setText(test_data["name"])
+                        elif field_key == "id_card":
+                            field_input.setText(test_data["id_number"])
+                        elif field_key == "phone":
+                            field_input.setText(test_data["phone"])
+                        elif field_key == "bank_card_no":
+                            field_input.setText(test_data["bank_card_number"])
+                        elif field_key == "id_card_start_time":
+                            field_input.setText(test_data["id_card_start_time"])
+                        elif field_key == "id_card_end_time":
+                            field_input.setText(test_data["id_card_end_time"])
+                        elif field_key in test_data:
+                            # 对于其他字段，如果测试数据中有对应的键，则使用测试数据
+                            field_input.setText(str(test_data[field_key]))
 
-                # 为下拉框设置默认值 - 修复：只有当没有设置值时才设置默认值
+                # 为下拉框设置默认值 - 只有当没有设置值时才设置默认值
                 elif item["type"] == "combo" and item["key"] in self.combo_boxes:
                     combo_key = item["key"]
                     combo_box = self.combo_boxes[combo_key]
@@ -566,7 +574,7 @@ class ApiToolTab(QWidget):
                             combo_box.setCurrentIndex(0)
 
     def on_product_changed(self, product_name, initial_load=False):
-        """产品切换事件"""
+        """首页产品切换事件"""
         if not product_name or product_name == "无可用产品":
             return
 
@@ -712,26 +720,34 @@ class ApiToolTab(QWidget):
                 field_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # 标签固定宽度
 
                 field_input = QLineEdit()
-                # 设置默认值
-                default_value = item.get("default", "")
-                if default_value:
-                    # 处理字段数据类型
-                    data_type = item.get("data_type", "string")
-                    if data_type == "int":
-                        try:
-                            # 确保默认值是整数
-                            int(default_value)
-                        except ValueError:
-                            # 如果默认值不是有效的整数，使用原始值
-                            pass
-                    elif data_type == "float":
-                        try:
-                            # 确保默认值是浮点数
-                            float(default_value)
-                        except ValueError:
-                            pass
+                # 智能设置默认值：优先使用变量池中的值，其次使用配置的默认值
+                field_key = item["key"]
+                # 始终使用变量池中的最新值（如果存在），否则使用默认值
+                if field_key in self.variable_pool:
+                    # 使用变量池中的最新值
+                    field_value = self.variable_pool[field_key]
+                    field_input.setText(str(field_value))
+                    print(f"字段 '{field_key}' 初始化为变量池值: {field_value}")
+                else:
+                    # 使用配置的默认值（支持变量替换）
+                    default_value = item.get("default", "")
+                    if default_value:
+                        processed_default = self.replace_variables_in_string(default_value)
 
-                    field_input.setText(default_value)
+                        # 处理字段数据类型
+                        data_type = item.get("data_type", "string")
+                        if data_type == "int":
+                            try:
+                                int(processed_default)
+                            except ValueError:
+                                pass
+                        elif data_type == "float":
+                            try:
+                                float(processed_default)
+                            except ValueError:
+                                pass
+
+                        field_input.setText(processed_default)
 
                 # 设置固定的大小策略，不拉伸
                 field_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -743,6 +759,12 @@ class ApiToolTab(QWidget):
                 field_input.textChanged.connect(lambda text, field=field_input: self.adjust_field_width(field, text))
 
                 self.field_inputs[item["key"]] = field_input
+
+                # 监听字段变化，实时更新变量池
+                field_input.textChanged.connect(lambda text, key=field_key:
+                                                self.on_field_changed(key, text))
+
+                self.field_inputs[field_key] = field_input
 
                 # 添加到当前行
                 current_row_layout.addWidget(field_label)
@@ -766,38 +788,57 @@ class ApiToolTab(QWidget):
                 combo_box.setMaximumWidth(250)  # 设置最大宽度
 
                 # 设置默认值 - 修复：使用配置的默认值而不是第一个选项
-                default_value = item.get("default", "")
-                if default_value:
-                    # 在选项中查找默认值对应的索引
+                combo_key = item["key"]
+                # 始终使用变量池中的最新值（如果存在），否则使用默认值
+                if combo_key in self.variable_pool:
+                    # 使用变量池中的最新值
+                    combo_value = self.variable_pool[combo_key]
+                    # 在下拉框中查找匹配的选项
                     found_index = -1
                     for i in range(combo_box.count()):
-                        if combo_box.itemData(i) == default_value:
+                        if combo_box.itemData(i) == str(combo_value):
                             found_index = i
                             break
-
-                    # 如果找到了对应的值，设置当前索引
                     if found_index >= 0:
                         combo_box.setCurrentIndex(found_index)
-                    else:
-                        # 如果没有找到，尝试使用显示文本匹配
-                        for i in range(combo_box.count()):
-                            if combo_box.itemText(i) == default_value:
-                                combo_box.setCurrentIndex(i)
-                                break
-                        # 如果还是没有找到，保持第一个选项
-                        # 可以选择设置第一个选项，或者留空
-                        if combo_box.count() > 0:
-                            combo_box.setCurrentIndex(0)
+                        print(f"下拉框 '{combo_key}' 初始化为变量池值: {combo_value}")
                 else:
-                    # 如果没有配置默认值，使用第一个选项
-                    if combo_box.count() > 0:
-                        combo_box.setCurrentIndex(0)
+                    # 使用配置的默认值（支持变量替换）
+                    default_value = item.get("default", "")
+                    if default_value:
+                        processed_default = self.replace_variables_in_string(default_value)
+
+                        # 在选项中查找默认值对应的索引
+                        found_index = -1
+                        for i in range(combo_box.count()):
+                            if combo_box.itemData(i) == processed_default:
+                                found_index = i
+                                break
+
+                        # 如果找到了对应的值，设置当前索引
+                        if found_index >= 0:
+                            combo_box.setCurrentIndex(found_index)
+                        else:
+                            # 如果没有找到，尝试使用显示文本匹配
+                            for i in range(combo_box.count()):
+                                if combo_box.itemText(i) == processed_default:
+                                    combo_box.setCurrentIndex(i)
+                                    break
+                            # 如果还是没有找到，保持第一个选项
+                            if combo_box.count() > 0 and combo_box.currentIndex() < 0:
+                                combo_box.setCurrentIndex(0)
 
                 # 根据内容调整宽度
                 self.adjust_combo_width(combo_box)
                 combo_box.currentTextChanged.connect(lambda text, combo=combo_box: self.adjust_combo_width(combo))
 
                 self.combo_boxes[item["key"]] = combo_box
+
+                # 监听下拉框变化，实时更新变量池
+                combo_box.currentIndexChanged.connect(lambda index, key=combo_key, combo=combo_box:
+                                                      self.on_combo_changed(key, combo))
+
+                self.combo_boxes[combo_key] = combo_box
 
                 # 添加到当前行
                 current_row_layout.addWidget(combo_label)
@@ -1006,7 +1047,7 @@ class ApiToolTab(QWidget):
             formatted_result = json.dumps(result_data, ensure_ascii=False, indent=2)
             self.response_body_edit.setPlainText(f"SQL查询成功:\n{formatted_result}")
 
-            # 将查询结果存储到变量池中，供请求体使用
+            # 将查询结果存储到变量池中，供请求体使用（会强制覆盖字段值）
             self.process_sql_output(sql_name, sql_config, result_data)
 
         except Exception as e:
@@ -1017,7 +1058,7 @@ class ApiToolTab(QWidget):
         self.response_body_edit.setPlainText(f"SQL查询失败:\n{error_message}")
 
     def process_sql_output(self, sql_name, sql_config, result_data):
-        """处理SQL输出结果，填充到变量池"""
+        """处理SQL输出结果，填充到变量池并更新相关字段 - 始终覆盖为最新值"""
         if not result_data:
             return
 
@@ -1027,17 +1068,145 @@ class ApiToolTab(QWidget):
         # 获取输出字段配置
         output_fields = sql_config.get("output_fields", [])
 
+        print(f"处理SQL '{sql_name}' 的输出结果，共 {len(output_fields)} 个输出字段")
+
+        # 存储SQL输出变量到变量池（直接使用字段名作为变量名）
         for field_config in output_fields:
             field_name = field_config["field"]
             if field_name in first_record:
+                # 直接使用字段名作为变量名
                 variable_name = field_name
-                self.variable_pool[variable_name] = first_record[field_name]
+                old_value = self.variable_pool.get(variable_name, "未设置")
+                new_value = first_record[field_name]
+                self.variable_pool[variable_name] = new_value
 
-                print(f"SQL输出变量 '{variable_name}' = '{first_record[field_name]}'")
+                print(f"更新变量池: '{variable_name}' 从 '{old_value}' 到 '{new_value}'")
+
+        # 自动填充到使用这些变量的字段输入框（始终覆盖）
+        self.auto_fill_sql_variables_to_fields(sql_name, first_record)
+
+        # 如果当前有活动的接口，重新生成请求体以反映最新的变量值
+        if self.current_interface and self.auto_request_checkbox.isChecked():
+            self.refresh_current_interface()
+
+    def auto_fill_sql_variables_to_fields(self, sql_name, sql_result):
+        """将SQL输出结果自动填充到使用这些变量的字段输入框 - 始终覆盖为最新值"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            print(f"开始自动填充SQL '{sql_name}' 的结果到相关字段")
+
+            # 首先填充与SQL输出字段名完全匹配的字段
+            for item in layout_config:
+                if item["type"] in ["field", "combo"]:
+                    field_key = item["key"]
+
+                    # 检查这个字段是否在SQL结果中
+                    if field_key in sql_result:
+                        field_value = sql_result[field_key]
+                        self.fill_field_with_sql_result(field_key, item, field_value)
+
+            # 然后检查是否有字段的默认值引用了SQL变量
+            self.fill_fields_with_sql_variables(sql_name, sql_result)
+
+        except Exception as e:
+            print(f"自动填充SQL变量到字段时出错: {str(e)}")
+
+    def fill_fields_with_sql_variables(self, sql_name, sql_result):
+        """填充使用SQL变量的字段"""
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            for item in layout_config:
+                if item["type"] in ["field", "combo"]:
+                    field_key = item["key"]
+                    default_value = item.get("default", "")
+
+                    # 检查默认值中是否包含SQL变量
+                    if default_value and f"{{{sql_name}" in default_value:
+                        # 构建替换后的值
+                        filled_value = self.replace_sql_variables_in_default(default_value, sql_name, sql_result)
+
+                        if filled_value != default_value:  # 如果有替换发生
+                            if field_key in self.field_inputs:
+                                self.field_inputs[field_key].setText(filled_value)
+                                print(f"通过变量替换更新字段 '{field_key}' 值为: {filled_value}")
+                            elif field_key in self.combo_boxes:
+                                combo_box = self.combo_boxes[field_key]
+                                # 在下拉框中查找匹配的选项
+                                found_index = -1
+                                for i in range(combo_box.count()):
+                                    if combo_box.itemData(i) == filled_value:
+                                        found_index = i
+                                        break
+                                if found_index >= 0:
+                                    combo_box.setCurrentIndex(found_index)
+                                    print(f"通过变量替换更新下拉框 '{field_key}' 为: {filled_value}")
+
+        except Exception as e:
+            print(f"填充使用SQL变量的字段时出错: {str(e)}")
+
+    def replace_sql_variables_in_default(self, default_value, sql_name, sql_result):
+        """替换默认值中的SQL变量"""
+        processed_value = default_value
+
+        # 匹配 {sql_name_field} 格式的变量
+        sql_var_pattern = r'\{(' + re.escape(sql_name) + r'_\w+)\}'
+        matches = re.findall(sql_var_pattern, processed_value)
+
+        for sql_var in matches:
+            # 提取字段名（去掉sql_name_前缀）
+            field_name = sql_var.replace(f"{sql_name}_", "")
+
+            # 从SQL结果中获取值
+            if field_name in sql_result:
+                field_value = sql_result[field_name]
+                processed_value = processed_value.replace(f"{{{sql_var}}}", str(field_value))
+
+        return processed_value
+
+    def fill_field_with_sql_result(self, field_key, field_config, field_value):
+        """使用SQL结果填充特定字段 - 始终覆盖为最新值"""
+        try:
+            # 如果字段在输入框中，直接更新输入框的值（始终覆盖）
+            if field_key in self.field_inputs:
+                field_input = self.field_inputs[field_key]
+                field_input.setText(str(field_value))
+                print(f"更新字段 '{field_key}' 值为: {field_value}")
+
+            # 如果字段在下拉框中，尝试匹配下拉框选项（始终覆盖）
+            elif field_key in self.combo_boxes:
+                combo_box = self.combo_boxes[field_key]
+
+                # 在下拉框中查找匹配的选项
+                found_index = -1
+                for i in range(combo_box.count()):
+                    if combo_box.itemData(i) == str(field_value):
+                        found_index = i
+                        break
+
+                # 如果找到匹配项，设置当前选项
+                if found_index >= 0:
+                    combo_box.setCurrentIndex(found_index)
+                    print(f"更新下拉框 '{field_key}' 为: {field_value}")
+                else:
+                    # 如果没有找到匹配项，尝试在显示文本中查找
+                    for i in range(combo_box.count()):
+                        if combo_box.itemText(i) == str(field_value):
+                            combo_box.setCurrentIndex(i)
+                            print(f"更新下拉框 '{field_key}' 为: {field_value} (通过显示文本匹配)")
+                            break
+
+        except Exception as e:
+            print(f"更新字段 {field_key} 时出错: {str(e)}")
 
     def generate_request_body(self, interface_config):
         """生成请求体 - 支持类型转换、条件模板和变量池"""
-
         # 检查是否存在条件模板
         if "conditional_body" in interface_config:
             body_template = self.process_conditional_body(interface_config["conditional_body"])
@@ -1057,7 +1226,7 @@ class ApiToolTab(QWidget):
             elif isinstance(template, list):
                 return [process_template(item) for item in template]
             elif isinstance(template, str):
-                # 使用统一的变量替换方法
+                # 使用增强的变量替换方法
                 return self.replace_variables_in_string(template)
             else:
                 return template
@@ -1231,16 +1400,16 @@ class ApiToolTab(QWidget):
         self.response_body_edit.setPlainText("请求中...")
 
     def replace_variables_in_string(self, text):
-        """替换字符串中的变量占位符 - 优化版：支持SQL变量"""
+        """替换字符串中的变量占位符 - 增强版：支持直接字段名变量"""
         if not isinstance(text, str):
             return text
 
         processed = text
 
         # 调试：打印原始文本
-        print(f"替换URL/headers变量: {text}")
+        print(f"替换变量: {text}")
 
-        # 1. 仅处理变量池中的三个Base64变量
+        # 1. 处理Base64变量
         for var_key in self.BASE64_VARIABLE_KEYS:
             if var_key in self.variable_pool:
                 placeholder = "{" + var_key + "}"
@@ -1250,16 +1419,13 @@ class ApiToolTab(QWidget):
                     processed = processed.replace(placeholder, str_value)
                     print(f"替换Base64变量 {var_key}: 长度={len(str_value)}")
 
-                    # 特别调试Base64变量
-                    print(f"Base64变量 {var_key} 前10字符: {str_value[:10]}...")
-
-        # 2. 处理请求ID（从输入框获取）
+        # 2. 处理请求ID
         if "{request_id}" in processed:
             request_id_value = self.request_id_input.text()
             processed = processed.replace("{request_id}", request_id_value)
             print(f"替换request_id: {request_id_value}")
 
-        # 3. 处理普通字段（全部从输入框获取，不跳过任何字段）
+        # 3. 处理普通字段（从输入框获取当前值）
         for field_key, field_input in self.field_inputs.items():
             placeholder = "{" + field_key + "}"
             if placeholder in processed:
@@ -1275,28 +1441,66 @@ class ApiToolTab(QWidget):
                 processed = processed.replace(placeholder, combo_value)
                 print(f"替换下拉框 {combo_key}: {combo_value}")
 
-        # 5. 处理SQL输出变量
-        # SQL输出变量的格式为：{sql_name_field_name}
-        import re
-        sql_var_pattern = r'\{(\w+)_(\w+)\}'
-        matches = re.findall(sql_var_pattern, processed)
+        # 5. 处理SQL输出变量（从变量池获取，使用字段名作为变量名）
+        # 匹配所有变量占位符
+        all_var_pattern = r'\{(\w+)\}'
+        all_matches = re.findall(all_var_pattern, processed)
 
-        for sql_name, field_name in matches:
-            variable_name = f"{sql_name}_{field_name}"
-            if variable_name in self.variable_pool:
-                placeholder = "{" + variable_name + "}"
-                var_value = self.variable_pool[variable_name]
+        for var_name in all_matches:
+            # 如果变量在变量池中且不在其他已处理的类别中，则替换
+            if (var_name in self.variable_pool and
+                    var_name not in self.BASE64_VARIABLE_KEYS and
+                    var_name != "request_id" and
+                    var_name not in self.field_inputs and
+                    var_name not in self.combo_boxes):
+                var_value = self.variable_pool[var_name]
                 str_value = str(var_value) if var_value is not None else ""
-                processed = processed.replace(placeholder, str_value)
-                print(f"替换SQL变量 {variable_name}: {str_value}")
+                processed = processed.replace(f"{{{var_name}}}", str_value)
+                print(f"替换SQL变量 {var_name}: {str_value}")
 
         # 6. 处理复杂模板（日期时间、随机数等）
         if any(pattern in processed for pattern in
                ["{dateTime", "{date", "{time", "{random:"]):
             processed = TemplateProcessor.process_template(processed)
 
-        print(f"替换后的URL/headers: {processed}")
+        print(f"替换后的文本: {processed}")
         return processed
+
+    def recursive_replace_variables(self, text, current_depth=0, max_depth=3):
+        """递归替换嵌套变量"""
+        if current_depth >= max_depth:
+            return text
+
+        # 检查是否还有变量占位符
+        var_pattern = r'\{(\w+)\}'
+        matches = re.findall(var_pattern, text)
+
+        if not matches:
+            return text
+
+        processed = text
+        for var_name in matches:
+            # 尝试从各个来源获取变量值
+            var_value = None
+
+            # 从变量池获取
+            if var_name in self.variable_pool:
+                var_value = self.variable_pool[var_name]
+            # 从字段输入框获取
+            elif var_name in self.field_inputs:
+                var_value = self.field_inputs[var_name].text()
+            # 从下拉框获取
+            elif var_name in self.combo_boxes:
+                var_value = self.combo_boxes[var_name].currentData()
+
+            if var_value is not None:
+                processed = processed.replace(f"{{{var_name}}}", str(var_value))
+
+        # 如果还有变化，继续递归
+        if processed != text:
+            return self.recursive_replace_variables(processed, current_depth + 1, max_depth)
+        else:
+            return processed
 
     def on_request_finished(self, response_data):
         """请求完成"""
@@ -1621,3 +1825,69 @@ class ApiToolTab(QWidget):
         Toast.success(self, message)
         # 可以在这里添加其他刷新逻辑
         self.refresh_ui()
+
+    def refresh_all_fields_from_variable_pool(self):
+        """从变量池强制刷新所有字段的值"""
+        print("强制刷新所有字段的值")
+
+        # 刷新字段输入框
+        for field_key, field_input in self.field_inputs.items():
+            if field_key in self.variable_pool:
+                new_value = self.variable_pool[field_key]
+                current_value = field_input.text()
+                if str(new_value) != current_value:
+                    field_input.setText(str(new_value))
+                    print(f"强制刷新字段 '{field_key}': '{current_value}' -> '{new_value}'")
+
+        # 刷新下拉框
+        for combo_key, combo_box in self.combo_boxes.items():
+            if combo_key in self.variable_pool:
+                new_value = self.variable_pool[combo_key]
+                current_data = combo_box.currentData()
+                if str(new_value) != str(current_data):
+                    # 在下拉框中查找匹配的选项
+                    found_index = -1
+                    for i in range(combo_box.count()):
+                        if combo_box.itemData(i) == str(new_value):
+                            found_index = i
+                            break
+                    if found_index >= 0:
+                        combo_box.setCurrentIndex(found_index)
+                        print(f"强制刷新下拉框 '{combo_key}': '{current_data}' -> '{new_value}'")
+
+    def on_field_changed(self, field_key, new_value):
+        """字段值变化时的处理"""
+        # 更新变量池
+        self.variable_pool[field_key] = new_value
+        print(f"字段 {field_key} 更新为: {new_value}")
+
+        # 如果当前有活动的接口，重新生成请求体
+        if self.current_interface and self.auto_request_checkbox.isChecked():
+            self.refresh_current_interface()
+
+    def on_combo_changed(self, combo_key, combo_box):
+        """下拉框值变化时的处理"""
+        current_data = combo_box.currentData()
+        # 更新变量池
+        self.variable_pool[combo_key] = current_data
+        print(f"下拉框 {combo_key} 更新为: {current_data}")
+
+        # 如果当前有活动的接口，重新生成请求体
+        if self.current_interface and self.auto_request_checkbox.isChecked():
+            self.refresh_current_interface()
+
+    def refresh_current_interface(self):
+        """刷新当前接口的显示（重新生成请求体）"""
+        if not self.current_interface or not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            interface_config = product_config["interfaces"][self.current_interface]
+
+            # 重新生成请求体
+            request_body = self.generate_request_body(interface_config)
+            self.request_body_edit.setPlainText(json.dumps(request_body, ensure_ascii=False, indent=2))
+
+        except Exception as e:
+            print(f"刷新接口显示时出错: {str(e)}")
