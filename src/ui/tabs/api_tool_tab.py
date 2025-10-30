@@ -820,7 +820,7 @@ class ApiToolTab(QWidget):
         text_width = font_metrics.horizontalAdvance(text)
 
         # 根据文本宽度调整，加上边距
-        content_width = text_width + 50  # 增加边距（控制按钮宽度）
+        content_width = text_width + 42  # 增加边距（控制按钮宽度）
         new_width = max(80, min(content_width, 200))
 
         button.setFixedWidth(new_width)
