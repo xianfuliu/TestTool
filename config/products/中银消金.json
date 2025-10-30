@@ -16,32 +16,6 @@
   ],
   "layout": [
     {
-      "key": "name",
-      "label": "姓名",
-      "priority": 1,
-      "type": "field"
-    },
-    {
-      "key": "id_card",
-      "label": "身份证号",
-      "priority": 2,
-      "type": "field"
-    },
-    {
-      "key": "phone",
-      "label": "手机号",
-      "priority": 3,
-      "type": "field"
-    },
-    {
-      "data_type": "string",
-      "default": "",
-      "key": "bank_card_no",
-      "label": "银行卡号",
-      "priority": 4,
-      "type": "field"
-    },
-    {
       "key": "channelMark",
       "label": "产品",
       "options": [
@@ -58,8 +32,34 @@
           "value": "03"
         }
       ],
-      "priority": 5,
+      "priority": 1,
       "type": "combo"
+    },
+    {
+      "key": "name",
+      "label": "姓名",
+      "priority": 2,
+      "type": "field"
+    },
+    {
+      "key": "id_card",
+      "label": "身份证号",
+      "priority": 3,
+      "type": "field"
+    },
+    {
+      "key": "phone",
+      "label": "手机号",
+      "priority": 4,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "bank_card_no",
+      "label": "银行卡号",
+      "priority": 5,
+      "type": "field"
     },
     {
       "name": "准入",
@@ -478,5 +478,6 @@
       "response_mapping": {},
       "url": "https://xj-api-test.hqrzdb.com/stage-api/zy/api/unNotifyLendResult"
     }
-  }
+  },
+  "sqls": {}
 }

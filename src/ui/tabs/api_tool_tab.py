@@ -305,7 +305,7 @@ class ApiToolTab(QWidget):
         splitter.addWidget(right_panel)
 
         # 设置分割比例
-        splitter.setSizes([400, 400])  # 左侧400，右侧400
+        splitter.setSizes([500, 400])  # 左侧500，右侧400
         main_layout.addWidget(splitter, 1)
 
     def create_global_config_panel(self):
@@ -530,7 +530,7 @@ class ApiToolTab(QWidget):
         # 使用灵活的布局策略
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
-        main_layout.setSpacing(20)
+        main_layout.setSpacing(35)  # 行间距,行高,高度
         main_layout.setContentsMargins(5, 10, 5, 10)  # 添加边距
         main_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 修改：主布局左对齐
 
@@ -538,8 +538,8 @@ class ApiToolTab(QWidget):
         current_row_layout.setSpacing(20)  # 更大的水平间距
         current_row_layout.setAlignment(Qt.AlignLeft)  # 修改：行布局左对齐
 
-        # 计算每行最多显示的元素数量
-        max_items_per_row = 3
+        # 每行最多显示的元素数量
+        max_items_per_row = 4
         current_item_count = 0
 
         for item in sorted_layout:
@@ -845,10 +845,13 @@ class ApiToolTab(QWidget):
                     self.adjust_button_width(widget)
 
     def on_interface_clicked(self, interface_name):
-        """接口按钮点击事件"""
+        """接口按钮点击事件 - 优化：点击时清空响应体"""
         if not self.current_product:
             QMessageBox.warning(self, "警告", "请先选择产品")
             return
+
+        # 清空响应体内容
+        self.response_body_edit.clear()
 
         self.current_interface = interface_name
         product_config = self.api_config["products"][self.current_product]
@@ -869,14 +872,24 @@ class ApiToolTab(QWidget):
         # 如果启用了发送请求，直接发送请求
         if self.auto_request_checkbox.isChecked():
             self.send_request(interface_config, request_body)
+        else:
+            # 如果不发送请求，确保响应体是空的
+            self.response_body_edit.setPlainText("")
+            # 添加提示信息
+            self.response_body_edit.setPlaceholderText("已清空响应体，点击'发送请求'按钮发送请求...")
 
     def on_sql_clicked(self, sql_name):
-        """SQL按钮点击事件"""
+        """SQL按钮点击事件 - 优化：点击时清空响应体"""
         if not self.current_product:
             QMessageBox.warning(self, "警告", "请先选择产品")
             return
 
         try:
+            # 清空响应体内容
+            self.response_body_edit.clear()
+            # 添加提示信息
+            self.response_body_edit.setPlaceholderText(f"正在执行SQL: {sql_name}...")
+
             product_config = self.api_config["products"][self.current_product]
             sql_config = product_config["sqls"][sql_name]
 
@@ -885,6 +898,9 @@ class ApiToolTab(QWidget):
 
         except KeyError as e:
             QMessageBox.warning(self, "错误", f"SQL配置不存在: {sql_name}")
+            # 错误时也清空响应体
+            self.response_body_edit.setPlainText("")
+            self.response_body_edit.setPlaceholderText("响应内容将显示在这里...")
             return
 
     def execute_sql_query(self, sql_name, sql_config):
@@ -915,6 +931,8 @@ class ApiToolTab(QWidget):
 
         except Exception as e:
             Toast.critical(self, "错误", f"执行SQL失败: {str(e)}")
+            # 确保错误时也清空响应体
+            self.response_body_edit.setPlainText("")
 
     def on_sql_finished(self, sql_name, sql_config, result_data):
         """SQL查询完成"""
@@ -1194,6 +1212,9 @@ class ApiToolTab(QWidget):
             Toast.info(self, '请求体不能为空')
             return
 
+        # 清空响应体内容
+        self.response_body_edit.clear()
+
         try:
             request_body = json.loads(request_body_text)
         except json.JSONDecodeError as e:
@@ -1328,7 +1349,6 @@ class ApiToolTab(QWidget):
 
             # 替换数组索引中的变量
             processed = re.sub(array_index_pattern, replace_array_index, processed)
-
 
         # 1. 处理复杂模板（日期时间、随机数等）
         if any(pattern in processed for pattern in

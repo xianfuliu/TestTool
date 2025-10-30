@@ -301,16 +301,25 @@
     },
     {
       "data_type": "string",
-      "default": "1",
-      "key": "rpyTerm",
-      "label": "还款期数",
+      "default": "01",
+      "key": "repay_num",
+      "label": "还款笔数",
       "priority": 30,
       "show_in_ui": true,
       "type": "field"
     },
     {
-      "name": "查询蓝海还款计划",
+      "data_type": "string",
+      "default": "1",
+      "key": "rpyTerm",
+      "label": "还款期数",
       "priority": 31,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "查询蓝海还款计划",
+      "priority": 32,
       "type": "interface"
     },
     {
@@ -318,13 +327,13 @@
       "default": "",
       "key": "executeBizDate",
       "label": "操作天数",
-      "priority": 32,
+      "priority": 33,
       "show_in_ui": true,
       "type": "field"
     },
     {
       "name": "修改蓝海还款计划",
-      "priority": 33,
+      "priority": 34,
       "type": "interface"
     },
     {
@@ -332,7 +341,7 @@
       "default": "",
       "key": "repayAmt",
       "label": "还款金额",
-      "priority": 34,
+      "priority": 35,
       "show_in_ui": true,
       "type": "field"
     },
@@ -341,7 +350,7 @@
       "default": "",
       "key": "prinAmt",
       "label": "本金",
-      "priority": 35,
+      "priority": 36,
       "show_in_ui": true,
       "type": "field"
     },
@@ -350,7 +359,7 @@
       "default": "",
       "key": "intAmt",
       "label": "利息",
-      "priority": 36,
+      "priority": 37,
       "show_in_ui": true,
       "type": "field"
     },
@@ -359,7 +368,16 @@
       "default": "0",
       "key": "ointAmt",
       "label": "罚息",
-      "priority": 37,
+      "priority": 38,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "pre_repay_date",
+      "label": "应还日期",
+      "priority": 39,
       "show_in_ui": true,
       "type": "field"
     },
@@ -368,7 +386,7 @@
       "default": "0",
       "key": "serviceFeeAmt",
       "label": "服务费",
-      "priority": 38,
+      "priority": 40,
       "show_in_ui": true,
       "type": "field"
     },
@@ -387,16 +405,16 @@
           "value": "ONLY"
         }
       ],
-      "priority": 39,
+      "priority": 41,
       "show_in_ui": true,
       "type": "combo"
     },
     {
       "data_type": "string",
-      "default": "01",
-      "key": "repay_num",
-      "label": "还款笔数",
-      "priority": 40,
+      "default": "",
+      "key": "before_calc_principal",
+      "label": "当前剩余本金",
+      "priority": 42,
       "show_in_ui": true,
       "type": "field"
     },
@@ -415,18 +433,18 @@
           "value": "ALIPAY"
         }
       ],
-      "priority": 41,
+      "priority": 43,
       "show_in_ui": true,
       "type": "combo"
     },
     {
       "name": "还款申请",
-      "priority": 42,
+      "priority": 44,
       "type": "interface"
     },
     {
       "name": "还款结果查询",
-      "priority": 43,
+      "priority": 45,
       "type": "interface"
     }
   ],
@@ -617,8 +635,10 @@
       },
       "method": "GET",
       "response_mapping": {
+        "before_calc_principal": "data[{rpyTerm}].before_calc_principal",
         "intAmt": "data[{rpyTerm}].pre_repay_interest",
         "ointAmt": "data[{rpyTerm}].pre_repay_overdue_fee",
+        "pre_repay_date": "data[{rpyTerm}].pre_repay_date",
         "prinAmt": "data[{rpyTerm}].pre_repay_principal",
         "repayAmt": "data[{rpyTerm}].pre_repay_amount"
       },
