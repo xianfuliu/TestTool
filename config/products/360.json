@@ -606,17 +606,19 @@
       "url": "http://192.168.0.47:8096/rule/all"
     },
     "查询蓝海还款计划": {
-      "body_template": {},
+      "body_template": {
+        "requestId": "{request_id}"
+      },
       "field_types": {},
       "headers": {
         "Content-Type": "application/json"
       },
       "method": "GET",
       "response_mapping": {
-        "intAmt": "data[0].pre_repay_interest",
-        "ointAmt": "data[0].pre_repay_overdue_fee",
-        "prinAmt": "data[0].pre_repay_principal",
-        "repayAmt": "data[0].pre_repay_amount"
+        "intAmt": "data[{rpyTerm}].pre_repay_interest",
+        "ointAmt": "data[{rpyTerm}].pre_repay_overdue_fee",
+        "prinAmt": "data[{rpyTerm}].pre_repay_principal",
+        "repayAmt": "data[{rpyTerm}].pre_repay_amount"
       },
       "url": "https://lhtest.ebanktest.com.cn/icfs1/api/repayplan?loanid={cap_loan_no}&env=SIT4"
     }

@@ -1400,15 +1400,56 @@ class ApiToolTab(QWidget):
         self.response_body_edit.setPlainText("请求中...")
 
     def replace_variables_in_string(self, text):
-        """替换字符串中的变量占位符 - 增强版：支持直接字段名变量"""
+        """替换字符串中的变量占位符 - 增强版：支持JSONPath中的数组索引转换（用户输入1代表索引0）"""
         if not isinstance(text, str):
             return text
 
         processed = text
 
-        # 调试：打印原始文本
-        print(f"替换变量: {text}")
+        # 特殊处理：如果是JSONPath并且包含数组索引，先处理数组索引
+        if '[' in processed and ']' in processed:
+            # 匹配数组索引中的变量，如 data[{rpyTerm}]
+            array_index_pattern = r'\[(\{(\w+)\})\]'
 
+            def replace_array_index(match):
+                var_name = match.group(2)  # 提取变量名
+                if var_name in self.variable_pool:
+                    var_value = self.variable_pool[var_name]
+                    try:
+                        # 用户输入1代表索引0，所以需要减1
+                        index = int(var_value) - 1
+                        if index < 0:
+                            print(f"警告: 变量 '{var_name}' 的值 {var_value} 小于1，使用索引0")
+                            index = 0
+                        return f"[{index}]"
+                    except (ValueError, TypeError):
+                        # 如果不是数字，保持原样
+                        print(f"警告: 变量 '{var_name}' 的值 '{var_value}' 不是有效数字")
+                        return match.group(0)
+                else:
+                    # 变量不存在，尝试获取默认值
+                    default_value = self.get_variable_default_value(var_name)
+                    if default_value is not None:
+                        try:
+                            # 用户输入1代表索引0，所以需要减1
+                            index = int(default_value) - 1
+                            if index < 0:
+                                print(f"警告: 变量 '{var_name}' 的默认值 {default_value} 小于1，使用索引0")
+                                index = 0
+                            return f"[{index}]"
+                        except (ValueError, TypeError):
+                            # 如果不是数字，保持原样
+                            print(f"警告: 变量 '{var_name}' 的默认值 '{default_value}' 不是有效数字")
+                            return match.group(0)
+                    else:
+                        # 默认值也没有，使用索引0
+                        print(f"警告: 变量 '{var_name}' 不存在且无默认值，使用索引0")
+                        return "[0]"
+
+            # 替换数组索引中的变量
+            processed = re.sub(array_index_pattern, replace_array_index, processed)
+
+        # 然后处理其他类型的变量（与之前相同）
         # 1. 处理Base64变量
         for var_key in self.BASE64_VARIABLE_KEYS:
             if var_key in self.variable_pool:
@@ -1457,6 +1498,25 @@ class ApiToolTab(QWidget):
                 str_value = str(var_value) if var_value is not None else ""
                 processed = processed.replace(f"{{{var_name}}}", str_value)
                 print(f"替换SQL变量 {var_name}: {str_value}")
+            elif (var_name not in self.variable_pool and
+                  var_name not in self.BASE64_VARIABLE_KEYS and
+                  var_name != "request_id" and
+                  var_name not in self.field_inputs and
+                  var_name not in self.combo_boxes):
+                # 变量不在变量池中，尝试获取默认值
+                default_value = self.get_variable_default_value(var_name)
+                if default_value is not None:
+                    processed = processed.replace(f"{{{var_name}}}", str(default_value))
+                    print(f"替换默认值变量 {var_name}: {default_value}")
+                else:
+                    # 默认值也没有，使用索引0或空字符串
+                    # 如果是数组索引相关的变量，使用"0"
+                    if var_name.endswith(('_index', '_idx', 'index', 'idx')):
+                        processed = processed.replace(f"{{{var_name}}}", "0")
+                        print(f"替换缺失变量 {var_name} 为索引: 0")
+                    else:
+                        processed = processed.replace(f"{{{var_name}}}", "")
+                        print(f"替换缺失变量 {var_name} 为空字符串")
 
         # 6. 处理复杂模板（日期时间、随机数等）
         if any(pattern in processed for pattern in
@@ -1464,6 +1524,67 @@ class ApiToolTab(QWidget):
             processed = TemplateProcessor.process_template(processed)
 
         print(f"替换后的文本: {processed}")
+        return processed
+
+    def get_variable_default_value(self, var_name):
+        """获取变量的默认值"""
+        if not self.current_product:
+            return None
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 在布局配置中查找该变量的默认值
+            for item in layout_config:
+                if item["type"] in ["field", "combo"] and item["key"] == var_name:
+                    default_value = item.get("default", "")
+                    if default_value:
+                        # 对默认值进行变量替换（避免循环依赖）
+                        return self.replace_variables_in_string_simple(default_value)
+                    break
+
+            return None
+        except Exception as e:
+            print(f"获取变量 {var_name} 默认值时出错: {str(e)}")
+            return None
+
+    def replace_variables_in_string_simple(self, text):
+        """简化版的变量替换，避免循环依赖"""
+        if not isinstance(text, str):
+            return text
+
+        processed = text
+
+        # 只处理最基本的变量（避免递归调用）
+        # 1. 处理Base64变量
+        for var_key in self.BASE64_VARIABLE_KEYS:
+            if var_key in self.variable_pool:
+                placeholder = "{" + var_key + "}"
+                if placeholder in processed:
+                    var_value = self.variable_pool[var_key]
+                    str_value = str(var_value) if var_value is not None else ""
+                    processed = processed.replace(placeholder, str_value)
+
+        # 2. 处理请求ID
+        if "{request_id}" in processed:
+            request_id_value = self.request_id_input.text()
+            processed = processed.replace("{request_id}", request_id_value)
+
+        # 3. 处理普通字段
+        for field_key, field_input in self.field_inputs.items():
+            placeholder = "{" + field_key + "}"
+            if placeholder in processed:
+                field_value = field_input.text()
+                processed = processed.replace(placeholder, field_value)
+
+        # 4. 处理下拉框字段
+        for combo_key, combo_box in self.combo_boxes.items():
+            placeholder = "{" + combo_key + "}"
+            if placeholder in processed:
+                combo_value = combo_box.currentData()
+                processed = processed.replace(placeholder, combo_value)
+
         return processed
 
     def recursive_replace_variables(self, text, current_depth=0, max_depth=3):
@@ -1538,7 +1659,7 @@ class ApiToolTab(QWidget):
             self.response_body_edit.setPlainText(f"处理响应时出错: {str(e)}")
 
     def process_response_mapping(self, response_data):
-        """处理响应参数映射 - 支持嵌套路径和JSONPath"""
+        """处理响应参数映射 - 支持嵌套路径和JSONPath，先替换变量再提取"""
         if not self.current_interface or not self.current_product:
             return
 
@@ -1551,23 +1672,43 @@ class ApiToolTab(QWidget):
             if not response_mapping:
                 return
 
+            print(f"开始处理响应映射，共有 {len(response_mapping)} 个映射项")
+            print(f"响应数据: {json.dumps(response_data, ensure_ascii=False, indent=2)}")
+
             # 遍历映射关系，更新对应的字段输入框和变量池
             for field_key, response_path in response_mapping.items():
-                # 使用JSONPath提取值
-                value = self.extract_value_by_jsonpath(response_data, response_path)
+                print(f"处理字段: {field_key}, 原始路径: {response_path}")
+
+                # 第一步：先替换JSONPath中的变量
+                processed_response_path = self.replace_variables_in_string(response_path)
+
+                print(f"处理后路径: {processed_response_path}")
+
+                # 第二步：使用处理后的JSONPath提取值
+                value = self.extract_value_by_jsonpath(response_data, processed_response_path)
 
                 if value is not None:
                     # 更新变量池
+                    old_value = self.variable_pool.get(field_key, "未设置")
                     self.variable_pool[field_key] = value
 
                     # 如果该字段在字段输入框中，也更新输入框
                     if field_key in self.field_inputs:
                         self.field_inputs[field_key].setText(str(value))
 
-                    print(f"从响应中提取字段 '{field_key}' = '{value}'")
+                    print(
+                        f"从响应中提取字段 '{field_key}': '{old_value}' -> '{value}' (路径: {processed_response_path})")
+
+                    # 如果当前有活动的接口，重新生成请求体以反映最新的变量值
+                    if self.current_interface and self.auto_request_checkbox.isChecked():
+                        self.refresh_current_interface()
+                else:
+                    print(f"⚠️ 无法从响应中提取字段 '{field_key}' (路径: {processed_response_path})")
 
         except Exception as e:
             print(f"处理响应映射失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def extract_value_by_jsonpath(self, data, jsonpath_expr):
         """使用JSONPath从数据中提取值 - 支持任意深度嵌套"""
