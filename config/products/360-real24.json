@@ -39,8 +39,9 @@
       "data_type": "string",
       "default": "",
       "key": "bank_card_no",
-      "label": "银行卡号",
+      "label": "银行卡",
       "priority": 5,
+      "show_in_ui": true,
       "type": "field"
     },
     {
@@ -485,7 +486,7 @@
         "cases": {
           "ALIPAY": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"N\",\"rpySource\":\"1\",\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"N\",\"rpySource\":\"1\",\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"{ointAmt}\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
               "partner": "{partner}",
               "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
               "requestTime": "1775531455763",
@@ -498,7 +499,7 @@
           },
           "BANK": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"baofu\",\"channelSignNo\":\"1202508252020052770017382282\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"0\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"baofu\",\"channelSignNo\":\"1202508252020052770017382282\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"{ointAmt}\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
               "partner": "{partner}",
               "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
               "requestTime": "1775531455763",

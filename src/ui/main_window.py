@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         self.enable_interface_auto = self.config.get("features", {}).get("interface_automation", False)
 
         self.setWindowTitle("测试工具")
-        self.setGeometry(100, 100, 1600, 800)
+        self.setGeometry(100, 100, 1800, 800)
 
         # 设置窗口图标
         self.setWindowIcon(self.create_icon())
