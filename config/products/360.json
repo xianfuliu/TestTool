@@ -277,25 +277,6 @@
       "type": "field"
     },
     {
-      "name": "查询蓝海还款计划",
-      "priority": 29,
-      "type": "interface"
-    },
-    {
-      "data_type": "string",
-      "default": "",
-      "key": "executeBizDate",
-      "label": "操作天数",
-      "priority": 30,
-      "show_in_ui": true,
-      "type": "field"
-    },
-    {
-      "name": "修改蓝海还款计划",
-      "priority": 31,
-      "type": "interface"
-    },
-    {
       "data_type": "string",
       "default": "",
       "key": "repayType",
@@ -314,7 +295,7 @@
           "value": "3"
         }
       ],
-      "priority": 32,
+      "priority": 29,
       "show_in_ui": true,
       "type": "combo"
     },
@@ -323,9 +304,28 @@
       "default": "1",
       "key": "rpyTerm",
       "label": "还款期数",
-      "priority": 33,
+      "priority": 30,
       "show_in_ui": true,
       "type": "field"
+    },
+    {
+      "name": "查询蓝海还款计划",
+      "priority": 31,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "executeBizDate",
+      "label": "操作天数",
+      "priority": 32,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "修改蓝海还款计划",
+      "priority": 33,
+      "type": "interface"
     },
     {
       "data_type": "string",
