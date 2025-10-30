@@ -6,7 +6,7 @@
   "layout": [
     {
       "data_type": "string",
-      "default": "",
+      "default": "ICE_HQLH2_V2",
       "key": "partner",
       "label": "渠道",
       "options": [
@@ -28,6 +28,7 @@
         }
       ],
       "priority": 1,
+      "show_in_ui": true,
       "type": "combo"
     },
     {
@@ -130,10 +131,11 @@
     },
     {
       "data_type": "string",
-      "default": "",
+      "default": "20270122",
       "key": "loanTime",
       "label": "蓝海时间",
       "priority": 13,
+      "show_in_ui": true,
       "type": "field"
     },
     {
@@ -143,7 +145,7 @@
     },
     {
       "data_type": "string",
-      "default": "",
+      "default": "20270122",
       "key": "qifu_time",
       "label": "360时间",
       "priority": 15,
@@ -446,7 +448,7 @@
         "cases": {
           "baofu": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"loanTime\":\"{loanTime}{time}\",\"loanAmt\":\"{loanAmt}\",\"loanPurpose\":\"{loanPurpose}\",\"term\":\"{term}\",\"repayMethod\":\"01\",\"dayRate\":\"{dayRate}\",\"irrYearRate\":\"{irrYearRate}\",\"userInfo\":{\"idCardNo\":\"{id_card}\",\"mobile\":\"{phone}\",\"name\":\"{name}\",\"marriage\":\"90\",\"job\":\"6\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"idCardOcrInfo\":{\"nameOCR\":\"{name}\",\"idCardNoOCR\":\"{id_card}\",\"beginTimeOCR\":\"{id_card_start_time}\",\"duetimeOCR\":\"{id_card_end_time}\",\"addressOCR\":\"辽宁省营口市大石桥市时柔街道生君小区131号楼508\",\"sexOCR\":\"F\",\"ethnicOCR\":\"高山\",\"issueOrgOCR\":\"大石桥市公安局\",\"positive\":\"{id_card_front_base64}\",\"negative\":\"{id_card_back_base64}\"},\"faceInfo\":{\"assayTime\":\"20250912101210\",\"assayType\":\"FACEAA\",\"best\":\"{face_base64}\"},\"contactInfoList\":[{\"contactRelationship\":\"PARENT\",\"contactName\":\"冀先霞\",\"contactPhone\":\"17820690370\"},{\"contactRelationship\":\"CHILDREN\",\"contactName\":\"谢风希\",\"contactPhone\":\"15847680022\"}],\"geoInfo\":{\"latitude\":\"28.535275875038835\",\"longitude\":\"114.45406872359285\"},\"extInfo\":{\"custFlag\":\"1100001010011000001110000\",\"custLevel\":null},\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"1202508252020052770017382282\"}}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"loanTime\":\"{qifu_time}{time}\",\"loanAmt\":\"{loanAmt}\",\"loanPurpose\":\"{loanPurpose}\",\"term\":\"{term}\",\"repayMethod\":\"01\",\"dayRate\":\"{dayRate}\",\"irrYearRate\":\"{irrYearRate}\",\"userInfo\":{\"idCardNo\":\"{id_card}\",\"mobile\":\"{phone}\",\"name\":\"{name}\",\"marriage\":\"90\",\"job\":\"6\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"idCardOcrInfo\":{\"nameOCR\":\"{name}\",\"idCardNoOCR\":\"{id_card}\",\"beginTimeOCR\":\"{id_card_start_time}\",\"duetimeOCR\":\"{id_card_end_time}\",\"addressOCR\":\"辽宁省营口市大石桥市时柔街道生君小区131号楼508\",\"sexOCR\":\"F\",\"ethnicOCR\":\"高山\",\"issueOrgOCR\":\"大石桥市公安局\",\"positive\":\"{id_card_front_base64}\",\"negative\":\"{id_card_back_base64}\"},\"faceInfo\":{\"assayTime\":\"20250912101210\",\"assayType\":\"FACEAA\",\"best\":\"{face_base64}\"},\"contactInfoList\":[{\"contactRelationship\":\"PARENT\",\"contactName\":\"冀先霞\",\"contactPhone\":\"17820690370\"},{\"contactRelationship\":\"CHILDREN\",\"contactName\":\"谢风希\",\"contactPhone\":\"15847680022\"}],\"geoInfo\":{\"latitude\":\"28.535275875038835\",\"longitude\":\"114.45406872359285\"},\"extInfo\":{\"custFlag\":\"1100001010011000001110000\",\"custLevel\":null},\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"1202508252020052770017382282\"}}",
               "partner": "{partner}",
               "requestNo": "d5bd475b-b6b1-40cc-a066-83c7cde14a40",
               "requestTime": "1757643572115",
@@ -459,7 +461,7 @@
           },
           "yeepay": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"loanTime\":\"{loanTime}{time}\",\"loanAmt\":\"{loanAmt}\",\"loanPurpose\":\"{loanPurpose}\",\"term\":\"{term}\",\"repayMethod\":\"01\",\"dayRate\":\"{dayRate}\",\"irrYearRate\":\"{irrYearRate}\",\"userInfo\":{\"idCardNo\":\"{id_card}\",\"mobile\":\"{phone}\",\"name\":\"{name}\",\"marriage\":\"90\",\"job\":\"6\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"idCardOcrInfo\":{\"nameOCR\":\"{name}\",\"idCardNoOCR\":\"{id_card}\",\"beginTimeOCR\":\"{id_card_start_time}\",\"duetimeOCR\":\"{id_card_end_time}\",\"addressOCR\":\"辽宁省营口市大石桥市时柔街道生君小区131号楼508\",\"sexOCR\":\"F\",\"ethnicOCR\":\"高山\",\"issueOrgOCR\":\"大石桥市公安局\",\"positive\":\"{id_card_front_base64}\",\"negative\":\"{id_card_back_base64}\"},\"faceInfo\":{\"assayTime\":\"20250912101210\",\"assayType\":\"FACEAA\",\"best\":\"{face_base64}\"},\"contactInfoList\":[{\"contactRelationship\":\"PARENT\",\"contactName\":\"冀先霞\",\"contactPhone\":\"17820690370\"},{\"contactRelationship\":\"CHILDREN\",\"contactName\":\"谢风希\",\"contactPhone\":\"15847680022\"}],\"geoInfo\":{\"latitude\":\"28.535275875038835\",\"longitude\":\"114.45406872359285\"},\"extInfo\":{\"custFlag\":\"1100001010011000001110000\",\"custLevel\":null},\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"2547288\"}}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"loanTime\":\"{qifu_time}{time}\",\"loanAmt\":\"{loanAmt}\",\"loanPurpose\":\"{loanPurpose}\",\"term\":\"{term}\",\"repayMethod\":\"01\",\"dayRate\":\"{dayRate}\",\"irrYearRate\":\"{irrYearRate}\",\"userInfo\":{\"idCardNo\":\"{id_card}\",\"mobile\":\"{phone}\",\"name\":\"{name}\",\"marriage\":\"90\",\"job\":\"6\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"idCardOcrInfo\":{\"nameOCR\":\"{name}\",\"idCardNoOCR\":\"{id_card}\",\"beginTimeOCR\":\"{id_card_start_time}\",\"duetimeOCR\":\"{id_card_end_time}\",\"addressOCR\":\"辽宁省营口市大石桥市时柔街道生君小区131号楼508\",\"sexOCR\":\"F\",\"ethnicOCR\":\"高山\",\"issueOrgOCR\":\"大石桥市公安局\",\"positive\":\"{id_card_front_base64}\",\"negative\":\"{id_card_back_base64}\"},\"faceInfo\":{\"assayTime\":\"20250912101210\",\"assayType\":\"FACEAA\",\"best\":\"{face_base64}\"},\"contactInfoList\":[{\"contactRelationship\":\"PARENT\",\"contactName\":\"冀先霞\",\"contactPhone\":\"17820690370\"},{\"contactRelationship\":\"CHILDREN\",\"contactName\":\"谢风希\",\"contactPhone\":\"15847680022\"}],\"geoInfo\":{\"latitude\":\"28.535275875038835\",\"longitude\":\"114.45406872359285\"},\"extInfo\":{\"custFlag\":\"1100001010011000001110000\",\"custLevel\":null},\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"2547288\"}}",
               "partner": "{partner}",
               "requestNo": "d5bd475b-b6b1-40cc-a066-83c7cde14a40",
               "requestTime": "1757643572115",

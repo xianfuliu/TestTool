@@ -450,131 +450,11 @@ class ApiToolTab(QWidget):
         return datetime.now().strftime("%Y%m%d%H%M%S")
 
     def update_request_id(self):
-        """更新请求流水号并生成测试数据 - 集中处理Base64生成"""
-        # 生成新的请求流水并更新变量池
-        new_request_id = self.generate_request_id()
-        self.request_id_input.setText(new_request_id)
-        self.variable_pool['request_id'] = new_request_id
-
-        # 生成测试数据
-        if self.current_product and self.current_product in self.api_config["products"]:
-            test_data = self.user_info_generator.generate_id_card_data()
-
-            # 集中生成身份证图片的Base64编码
-            try:
-                base64_images = self.id_card_image_generator.generate_id_card_images_base64(
-                    id_data=test_data
-                )
-                # 将Base64编码添加到变量池
-                self.variable_pool['id_card_front_base64'] = base64_images['front']
-                self.variable_pool['id_card_back_base64'] = base64_images['back']
-                self.variable_pool['face_base64'] = base64_images['face']
-                print(f"Base64生成成功 - 正面: {len(base64_images['front'])} 字符")
-                print(f"Base64生成成功 - 背面: {len(base64_images['back'])} 字符")
-                print(f"Base64生成成功 - 人脸: {len(base64_images['face'])} 字符")
-            except Exception as e:
-                print(f"生成身份证图片Base64失败: {str(e)}")
-                # 如果生成失败，设置空值到变量池
-                for key in self.BASE64_VARIABLE_KEYS:
-                    self.variable_pool[key] = ""
-                    print(f"设置空值到变量: {key}")
-
-            # 根据当前产品的字段映射填充数据
-            product_config = self.api_config["products"][self.current_product]
-            layout_config = product_config.get("layout", [])
-
-            # 首先，确保所有字段（包括隐藏字段）都在对应的字典中有记录
-            for item in layout_config:
-                if item["type"] == "field" and item["key"] not in self.field_inputs:
-                    # 如果字段不在field_inputs中（可能是隐藏字段），创建它
-                    field_input = QLineEdit()
-                    default_value = item.get("default", "")
-                    if default_value:
-                        field_input.setText(default_value)
-
-                    self.field_inputs[item["key"]] = field_input
-
-                elif item["type"] == "combo" and item["key"] not in self.combo_boxes:
-                    # 如果下拉框不在combo_boxes中（可能是隐藏字段），创建它
-                    combo_box = QComboBox()
-                    options = item.get("options", [])
-                    for option in options:
-                        combo_box.addItem(option["text"], option["value"])
-
-                    default_value = item.get("default", "")
-                    if default_value:
-                        found_index = -1
-                        for i in range(combo_box.count()):
-                            if combo_box.itemData(i) == default_value:
-                                found_index = i
-                                break
-                        if found_index >= 0:
-                            combo_box.setCurrentIndex(found_index)
-                        elif combo_box.count() > 0:
-                            combo_box.setCurrentIndex(0)
-                    self.combo_boxes[item["key"]] = combo_box
-
-            # 然后，只填充那些当前值为空或等于默认值的字段（保留用户修改的值）
-            for item in layout_config:
-                if item["type"] == "field" and item["key"] in self.field_inputs:
-                    field_key = item["key"]
-                    field_input = self.field_inputs[field_key]
-                    current_value = field_input.text()
-                    default_value = item.get("default", "")
-
-                    # 跳过Base64字段，因为它们已经通过变量池处理
-                    if field_key in self.BASE64_VARIABLE_KEYS:
-                        continue
-
-                    # 只有在字段为空或等于默认值时才填充测试数据
-                    if not current_value or current_value == default_value:
-                        # 使用测试数据填充字段
-                        if field_key == "name":
-                            field_input.setText(test_data["name"])
-                        elif field_key == "id_card":
-                            field_input.setText(test_data["id_number"])
-                        elif field_key == "phone":
-                            field_input.setText(test_data["phone"])
-                        elif field_key == "bank_card_no":
-                            field_input.setText(test_data["bank_card_number"])
-                        elif field_key == "id_card_start_time":
-                            field_input.setText(test_data["id_card_start_time"])
-                        elif field_key == "id_card_end_time":
-                            field_input.setText(test_data["id_card_end_time"])
-                        elif field_key in test_data:
-                            # 对于其他字段，如果测试数据中有对应的键，则使用测试数据
-                            field_input.setText(str(test_data[field_key]))
-
-                # 为下拉框设置默认值 - 只有当没有设置值时才设置默认值
-                elif item["type"] == "combo" and item["key"] in self.combo_boxes:
-                    combo_key = item["key"]
-                    combo_box = self.combo_boxes[combo_key]
-
-                    # 只有当当前没有选择任何项时才设置默认值
-                    if combo_box.currentIndex() < 0:
-                        default_value = item.get("default", "")
-                        options = item.get("options", [])
-
-                        if default_value and options:
-                            # 在选项中查找默认值对应的索引
-                            found_index = -1
-                            for i, option in enumerate(options):
-                                if option.get("value") == default_value or option.get("text") == default_value:
-                                    found_index = i
-                                    break
-
-                            # 如果找到了对应的值，设置当前索引
-                            if found_index >= 0:
-                                combo_box.setCurrentIndex(found_index)
-                            else:
-                                # 如果没有找到，使用第一个选项
-                                combo_box.setCurrentIndex(0)
-                        elif options:
-                            # 如果没有配置默认值，使用第一个选项
-                            combo_box.setCurrentIndex(0)
+        """更新请求流水号 - 修复：调用新的重置方法"""
+        self.update_request_id_and_reset_fields()
 
     def on_product_changed(self, product_name, initial_load=False):
-        """首页产品切换事件"""
+        """首页产品切换事件 - 修复：切换产品时自动生成测试数据"""
         if not product_name or product_name == "无可用产品":
             return
 
@@ -597,8 +477,8 @@ class ApiToolTab(QWidget):
         # 清空右侧栏
         self.clear_right_panel()
 
-        # 无论是初始加载还是切换产品，都更新流水
-        self.update_request_id()
+        # 无论是初始加载还是切换产品，都更新流水并生成测试数据
+        self.update_request_id_and_reset_fields()
 
         # 调整所有元素的宽度
         self.adjust_all_elements_width()
@@ -1449,8 +1329,14 @@ class ApiToolTab(QWidget):
             # 替换数组索引中的变量
             processed = re.sub(array_index_pattern, replace_array_index, processed)
 
+
+        # 1. 处理复杂模板（日期时间、随机数等）
+        if any(pattern in processed for pattern in
+               ["{dateTime", "{date", "{time", "{random:"]):
+            processed = TemplateProcessor.process_template(processed)
+
         # 然后处理其他类型的变量（与之前相同）
-        # 1. 处理Base64变量
+        # 2. 处理Base64变量
         for var_key in self.BASE64_VARIABLE_KEYS:
             if var_key in self.variable_pool:
                 placeholder = "{" + var_key + "}"
@@ -1460,13 +1346,13 @@ class ApiToolTab(QWidget):
                     processed = processed.replace(placeholder, str_value)
                     print(f"替换Base64变量 {var_key}: 长度={len(str_value)}")
 
-        # 2. 处理请求ID
+        # 3. 处理请求ID
         if "{request_id}" in processed:
             request_id_value = self.request_id_input.text()
             processed = processed.replace("{request_id}", request_id_value)
             print(f"替换request_id: {request_id_value}")
 
-        # 3. 处理普通字段（从输入框获取当前值）
+        # 4. 处理普通字段（从输入框获取当前值）
         for field_key, field_input in self.field_inputs.items():
             placeholder = "{" + field_key + "}"
             if placeholder in processed:
@@ -1474,7 +1360,7 @@ class ApiToolTab(QWidget):
                 processed = processed.replace(placeholder, field_value)
                 print(f"替换字段 {field_key}: {field_value}")
 
-        # 4. 处理下拉框字段
+        # 5. 处理下拉框字段
         for combo_key, combo_box in self.combo_boxes.items():
             placeholder = "{" + combo_key + "}"
             if placeholder in processed:
@@ -1482,7 +1368,7 @@ class ApiToolTab(QWidget):
                 processed = processed.replace(placeholder, combo_value)
                 print(f"替换下拉框 {combo_key}: {combo_value}")
 
-        # 5. 处理SQL输出变量（从变量池获取，使用字段名作为变量名）
+        # 6. 处理SQL输出变量（从变量池获取，使用字段名作为变量名）
         # 匹配所有变量占位符
         all_var_pattern = r'\{(\w+)\}'
         all_matches = re.findall(all_var_pattern, processed)
@@ -1517,11 +1403,6 @@ class ApiToolTab(QWidget):
                     else:
                         processed = processed.replace(f"{{{var_name}}}", "")
                         print(f"替换缺失变量 {var_name} 为空字符串")
-
-        # 6. 处理复杂模板（日期时间、随机数等）
-        if any(pattern in processed for pattern in
-               ["{dateTime", "{date", "{time", "{random:"]):
-            processed = TemplateProcessor.process_template(processed)
 
         print(f"替换后的文本: {processed}")
         return processed
@@ -1962,10 +1843,14 @@ class ApiToolTab(QWidget):
         dialog.exec_()
 
     def on_config_saved(self, message):
-        """配置保存成功的回调"""
+        """配置保存成功的回调 - 修复：保存后刷新界面并生成测试数据"""
         Toast.success(self, message)
-        # 可以在这里添加其他刷新逻辑
+        # 刷新界面
         self.refresh_ui()
+
+        # 如果当前有产品，重新生成测试数据
+        if self.current_product:
+            self.update_request_id_and_reset_fields()
 
     def refresh_all_fields_from_variable_pool(self):
         """从变量池强制刷新所有字段的值"""
@@ -2032,3 +1917,176 @@ class ApiToolTab(QWidget):
 
         except Exception as e:
             print(f"刷新接口显示时出错: {str(e)}")
+
+    def update_request_id_and_reset_fields(self):
+        """更新请求流水号并重置字段 - 新增方法：集中处理重置逻辑"""
+        # 生成新的请求流水并更新变量池
+        new_request_id = self.generate_request_id()
+        self.request_id_input.setText(new_request_id)
+        self.variable_pool['request_id'] = new_request_id
+
+        # 生成测试数据
+        if self.current_product and self.current_product in self.api_config["products"]:
+            test_data = self.user_info_generator.generate_id_card_data()
+
+            # 集中生成身份证图片的Base64编码
+            try:
+                base64_images = self.id_card_image_generator.generate_id_card_images_base64(
+                    id_data=test_data
+                )
+                # 将Base64编码添加到变量池
+                self.variable_pool['id_card_front_base64'] = base64_images['front']
+                self.variable_pool['id_card_back_base64'] = base64_images['back']
+                self.variable_pool['face_base64'] = base64_images['face']
+                print(f"Base64生成成功 - 正面: {len(base64_images['front'])} 字符")
+                print(f"Base64生成成功 - 背面: {len(base64_images['back'])} 字符")
+                print(f"Base64生成成功 - 人脸: {len(base64_images['face'])} 字符")
+            except Exception as e:
+                print(f"生成身份证图片Base64失败: {str(e)}")
+                # 如果生成失败，设置空值到变量池
+                for key in self.BASE64_VARIABLE_KEYS:
+                    self.variable_pool[key] = ""
+                    print(f"设置空值到变量: {key}")
+
+            # 重置所有字段：清空无默认值的字段，有默认值的设置为默认值
+            self.reset_all_fields(test_data)
+
+    def reset_all_fields(self, test_data):
+        """重置所有字段 - 修复：下拉框无默认值时默认选择第一个"""
+        product_config = self.api_config["products"][self.current_product]
+        layout_config = product_config.get("layout", [])
+
+        print("开始重置所有字段...")
+
+        # 首先，确保所有字段（包括隐藏字段）都在对应的字典中有记录
+        for item in layout_config:
+            if item["type"] == "field" and item["key"] not in self.field_inputs:
+                # 如果字段不在field_inputs中（可能是隐藏字段），创建它
+                field_input = QLineEdit()
+                default_value = item.get("default", "")
+                if default_value:
+                    # 处理默认值中的变量
+                    processed_default = self.replace_variables_in_string(default_value)
+                    field_input.setText(processed_default)
+                self.field_inputs[item["key"]] = field_input
+
+            elif item["type"] == "combo" and item["key"] not in self.combo_boxes:
+                # 如果下拉框不在combo_boxes中（可能是隐藏字段），创建它
+                combo_box = QComboBox()
+                options = item.get("options", [])
+                for option in options:
+                    combo_box.addItem(option["text"], option["value"])
+                self.combo_boxes[item["key"]] = combo_box
+
+        # 然后，重置所有字段的值
+        for item in layout_config:
+            if item["type"] in ["field", "combo"]:
+                field_key = item["key"]
+                default_value = item.get("default", "")
+                show_in_ui = item.get("show_in_ui", True)
+
+                # 跳过Base64字段，因为它们已经通过变量池处理
+                if field_key in self.BASE64_VARIABLE_KEYS:
+                    continue
+
+                if item["type"] == "field" and field_key in self.field_inputs:
+                    field_input = self.field_inputs[field_key]
+
+                    if default_value:
+                        # 有默认值：使用默认值（支持变量替换）
+                        processed_default = self.replace_variables_in_string(default_value)
+                        field_input.setText(processed_default)
+                        print(f"字段 '{field_key}' 设置为默认值: {processed_default}")
+                    else:
+                        # 无默认值：使用测试数据或清空
+                        if field_key in self.get_test_data_mapping(test_data):
+                            test_value = self.get_test_data_mapping(test_data)[field_key]
+                            field_input.setText(str(test_value))
+                            print(f"字段 '{field_key}' 设置为测试数据: {test_value}")
+                        else:
+                            field_input.clear()
+                            print(f"字段 '{field_key}' 已清空")
+
+                    # 更新变量池
+                    self.variable_pool[field_key] = field_input.text()
+
+                elif item["type"] == "combo" and field_key in self.combo_boxes:
+                    combo_box = self.combo_boxes[field_key]
+
+                    if default_value:
+                        # 有默认值：使用默认值
+                        processed_default = self.replace_variables_in_string(default_value)
+                        # 在下拉框中查找匹配的选项
+                        found_index = -1
+                        for i in range(combo_box.count()):
+                            if combo_box.itemData(i) == processed_default:
+                                found_index = i
+                                break
+                        if found_index >= 0:
+                            combo_box.setCurrentIndex(found_index)
+                            print(f"下拉框 '{field_key}' 设置为默认值: {processed_default}")
+                        else:
+                            # 如果没有找到，尝试使用显示文本匹配
+                            for i in range(combo_box.count()):
+                                if combo_box.itemText(i) == processed_default:
+                                    combo_box.setCurrentIndex(i)
+                                    print(f"下拉框 '{field_key}' 设置为默认值(文本匹配): {processed_default}")
+                                    break
+                            else:
+                                # 如果还是没有找到，使用第一个选项
+                                if combo_box.count() > 0:
+                                    combo_box.setCurrentIndex(0)
+                                    first_value = combo_box.itemData(0)
+                                    print(f"下拉框 '{field_key}' 未找到默认值，使用第一个选项: {first_value}")
+                    else:
+                        # 无默认值：使用测试数据或第一个选项
+                        test_value = None
+                        if field_key in self.get_test_data_mapping(test_data):
+                            test_value = self.get_test_data_mapping(test_data)[field_key]
+
+                        if test_value:
+                            # 在下拉框中查找匹配的选项
+                            found_index = -1
+                            for i in range(combo_box.count()):
+                                if combo_box.itemData(i) == str(test_value):
+                                    found_index = i
+                                    break
+                            if found_index >= 0:
+                                combo_box.setCurrentIndex(found_index)
+                                print(f"下拉框 '{field_key}' 设置为测试数据: {test_value}")
+                            else:
+                                # 如果没有找到，尝试使用显示文本匹配
+                                for i in range(combo_box.count()):
+                                    if combo_box.itemText(i) == str(test_value):
+                                        combo_box.setCurrentIndex(i)
+                                        print(f"下拉框 '{field_key}' 设置为测试数据(文本匹配): {test_value}")
+                                        break
+                                else:
+                                    # 如果还是没有找到，使用第一个选项
+                                    if combo_box.count() > 0:
+                                        combo_box.setCurrentIndex(0)
+                                        first_value = combo_box.itemData(0)
+                                        print(f"下拉框 '{field_key}' 未找到测试数据，使用第一个选项: {first_value}")
+                        else:
+                            # 无测试数据，使用第一个选项
+                            if combo_box.count() > 0:
+                                combo_box.setCurrentIndex(0)
+                                first_value = combo_box.itemData(0)
+                                print(f"下拉框 '{field_key}' 使用第一个选项: {first_value}")
+
+                    # 更新变量池
+                    current_data = combo_box.currentData()
+                    self.variable_pool[field_key] = current_data if current_data is not None else ""
+
+        print("所有字段重置完成")
+
+    def get_test_data_mapping(self, test_data):
+        """获取测试数据映射 - 新增方法：将测试数据映射到字段名"""
+        return {
+            "name": test_data["name"],
+            "id_card": test_data["id_number"],
+            "phone": test_data["phone"],
+            "bank_card_no": test_data["bank_card_number"],
+            "id_card_start_time": test_data["id_card_start_time"],
+            "id_card_end_time": test_data["id_card_end_time"]
+        }
