@@ -6,7 +6,7 @@ from PyQt5.QtGui import QFont
 from src.ui.widgets.toast_tips import Toast
 from src.utils.resource_utils import resource_path
 from src.utils.sql_worker import SQLWorker
-from src.ui.dialogs.database_config_dialog import DatabaseConfigDialog
+from src.ui.dialogs.data_query_database_config_dialog import DatabaseConfigDialog
 import json
 import os
 import re

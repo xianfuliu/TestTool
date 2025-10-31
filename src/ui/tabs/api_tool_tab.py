@@ -13,7 +13,7 @@ from PyQt5.QtGui import QFont
 from src.ui.widgets.toast_tips import Toast
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_images_generator import IdCardImageGenerator
-from src.ui.dialogs.config_management_dialog import ConfigManagementDialog
+from src.ui.dialogs.api_tool_config_management_dialog import ConfigManagementDialog
 from src.utils.resource_utils import resource_path
 from src.utils.api_worker import ApiWorker
 from src.utils.schedule_executor import ScheduleExecutor
