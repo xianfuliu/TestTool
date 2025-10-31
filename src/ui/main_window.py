@@ -12,11 +12,19 @@ from src.utils.resource_utils import resource_path
 # 条件导入接口自动化标签页
 try:
     from src.ui.tabs.interface_auto_tab import InterfaceAutoTab
-
     INTERFACE_AUTO_AVAILABLE = True
+    TOOL_CARDS_AVAILABLE = True
 except ImportError as e:
     print(f"接口自动化模块不可用: {e}")
     INTERFACE_AUTO_AVAILABLE = False
+
+# 条件导入卡片工具标签页
+try:
+    from src.ui.tabs.tool_cards_tab import ToolCardsTab
+    TOOL_CARDS_AVAILABLE = True
+except ImportError as e:
+    print(f"卡片工具模块不可用: {e}")
+    TOOL_CARDS_AVAILABLE = False
 
 
 class MainWindow(QMainWindow):
@@ -31,6 +39,8 @@ class MainWindow(QMainWindow):
 
         # 获取功能开关状态
         self.enable_interface_auto = self.config.get("features", {}).get("interface_automation", False)
+        self.enable_tool_cards = self.config.get("features", {}).get("tool_cards", False)
+
 
         self.setWindowTitle("测试工具")
         self.setGeometry(100, 100, 1800, 800)
@@ -186,12 +196,25 @@ class MainWindow(QMainWindow):
         if self.enable_interface_auto and INTERFACE_AUTO_AVAILABLE:
             try:
                 self.interface_auto_tab = InterfaceAutoTab(self)
+                self.tool_cards_tab = ToolCardsTab(self)
                 tab_widget.addTab(self.interface_auto_tab, "接口自动化")
+                tab_widget.addTab(self.tool_cards_tab, '卡片工具')
                 print("接口自动化标签页已加载")
             except Exception as e:
                 print(f"加载接口自动化标签页失败: {e}")
         else:
             print("接口自动化功能已禁用或模块不可用")
+
+        # 条件加载卡片工具标签页
+        if self.enable_tool_cards and TOOL_CARDS_AVAILABLE:
+            try:
+                self.tool_cards_tab = ToolCardsTab(self)
+                tab_widget.addTab(self.tool_cards_tab, '卡片工具')
+                print("卡片工具标签页已加载")
+            except Exception as e:
+                print(f"加载卡片工具标签页失败: {e}")
+        else:
+            print("卡片工具功能已禁用或模块不可用")
 
         # 设置Tab Widget为中心部件
         self.setCentralWidget(tab_widget)

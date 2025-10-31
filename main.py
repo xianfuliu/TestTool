@@ -60,6 +60,8 @@ if __name__ == "__main__":
     # 加载配置
     config = load_config()
     enable_interface_auto = config.get("features", {}).get("interface_automation", False)
+    enable_tool_cards = config.get("features", {}).get("tool_cards", False)
+
 
     app = QApplication(sys.argv)
 
