@@ -1,0 +1,19 @@
+{
+  "business_lines": [
+    {
+      "name": "消费金融",
+      "sub_business": []
+    },
+    {
+      "name": "小微测试",
+      "sub_business": []
+    },
+    {
+      "name": "213123",
+      "sub_business": [
+        "hal"
+      ]
+    }
+  ],
+  "default_business_line": "消费金融"
+}
