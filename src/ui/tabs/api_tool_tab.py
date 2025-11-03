@@ -11,6 +11,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from src.ui.widgets.toast_tips import Toast
+from src.ui.widgets.width_aware import WidthAwareWidget
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_images_generator import IdCardImageGenerator
 from src.ui.dialogs.api_tool_config_management_dialog import ConfigManagementDialog
@@ -852,7 +853,7 @@ class ApiToolTab(QWidget):
             # 有内容时根据内容宽度调整，加上一些边距
             content_width = text_width + 30  # 增加边距
             # 限制在最小和最大宽度之间
-            new_width = max(120, min(content_width, 250))
+            new_width = max(80, min(content_width, 250))
         else:
             # 无内容时使用固定宽度
             new_width = 120
@@ -2420,22 +2421,3 @@ class ApiToolTab(QWidget):
             "id_card_start_time": test_data["id_card_start_time"],
             "id_card_end_time": test_data["id_card_end_time"]
         }
-
-
-class WidthAwareWidget(QWidget):
-    """自定义宽度感知部件，确保在渲染完成后调整宽度"""
-
-    def __init__(self, content_widget, parent_tab):
-        super().__init__()
-        self.parent_tab = parent_tab
-        layout = QVBoxLayout(self)
-        layout.addWidget(content_widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-    def paintEvent(self, event):
-        """重写绘制事件 - 在第一次绘制时调整宽度"""
-        super().paintEvent(event)
-        # 只在第一次绘制时调整宽度
-        if not hasattr(self, '_width_adjusted'):
-            self.parent_tab.adjust_all_elements_width()
-            self._width_adjusted = True
