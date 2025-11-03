@@ -481,10 +481,6 @@ class ApiToolTab(QWidget):
         # 无论是初始加载还是切换产品，都更新流水并生成测试数据
         self.update_request_id_and_reset_fields()
 
-        # 延迟调整所有元素的宽度，确保与【更新】按钮保持一致
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(150, self.adjust_all_elements_width)
-
     def clear_right_panel(self):
         """清空右侧面板内容"""
         self.url_input.clear()
@@ -823,9 +819,8 @@ class ApiToolTab(QWidget):
         # 初始调整所有元素的宽度
         self.adjust_all_elements_width()
 
-        # 延迟调整布局宽度
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(100, self.adjust_all_elements_width_delayed)
+        # 使用自定义的布局部件
+        self.combined_layout.addWidget(WidthAwareWidget(main_widget, self))
 
     def adjust_all_elements_width_delayed(self):
         """延迟调整所有元素的宽度 - 确保控件完全渲染后再调整"""
@@ -2425,3 +2420,22 @@ class ApiToolTab(QWidget):
             "id_card_start_time": test_data["id_card_start_time"],
             "id_card_end_time": test_data["id_card_end_time"]
         }
+
+
+class WidthAwareWidget(QWidget):
+    """自定义宽度感知部件，确保在渲染完成后调整宽度"""
+
+    def __init__(self, content_widget, parent_tab):
+        super().__init__()
+        self.parent_tab = parent_tab
+        layout = QVBoxLayout(self)
+        layout.addWidget(content_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+    def paintEvent(self, event):
+        """重写绘制事件 - 在第一次绘制时调整宽度"""
+        super().paintEvent(event)
+        # 只在第一次绘制时调整宽度
+        if not hasattr(self, '_width_adjusted'):
+            self.parent_tab.adjust_all_elements_width()
+            self._width_adjusted = True
