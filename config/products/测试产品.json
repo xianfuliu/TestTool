@@ -2,7 +2,18 @@
   "enable_encryption": false,
   "encrypt_url": "",
   "decrypt_url": "",
-  "schedule_tasks": [],
+  "schedule_tasks": [
+    {
+      "id": "2",
+      "jobGroup": "DEFAULT",
+      "name": "test1"
+    },
+    {
+      "id": "12",
+      "jobGroup": "DEFAULT",
+      "name": "43"
+    }
+  ],
   "layout": [
     {
       "default": "",
@@ -64,6 +75,114 @@
       "label": "123",
       "priority": 8,
       "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "1",
+      "key": "abc",
+      "label": "下拉框1",
+      "options": [
+        {
+          "text": "1",
+          "value": "1"
+        },
+        {
+          "text": "2",
+          "value": "2"
+        },
+        {
+          "text": "3",
+          "value": "3"
+        }
+      ],
+      "priority": 9,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "data_type": "string",
+      "default": "a",
+      "key": "sss",
+      "label": "下拉框2",
+      "options": [
+        {
+          "text": "a",
+          "value": "a"
+        },
+        {
+          "text": "b",
+          "value": "b"
+        },
+        {
+          "text": "c",
+          "value": "c"
+        }
+      ],
+      "priority": 10,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "condition_field": "sss",
+      "key": "hahah",
+      "label": "条件字段",
+      "mappings": {
+        "a": "name",
+        "b": "id_card",
+        "c": "phone"
+      },
+      "priority": 11,
+      "type": "condition"
+    },
+    {
+      "data_type": "string",
+      "default": "1",
+      "key": "test_field",
+      "label": "测试字段1",
+      "priority": 12,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "1",
+      "key": "test_combo",
+      "label": "测试下拉框1",
+      "options": [
+        {
+          "text": "1",
+          "value": "1"
+        },
+        {
+          "text": "3",
+          "value": "3"
+        },
+        {
+          "text": "2",
+          "value": "2"
+        }
+      ],
+      "priority": 13,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "name": "测试接口1",
+      "priority": 14,
+      "type": "interface"
+    },
+    {
+      "condition_field": "test_combo",
+      "key": "test_condition",
+      "label": "测试条件",
+      "mappings": {
+        "1": "name",
+        "2": "name",
+        "3": "id_card"
+      },
+      "priority": 15,
+      "show_in_ui": true,
+      "type": "condition"
     }
   ],
   "interfaces": {
@@ -71,15 +190,17 @@
       "body_template": {
         "requestId": "{request_id}",
         "userInfo": {
-          "idCard": "{id_card}",
-          "name": "{name}",
+          "idCard": "{test}",
+          "name": "{hahah}",
           "phone": "{phone}"
         }
       },
+      "field_types": {},
       "headers": {
         "Content-Type": "application/json"
       },
       "method": "POST",
+      "response_mapping": {},
       "url": "http://api.example.com/default"
     },
     "123": {
@@ -93,6 +214,20 @@
       "method": "POST",
       "response_mapping": {},
       "url": ""
+    },
+    "测试接口1": {
+      "body_template": {
+        "requestId": "{test_condition}",
+        "the": "{test_field}"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": ""
     }
-  }
+  },
+  "sqls": {}
 }

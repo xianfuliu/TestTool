@@ -701,6 +701,10 @@ class ConfigManagementDialog(QDialog):
                         display_text = f"接口: {item_name}"
                     elif item_type == "sql":
                         display_text = f"SQL: {item_name}"
+                    elif item_type == "condition":
+                        display_text = f"条件: {item_label} ({item_key})"
+                        if not show_in_ui:
+                            display_text += " [隐藏]"  # 为条件字段添加隐藏标记
                     else:
                         display_text = f"未知: {item}"
 
@@ -1415,8 +1419,8 @@ class ConfigManagementDialog(QDialog):
         dialog.setFixedSize(450, 580)  # 增加高度以容纳新控件
 
         layout = QVBoxLayout(dialog)
-        layout.setSpacing(8)  # 减少整体间距
-        layout.setContentsMargins(12, 12, 12, 12)  # 减少边距
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
 
         # 类型选择 - 紧凑布局
         type_layout = QHBoxLayout()
@@ -1430,7 +1434,8 @@ class ConfigManagementDialog(QDialog):
         self.add_type_combo.addItem("字段", "field")
         self.add_type_combo.addItem("下拉框", "combo")
         self.add_type_combo.addItem("接口", "interface")
-        self.add_type_combo.addItem("SQL", "sql")  # 新增SQL类型
+        self.add_type_combo.addItem("SQL", "sql")
+        self.add_type_combo.addItem("条件", "condition")  # 新增条件类型
         self.add_type_combo.setFixedWidth(120)
         self.add_type_combo.currentTextChanged.connect(self.on_add_type_changed)
         type_layout.addWidget(self.add_type_combo)
@@ -1443,14 +1448,14 @@ class ConfigManagementDialog(QDialog):
         form_layout.setVerticalSpacing(6)
         form_layout.setHorizontalSpacing(8)
 
-        # 键/名称 - 字段和下拉框显示
+        # 键 - 字段、下拉框和条件显示
         self.add_key_label = QLabel("键:")
         self.add_key_edit = QLineEdit()
         self.add_key_edit.setPlaceholderText("字段键名")
         self.add_key_edit.setFixedWidth(250)
         form_layout.addRow(self.add_key_label, self.add_key_edit)
 
-        # 标签 - 字段和下拉框显示
+        # 标签 - 字段、下拉框和条件显示
         self.add_label_label = QLabel("标签:")
         self.add_label_edit = QLineEdit()
         self.add_label_edit.setPlaceholderText("显示标签")
@@ -1475,6 +1480,15 @@ class ConfigManagementDialog(QDialog):
         self.add_sql_name_edit.setVisible(False)
         form_layout.addRow(self.add_sql_name_label, self.add_sql_name_edit)
 
+        # 条件字段选择 - 仅条件类型显示
+        self.add_condition_field_label = QLabel("条件字段:")
+        self.add_condition_field_combo = QComboBox()
+        self.add_condition_field_combo.setFixedWidth(250)
+        self.add_condition_field_combo.currentIndexChanged.connect(self.on_condition_field_changed)
+        self.add_condition_field_label.setVisible(False)
+        self.add_condition_field_combo.setVisible(False)
+        form_layout.addRow(self.add_condition_field_label, self.add_condition_field_combo)
+
         # 数据类型 - 字段和下拉框显示
         self.add_data_type_label = QLabel("数据类型:")
         self.add_data_type_combo = QComboBox()
@@ -1490,7 +1504,7 @@ class ConfigManagementDialog(QDialog):
         self.add_default_edit.setFixedWidth(250)
         form_layout.addRow(self.add_default_label, self.add_default_edit)
 
-        # 新增：是否展示到前端 - 字段和下拉框显示
+        # 是否展示到前端 - 字段和下拉框显示
         self.add_show_in_ui_label = QLabel("展示到前端:")
         self.add_show_in_ui_checkbox = QCheckBox()
         self.add_show_in_ui_checkbox.setChecked(True)  # 默认勾选
@@ -1542,6 +1556,24 @@ class ConfigManagementDialog(QDialog):
         options_layout.addLayout(options_btn_layout)
         layout.addWidget(self.add_options_group)
 
+        # 条件映射配置 - 仅条件类型显示
+        self.add_condition_mapping_group = QGroupBox("条件映射配置")
+        self.add_condition_mapping_group.setContentsMargins(8, 8, 8, 8)
+        self.add_condition_mapping_group.setVisible(False)
+        condition_mapping_layout = QVBoxLayout(self.add_condition_mapping_group)
+        condition_mapping_layout.setSpacing(6)
+
+        self.add_condition_mapping_table = QTableWidget()
+        self.add_condition_mapping_table.setColumnCount(2)
+        self.add_condition_mapping_table.setHorizontalHeaderLabels(["条件值", "变量字段"])
+        self.add_condition_mapping_table.horizontalHeader().setStretchLastSection(True)
+        self.add_condition_mapping_table.setMaximumHeight(180)
+        self.add_condition_mapping_table.setColumnWidth(0, 150)
+        self.add_condition_mapping_table.setColumnWidth(1, 150)
+        condition_mapping_layout.addWidget(self.add_condition_mapping_table)
+
+        layout.addWidget(self.add_condition_mapping_group)
+
         # 按钮布局
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
@@ -1559,12 +1591,12 @@ class ConfigManagementDialog(QDialog):
             label = self.add_label_edit.text().strip()
             interface_name = self.add_interface_name_edit.text().strip()
             sql_name = self.add_sql_name_edit.text().strip()
-            data_type = self.add_data_type_combo.currentText()
+            data_type = self.add_data_type_combo.currentText() if item_type in ["field", "combo"] else "string"
             default_value = self.add_default_edit.text().strip()
             show_in_ui = self.add_show_in_ui_checkbox.isChecked()
 
             # 验证必填字段
-            if item_type in ["field", "combo"]:
+            if item_type in ["field", "combo", "condition"]:  # 添加条件类型
                 if not key:
                     Toast.warning(dialog, "警告", "请输入键")
                     return
@@ -1656,6 +1688,38 @@ class ConfigManagementDialog(QDialog):
                 # 自动在SQL配置中生成默认SQL配置
                 self.add_default_sql_config(sql_name)
 
+            elif item_type == "condition":  # 新增条件类型处理
+                # 获取条件字段
+                condition_field_key = self.add_condition_field_combo.currentData()
+                if not condition_field_key:
+                    Toast.warning(dialog, "警告", "请选择条件字段")
+                    return
+
+                # 获取映射关系
+                mappings = {}
+                for row in range(self.add_condition_mapping_table.rowCount()):
+                    value_item = self.add_condition_mapping_table.item(row, 0)
+                    if not value_item:
+                        continue
+                    condition_value = value_item.data(Qt.UserRole)  # 获取原始值
+                    combo = self.add_condition_mapping_table.cellWidget(row, 1)
+                    variable_field_key = combo.currentData()
+                    if condition_value and variable_field_key:
+                        mappings[condition_value] = variable_field_key
+                if not mappings:
+                    Toast.warning(dialog, "警告", "请至少配置一个条件映射")
+                    return
+                item_data.update({
+                    "key": key,
+                    "label": label,
+                    "condition_field": condition_field_key,
+                    "mappings": mappings,
+                    "show_in_ui": show_in_ui  # 新增展示到前端配置
+                })
+                display_text = f"条件: {label} ({key})"
+                if not show_in_ui:
+                    display_text += " [隐藏]"  # 添加隐藏标记
+
             # 添加到列表
             item = QListWidgetItem(display_text)
             item.setData(Qt.UserRole, item_data)
@@ -1696,12 +1760,12 @@ class ConfigManagementDialog(QDialog):
 
         # 根据类型设置不同的大小
         item_type = item_data.get("type")
-        if item_type == "combo":
-            dialog.setFixedSize(450, 580)  # 下拉框需要更多空间显示选项
-        elif item_type == "interface" or item_type == "sql":  # SQL类型与接口类型大小相同
-            dialog.setFixedSize(350, 200)  # 接口类型只需要接口名称，更小
+        if item_type == "combo" or item_type == "condition":  # 条件和下拉框需要更多空间
+            dialog.setFixedSize(500, 650)  # 增加宽度和高度
+        elif item_type == "interface" or item_type == "sql":
+            dialog.setFixedSize(400, 200)
         else:  # field
-            dialog.setFixedSize(350, 330)  # 字段类型适中
+            dialog.setFixedSize(400, 350)
 
         layout = QVBoxLayout(dialog)
         layout.setSpacing(8)
@@ -1719,7 +1783,8 @@ class ConfigManagementDialog(QDialog):
             "field": "字段",
             "combo": "下拉框",
             "interface": "接口",
-            "sql": "SQL"  # 新增SQL类型
+            "sql": "SQL",
+            "condition": "条件"  # 新增条件类型
         }
 
         type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
@@ -1735,7 +1800,7 @@ class ConfigManagementDialog(QDialog):
         form_layout.setHorizontalSpacing(8)
 
         # 根据类型显示不同的字段
-        if item_type in ["field", "combo"]:
+        if item_type in ["field", "combo", "condition"]:  # 添加条件类型
             # 键
             key_edit = QLineEdit()
             key_edit.setText(item_data.get("key", ""))
@@ -1748,6 +1813,15 @@ class ConfigManagementDialog(QDialog):
             label_edit.setFixedWidth(250)
             form_layout.addRow("标签:", label_edit)
 
+        if item_type in ["field", "combo", "condition"]:  # 添加条件类型
+            # 是否展示到前端
+            show_in_ui_checkbox = QCheckBox()
+            show_in_ui = item_data.get("show_in_ui", True)  # 默认True
+            show_in_ui_checkbox.setChecked(show_in_ui)
+            show_in_ui_checkbox.setToolTip("勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数")
+            form_layout.addRow("展示到前端:", show_in_ui_checkbox)
+
+        if item_type in ["field", "combo"]:
             # 数据类型
             data_type_combo = QComboBox()
             data_type_combo.addItems(["string", "int", "float", "bool"])
@@ -1761,13 +1835,6 @@ class ConfigManagementDialog(QDialog):
             default_edit.setFixedWidth(250)
             form_layout.addRow("默认值:", default_edit)
 
-            # 是否展示到前端
-            show_in_ui_checkbox = QCheckBox()
-            show_in_ui = item_data.get("show_in_ui", True)
-            show_in_ui_checkbox.setChecked(show_in_ui)
-            show_in_ui_checkbox.setToolTip("勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数")
-            form_layout.addRow("展示到前端:", show_in_ui_checkbox)
-
         elif item_type == "interface":
             # 接口名称
             interface_name_edit = QLineEdit()
@@ -1775,12 +1842,44 @@ class ConfigManagementDialog(QDialog):
             interface_name_edit.setFixedWidth(250)
             form_layout.addRow("接口名称:", interface_name_edit)
 
-        elif item_type == "sql":  # 新增SQL类型编辑
+        elif item_type == "sql":
             # SQL名称
             sql_name_edit = QLineEdit()
             sql_name_edit.setText(item_data.get("name", ""))
             sql_name_edit.setFixedWidth(250)
             form_layout.addRow("SQL名称:", sql_name_edit)
+
+        # 条件字段 - 仅条件类型显示
+        condition_field_combo = None  # 提前声明变量
+        if item_type == "condition":
+            # 条件字段（可编辑）
+            condition_field_combo = QComboBox()
+            condition_field_combo.setFixedWidth(250)
+
+            # 初始化条件字段下拉框
+            combo_fields = []
+            for i in range(self.layout_list.count()):
+                item = self.layout_list.item(i)
+                item_data_field = item.data(Qt.UserRole)
+                if item_data_field and item_data_field.get("type") == "combo":
+                    combo_fields.append({
+                        "key": item_data_field.get("key"),
+                        "label": item_data_field.get("label")
+                    })
+
+            # 添加到下拉框
+            for field in combo_fields:
+                display_text = f"{field['label']} ({field['key']})"
+                condition_field_combo.addItem(display_text, field['key'])
+
+            # 设置当前选中的条件字段
+            current_condition_field = item_data.get("condition_field")
+            if current_condition_field:
+                index = condition_field_combo.findData(current_condition_field)
+                if index >= 0:
+                    condition_field_combo.setCurrentIndex(index)
+
+            form_layout.addRow("条件字段:", condition_field_combo)
 
         layout.addLayout(form_layout)
 
@@ -1978,6 +2077,115 @@ class ConfigManagementDialog(QDialog):
             options_layout.addLayout(options_btn_layout)
             layout.addWidget(options_group)
 
+        # 条件映射配置 - 仅条件显示
+        condition_mapping_table = None  # 提前声明变量
+        if item_type == "condition":
+            condition_mapping_group = QGroupBox("条件映射配置")
+            condition_mapping_group.setContentsMargins(8, 8, 8, 8)
+            condition_mapping_layout = QVBoxLayout(condition_mapping_group)
+            condition_mapping_layout.setSpacing(6)
+
+            condition_mapping_table = QTableWidget()
+            condition_mapping_table.setColumnCount(2)
+            condition_mapping_table.setHorizontalHeaderLabels(["条件值", "变量字段"])
+            condition_mapping_table.horizontalHeader().setStretchLastSection(True)
+            condition_mapping_table.setMaximumHeight(180)
+            condition_mapping_table.setColumnWidth(0, 150)
+            condition_mapping_table.setColumnWidth(1, 150)
+
+            # 填充现有映射
+            mappings = item_data.get("mappings", {})
+
+            # 获取所有字段类型的布局项（用于第二列的下拉框）
+            field_items = []
+            for i in range(self.layout_list.count()):
+                item = self.layout_list.item(i)
+                item_data_field = item.data(Qt.UserRole)
+                if item_data_field and item_data_field.get("type") == "field":
+                    field_items.append({
+                        "key": item_data_field.get("key"),
+                        "label": item_data_field.get("label")
+                    })
+
+            # 获取当前条件字段的选项（如果条件字段已设置）
+            current_condition_field_key = item_data.get("condition_field")
+            condition_options = []
+            if current_condition_field_key:
+                for i in range(self.layout_list.count()):
+                    item = self.layout_list.item(i)
+                    item_data_field = item.data(Qt.UserRole)
+                    if item_data_field and item_data_field.get(
+                            "key") == current_condition_field_key and item_data_field.get("type") == "combo":
+                        condition_options = item_data_field.get("options", [])
+                        break
+
+            for option in condition_options:
+                condition_value = option.get("value")
+                row = condition_mapping_table.rowCount()
+                condition_mapping_table.insertRow(row)
+
+                # 第一列：条件值（不可编辑）
+                value_item = QTableWidgetItem(condition_value)
+                value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable)
+                condition_mapping_table.setItem(row, 0, value_item)
+
+                # 第二列：变量字段选择（下拉框）
+                combo = QComboBox()
+                combo.addItem("", "")  # 空选项
+                current_index = 0
+                for idx, field in enumerate(field_items):
+                    display_text = f"{field['label']} ({field['key']})"
+                    combo.addItem(display_text, field['key'])
+                    # 如果当前有映射，设置选中项
+                    if condition_value in mappings and mappings[condition_value] == field['key']:
+                        current_index = idx + 1  # +1 因为第一个是空选项
+                combo.setCurrentIndex(current_index)
+                condition_mapping_table.setCellWidget(row, 1, combo)
+
+            condition_mapping_layout.addWidget(condition_mapping_table)
+
+            # 当条件字段改变时，更新条件映射表格
+            def on_condition_field_changed():
+                current_field_key = condition_field_combo.currentData()
+                condition_mapping_table.setRowCount(0)
+                if not current_field_key:
+                    return
+                # 查找选中的下拉框配置
+                combo_config = None
+                for i in range(self.layout_list.count()):
+                    item = self.layout_list.item(i)
+                    item_data_field = item.data(Qt.UserRole)
+                    if item_data_field and item_data_field.get("key") == current_field_key and item_data_field.get(
+                            "type") == "combo":
+                        combo_config = item_data_field
+                        break
+                if not combo_config:
+                    return
+                options = combo_config.get("options", [])
+                for option in options:
+                    row = condition_mapping_table.rowCount()
+                    condition_mapping_table.insertRow(row)
+                    condition_value = option.get("value")
+                    value_item = QTableWidgetItem(condition_value)
+                    value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable)
+                    condition_mapping_table.setItem(row, 0, value_item)
+                    combo = QComboBox()
+                    combo.addItem("", "")
+                    current_index = 0
+                    for idx, field in enumerate(field_items):
+                        display_text = f"{field['label']} ({field['key']})"
+                        combo.addItem(display_text, field['key'])
+                        if condition_value in mappings and mappings[condition_value] == field['key']:
+                            current_index = idx + 1
+                    combo.setCurrentIndex(current_index)
+                    condition_mapping_table.setCellWidget(row, 1, combo)
+
+            # 将信号连接移到条件类型判断内部
+            if condition_field_combo:
+                condition_field_combo.currentIndexChanged.connect(on_condition_field_changed)
+
+            layout.addWidget(condition_mapping_group)
+
         # 按钮布局
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
@@ -1990,16 +2198,9 @@ class ConfigManagementDialog(QDialog):
 
         def on_ok():
             # 根据类型校验必填字段
-            if item_type in ["field", "combo"]:
+            if item_type in ["field", "combo", "condition"]:
                 key = key_edit.text().strip()
                 label = label_edit.text().strip()
-
-                if item_type in ["field", "combo"]:
-                    data_type = data_type_combo.currentText()
-                    default_value = default_edit.text().strip()
-                    show_in_ui = show_in_ui_checkbox.isChecked()
-                else:
-                    default_value = default_edit.text().strip()
 
                 # 必填校验
                 if not key:
@@ -2009,21 +2210,27 @@ class ConfigManagementDialog(QDialog):
                     Toast.warning(dialog, "警告", "请输入标签")
                     return
 
-                # 数据类型校验（仅字段和下拉框）
-                if item_type in ["field", "combo"]:
-                    if data_type in ["int", "float"] and default_value:
-                        try:
-                            if data_type == "int":
-                                int(default_value)
-                            elif data_type == "float":
-                                float(default_value)
-                        except ValueError:
-                            Toast.warning(dialog, "警告", f"默认值 '{default_value}' 与数据类型 '{data_type}' 不匹配")
-                            return
-                    elif data_type == "bool" and default_value:
-                        if default_value.lower() not in ["true", "false", "1", "0"]:
-                            Toast.warning(dialog, "警告", "布尔类型的默认值应为 true/false 或 1/0")
-                            return
+            # 对于字段和下拉框类型，还需要获取其他字段的值
+            if item_type in ["field", "combo"]:
+                # 只有在字段和下拉框类型中才获取数据类型和默认值
+                data_type = data_type_combo.currentText()
+                default_value = default_edit.text().strip()
+                show_in_ui = show_in_ui_checkbox.isChecked()
+
+                # 数据类型校验
+                if data_type in ["int", "float"] and default_value:
+                    try:
+                        if data_type == "int":
+                            int(default_value)
+                        elif data_type == "float":
+                            float(default_value)
+                    except ValueError:
+                        Toast.warning(dialog, "警告", f"默认值 '{default_value}' 与数据类型 '{data_type}' 不匹配")
+                        return
+                elif data_type == "bool" and default_value:
+                    if default_value.lower() not in ["true", "false", "1", "0"]:
+                        Toast.warning(dialog, "警告", "布尔类型的默认值应为 true/false 或 1/0")
+                        return
 
                 # 下拉框特殊校验
                 if item_type == "combo":
@@ -2060,7 +2267,7 @@ class ConfigManagementDialog(QDialog):
                             Toast.warning(dialog, "警告", "接口名称已存在")
                             return
 
-            elif item_type == "sql":  # 新增SQL类型编辑
+            elif item_type == "sql":
                 old_sql_name = item_data.get("name", "")
                 new_sql_name = sql_name_edit.text().strip()
 
@@ -2076,6 +2283,11 @@ class ConfigManagementDialog(QDialog):
                         if self.sql_list.item(i).text() == new_sql_name:
                             Toast.warning(dialog, "警告", "SQL名称已存在")
                             return
+
+            elif item_type == "condition":
+                # 对于条件类型，只需要获取是否展示到前端
+                show_in_ui = show_in_ui_checkbox.isChecked()
+                # 条件类型不需要数据类型和默认值验证
 
             # 更新布局项数据
             if item_type in ["field", "combo"]:
@@ -2121,7 +2333,7 @@ class ConfigManagementDialog(QDialog):
                 })
                 display_text = f"接口: {new_interface_name}"
 
-            elif item_type == "sql":  # 新增SQL类型更新
+            elif item_type == "sql":
                 old_sql_name = item_data.get("name", "")
                 new_sql_name = sql_name_edit.text().strip()
 
@@ -2137,6 +2349,43 @@ class ConfigManagementDialog(QDialog):
                     "name": new_sql_name
                 })
                 display_text = f"SQL: {new_sql_name}"
+
+            elif item_type == "condition":
+                # 获取条件字段
+                new_condition_field_key = condition_field_combo.currentData() if condition_field_combo else None
+                if not new_condition_field_key:
+                    Toast.warning(dialog, "警告", "请选择条件字段")
+                    return
+
+                # 获取映射关系
+                mappings = {}
+                if condition_mapping_table:
+                    for row in range(condition_mapping_table.rowCount()):
+                        value_item = condition_mapping_table.item(row, 0)
+                        if not value_item:
+                            continue
+
+                        condition_value = value_item.text()  # 获取条件值
+                        combo = condition_mapping_table.cellWidget(row, 1)
+                        variable_field_key = combo.currentData() if combo else None
+
+                        if condition_value and variable_field_key:
+                            mappings[condition_value] = variable_field_key
+
+                if not mappings:
+                    Toast.warning(dialog, "警告", "请至少配置一个条件映射")
+                    return
+
+                item_data.update({
+                    "key": key_edit.text().strip(),
+                    "label": label_edit.text().strip(),
+                    "condition_field": new_condition_field_key,
+                    "mappings": mappings,
+                    "show_in_ui": show_in_ui_checkbox.isChecked()  # 使用复选框的值
+                })
+                display_text = f"条件: {label_edit.text().strip()} ({key_edit.text().strip()})"
+                if not show_in_ui_checkbox.isChecked():
+                    display_text += " [隐藏]"  # 添加隐藏标记
 
             # 更新列表显示
             current_item.setText(display_text)
@@ -2223,12 +2472,12 @@ class ConfigManagementDialog(QDialog):
         dialog.setModal(True)
 
         item_type = item_data.get("type")
-        if item_type == "combo":
-            dialog.setFixedSize(450, 550)
-        elif item_type == "interface" or item_type == "sql":  # SQL类型与接口类型大小相同
-            dialog.setFixedSize(350, 200)
+        if item_type == "combo" or item_type == "condition":
+            dialog.setFixedSize(500, 650)  # 与编辑对话框保持一致
+        elif item_type == "interface" or item_type == "sql":
+            dialog.setFixedSize(400, 200)
         else:  # field
-            dialog.setFixedSize(350, 300)
+            dialog.setFixedSize(400, 350)
 
         layout = QVBoxLayout(dialog)
         layout.setSpacing(8)
@@ -2245,7 +2494,8 @@ class ConfigManagementDialog(QDialog):
             "field": "字段",
             "combo": "下拉框",
             "interface": "接口",
-            "sql": "SQL"  # 新增SQL类型
+            "sql": "SQL",
+            "condition": "条件"  # 新增条件类型
         }
         type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
         type_value.setStyleSheet("font-weight: bold; color: blue;")
@@ -2260,7 +2510,7 @@ class ConfigManagementDialog(QDialog):
         form_layout.setHorizontalSpacing(8)
 
         # 根据类型显示不同的字段（全部只读）
-        if item_type in ["field", "combo"]:
+        if item_type in ["field", "combo", "condition"]:
             # 键（只读）
             key_edit = QLineEdit()
             key_edit.setText(item_data.get("key", ""))
@@ -2277,14 +2527,14 @@ class ConfigManagementDialog(QDialog):
             label_edit.setFixedWidth(250)
             form_layout.addRow("标签:", label_edit)
 
-            # 数据类型（只读）- 仅字段和下拉框显示
-            if item_type in ["field", "combo"]:
-                data_type_combo = QComboBox()
-                data_type_combo.addItems(["string", "int", "float", "bool"])
-                data_type_combo.setCurrentText(item_data.get("data_type", "string"))
-                data_type_combo.setEnabled(False)
-                data_type_combo.setFixedWidth(120)
-                form_layout.addRow("数据类型:", data_type_combo)
+        if item_type in ["field", "combo"]:
+            # 数据类型（只读）
+            data_type_combo = QComboBox()
+            data_type_combo.addItems(["string", "int", "float", "bool"])
+            data_type_combo.setCurrentText(item_data.get("data_type", "string"))
+            data_type_combo.setEnabled(False)
+            data_type_combo.setFixedWidth(120)
+            form_layout.addRow("数据类型:", data_type_combo)
 
             # 默认值（只读）
             default_edit = QLineEdit()
@@ -2294,11 +2544,10 @@ class ConfigManagementDialog(QDialog):
             default_edit.setFixedWidth(250)
             form_layout.addRow("默认值:", default_edit)
 
-            # 是否展示到前端（只读）- 仅字段和下拉框显示
-            if item_type in ["field", "combo"]:
-                show_in_ui_label = QLabel("是" if item_data.get("show_in_ui", True) else "否")
-                show_in_ui_label.setStyleSheet("font-weight: bold; color: blue;")
-                form_layout.addRow("展示到前端:", show_in_ui_label)
+            # 是否展示到前端（只读）
+            show_in_ui_label = QLabel("是" if item_data.get("show_in_ui", True) else "否")
+            show_in_ui_label.setStyleSheet("font-weight: bold; color: blue;")
+            form_layout.addRow("展示到前端:", show_in_ui_label)
 
         elif item_type == "interface":
             # 接口名称（只读）
@@ -2309,7 +2558,7 @@ class ConfigManagementDialog(QDialog):
             interface_name_edit.setFixedWidth(250)
             form_layout.addRow("接口名称:", interface_name_edit)
 
-        elif item_type == "sql":  # 新增SQL类型查看
+        elif item_type == "sql":
             # SQL名称（只读）
             sql_name_edit = QLineEdit()
             sql_name_edit.setText(item_data.get("name", ""))
@@ -2317,6 +2566,15 @@ class ConfigManagementDialog(QDialog):
             sql_name_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
             sql_name_edit.setFixedWidth(250)
             form_layout.addRow("SQL名称:", sql_name_edit)
+
+        elif item_type == "condition":
+            # 条件字段（只读）
+            condition_field_edit = QLineEdit()
+            condition_field_edit.setText(item_data.get("condition_field", ""))
+            condition_field_edit.setReadOnly(True)
+            condition_field_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            condition_field_edit.setFixedWidth(250)
+            form_layout.addRow("条件字段:", condition_field_edit)
 
         layout.addLayout(form_layout)
 
@@ -2350,6 +2608,62 @@ class ConfigManagementDialog(QDialog):
             options_layout.addWidget(options_table)
             layout.addWidget(options_group)
 
+        # 条件映射配置 - 仅条件类型显示（只读）
+        if item_type == "condition":
+            condition_mapping_group = QGroupBox("条件映射配置")
+            condition_mapping_group.setContentsMargins(8, 8, 8, 8)
+            condition_mapping_layout = QVBoxLayout(condition_mapping_group)
+            condition_mapping_layout.setSpacing(6)
+
+            condition_mapping_table = QTableWidget()
+            condition_mapping_table.setColumnCount(2)
+            condition_mapping_table.setHorizontalHeaderLabels(["条件值", "变量字段"])
+            condition_mapping_table.horizontalHeader().setStretchLastSection(True)
+            condition_mapping_table.setMaximumHeight(180)
+            condition_mapping_table.setColumnWidth(0, 150)
+            condition_mapping_table.setColumnWidth(1, 150)
+            condition_mapping_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 禁止编辑
+
+            # 填充现有映射
+            mappings = item_data.get("mappings", {})
+            # 获取所有字段类型的布局项（用于显示变量字段的标签）
+            field_mapping = {}
+            for i in range(self.layout_list.count()):
+                item = self.layout_list.item(i)
+                item_data_field = item.data(Qt.UserRole)
+                if item_data_field and item_data_field.get("type") == "field":
+                    field_mapping[item_data_field.get("key")] = item_data_field.get("label")
+
+            # 获取条件字段的选项（用于显示条件值的标签）
+            condition_field_options = {}
+            condition_field_key = item_data.get("condition_field")
+            if condition_field_key:
+                for i in range(self.layout_list.count()):
+                    item = self.layout_list.item(i)
+                    item_data_field = item.data(Qt.UserRole)
+                    if (item_data_field and
+                            item_data_field.get("type") == "combo" and
+                            item_data_field.get("key") == condition_field_key):
+                        options = item_data_field.get("options", [])
+                        for option in options:
+                            condition_field_options[option.get("value")] = option.get("text")
+                        break
+
+            for condition_value, variable_field in mappings.items():
+                row = condition_mapping_table.rowCount()
+                condition_mapping_table.insertRow(row)
+
+                # 第一列：条件值（显示文本）
+                condition_text = condition_field_options.get(condition_value, condition_value)
+                condition_mapping_table.setItem(row, 0, QTableWidgetItem(f"{condition_text} ({condition_value})"))
+
+                # 第二列：变量字段显示（显示标签）
+                field_label = field_mapping.get(variable_field, variable_field)
+                condition_mapping_table.setItem(row, 1, QTableWidgetItem(f"{field_label} ({variable_field})"))
+
+            condition_mapping_layout.addWidget(condition_mapping_table)
+            layout.addWidget(condition_mapping_group)
+
         # 按钮布局
         button_layout = QHBoxLayout()
         button_layout.setSpacing(10)
@@ -2371,21 +2685,23 @@ class ConfigManagementDialog(QDialog):
             "字段": "field",
             "下拉框": "combo",
             "接口": "interface",
-            "SQL": "sql"  # 新增SQL类型
+            "SQL": "sql",
+            "条件": "condition"  # 新增条件类型
         }
         actual_type = type_mapping.get(item_type, item_type)
 
-        # 显示/隐藏相关字段
-        is_field_or_combo = actual_type in ["field", "combo"]
+        # 显示/隐藏相关字段 - 修复：确保所有变量都是布尔值
+        is_field_or_combo_or_condition = actual_type in ["field", "combo", "condition"]  # 添加条件类型
         is_interface = actual_type == "interface"
-        is_sql = actual_type == "sql"  # 新增SQL类型判断
-        is_combo = actual_type == "combo"
+        is_sql = actual_type == "sql"
+        is_combo = actual_type == "combo"  # 修复：确保这是布尔值，不是元组
+        is_condition = actual_type == "condition"  # 新增条件类型判断
 
-        # 键/名称和标签 - 仅字段和下拉框显示
-        self.add_key_label.setVisible(is_field_or_combo)
-        self.add_key_edit.setVisible(is_field_or_combo)
-        self.add_label_label.setVisible(is_field_or_combo)
-        self.add_label_edit.setVisible(is_field_or_combo)
+        # 键/名称和标签 - 仅字段、下拉框和条件显示
+        self.add_key_label.setVisible(is_field_or_combo_or_condition)
+        self.add_key_edit.setVisible(is_field_or_combo_or_condition)
+        self.add_label_label.setVisible(is_field_or_combo_or_condition)
+        self.add_label_edit.setVisible(is_field_or_combo_or_condition)
 
         # 接口名称 - 仅接口显示
         self.add_interface_name_label.setVisible(is_interface)
@@ -2395,29 +2711,125 @@ class ConfigManagementDialog(QDialog):
         self.add_sql_name_label.setVisible(is_sql)
         self.add_sql_name_edit.setVisible(is_sql)
 
+        # 条件字段和映射配置 - 仅条件类型显示
+        self.add_condition_field_label.setVisible(is_condition)
+        self.add_condition_field_combo.setVisible(is_condition)
+        self.add_condition_mapping_group.setVisible(is_condition)
+
         # 数据类型 - 仅字段和下拉框显示
-        self.add_data_type_label.setVisible(is_field_or_combo)
-        self.add_data_type_combo.setVisible(is_field_or_combo)
+        self.add_data_type_label.setVisible(is_field_or_combo_or_condition)
+        self.add_data_type_combo.setVisible(is_field_or_combo_or_condition)
 
         # 默认值 - 仅字段和下拉框显示
-        self.add_default_label.setVisible(is_field_or_combo)
-        self.add_default_edit.setVisible(is_field_or_combo)
+        self.add_default_label.setVisible(is_field_or_combo_or_condition)
+        self.add_default_edit.setVisible(is_field_or_combo_or_condition)
 
         # 是否展示到前端 - 仅字段和下拉框显示
-        self.add_show_in_ui_label.setVisible(is_field_or_combo)
-        self.add_show_in_ui_checkbox.setVisible(is_field_or_combo)
+        self.add_show_in_ui_label.setVisible(is_field_or_combo_or_condition)
+        self.add_show_in_ui_checkbox.setVisible(is_field_or_combo_or_condition)
 
         # 下拉框枚举配置 - 仅下拉框显示
-        self.add_options_group.setVisible(is_combo)
+        self.add_options_group.setVisible(is_combo)  # 修复：这里应该是 is_combo 而不是 is_combo
 
         # 清空字段
-        if not is_field_or_combo:
+        if not is_field_or_combo_or_condition and not is_condition:
             self.add_key_edit.clear()
             self.add_label_edit.clear()
         if not is_interface:
             self.add_interface_name_edit.clear()
         if not is_sql:
             self.add_sql_name_edit.clear()
+
+        # 如果是条件类型，初始化条件字段下拉框
+        if is_condition:
+            self.init_condition_field_combo()
+
+    def init_condition_field_combo(self):
+        """初始化条件字段下拉框 - 只显示下拉框类型的布局项"""
+        self.add_condition_field_combo.clear()
+
+        # 获取所有已配置的下拉框类型布局项
+        combo_fields = []
+        for i in range(self.layout_list.count()):
+            item = self.layout_list.item(i)
+            item_data = item.data(Qt.UserRole)
+            if item_data and item_data.get("type") == "combo":
+                combo_fields.append({
+                    "key": item_data.get("key"),
+                    "label": item_data.get("label")
+                })
+
+        # 添加到下拉框
+        for field in combo_fields:
+            display_text = f"{field['label']} ({field['key']})"
+            self.add_condition_field_combo.addItem(display_text, field['key'])
+
+        # 如果有条件字段，初始化映射表格
+        if self.add_condition_field_combo.count() > 0:
+            self.init_condition_mapping_table()
+        else:
+            self.add_condition_mapping_table.setRowCount(0)
+
+    def on_condition_field_changed(self):
+        """条件字段改变事件"""
+        self.init_condition_mapping_table()
+
+    def init_condition_mapping_table(self):
+        """初始化条件映射表格"""
+        self.add_condition_mapping_table.setRowCount(0)
+
+        current_field_key = self.add_condition_field_combo.currentData()
+        if not current_field_key:
+            return
+
+        # 查找选中的下拉框配置
+        combo_config = None
+        for i in range(self.layout_list.count()):
+            item = self.layout_list.item(i)
+            item_data = item.data(Qt.UserRole)
+            if item_data and item_data.get("key") == current_field_key and item_data.get("type") == "combo":
+                combo_config = item_data
+                break
+
+        if not combo_config:
+            return
+
+        # 获取下拉框的选项
+        options = combo_config.get("options", [])
+
+        # 获取所有字段类型的布局项（用于第二列的下拉框）
+        field_items = []
+        for i in range(self.layout_list.count()):
+            item = self.layout_list.item(i)
+            item_data = item.data(Qt.UserRole)
+            if item_data and item_data.get("type") == "field":
+                field_items.append({
+                    "key": item_data.get("key"),
+                    "label": item_data.get("label")
+                })
+
+        # 填充表格
+        for option in options:
+            row = self.add_condition_mapping_table.rowCount()
+            self.add_condition_mapping_table.insertRow(row)
+
+            # 第一列：条件值（不可编辑）
+            condition_value = option.get("value", "")
+            condition_text = option.get("text", "")
+            display_text = f"{condition_text} ({condition_value})" if condition_text != condition_value else condition_value
+
+            value_item = QTableWidgetItem(display_text)
+            value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
+            value_item.setData(Qt.UserRole, condition_value)  # 保存原始值到 UserRole
+            self.add_condition_mapping_table.setItem(row, 0, value_item)
+
+            # 第二列：变量字段选择（下拉框）
+            combo = QComboBox()
+            combo.addItem("", "")  # 空选项
+            for field in field_items:
+                display_text = f"{field['label']} ({field['key']})"
+                combo.addItem(display_text, field['key'])
+            self.add_condition_mapping_table.setCellWidget(row, 1, combo)
 
     def add_option_item(self):
         """添加下拉框选项"""

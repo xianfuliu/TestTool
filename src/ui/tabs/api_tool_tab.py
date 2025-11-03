@@ -33,6 +33,7 @@ class ApiToolTab(QWidget):
         self.api_config = {"products": {}}  # 存储所有产品配置
         self.products_config = {}  # 存储产品文件映射
         self.sql_buttons = {}  # 新增SQL按钮字典
+        self.condition_displays = {}  # 新增：存储条件显示控件
         self.sql_worker = None  # 新增SQL工作线程
         # 新增：记录最后一次SQL查询的时间戳
         self.last_sql_execution_time = None
@@ -450,7 +451,7 @@ class ApiToolTab(QWidget):
         return datetime.now().strftime("%Y%m%d%H%M%S")
 
     def update_request_id(self):
-        """更新请求流水号 - 修复：调用新的重置方法"""
+        """更新请求流水号 - 修复：调用新的强制刷新方法"""
         self.update_request_id_and_reset_fields()
 
     def on_product_changed(self, product_name, initial_load=False):
@@ -518,6 +519,7 @@ class ApiToolTab(QWidget):
         self.field_inputs.clear()
         self.combo_boxes.clear()  # 清空下拉框字典
         self.sql_buttons.clear()  # 清空SQL按钮字典
+        self.condition_displays.clear()  # 新增：清空条件显示控件字典
 
         # 获取布局配置
         layout_config = product_config.get("layout", [])
@@ -544,11 +546,11 @@ class ApiToolTab(QWidget):
 
         for item in sorted_layout:
             # 检查是否需要在UI中显示（仅对字段和下拉框类型）
-            if item["type"] in ["field", "combo"]:
+            if item["type"] in ["field", "combo", "condition"]:  # 添加条件类型
                 # 默认值为True，保持向后兼容
                 show_in_ui = item.get("show_in_ui", True)
                 if not show_in_ui:
-                    # 不显示在前端，但仍然需要在field_inputs或combo_boxes中记录
+                    # 不显示在前端，但仍然需要在对应的字典中记录
                     if item["type"] == "field" and item["key"] not in self.field_inputs:
                         # 创建隐藏的字段输入框，但不添加到UI
                         field_input = QLineEdit()
@@ -581,6 +583,17 @@ class ApiToolTab(QWidget):
                             elif combo_box.count() > 0:
                                 combo_box.setCurrentIndex(0)
                         self.combo_boxes[item["key"]] = combo_box
+
+                    elif item["type"] == "condition" and item["key"] not in self.condition_displays:
+                        # 创建隐藏的条件显示控件，但不添加到UI
+                        condition_display = QLineEdit()
+                        condition_display.setReadOnly(True)
+                        # 初始显示值
+                        condition_key = item["key"]
+                        condition_value = self.get_condition_variable_value(condition_key)
+                        if condition_value is not None:
+                            condition_display.setText(str(condition_value))
+                        self.condition_displays[condition_key] = condition_display
 
                     # 跳过UI显示，继续下一个元素
                     continue
@@ -762,6 +775,36 @@ class ApiToolTab(QWidget):
 
                     # 添加到当前行
                     current_row_layout.addWidget(sql_btn)
+
+            elif item["type"] == "condition":
+
+                # 创建条件控件 - 根据文本内容自适应宽度
+                condition_label = QLabel(item["label"])
+                condition_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                condition_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+                # 条件字段显示当前映射的值
+                condition_display = QLineEdit()
+                condition_display.setReadOnly(True)  # 只读显示
+                condition_display.setStyleSheet("background-color: #f0f0f0; color: #666;")
+
+                # 设置固定的大小策略，不拉伸
+                condition_display.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                condition_display.setMinimumWidth(120)
+                condition_display.setMaximumWidth(250)
+
+                # 初始显示值
+                condition_key = item["key"]
+                condition_value = self.get_condition_variable_value(condition_key)
+                if condition_value is not None:
+                    condition_display.setText(str(condition_value))
+
+                # 保存条件显示控件引用，以便后续更新
+                self.condition_displays[condition_key] = condition_display
+
+                # 添加到当前行
+                current_row_layout.addWidget(condition_label)
+                current_row_layout.addWidget(condition_display)
 
             current_item_count += 1
 
@@ -983,9 +1026,8 @@ class ApiToolTab(QWidget):
         # 自动填充到使用这些变量的字段输入框（始终覆盖）
         self.auto_fill_sql_variables_to_fields(sql_name, first_record)
 
-        # 如果当前有活动的接口，重新生成请求体以反映最新的变量值
-        if self.current_interface and self.auto_request_checkbox.isChecked():
-            self.refresh_current_interface()
+        # 修复：无论是否勾选发送请求，都强制刷新请求体
+        self.force_refresh_request_body()
 
     def auto_fill_sql_variables_to_fields(self, sql_name, sql_result):
         """将SQL输出结果自动填充到使用这些变量的字段输入框 - 始终覆盖为最新值"""
@@ -1424,8 +1466,83 @@ class ApiToolTab(QWidget):
                         processed = processed.replace(f"{{{var_name}}}", "")
                         print(f"替换缺失变量 {var_name} 为空字符串")
 
+        # 7. 处理条件变量（在普通变量之后处理）
+        condition_var_pattern = r'\{(\w+)\}'
+        condition_matches = re.findall(condition_var_pattern, processed)
+
+        for var_name in condition_matches:
+            # 如果变量已经被其他类型处理过，跳过
+            if (var_name in self.BASE64_VARIABLE_KEYS or
+                    var_name == "request_id" or
+                    var_name in self.field_inputs or
+                    var_name in self.combo_boxes or
+                    var_name in self.variable_pool):
+                continue
+
+            # 检查是否是条件变量
+            condition_value = self.get_condition_variable_value(var_name)
+            if condition_value is not None:
+                processed = processed.replace(f"{{{var_name}}}", str(condition_value))
+                print(f"替换条件变量 {var_name}: {condition_value}")
+
         print(f"替换后的文本: {processed}")
         return processed
+
+    def get_condition_variable_value(self, condition_key):
+        """获取条件变量的值"""
+        if not self.current_product:
+            return None
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 查找条件配置
+            condition_config = None
+            for item in layout_config:
+                if item.get("type") == "condition" and item.get("key") == condition_key:
+                    condition_config = item
+                    break
+
+            if not condition_config:
+                return None
+
+            # 获取条件字段的当前值
+            condition_field_key = condition_config.get("condition_field")
+            if not condition_field_key:
+                return None
+
+            # 从下拉框获取条件字段的当前值
+            condition_field_value = None
+            if condition_field_key in self.combo_boxes:
+                combo_box = self.combo_boxes[condition_field_key]
+                condition_field_value = combo_box.currentData()
+
+            if not condition_field_value:
+                return None
+
+            # 根据条件字段值查找对应的变量字段
+            mappings = condition_config.get("mappings", {})
+            variable_field_key = mappings.get(condition_field_value)
+
+            if not variable_field_key:
+                return None
+
+            # 获取变量字段的值
+            variable_value = None
+            if variable_field_key in self.field_inputs:
+                variable_value = self.field_inputs[variable_field_key].text()
+            elif variable_field_key in self.combo_boxes:
+                combo_box = self.combo_boxes[variable_field_key]
+                variable_value = combo_box.currentData()
+            elif variable_field_key in self.variable_pool:
+                variable_value = self.variable_pool[variable_field_key]
+
+            return variable_value
+
+        except Exception as e:
+            print(f"获取条件变量 {condition_key} 值时出错: {str(e)}")
+            return None
 
     def get_variable_default_value(self, var_name):
         """获取变量的默认值"""
@@ -1600,11 +1717,8 @@ class ApiToolTab(QWidget):
                     print(
                         f"从响应中提取字段 '{field_key}': '{old_value}' -> '{value}' (路径: {processed_response_path})")
 
-                    # 如果当前有活动的接口，重新生成请求体以反映最新的变量值
-                    if self.current_interface and self.auto_request_checkbox.isChecked():
-                        self.refresh_current_interface()
-                else:
-                    print(f"⚠️ 无法从响应中提取字段 '{field_key}' (路径: {processed_response_path})")
+            # 修复：无论是否勾选发送请求，都强制刷新请求体
+            self.force_refresh_request_body()
 
         except Exception as e:
             print(f"处理响应映射失败: {str(e)}")
@@ -1907,9 +2021,11 @@ class ApiToolTab(QWidget):
         self.variable_pool[field_key] = new_value
         print(f"字段 {field_key} 更新为: {new_value}")
 
-        # 如果当前有活动的接口，重新生成请求体
-        if self.current_interface and self.auto_request_checkbox.isChecked():
-            self.refresh_current_interface()
+        # 检查这个字段是否被用作条件字段，如果是，需要更新相关的条件变量
+        self.update_condition_variables_for_field(field_key)
+
+        # 修复：无论是否勾选发送请求，都更新请求体
+        self.force_refresh_request_body()
 
     def on_combo_changed(self, combo_key, combo_box):
         """下拉框值变化时的处理"""
@@ -1918,9 +2034,38 @@ class ApiToolTab(QWidget):
         self.variable_pool[combo_key] = current_data
         print(f"下拉框 {combo_key} 更新为: {current_data}")
 
-        # 如果当前有活动的接口，重新生成请求体
-        if self.current_interface and self.auto_request_checkbox.isChecked():
-            self.refresh_current_interface()
+        # 检查这个下拉框是否被用作条件字段，如果是，需要更新相关的条件变量
+        self.update_condition_variables_for_field(combo_key)
+
+        # 修复：无论是否勾选发送请求，都更新请求体
+        self.force_refresh_request_body()
+
+    def update_condition_variables_for_field(self, field_key):
+        """更新依赖于指定字段的条件变量"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 查找所有使用这个字段作为条件字段的条件配置
+            for item in layout_config:
+                if item.get("type") == "condition" and item.get("condition_field") == field_key:
+                    condition_key = item.get("key")
+                    # 更新条件变量的值
+                    condition_value = self.get_condition_variable_value(condition_key)
+                    if condition_value is not None:
+                        self.variable_pool[condition_key] = condition_value
+                        print(f"更新条件变量 {condition_key}: {condition_value}")
+
+                        # 更新UI显示
+                        if condition_key in self.condition_displays:
+                            self.condition_displays[condition_key].setText(str(condition_value))
+                            print(f"更新条件显示 {condition_key}: {condition_value}")
+
+        except Exception as e:
+            print(f"更新条件变量时出错: {str(e)}")
 
     def refresh_current_interface(self):
         """刷新当前接口的显示（重新生成请求体）"""
@@ -1939,7 +2084,7 @@ class ApiToolTab(QWidget):
             print(f"刷新接口显示时出错: {str(e)}")
 
     def update_request_id_and_reset_fields(self):
-        """更新请求流水号并重置字段 - 新增方法：集中处理重置逻辑"""
+        """更新请求流水号并重置字段 - 修复：确保刷新当前接口"""
         # 生成新的请求流水并更新变量池
         new_request_id = self.generate_request_id()
         self.request_id_input.setText(new_request_id)
@@ -1971,8 +2116,43 @@ class ApiToolTab(QWidget):
             # 重置所有字段：清空无默认值的字段，有默认值的设置为默认值
             self.reset_all_fields(test_data)
 
+        # 修复：无论是否有当前接口，都强制刷新请求体
+        self.force_refresh_request_body()
+
+    def force_refresh_request_body(self):
+        """强制刷新请求体 - 新增方法：确保使用最新的变量值"""
+        # 如果有当前接口，重新生成请求体
+        if self.current_interface and self.current_product:
+            try:
+                product_config = self.api_config["products"][self.current_product]
+                interface_config = product_config["interfaces"][self.current_interface]
+
+                # 重新生成请求体
+                request_body = self.generate_request_body(interface_config)
+                self.request_body_edit.setPlainText(json.dumps(request_body, ensure_ascii=False, indent=2))
+
+                print(f"强制刷新请求体完成，使用最新的变量值")
+
+            except Exception as e:
+                print(f"强制刷新请求体时出错: {str(e)}")
+        else:
+            # 如果没有当前接口，但URL和请求体有内容，也尝试刷新
+            if self.url_input.text().strip() and self.request_body_edit.toPlainText().strip():
+                try:
+                    # 尝试解析现有的请求体并重新生成
+                    request_body_text = self.request_body_edit.toPlainText().strip()
+                    if request_body_text:
+                        # 先对现有请求体进行变量替换
+                        processed_body = self.replace_variables_in_string(request_body_text)
+                        # 如果处理后的内容不同，则更新
+                        if processed_body != request_body_text:
+                            self.request_body_edit.setPlainText(processed_body)
+                            print("已更新独立请求体中的变量")
+                except Exception as e:
+                    print(f"刷新独立请求体时出错: {str(e)}")
+
     def reset_all_fields(self, test_data):
-        """重置所有字段 - 修复：下拉框无默认值时默认选择第一个"""
+        """重置所有字段"""
         product_config = self.api_config["products"][self.current_product]
         layout_config = product_config.get("layout", [])
 
@@ -1997,6 +2177,12 @@ class ApiToolTab(QWidget):
                 for option in options:
                     combo_box.addItem(option["text"], option["value"])
                 self.combo_boxes[item["key"]] = combo_box
+
+            elif item["type"] == "condition" and item["key"] not in self.condition_displays:
+                # 如果条件字段不在condition_displays中（可能是隐藏字段），创建它
+                condition_display = QLineEdit()
+                condition_display.setReadOnly(True)
+                self.condition_displays[item["key"]] = condition_display
 
         # 然后，重置所有字段的值
         for item in layout_config:
@@ -2097,6 +2283,18 @@ class ApiToolTab(QWidget):
                     # 更新变量池
                     current_data = combo_box.currentData()
                     self.variable_pool[field_key] = current_data if current_data is not None else ""
+
+            elif item["type"] == "condition":
+                # 条件类型不需要重置，因为它的值依赖于其他字段
+                condition_key = item["key"]
+                # 更新变量池中的条件变量值
+                condition_value = self.get_condition_variable_value(condition_key)
+                if condition_value is not None:
+                    self.variable_pool[condition_key] = condition_value
+                    # 更新显示控件
+                    if condition_key in self.condition_displays:
+                        self.condition_displays[condition_key].setText(str(condition_value))
+                    print(f"重置条件字段 '{condition_key}' 值为: {condition_value}")
 
         print("所有字段重置完成")
 
