@@ -177,7 +177,6 @@
       "label": "测试条件",
       "mappings": {
         "1": "name",
-        "2": "name",
         "3": "id_card"
       },
       "priority": 15,

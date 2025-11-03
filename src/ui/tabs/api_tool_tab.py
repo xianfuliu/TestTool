@@ -1489,7 +1489,7 @@ class ApiToolTab(QWidget):
         return processed
 
     def get_condition_variable_value(self, condition_key):
-        """获取条件变量的值"""
+        """获取条件变量的值 - 修正：正确处理未映射的情况"""
         if not self.current_product:
             return None
 
@@ -1525,8 +1525,9 @@ class ApiToolTab(QWidget):
             mappings = condition_config.get("mappings", {})
             variable_field_key = mappings.get(condition_field_value)
 
+            # 如果没有映射，返回空字符串
             if not variable_field_key:
-                return None
+                return ""
 
             # 获取变量字段的值
             variable_value = None
@@ -2041,7 +2042,7 @@ class ApiToolTab(QWidget):
         self.force_refresh_request_body()
 
     def update_condition_variables_for_field(self, field_key):
-        """更新依赖于指定字段的条件变量"""
+        """更新依赖于指定字段的条件变量 - 修正：只清空条件字段本身"""
         if not self.current_product:
             return
 
@@ -2053,19 +2054,66 @@ class ApiToolTab(QWidget):
             for item in layout_config:
                 if item.get("type") == "condition" and item.get("condition_field") == field_key:
                     condition_key = item.get("key")
-                    # 更新条件变量的值
-                    condition_value = self.get_condition_variable_value(condition_key)
-                    if condition_value is not None:
-                        self.variable_pool[condition_key] = condition_value
-                        print(f"更新条件变量 {condition_key}: {condition_value}")
+                    # 获取条件字段的当前值
+                    condition_field_value = None
+                    if field_key in self.combo_boxes:
+                        combo_box = self.combo_boxes[field_key]
+                        condition_field_value = combo_box.currentData()
 
-                        # 更新UI显示
-                        if condition_key in self.condition_displays:
-                            self.condition_displays[condition_key].setText(str(condition_value))
-                            print(f"更新条件显示 {condition_key}: {condition_value}")
+                    if condition_field_value is None:
+                        # 如果没有值，清空条件变量
+                        self.clear_condition_variable(condition_key)
+                        continue
+
+                    # 根据条件字段值查找对应的变量字段
+                    mappings = item.get("mappings", {})
+                    variable_field_key = mappings.get(condition_field_value)
+
+                    if not variable_field_key:
+                        # 如果没有映射，只清空条件变量本身
+                        print(
+                            f"条件字段 '{field_key}' 的值 '{condition_field_value}' 没有配置映射，清空条件变量 '{condition_key}'")
+                        self.clear_condition_variable(condition_key)
+                        continue
+
+                    # 获取变量字段的值
+                    variable_value = None
+                    if variable_field_key in self.field_inputs:
+                        variable_value = self.field_inputs[variable_field_key].text()
+                    elif variable_field_key in self.combo_boxes:
+                        combo_box = self.combo_boxes[variable_field_key]
+                        variable_value = combo_box.currentData()
+                    elif variable_field_key in self.variable_pool:
+                        variable_value = self.variable_pool[variable_field_key]
+
+                    # 更新条件变量
+                    old_value = self.variable_pool.get(condition_key, "未设置")
+                    self.variable_pool[condition_key] = variable_value
+
+                    # 更新UI显示
+                    if condition_key in self.condition_displays:
+                        display_value = str(variable_value) if variable_value is not None else ""
+                        self.condition_displays[condition_key].setText(display_value)
+                        print(f"更新条件显示 {condition_key}: {old_value} -> {variable_value}")
+
+                    # 强制刷新请求体
+                    self.force_refresh_request_body()
 
         except Exception as e:
             print(f"更新条件变量时出错: {str(e)}")
+
+    def clear_condition_variable(self, condition_key):
+        """清空条件变量 - 只清空条件字段本身"""
+        old_value = self.variable_pool.get(condition_key, "未设置")
+        self.variable_pool[condition_key] = ""
+
+        # 更新UI显示
+        if condition_key in self.condition_displays:
+            self.condition_displays[condition_key].setText("")
+            print(f"清空条件变量 {condition_key}: {old_value} -> ''")
+
+        # 强制刷新请求体
+        self.force_refresh_request_body()
 
     def refresh_current_interface(self):
         """刷新当前接口的显示（重新生成请求体）"""
@@ -2152,7 +2200,7 @@ class ApiToolTab(QWidget):
                     print(f"刷新独立请求体时出错: {str(e)}")
 
     def reset_all_fields(self, test_data):
-        """重置所有字段"""
+        """重置所有字段 - 修复：下拉框无默认值时默认选择第一个"""
         product_config = self.api_config["products"][self.current_product]
         layout_config = product_config.get("layout", [])
 
@@ -2296,7 +2344,45 @@ class ApiToolTab(QWidget):
                         self.condition_displays[condition_key].setText(str(condition_value))
                     print(f"重置条件字段 '{condition_key}' 值为: {condition_value}")
 
+        # 在所有字段重置完成后，检查条件字段的映射状态
+        self.check_all_condition_mappings()
+
         print("所有字段重置完成")
+
+    def check_all_condition_mappings(self):
+        """检查所有条件字段的映射状态 - 修正：只清空条件字段本身"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 查找所有条件配置
+            condition_configs = [item for item in layout_config if item.get("type") == "condition"]
+
+            for condition_config in condition_configs:
+                condition_key = condition_config.get("key")
+                condition_field_key = condition_config.get("condition_field")
+
+                if condition_field_key and condition_field_key in self.combo_boxes:
+                    # 获取条件字段的当前值
+                    combo_box = self.combo_boxes[condition_field_key]
+                    condition_field_value = combo_box.currentData()
+
+                    if condition_field_value:
+                        # 检查是否有映射
+                        mappings = condition_config.get("mappings", {})
+                        variable_field_key = mappings.get(condition_field_value)
+
+                        if not variable_field_key:
+                            # 没有映射，只清空条件变量本身
+                            print(
+                                f"初始化时发现条件字段 '{condition_field_key}' 的值 '{condition_field_value}' 没有配置映射，清空条件变量 '{condition_key}'")
+                            self.clear_condition_variable(condition_key)
+
+        except Exception as e:
+            print(f"检查条件字段映射状态时出错: {str(e)}")
 
     def get_test_data_mapping(self, test_data):
         """获取测试数据映射 - 新增方法：将测试数据映射到字段名"""
