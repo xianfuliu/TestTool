@@ -939,7 +939,7 @@ class ApiToolTab(QWidget):
             # 如果不发送请求，确保响应体是空的
             self.response_body_edit.setPlainText("")
             # 添加提示信息
-            self.response_body_edit.setPlaceholderText("已清空响应体，点击'发送请求'按钮发送请求...")
+            self.response_body_edit.setPlaceholderText("点击'发送请求'按钮发送请求...")
 
     def on_sql_clicked(self, sql_name):
         """SQL按钮点击事件 - 优化：点击时清空响应体"""

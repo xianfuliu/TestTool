@@ -207,11 +207,11 @@
     },
     {
       "data_type": "string",
-      "default": "0.00065700",
+      "default": "0.000657",
       "key": "dayRate",
       "label": "日利率",
       "priority": 20,
-      "show_in_ui": true,
+      "show_in_ui": false,
       "type": "field"
     },
     {
@@ -220,7 +220,7 @@
       "key": "irrYearRate",
       "label": "年利率",
       "priority": 21,
-      "show_in_ui": true,
+      "show_in_ui": false,
       "type": "field"
     },
     {
