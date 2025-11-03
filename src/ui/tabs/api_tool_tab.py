@@ -868,7 +868,7 @@ class ApiToolTab(QWidget):
 
         if current_text:
             # 有内容时根据内容宽度调整，加上下拉箭头和边距
-            content_width = text_width + 50  # 增加边距和下拉箭头空间
+            content_width = text_width + 35  # 增加边距和下拉箭头空间
             new_width = max(120, min(content_width, 250))
         else:
             # 无内容时使用固定宽度

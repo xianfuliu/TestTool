@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
 
 
         self.setWindowTitle("测试工具")
-        self.setGeometry(100, 100, 1800, 800)
+        self.setGeometry(100, 100, 1720, 700)
 
         # 设置窗口图标
         self.setWindowIcon(self.create_icon())
