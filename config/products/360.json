@@ -600,7 +600,7 @@
     "奇富切日": {
       "body_template": {
         "ruleKey": "SERVER_DATE",
-        "ruleValue": "{qifu_time}"
+        "ruleValue": "{loanTime}"
       },
       "field_types": {},
       "headers": {

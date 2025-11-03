@@ -481,8 +481,9 @@ class ApiToolTab(QWidget):
         # 无论是初始加载还是切换产品，都更新流水并生成测试数据
         self.update_request_id_and_reset_fields()
 
-        # 调整所有元素的宽度
-        self.adjust_all_elements_width()
+        # 延迟调整所有元素的宽度，确保与【更新】按钮保持一致
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(150, self.adjust_all_elements_width)
 
     def clear_right_panel(self):
         """清空右侧面板内容"""
@@ -822,11 +823,34 @@ class ApiToolTab(QWidget):
         # 初始调整所有元素的宽度
         self.adjust_all_elements_width()
 
+        # 延迟调整布局宽度
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, self.adjust_all_elements_width_delayed)
+
+    def adjust_all_elements_width_delayed(self):
+        """延迟调整所有元素的宽度 - 确保控件完全渲染后再调整"""
+        # 调整所有字段输入框的宽度
+        for field_key, field_input in self.field_inputs.items():
+            text = field_input.text()
+            self.adjust_field_width(field_input, text)
+
+        # 调整所有下拉框的宽度
+        for combo_box in self.combo_boxes.values():
+            self.adjust_combo_width(combo_box)
+
+        # 调整所有按钮的宽度（包括接口按钮和SQL按钮）
+        for i in range(self.combined_layout.count()):
+            item = self.combined_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if isinstance(widget, QPushButton):
+                    self.adjust_button_width(widget)
+
     def adjust_field_width(self, field_input, text):
         """根据输入框内容调整宽度 - 统一处理所有字段"""
         # 计算文本宽度
         font_metrics = field_input.fontMetrics()
-        text_width = font_metrics.horizontalAdvance(text)  # 使用 horizontalAdvance 替代已废弃的 width 方法
+        text_width = font_metrics.horizontalAdvance(text) if text else 0
 
         # 设置宽度：有内容时根据内容调整，无内容时使用固定宽度
         if text:
@@ -841,7 +865,7 @@ class ApiToolTab(QWidget):
         field_input.setFixedWidth(new_width)
 
     def adjust_combo_width(self, combo_box):
-        """根据下拉框内容调整宽度"""
+        """根据下拉框内容调整宽度 - 统一算法"""
         current_text = combo_box.currentText()
         font_metrics = combo_box.fontMetrics()
         text_width = font_metrics.horizontalAdvance(current_text) if current_text else 0
@@ -857,10 +881,10 @@ class ApiToolTab(QWidget):
         combo_box.setFixedWidth(new_width)
 
     def adjust_button_width(self, button):
-        """根据按钮文本调整宽度"""
+        """根据按钮文本调整宽度 - 统一算法"""
         text = button.text()
         font_metrics = button.fontMetrics()
-        text_width = font_metrics.horizontalAdvance(text)
+        text_width = font_metrics.horizontalAdvance(text) if text else 0
 
         # 根据文本宽度调整，加上边距
         content_width = text_width + 42  # 增加边距（控制按钮宽度）
@@ -2022,6 +2046,10 @@ class ApiToolTab(QWidget):
         self.variable_pool[field_key] = new_value
         print(f"字段 {field_key} 更新为: {new_value}")
 
+        # 调整该字段的宽度
+        if field_key in self.field_inputs:
+            self.adjust_field_width(self.field_inputs[field_key], new_value)
+
         # 检查这个字段是否被用作条件字段，如果是，需要更新相关的条件变量
         self.update_condition_variables_for_field(field_key)
 
@@ -2348,6 +2376,9 @@ class ApiToolTab(QWidget):
         self.check_all_condition_mappings()
 
         print("所有字段重置完成")
+
+        # 使用与【更新】按钮相同的宽度调整逻辑
+        self.adjust_all_elements_width()
 
     def check_all_condition_mappings(self):
         """检查所有条件字段的映射状态 - 修正：只清空条件字段本身"""
