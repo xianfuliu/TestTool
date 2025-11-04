@@ -2274,7 +2274,7 @@ class ApiToolTab(QWidget):
                     print(f"刷新独立请求体时出错: {str(e)}")
 
     def reset_all_fields(self, test_data):
-        """重置所有字段 - 修复：下拉框无默认值时默认选择第一个"""
+        """重置所有字段 - 修复：确保公式在依赖字段初始化后计算"""
         product_config = self.api_config["products"][self.current_product]
         layout_config = product_config.get("layout", [])
 
@@ -2318,11 +2318,11 @@ class ApiToolTab(QWidget):
                 formula_key = item["key"]
                 self.formula_configs[formula_key] = {
                     "formula": item.get("formula", ""),
-                    "formula_type": item.get("formula_type", "numeric"),  # 新增公式类型
+                    "formula_type": item.get("formula_type", "numeric"),
                     "dependencies": self.extract_formula_dependencies(item.get("formula", ""))
                 }
 
-        # 然后，重置所有字段的值
+        # 然后，重置所有字段的值（先处理非公式字段）
         for item in layout_config:
             if item["type"] in ["field", "combo"]:
                 field_key = item["key"]
@@ -2422,19 +2422,21 @@ class ApiToolTab(QWidget):
                     current_data = combo_box.currentData()
                     self.variable_pool[field_key] = current_data if current_data is not None else ""
 
-            elif item["type"] == "condition":
-                # 条件类型不需要重置，因为它的值依赖于其他字段
-                condition_key = item["key"]
-                # 更新变量池中的条件变量值
-                condition_value = self.get_condition_variable_value(condition_key)
-                if condition_value is not None:
-                    self.variable_pool[condition_key] = condition_value
-                    # 更新显示控件
-                    if condition_key in self.condition_displays:
-                        self.condition_displays[condition_key].setText(str(condition_value))
-                    print(f"重置条件字段 '{condition_key}' 值为: {condition_value}")
+                elif item["type"] == "condition":
+                    # 条件类型不需要重置，因为它的值依赖于其他字段
+                    condition_key = item["key"]
+                    # 更新变量池中的条件变量值
+                    condition_value = self.get_condition_variable_value(condition_key)
+                    if condition_value is not None:
+                        self.variable_pool[condition_key] = condition_value
+                        # 更新显示控件
+                        if condition_key in self.condition_displays:
+                            self.condition_displays[condition_key].setText(str(condition_value))
+                        print(f"重置条件字段 '{condition_key}' 值为: {condition_value}")
 
-            elif item["type"] == "formula":
+        # 在所有非公式字段都初始化完成后，再处理公式字段
+        for item in layout_config:
+            if item["type"] == "formula":
                 # 公式类型不需要手动设置值，因为它的值依赖于其他字段
                 formula_key = item["key"]
                 # 计算公式值
@@ -2502,28 +2504,34 @@ class ApiToolTab(QWidget):
         return list(set(variables))  # 去重
 
     def calculate_formula(self, formula_key):
-        """计算公式的值"""
+        """计算公式的值 - 修复：处理依赖变量为空的情况"""
         if formula_key not in self.formula_configs:
             return
 
         formula_config = self.formula_configs[formula_key]
         formula_str = formula_config["formula"]
+        formula_type = formula_config.get("formula_type", "numeric")
         dependencies = formula_config["dependencies"]
 
         # 检查所有依赖变量是否都有值
         values = {}
+        missing_dependencies = []
+
         for var in dependencies:
             if var in self.variable_pool:
                 value = self.variable_pool[var]
                 if value is None or value == "":
-                    # 有变量为空，公式值为空
-                    self.set_formula_value(formula_key, "")
-                    return
-                values[var] = value
+                    missing_dependencies.append(var)
+                else:
+                    values[var] = value
             else:
-                # 变量不存在，公式值为空
-                self.set_formula_value(formula_key, "")
-                return
+                missing_dependencies.append(var)
+
+        # 如果有缺失的依赖变量，设置公式值为空
+        if missing_dependencies:
+            print(f"公式 '{formula_key}' 依赖的变量为空或不存在: {missing_dependencies}")
+            self.set_formula_value(formula_key, "")
+            return
 
         try:
             # 替换公式中的变量为实际值
@@ -2531,38 +2539,106 @@ class ApiToolTab(QWidget):
             for var, val in values.items():
                 expression = expression.replace("{" + var + "}", str(val))
 
-            # 计算公式结果
-            result = self.evaluate_formula_expression(expression)
+            print(f"计算公式 '{formula_key}': {expression} (类型: {formula_type})")
+
+            # 根据公式类型计算公式结果
+            if formula_type == "date":
+                # 日期类型公式
+                result = self.evaluate_date_expression(expression)
+            else:
+                # 数值类型公式
+                result = self.evaluate_numeric_expression(expression)
+
             self.set_formula_value(formula_key, str(result))
+            print(f"公式 '{formula_key}' 计算结果: {result}")
 
         except Exception as e:
             print(f"计算公式 {formula_key} 时出错: {str(e)}")
             self.set_formula_value(formula_key, "")
 
-    def evaluate_formula_expression(self, expression):
-        """计算公式表达式"""
-        # 移除空格
-        expression = expression.replace(" ", "")
+    def evaluate_numeric_expression(self, expression):
+        """计算数值表达式 - 仅处理数值运算"""
+        try:
+            # 移除空格
+            expression = expression.replace(" ", "")
 
-        # 检查是否为日期计算
-        if self.is_date_expression(expression):
-            return self.evaluate_date_expression(expression)
-        else:
-            return self.evaluate_numeric_expression(expression)
+            # 安全地计算数学表达式
+            allowed_chars = set('0123456789+-*/().% ')
+            if not all(c in allowed_chars for c in expression):
+                raise ValueError("数值表达式包含非法字符")
 
-    def is_date_expression(self, expression):
-        """判断是否为日期表达式"""
-        # 简单的日期格式检测
-        date_patterns = [
-            r'\d{8}',  # 20251029
-            r'\d{4}-\d{2}-\d{2}',  # 2025-10-29
-            r'\d{4}/\d{2}/\d{2}',  # 2025/10/29
-        ]
+            # 验证表达式包含必要的数学运算符
+            if not any(op in expression for op in ['+', '-', '*', '/']):
+                raise ValueError("数值公式应包含数学运算符（+、-、*、/）")
 
-        for pattern in date_patterns:
-            if re.search(pattern, expression):
-                return True
-        return False
+            # 替换百分比符号
+            expression = expression.replace('%', '/100')
+
+            # 使用 eval 计算（在生产环境中应考虑更安全的替代方案）
+            result = eval(expression)
+            return round(result, 2)  # 保留2位小数
+
+        except Exception as e:
+            raise ValueError(f"数值公式计算错误: {str(e)}")
+
+    def evaluate_date_expression(self, expression):
+        """计算日期表达式 - 增强调试信息"""
+        from datetime import datetime, timedelta
+        import re
+
+        try:
+            print(f"开始计算日期表达式: {expression}")
+
+            # 移除空格
+            expression = expression.replace(" ", "")
+
+            # 验证日期表达式格式
+            if not any(op in expression for op in ['-']):
+                raise ValueError("日期公式应包含减法运算符（-）")
+
+            # 提取日期和操作符
+            date_pattern = r'(\d{4}[-/]?\d{2}[-/]?\d{2})(?:\s+\d{2}:\d{2}:\d{2})?'
+            dates = re.findall(date_pattern, expression)
+            operators = re.findall(r'[+-]', expression)
+
+            print(f"找到日期: {dates}, 操作符: {operators}")
+
+            if len(dates) != 2 or len(operators) != 1:
+                raise ValueError("日期表达式格式错误，应为 '日期1 - 日期2' 格式")
+
+            date1_str, date2_str = dates
+            operator = operators[0]
+
+            if operator != '-':
+                raise ValueError("日期公式目前只支持减法运算")
+
+            # 统一日期格式
+            def parse_date(date_str):
+                # 移除分隔符
+                clean_str = re.sub(r'[-/]', '', date_str)
+                if len(clean_str) == 8:
+                    return datetime.strptime(clean_str, '%Y%m%d')
+                else:
+                    # 尝试解析带时间的日期
+                    return datetime.strptime(date_str, '%Y%m%d %H:%M:%S')
+
+            date1 = parse_date(date1_str)
+            date2 = parse_date(date2_str)
+
+            print(f"解析后的日期: date1={date1}, date2={date2}")
+
+            # 计算日期差（天数）
+            delta = date1 - date2
+            result = delta.days
+            print(f"日期差计算结果: {result} 天")
+
+            return result
+
+        except Exception as e:
+            print(f"日期公式计算详细错误: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise ValueError(f"日期公式计算错误: {str(e)}")
 
     def evaluate_numeric_expression(self, expression):
         """计算数字表达式"""
@@ -2577,45 +2653,6 @@ class ApiToolTab(QWidget):
         # 使用 eval 计算（在生产环境中应考虑更安全的替代方案）
         result = eval(expression)
         return round(result, 2)  # 保留2位小数
-
-    def evaluate_date_expression(self, expression):
-        """计算日期表达式"""
-        from datetime import datetime, timedelta
-        import re
-
-        # 提取日期和操作符
-        date_pattern = r'(\d{4}[-/]?\d{2}[-/]?\d{2})(?:\s+\d{2}:\d{2}:\d{2})?'
-        dates = re.findall(date_pattern, expression)
-        operators = re.findall(r'[+-]', expression)
-
-        if len(dates) != 2 or len(operators) != 1:
-            raise ValueError("日期表达式格式错误")
-
-        date1_str, date2_str = dates
-        operator = operators[0]
-
-        # 统一日期格式
-        def parse_date(date_str):
-            # 移除分隔符
-            clean_str = re.sub(r'[-/]', '', date_str)
-            if len(clean_str) == 8:
-                return datetime.strptime(clean_str, '%Y%m%d')
-            else:
-                # 尝试解析带时间的日期
-                return datetime.strptime(date_str, '%Y%m%d %H:%M:%S')
-
-        date1 = parse_date(date1_str)
-        date2 = parse_date(date2_str)
-
-        if operator == '-':
-            # 计算日期差（天数）
-            delta = date1 - date2
-            return delta.days
-        elif operator == '+':
-            # 日期加法（暂时不支持）
-            raise ValueError("日期加法暂不支持")
-        else:
-            raise ValueError("不支持的日期操作符")
 
     def set_formula_value(self, formula_key, value):
         """设置公式变量的值并更新显示"""

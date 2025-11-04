@@ -1622,8 +1622,20 @@ class ConfigManagementDialog(QDialog):
 
             if item_type == "formula":  # 新增公式类型验证
                 if not formula:
-                    Toast.warning(dialog, "警告", "请输入公式")  # 确保这一行存在
+                    Toast.warning(dialog, "警告", "请输入公式")
                     return
+
+                # 根据公式类型进行不同的验证
+                if formula_type == "numeric":
+                    # 数值公式验证：检查是否包含数字运算符号
+                    if not any(op in formula for op in ['+', '-', '*', '/']):
+                        Toast.warning(dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）")
+                        return
+                elif formula_type == "date":
+                    # 日期公式验证：检查是否包含日期运算
+                    if not any(op in formula for op in ['-']):
+                        Toast.warning(dialog, "警告", "日期公式应包含减法运算符（-）")
+                        return
 
                 # 验证公式语法（简单验证）
                 try:
@@ -1632,19 +1644,6 @@ class ConfigManagementDialog(QDialog):
                     if not dependencies:
                         Toast.warning(dialog, "警告", "公式中未包含任何变量")
                         return
-
-                    # 新增：根据公式类型验证公式内容
-                    if formula_type == "numeric":
-                        # 数值公式验证：检查是否包含数字运算符号
-                        if not any(op in formula for op in ['+', '-', '*', '/']):
-                            Toast.warning(dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）")
-                            return
-                    elif formula_type == "date":
-                        # 日期公式验证：检查是否包含日期运算
-                        if not any(op in formula for op in ['-']):
-                            Toast.warning(dialog, "警告", "日期公式应包含减法运算符（-）")
-                            return
-
                 except Exception as e:
                     Toast.warning(dialog, "警告", f"公式格式错误: {str(e)}")
                     return
@@ -2358,12 +2357,24 @@ class ConfigManagementDialog(QDialog):
                 show_in_ui = show_in_ui_checkbox.isChecked()
                 # 条件类型不需要数据类型和默认值验证
 
-            elif item_type == "formula":  # 新增公式类型处理
+            elif item_type == "formula":  # 新增公式类型验证
                 formula = formula_edit.toPlainText().strip()
-
                 if not formula:
                     Toast.warning(dialog, "警告", "请输入公式")
                     return
+
+                # 根据公式类型进行不同的验证
+                formula_type = formula_type_combo.currentData()
+                if formula_type == "numeric":
+                    # 数值公式验证：检查是否包含数字运算符号
+                    if not any(op in formula for op in ['+', '-', '*', '/']):
+                        Toast.warning(dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）")
+                        return
+                elif formula_type == "date":
+                    # 日期公式验证：检查是否包含日期运算
+                    if not any(op in formula for op in ['-']):
+                        Toast.warning(dialog, "警告", "日期公式应包含减法运算符（-）")
+                        return
 
             # 更新布局项数据
             if item_type in ["field", "combo"]:

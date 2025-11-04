@@ -239,7 +239,7 @@
       "type": "field"
     },
     {
-      "formula": "1*{phone}",
+      "formula": "1*{id_card}",
       "formula_type": "numeric",
       "key": "12",
       "label": "12",
