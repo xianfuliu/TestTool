@@ -281,7 +281,7 @@ class InterfaceConfigDialog(QDialog):
             self.url_edit.setText("")
             self.method_combo.setCurrentText("POST")
             self.headers_edit.setPlainText('{"Content-Type": "application/json"}')
-            self.normal_body_edit.setPlainText('{}')
+            self.normal_body_edit.setPlainText("")
             self.conditional_cases_edit.setPlainText("")
             self.response_mapping_edit.setPlainText("")
             self.field_types_edit.setPlainText("")
