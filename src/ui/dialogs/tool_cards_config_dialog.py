@@ -1,11 +1,13 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
-                             QWidget, QLabel, QLineEdit, QTextEdit, QComboBox,
+                             QWidget, QLabel, QLineEdit, QTextEdit,
                              QSpinBox, QCheckBox, QPushButton, QGroupBox,
                              QFormLayout, QListWidget, QListWidgetItem,
                              QMessageBox, QScrollArea, QGridLayout)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 import json
+
+from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 
 
 class ToolCardsConfigDialog(QDialog):
@@ -136,12 +138,12 @@ class ToolCardsConfigDialog(QDialog):
         card_selection_layout = QHBoxLayout()
 
         card_selection_layout.addWidget(QLabel("选择业务线:"))
-        self.business_combo = QComboBox()
+        self.business_combo = NoWheelComboBox()
         self.business_combo.currentTextChanged.connect(self.on_business_combo_changed)
         card_selection_layout.addWidget(self.business_combo)
 
         card_selection_layout.addWidget(QLabel("选择子模块:"))
-        self.sub_business_combo = QComboBox()
+        self.sub_business_combo = NoWheelComboBox()
         self.sub_business_combo.currentTextChanged.connect(self.on_sub_business_combo_changed)
         card_selection_layout.addWidget(self.sub_business_combo)
 
@@ -267,7 +269,7 @@ class ToolCardsConfigDialog(QDialog):
         self.card_title_edit = QLineEdit()
         basic_layout.addRow("卡片名称:", self.card_title_edit)
 
-        self.card_type_combo = QComboBox()
+        self.card_type_combo = NoWheelComboBox()
         self.card_type_combo.addItems(["SQL查询", "SQL更新", "SQL删除", "HTTP接口", "Python类"])
         self.card_type_combo.currentTextChanged.connect(self.on_card_type_changed)
         basic_layout.addRow("卡片类型:", self.card_type_combo)
@@ -319,7 +321,7 @@ class ToolCardsConfigDialog(QDialog):
         for i in reversed(range(self.config_layout.count())):
             self.config_layout.itemAt(i).widget().setParent(None)
 
-        self.database_combo = QComboBox()
+        self.database_combo = NoWheelComboBox()
         # TODO: 从数据库配置中加载可用的数据库连接
         self.database_combo.addItems(["default_db", "test_db"])
         self.config_layout.addRow("数据库连接:", self.database_combo)
@@ -337,7 +339,7 @@ class ToolCardsConfigDialog(QDialog):
         self.url_edit = QLineEdit()
         self.config_layout.addRow("请求URL:", self.url_edit)
 
-        self.method_combo = QComboBox()
+        self.method_combo = NoWheelComboBox()
         self.method_combo.addItems(["GET", "POST", "PUT", "DELETE"])
         self.config_layout.addRow("请求方法:", self.method_combo)
 

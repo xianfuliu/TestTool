@@ -43,10 +43,11 @@
     },
     {
       "data_type": "string",
-      "default": "123",
-      "key": "12312",
-      "label": "3123",
+      "default": "123hahah",
+      "key": "the_filed_hide",
+      "label": "我是隐藏字段",
       "priority": 5,
+      "show_in_ui": false,
       "type": "field"
     },
     {
@@ -176,12 +177,75 @@
       "key": "test_condition",
       "label": "测试条件",
       "mappings": {
-        "1": "name",
+        "1": "the_filed_hide",
         "3": "id_card"
       },
       "priority": 15,
       "show_in_ui": true,
       "type": "condition"
+    },
+    {
+      "data_type": "string",
+      "default": "12.05",
+      "key": "num1",
+      "label": "数字1",
+      "priority": 16,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "10.96",
+      "key": "num2",
+      "label": "数字2",
+      "priority": 17,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "formula": "{num1}+{num2}",
+      "formula_type": "numeric",
+      "key": "test1",
+      "label": "测试公式",
+      "priority": 18,
+      "show_in_ui": true,
+      "type": "formula"
+    },
+    {
+      "formula": "{date1}-{date2}",
+      "formula_type": "date",
+      "key": "test2",
+      "label": "日期公式",
+      "priority": 19,
+      "show_in_ui": true,
+      "type": "formula"
+    },
+    {
+      "data_type": "string",
+      "default": "20251104",
+      "key": "date1",
+      "label": "日期1",
+      "priority": 20,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "20260104",
+      "key": "date2",
+      "label": "日期2",
+      "priority": 21,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "formula": "1*{phone}",
+      "formula_type": "numeric",
+      "key": "12",
+      "label": "12",
+      "priority": 22,
+      "show_in_ui": true,
+      "type": "formula"
     }
   ],
   "interfaces": {

@@ -4,12 +4,12 @@ import re
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QGroupBox,
-                             QComboBox, QCheckBox, QTextEdit, QMessageBox,
-                             QSplitter, QScrollArea, QSizePolicy)
+                             QCheckBox, QTextEdit, QMessageBox, QSplitter, QScrollArea, QSizePolicy)
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
+from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.ui.widgets.width_aware import WidthAwareWidget
 from src.utils.id_card_generator import UserInfoGenerator
@@ -36,6 +36,8 @@ class ApiToolTab(QWidget):
         self.sql_buttons = {}  # 新增SQL按钮字典
         self.condition_displays = {}  # 新增：存储条件显示控件
         self.sql_worker = None  # 新增SQL工作线程
+        self.formula_displays = {}  # 存储公式显示控件
+        self.formula_configs = {}  # 存储公式配置
         # 新增：记录最后一次SQL查询的时间戳
         self.last_sql_execution_time = None
         # 新增：记录各字段的最后更新时间
@@ -321,7 +323,7 @@ class ApiToolTab(QWidget):
 
         # 产品选择
         first_row_layout.addWidget(QLabel("产品:"))
-        self.product_combo = QComboBox()
+        self.product_combo = NoWheelComboBox()
         self.product_combo.currentTextChanged.connect(self.on_product_changed)
         self.product_combo.setFixedWidth(150)
         first_row_layout.addWidget(self.product_combo)
@@ -346,7 +348,7 @@ class ApiToolTab(QWidget):
 
         # 定时任务控件
         first_row_layout.addWidget(QLabel("定时任务:"))
-        self.schedule_combo = QComboBox()
+        self.schedule_combo = NoWheelComboBox()
         self.schedule_combo.setFixedWidth(250)
         first_row_layout.addWidget(self.schedule_combo)
 
@@ -518,6 +520,8 @@ class ApiToolTab(QWidget):
         self.combo_boxes.clear()  # 清空下拉框字典
         self.sql_buttons.clear()  # 清空SQL按钮字典
         self.condition_displays.clear()  # 新增：清空条件显示控件字典
+        self.formula_displays.clear()  # 新增：清空公式显示控件字典
+        self.formula_configs.clear()  # 新增：清空公式配置字典
 
         # 获取布局配置
         layout_config = product_config.get("layout", [])
@@ -544,7 +548,7 @@ class ApiToolTab(QWidget):
 
         for item in sorted_layout:
             # 检查是否需要在UI中显示（仅对字段和下拉框类型）
-            if item["type"] in ["field", "combo", "condition"]:  # 添加条件类型
+            if item["type"] in ["field", "combo", "condition", "formula"]:  # 添加公式类型
                 # 默认值为True，保持向后兼容
                 show_in_ui = item.get("show_in_ui", True)
                 if not show_in_ui:
@@ -556,12 +560,11 @@ class ApiToolTab(QWidget):
                         default_value = item.get("default", "")
                         if default_value:
                             field_input.setText(default_value)
-
                         self.field_inputs[item["key"]] = field_input
 
                     elif item["type"] == "combo" and item["key"] not in self.combo_boxes:
                         # 创建隐藏的下拉框，但不添加到UI
-                        combo_box = QComboBox()
+                        combo_box = NoWheelComboBox()
                         # 添加选项
                         options = item.get("options", [])
                         for option in options:
@@ -592,6 +595,23 @@ class ApiToolTab(QWidget):
                         if condition_value is not None:
                             condition_display.setText(str(condition_value))
                         self.condition_displays[condition_key] = condition_display
+
+                    elif item["type"] == "formula" and item["key"] not in self.formula_displays:
+                        # 新增：创建隐藏的公式显示控件，但不添加到UI
+                        formula_display = QLineEdit()
+                        formula_display.setReadOnly(True)
+                        formula_display.setStyleSheet("background-color: #f0f0f0; color: #666;")
+                        self.formula_displays[item["key"]] = formula_display
+
+                        # 保存公式配置
+                        formula_key = item["key"]
+                        self.formula_configs[formula_key] = {
+                            "formula": item.get("formula", ""),
+                            "formula_type": item.get("formula_type", "numeric"),  # 新增公式类型
+                            "dependencies": self.extract_formula_dependencies(item.get("formula", ""))
+                        }
+                        # 初始计算公式值
+                        self.calculate_formula(formula_key)
 
                     # 跳过UI显示，继续下一个元素
                     continue
@@ -667,7 +687,7 @@ class ApiToolTab(QWidget):
                 combo_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 combo_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # 标签固定宽度
 
-                combo_box = QComboBox()
+                combo_box = NoWheelComboBox()
                 # 添加选项
                 options = item.get("options", [])
                 for option in options:
@@ -804,15 +824,45 @@ class ApiToolTab(QWidget):
                 current_row_layout.addWidget(condition_label)
                 current_row_layout.addWidget(condition_display)
 
+
+            elif item["type"] == "formula":
+                # 创建公式控件 - 只读显示计算结果
+                formula_label = QLabel(item["label"])
+                formula_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                formula_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                formula_display = QLineEdit()
+                formula_display.setReadOnly(True)
+                formula_display.setStyleSheet("background-color: #f0f0f0; color: #666;")
+
+                # 设置固定的大小策略，不拉伸
+                formula_display.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                formula_display.setMinimumWidth(120)
+                formula_display.setMaximumWidth(250)
+
+                # 保存公式显示控件引用和配置
+                formula_key = item["key"]
+                self.formula_displays[formula_key] = formula_display
+                self.formula_configs[formula_key] = {
+                    "formula": item.get("formula", ""),
+                    "formula_type": item.get("formula_type", "numeric"),  # 新增公式类型
+                    "dependencies": self.extract_formula_dependencies(item.get("formula", ""))
+                }
+
+                # 初始计算公式值
+                self.calculate_formula(formula_key)
+
+                # # 根据内容调整宽度
+                # self.adjust_field_width(formula_display, formula_display.text())
+
+                # 添加到当前行
+                current_row_layout.addWidget(formula_label)
+                current_row_layout.addWidget(formula_display)
+
             current_item_count += 1
 
         # 添加最后一行
         if current_row_layout.count() > 0:
             main_layout.addLayout(current_row_layout)
-
-        # 注意：这里移除了 addStretch()，防止元素被推到中间
-        # 如果希望内容在顶部显示，可以添加一个弹性空间在底部
-        # main_layout.addStretch()
 
         # 将主部件添加到滚动区域
         self.combined_layout.addWidget(main_widget)
@@ -841,6 +891,11 @@ class ApiToolTab(QWidget):
                 widget = item.widget()
                 if isinstance(widget, QPushButton):
                     self.adjust_button_width(widget)
+
+        # 新增：调整所有公式显示控件的宽度
+        for formula_key, formula_display in self.formula_displays.items():
+            text = formula_display.text()
+            self.adjust_field_width(formula_display, text)
 
     def adjust_field_width(self, field_input, text):
         """根据输入框内容调整宽度 - 统一处理所有字段"""
@@ -906,6 +961,11 @@ class ApiToolTab(QWidget):
                 widget = item.widget()
                 if isinstance(widget, QPushButton):
                     self.adjust_button_width(widget)
+
+        # 新增：调整所有公式显示控件的宽度
+        for formula_display in self.formula_displays.values():
+            text = formula_display.text()
+            self.adjust_field_width(formula_display, text)
 
     def on_interface_clicked(self, interface_name):
         """接口按钮点击事件 - 优化：点击时清空响应体"""
@@ -2049,6 +2109,9 @@ class ApiToolTab(QWidget):
         # 检查这个字段是否被用作条件字段，如果是，需要更新相关的条件变量
         self.update_condition_variables_for_field(field_key)
 
+        # 检查这个字段是否被公式依赖，如果是，重新计算相关公式
+        self.refresh_dependent_formulas(field_key)
+
         # 修复：无论是否勾选发送请求，都更新请求体
         self.force_refresh_request_body()
 
@@ -2061,6 +2124,9 @@ class ApiToolTab(QWidget):
 
         # 检查这个下拉框是否被用作条件字段，如果是，需要更新相关的条件变量
         self.update_condition_variables_for_field(combo_key)
+
+        # 检查这个下拉框是否被公式依赖，如果是，重新计算相关公式
+        self.refresh_dependent_formulas(combo_key)
 
         # 修复：无论是否勾选发送请求，都更新请求体
         self.force_refresh_request_body()
@@ -2138,22 +2204,6 @@ class ApiToolTab(QWidget):
 
         # 强制刷新请求体
         self.force_refresh_request_body()
-
-    def refresh_current_interface(self):
-        """刷新当前接口的显示（重新生成请求体）"""
-        if not self.current_interface or not self.current_product:
-            return
-
-        try:
-            product_config = self.api_config["products"][self.current_product]
-            interface_config = product_config["interfaces"][self.current_interface]
-
-            # 重新生成请求体
-            request_body = self.generate_request_body(interface_config)
-            self.request_body_edit.setPlainText(json.dumps(request_body, ensure_ascii=False, indent=2))
-
-        except Exception as e:
-            print(f"刷新接口显示时出错: {str(e)}")
 
     def update_request_id_and_reset_fields(self):
         """更新请求流水号并重置字段 - 修复：确保刷新当前接口"""
@@ -2244,7 +2294,7 @@ class ApiToolTab(QWidget):
 
             elif item["type"] == "combo" and item["key"] not in self.combo_boxes:
                 # 如果下拉框不在combo_boxes中（可能是隐藏字段），创建它
-                combo_box = QComboBox()
+                combo_box = NoWheelComboBox()
                 options = item.get("options", [])
                 for option in options:
                     combo_box.addItem(option["text"], option["value"])
@@ -2255,6 +2305,22 @@ class ApiToolTab(QWidget):
                 condition_display = QLineEdit()
                 condition_display.setReadOnly(True)
                 self.condition_displays[item["key"]] = condition_display
+
+            # 新增：确保公式字段在对应的字典中有记录
+            elif item["type"] == "formula" and item["key"] not in self.formula_displays:
+                # 如果公式字段不在formula_displays中（可能是隐藏字段），创建它
+                formula_display = QLineEdit()
+                formula_display.setReadOnly(True)
+                formula_display.setStyleSheet("background-color: #f0f0f0; color: #666;")
+                self.formula_displays[item["key"]] = formula_display
+
+                # 保存公式配置
+                formula_key = item["key"]
+                self.formula_configs[formula_key] = {
+                    "formula": item.get("formula", ""),
+                    "formula_type": item.get("formula_type", "numeric"),  # 新增公式类型
+                    "dependencies": self.extract_formula_dependencies(item.get("formula", ""))
+                }
 
         # 然后，重置所有字段的值
         for item in layout_config:
@@ -2368,6 +2434,13 @@ class ApiToolTab(QWidget):
                         self.condition_displays[condition_key].setText(str(condition_value))
                     print(f"重置条件字段 '{condition_key}' 值为: {condition_value}")
 
+            elif item["type"] == "formula":
+                # 公式类型不需要手动设置值，因为它的值依赖于其他字段
+                formula_key = item["key"]
+                # 计算公式值
+                self.calculate_formula(formula_key)
+                print(f"重置公式字段 '{formula_key}' 并重新计算")
+
         # 在所有字段重置完成后，检查条件字段的映射状态
         self.check_all_condition_mappings()
 
@@ -2421,3 +2494,137 @@ class ApiToolTab(QWidget):
             "id_card_start_time": test_data["id_card_start_time"],
             "id_card_end_time": test_data["id_card_end_time"]
         }
+
+    def extract_formula_dependencies(self, formula):
+        """提取公式中依赖的变量"""
+        pattern = r'\{(\w+)\}'
+        variables = re.findall(pattern, formula)
+        return list(set(variables))  # 去重
+
+    def calculate_formula(self, formula_key):
+        """计算公式的值"""
+        if formula_key not in self.formula_configs:
+            return
+
+        formula_config = self.formula_configs[formula_key]
+        formula_str = formula_config["formula"]
+        dependencies = formula_config["dependencies"]
+
+        # 检查所有依赖变量是否都有值
+        values = {}
+        for var in dependencies:
+            if var in self.variable_pool:
+                value = self.variable_pool[var]
+                if value is None or value == "":
+                    # 有变量为空，公式值为空
+                    self.set_formula_value(formula_key, "")
+                    return
+                values[var] = value
+            else:
+                # 变量不存在，公式值为空
+                self.set_formula_value(formula_key, "")
+                return
+
+        try:
+            # 替换公式中的变量为实际值
+            expression = formula_str
+            for var, val in values.items():
+                expression = expression.replace("{" + var + "}", str(val))
+
+            # 计算公式结果
+            result = self.evaluate_formula_expression(expression)
+            self.set_formula_value(formula_key, str(result))
+
+        except Exception as e:
+            print(f"计算公式 {formula_key} 时出错: {str(e)}")
+            self.set_formula_value(formula_key, "")
+
+    def evaluate_formula_expression(self, expression):
+        """计算公式表达式"""
+        # 移除空格
+        expression = expression.replace(" ", "")
+
+        # 检查是否为日期计算
+        if self.is_date_expression(expression):
+            return self.evaluate_date_expression(expression)
+        else:
+            return self.evaluate_numeric_expression(expression)
+
+    def is_date_expression(self, expression):
+        """判断是否为日期表达式"""
+        # 简单的日期格式检测
+        date_patterns = [
+            r'\d{8}',  # 20251029
+            r'\d{4}-\d{2}-\d{2}',  # 2025-10-29
+            r'\d{4}/\d{2}/\d{2}',  # 2025/10/29
+        ]
+
+        for pattern in date_patterns:
+            if re.search(pattern, expression):
+                return True
+        return False
+
+    def evaluate_numeric_expression(self, expression):
+        """计算数字表达式"""
+        # 安全地计算数学表达式
+        allowed_chars = set('0123456789+-*/().% ')
+        if not all(c in allowed_chars for c in expression):
+            raise ValueError("表达式包含非法字符")
+
+        # 替换百分比符号
+        expression = expression.replace('%', '/100')
+
+        # 使用 eval 计算（在生产环境中应考虑更安全的替代方案）
+        result = eval(expression)
+        return round(result, 2)  # 保留2位小数
+
+    def evaluate_date_expression(self, expression):
+        """计算日期表达式"""
+        from datetime import datetime, timedelta
+        import re
+
+        # 提取日期和操作符
+        date_pattern = r'(\d{4}[-/]?\d{2}[-/]?\d{2})(?:\s+\d{2}:\d{2}:\d{2})?'
+        dates = re.findall(date_pattern, expression)
+        operators = re.findall(r'[+-]', expression)
+
+        if len(dates) != 2 or len(operators) != 1:
+            raise ValueError("日期表达式格式错误")
+
+        date1_str, date2_str = dates
+        operator = operators[0]
+
+        # 统一日期格式
+        def parse_date(date_str):
+            # 移除分隔符
+            clean_str = re.sub(r'[-/]', '', date_str)
+            if len(clean_str) == 8:
+                return datetime.strptime(clean_str, '%Y%m%d')
+            else:
+                # 尝试解析带时间的日期
+                return datetime.strptime(date_str, '%Y%m%d %H:%M:%S')
+
+        date1 = parse_date(date1_str)
+        date2 = parse_date(date2_str)
+
+        if operator == '-':
+            # 计算日期差（天数）
+            delta = date1 - date2
+            return delta.days
+        elif operator == '+':
+            # 日期加法（暂时不支持）
+            raise ValueError("日期加法暂不支持")
+        else:
+            raise ValueError("不支持的日期操作符")
+
+    def set_formula_value(self, formula_key, value):
+        """设置公式变量的值并更新显示"""
+        self.variable_pool[formula_key] = value
+        if formula_key in self.formula_displays:
+            self.formula_displays[formula_key].setText(value)
+
+    def refresh_dependent_formulas(self, variable_key):
+        """刷新依赖指定变量的所有公式"""
+        for formula_key, formula_config in self.formula_configs.items():
+            if variable_key in formula_config["dependencies"]:
+                self.calculate_formula(formula_key)

@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtCore import Qt, pyqtSignal
 from src.ui.dialogs.api_tool_interface_config_dialog import InterfaceConfigDialog
 from src.ui.dialogs.api_tool_sql_config_dialog import SQLConfigDialog
+from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.utils.resource_utils import resource_path
 
@@ -82,7 +83,7 @@ class ConfigManagementDialog(QDialog):
         product_select_layout = QHBoxLayout()
         product_select_layout.setSpacing(8)
         product_select_layout.addWidget(QLabel("产品:"))
-        self.product_combo = QComboBox()
+        self.product_combo = NoWheelComboBox()
         self.product_combo.currentTextChanged.connect(self.on_product_selected)
         self.product_combo.setFixedWidth(250)
         product_select_layout.addWidget(self.product_combo)
@@ -154,7 +155,7 @@ class ConfigManagementDialog(QDialog):
         product_select_layout = QHBoxLayout()
         product_select_layout.setSpacing(8)
         product_select_layout.addWidget(QLabel("产品:"))
-        self.detail_product_combo = QComboBox()
+        self.detail_product_combo = NoWheelComboBox()
         self.detail_product_combo.currentTextChanged.connect(self.on_detail_product_changed)
         self.detail_product_combo.setFixedWidth(250)
         product_select_layout.addWidget(self.detail_product_combo)
@@ -703,6 +704,10 @@ class ConfigManagementDialog(QDialog):
                         display_text = f"SQL: {item_name}"
                     elif item_type == "condition":
                         display_text = f"条件: {item_label} ({item_key})"
+                        if not show_in_ui:
+                            display_text += " [隐藏]"  # 为条件字段添加隐藏标记
+                    elif item_type == "formula":
+                        display_text = f"公式: {item_label} ({item_key})"
                         if not show_in_ui:
                             display_text += " [隐藏]"  # 为条件字段添加隐藏标记
                     else:
@@ -1416,7 +1421,6 @@ class ConfigManagementDialog(QDialog):
         dialog = QDialog(self)
         dialog.setWindowTitle("添加布局项")
         dialog.setModal(True)
-        dialog.setFixedSize(450, 580)  # 增加高度以容纳新控件
 
         layout = QVBoxLayout(dialog)
         layout.setSpacing(8)
@@ -1429,18 +1433,25 @@ class ConfigManagementDialog(QDialog):
         type_label.setFixedWidth(30)
         type_layout.addWidget(type_label)
 
-        self.add_type_combo = QComboBox()
+        self.add_type_combo = NoWheelComboBox()
         # 使用中文显示，但存储英文值
         self.add_type_combo.addItem("字段", "field")
         self.add_type_combo.addItem("下拉框", "combo")
         self.add_type_combo.addItem("接口", "interface")
         self.add_type_combo.addItem("SQL", "sql")
-        self.add_type_combo.addItem("条件", "condition")  # 新增条件类型
+        self.add_type_combo.addItem("条件", "condition")
+        self.add_type_combo.addItem("公式", "formula")  # 新增公式类型
         self.add_type_combo.setFixedWidth(120)
-        self.add_type_combo.currentTextChanged.connect(self.on_add_type_changed)
         type_layout.addWidget(self.add_type_combo)
         type_layout.addStretch()
         layout.addLayout(type_layout)
+
+        # 现在可以安全地获取初始类型并设置对话框大小
+        initial_type = self.add_type_combo.currentData()
+        self._set_dialog_size_by_type(dialog, initial_type)
+
+        # 连接信号（必须在设置大小之后）
+        self.add_type_combo.currentTextChanged.connect(self.on_add_type_changed)
 
         # 创建表单布局 - 使用紧凑的设置
         form_layout = QFormLayout()
@@ -1448,14 +1459,14 @@ class ConfigManagementDialog(QDialog):
         form_layout.setVerticalSpacing(6)
         form_layout.setHorizontalSpacing(8)
 
-        # 键 - 字段、下拉框和条件显示
+        # 键 - 字段、下拉框、条件和公式显示
         self.add_key_label = QLabel("键:")
         self.add_key_edit = QLineEdit()
         self.add_key_edit.setPlaceholderText("字段键名")
         self.add_key_edit.setFixedWidth(250)
         form_layout.addRow(self.add_key_label, self.add_key_edit)
 
-        # 标签 - 字段、下拉框和条件显示
+        # 标签 - 字段、下拉框、条件和公式显示
         self.add_label_label = QLabel("标签:")
         self.add_label_edit = QLineEdit()
         self.add_label_edit.setPlaceholderText("显示标签")
@@ -1482,7 +1493,7 @@ class ConfigManagementDialog(QDialog):
 
         # 条件字段选择 - 仅条件类型显示
         self.add_condition_field_label = QLabel("条件字段:")
-        self.add_condition_field_combo = QComboBox()
+        self.add_condition_field_combo = NoWheelComboBox()
         self.add_condition_field_combo.setFixedWidth(250)
         self.add_condition_field_combo.currentIndexChanged.connect(self.on_condition_field_changed)
         self.add_condition_field_label.setVisible(False)
@@ -1491,7 +1502,7 @@ class ConfigManagementDialog(QDialog):
 
         # 数据类型 - 字段和下拉框显示
         self.add_data_type_label = QLabel("数据类型:")
-        self.add_data_type_combo = QComboBox()
+        self.add_data_type_combo = NoWheelComboBox()
         self.add_data_type_combo.addItems(["string", "int", "float", "bool"])
         self.add_data_type_combo.setCurrentText("string")
         self.add_data_type_combo.setFixedWidth(120)
@@ -1504,12 +1515,29 @@ class ConfigManagementDialog(QDialog):
         self.add_default_edit.setFixedWidth(250)
         form_layout.addRow(self.add_default_label, self.add_default_edit)
 
-        # 是否展示到前端 - 字段和下拉框显示
+        # 是否展示到前端 - 字段、下拉框和公式显示
         self.add_show_in_ui_label = QLabel("展示到前端:")
         self.add_show_in_ui_checkbox = QCheckBox()
         self.add_show_in_ui_checkbox.setChecked(True)  # 默认勾选
         self.add_show_in_ui_checkbox.setToolTip("勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数")
         form_layout.addRow(self.add_show_in_ui_label, self.add_show_in_ui_checkbox)
+
+        # 新增：公式类型选择 - 仅公式类型显示
+        self.add_formula_type_label = QLabel("公式类型:")
+        self.add_formula_type_combo = NoWheelComboBox()
+        self.add_formula_type_combo.addItem("数值", "numeric")
+        self.add_formula_type_combo.addItem("日期", "date")
+        self.add_formula_type_combo.setFixedWidth(100)  # 减小宽度
+        self.add_formula_type_combo.setVisible(False)
+        form_layout.addRow(self.add_formula_type_label, self.add_formula_type_combo)
+
+        # 新增：公式输入框 - 仅公式类型显示
+        self.add_formula_label = QLabel("公式:")
+        self.add_formula_edit = QTextEdit()
+        self.add_formula_edit.setPlaceholderText("请输入公式表达式，例如: {field1} + {field2} * 0.06")
+        self.add_formula_edit.setFixedHeight(80)
+        self.add_formula_edit.setVisible(False)
+        form_layout.addRow(self.add_formula_label, self.add_formula_edit)
 
         layout.addLayout(form_layout)
 
@@ -1594,9 +1622,11 @@ class ConfigManagementDialog(QDialog):
             data_type = self.add_data_type_combo.currentText() if item_type in ["field", "combo"] else "string"
             default_value = self.add_default_edit.text().strip()
             show_in_ui = self.add_show_in_ui_checkbox.isChecked()
+            formula_type = self.add_formula_type_combo.currentData() if item_type == "formula" else ""
+            formula = self.add_formula_edit.toPlainText().strip() if item_type == "formula" else ""
 
             # 验证必填字段
-            if item_type in ["field", "combo", "condition"]:  # 添加条件类型
+            if item_type in ["field", "combo", "condition", "formula"]:  # 添加公式类型
                 if not key:
                     Toast.warning(dialog, "警告", "请输入键")
                     return
@@ -1623,6 +1653,35 @@ class ConfigManagementDialog(QDialog):
                     if self.sql_list.item(i).text() == sql_name:
                         Toast.warning(dialog, "警告", "SQL名称已存在")
                         return
+
+            if item_type == "formula":  # 新增公式类型验证
+                if not formula:
+                    Toast.warning(dialog, "警告", "请输入公式")  # 确保这一行存在
+                    return
+
+                # 验证公式语法（简单验证）
+                try:
+                    # 提取公式中的变量进行验证
+                    dependencies = self.extract_formula_dependencies(formula)
+                    if not dependencies:
+                        Toast.warning(dialog, "警告", "公式中未包含任何变量")
+                        return
+
+                    # 新增：根据公式类型验证公式内容
+                    if formula_type == "numeric":
+                        # 数值公式验证：检查是否包含数字运算符号
+                        if not any(op in formula for op in ['+', '-', '*', '/']):
+                            Toast.warning(dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）")
+                            return
+                    elif formula_type == "date":
+                        # 日期公式验证：检查是否包含日期运算
+                        if not any(op in formula for op in ['-']):
+                            Toast.warning(dialog, "警告", "日期公式应包含减法运算符（-）")
+                            return
+
+                except Exception as e:
+                    Toast.warning(dialog, "警告", f"公式格式错误: {str(e)}")
+                    return
 
             # 构建布局项数据
             item_data = {
@@ -1720,6 +1779,18 @@ class ConfigManagementDialog(QDialog):
                 if not show_in_ui:
                     display_text += " [隐藏]"  # 添加隐藏标记
 
+            elif item_type == "formula":  # 新增公式类型处理
+                item_data.update({
+                    "key": key,
+                    "label": label,
+                    "formula_type": formula_type,  # 新增公式类型
+                    "formula": formula,
+                    "show_in_ui": show_in_ui  # 确保这一行存在
+                })
+                display_text = f"公式: {label} ({key})"
+                if not show_in_ui:
+                    display_text += " [隐藏]"
+
             # 添加到列表
             item = QListWidgetItem(display_text)
             item.setData(Qt.UserRole, item_data)
@@ -1735,10 +1806,16 @@ class ConfigManagementDialog(QDialog):
         button_layout.addWidget(cancel_btn)
         layout.addLayout(button_layout)
 
+        # 保存对话框引用用于大小调整
+        self._add_dialog = dialog
+
         # 初始化界面状态
         self.on_add_type_changed(self.add_type_combo.currentText())
 
         dialog.exec_()
+
+        # 清理引用
+        self._add_dialog = None
 
     def edit_layout_item(self):
         """编辑布局项 - 修复固定变量编辑问题"""
@@ -1758,10 +1835,12 @@ class ConfigManagementDialog(QDialog):
         dialog.setWindowTitle("编辑布局项")
         dialog.setModal(True)
 
-        # 根据类型设置不同的大小
+        # 根据类型设置弹窗大小--防止字段间距垂直拉伸
         item_type = item_data.get("type")
-        if item_type == "combo" or item_type == "condition":  # 条件和下拉框需要更多空间
+        if item_type == "combo" or item_type == "condition":
             dialog.setFixedSize(500, 650)  # 增加宽度和高度
+        elif item_type == "formula":  # 不能与其他类型的公用，不然会被拉伸垂直间距
+            dialog.setFixedSize(400, 400)
         elif item_type == "interface" or item_type == "sql":
             dialog.setFixedSize(400, 200)
         else:  # field
@@ -1784,7 +1863,8 @@ class ConfigManagementDialog(QDialog):
             "combo": "下拉框",
             "interface": "接口",
             "sql": "SQL",
-            "condition": "条件"  # 新增条件类型
+            "condition": "条件",
+            "formula": "公式"
         }
 
         type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
@@ -1800,7 +1880,7 @@ class ConfigManagementDialog(QDialog):
         form_layout.setHorizontalSpacing(8)
 
         # 根据类型显示不同的字段
-        if item_type in ["field", "combo", "condition"]:  # 添加条件类型
+        if item_type in ["field", "combo", "condition", "formula"]:  # 新增公式类型
             # 键
             key_edit = QLineEdit()
             key_edit.setText(item_data.get("key", ""))
@@ -1813,7 +1893,7 @@ class ConfigManagementDialog(QDialog):
             label_edit.setFixedWidth(250)
             form_layout.addRow("标签:", label_edit)
 
-        if item_type in ["field", "combo", "condition"]:  # 添加条件类型
+        if item_type in ["field", "combo", "condition", "formula"]:  # 添加公式类型
             # 是否展示到前端
             show_in_ui_checkbox = QCheckBox()
             show_in_ui = item_data.get("show_in_ui", True)  # 默认True
@@ -1823,7 +1903,7 @@ class ConfigManagementDialog(QDialog):
 
         if item_type in ["field", "combo"]:
             # 数据类型
-            data_type_combo = QComboBox()
+            data_type_combo = NoWheelComboBox()
             data_type_combo.addItems(["string", "int", "float", "bool"])
             data_type_combo.setCurrentText(item_data.get("data_type", "string"))
             data_type_combo.setFixedWidth(120)
@@ -1849,11 +1929,34 @@ class ConfigManagementDialog(QDialog):
             sql_name_edit.setFixedWidth(250)
             form_layout.addRow("SQL名称:", sql_name_edit)
 
+        elif item_type == "formula":  # 新增公式类型处理
+            # 公式类型选择
+            formula_type_combo = NoWheelComboBox()
+            formula_type_combo.addItem("数值", "numeric")
+            formula_type_combo.addItem("日期", "date")
+            formula_type_combo.setFixedWidth(120)
+
+            # 设置当前公式类型
+            current_formula_type = item_data.get("formula_type", "numeric")
+            index = formula_type_combo.findData(current_formula_type)
+            if index >= 0:
+                formula_type_combo.setCurrentIndex(index)
+
+            form_layout.addRow("公式类型:", formula_type_combo)
+
+            # 公式编辑框
+            formula_label = QLabel("公式:")
+            formula_edit = QTextEdit()
+            formula_edit.setText(item_data.get("formula", ""))
+            formula_edit.setPlaceholderText("请输入公式表达式，例如: {field1} + {field2} * 0.06")
+            formula_edit.setFixedHeight(80)
+            form_layout.addRow(formula_label, formula_edit)
+
         # 条件字段 - 仅条件类型显示
         condition_field_combo = None  # 提前声明变量
         if item_type == "condition":
             # 条件字段（可编辑）
-            condition_field_combo = QComboBox()
+            condition_field_combo = NoWheelComboBox()
             condition_field_combo.setFixedWidth(250)
 
             # 初始化条件字段下拉框
@@ -2130,7 +2233,7 @@ class ConfigManagementDialog(QDialog):
                 condition_mapping_table.setItem(row, 0, value_item)
 
                 # 第二列：变量字段选择（下拉框）
-                combo = QComboBox()
+                combo = NoWheelComboBox()
                 combo.addItem("", "")  # 空选项
                 current_index = 0
                 for idx, field in enumerate(field_items):
@@ -2169,7 +2272,7 @@ class ConfigManagementDialog(QDialog):
                     value_item = QTableWidgetItem(condition_value)
                     value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable)
                     condition_mapping_table.setItem(row, 0, value_item)
-                    combo = QComboBox()
+                    combo = NoWheelComboBox()
                     combo.addItem("", "")
                     current_index = 0
                     for idx, field in enumerate(field_items):
@@ -2198,7 +2301,7 @@ class ConfigManagementDialog(QDialog):
 
         def on_ok():
             # 根据类型校验必填字段
-            if item_type in ["field", "combo", "condition"]:
+            if item_type in ["field", "combo", "condition", "formula"]:  # 新增公式类型
                 key = key_edit.text().strip()
                 label = label_edit.text().strip()
 
@@ -2288,6 +2391,13 @@ class ConfigManagementDialog(QDialog):
                 # 对于条件类型，只需要获取是否展示到前端
                 show_in_ui = show_in_ui_checkbox.isChecked()
                 # 条件类型不需要数据类型和默认值验证
+
+            elif item_type == "formula":  # 新增公式类型处理
+                formula = formula_edit.toPlainText().strip()
+
+                if not formula:
+                    Toast.warning(dialog, "警告", "请输入公式")
+                    return
 
             # 更新布局项数据
             if item_type in ["field", "combo"]:
@@ -2387,6 +2497,18 @@ class ConfigManagementDialog(QDialog):
                 if not show_in_ui_checkbox.isChecked():
                     display_text += " [隐藏]"  # 添加隐藏标记
 
+            elif item_type == "formula":  # 新增公式类型更新
+                item_data.update({
+                    "key": key_edit.text().strip(),
+                    "label": label_edit.text().strip(),
+                    "formula_type": formula_type_combo.currentData(),
+                    "formula": formula_edit.toPlainText().strip(),
+                    "show_in_ui": show_in_ui_checkbox.isChecked()  # 确保这一行存在
+                })
+                display_text = f"公式: {label_edit.text().strip()} ({key_edit.text().strip()})"
+                if not show_in_ui_checkbox.isChecked():
+                    display_text += " [隐藏]"
+
             # 更新列表显示
             current_item.setText(display_text)
             current_item.setData(Qt.UserRole, item_data)
@@ -2474,6 +2596,8 @@ class ConfigManagementDialog(QDialog):
         item_type = item_data.get("type")
         if item_type == "combo" or item_type == "condition":
             dialog.setFixedSize(500, 650)  # 与编辑对话框保持一致
+        elif item_type == "formula":  # 不能与其他类型的公用，不然会被拉伸垂直间距
+            dialog.setFixedSize(400, 400)
         elif item_type == "interface" or item_type == "sql":
             dialog.setFixedSize(400, 200)
         else:  # field
@@ -2495,7 +2619,8 @@ class ConfigManagementDialog(QDialog):
             "combo": "下拉框",
             "interface": "接口",
             "sql": "SQL",
-            "condition": "条件"  # 新增条件类型
+            "condition": "条件",
+            "formula": "公式"  # 新增公式类型
         }
         type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
         type_value.setStyleSheet("font-weight: bold; color: blue;")
@@ -2510,7 +2635,7 @@ class ConfigManagementDialog(QDialog):
         form_layout.setHorizontalSpacing(8)
 
         # 根据类型显示不同的字段（全部只读）
-        if item_type in ["field", "combo", "condition"]:
+        if item_type in ["field", "combo", "condition", "formula"]:  # 新增公式类型
             # 键（只读）
             key_edit = QLineEdit()
             key_edit.setText(item_data.get("key", ""))
@@ -2527,9 +2652,18 @@ class ConfigManagementDialog(QDialog):
             label_edit.setFixedWidth(250)
             form_layout.addRow("标签:", label_edit)
 
+        if item_type in ["field", "combo", "formula"]:
+            # 是否展示到前端（只读）- 使用 QLineEdit 保持一致的间距
+            show_in_ui_edit = QLineEdit()
+            show_in_ui_edit.setText("是" if item_data.get("show_in_ui", True) else "否")
+            show_in_ui_edit.setReadOnly(True)
+            show_in_ui_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            show_in_ui_edit.setFixedWidth(250)
+            form_layout.addRow("展示到前端:", show_in_ui_edit)
+
         if item_type in ["field", "combo"]:
             # 数据类型（只读）
-            data_type_combo = QComboBox()
+            data_type_combo = NoWheelComboBox()
             data_type_combo.addItems(["string", "int", "float", "bool"])
             data_type_combo.setCurrentText(item_data.get("data_type", "string"))
             data_type_combo.setEnabled(False)
@@ -2543,11 +2677,6 @@ class ConfigManagementDialog(QDialog):
             default_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
             default_edit.setFixedWidth(250)
             form_layout.addRow("默认值:", default_edit)
-
-            # 是否展示到前端（只读）
-            show_in_ui_label = QLabel("是" if item_data.get("show_in_ui", True) else "否")
-            show_in_ui_label.setStyleSheet("font-weight: bold; color: blue;")
-            form_layout.addRow("展示到前端:", show_in_ui_label)
 
         elif item_type == "interface":
             # 接口名称（只读）
@@ -2575,6 +2704,28 @@ class ConfigManagementDialog(QDialog):
             condition_field_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
             condition_field_edit.setFixedWidth(250)
             form_layout.addRow("条件字段:", condition_field_edit)
+
+        elif item_type == "formula":  # 新增公式类型处理
+            # 公式类型显示（只读）
+            formula_type_edit = NoWheelComboBox()
+            formula_type_edit.addItems(["数值", "日期"])
+            formula_type_edit.setEnabled(False)
+            formula_type_edit.setFixedWidth(120)
+            # 将英文类型映射为对应的索引
+            current_formula_type = item_data.get("formula_type", "numeric")
+            if current_formula_type == "numeric":
+                formula_type_edit.setCurrentIndex(0)  # 数值
+            elif current_formula_type == "date":
+                formula_type_edit.setCurrentIndex(1)  # 日期
+            form_layout.addRow("公式类型:", formula_type_edit)
+
+            # 公式显示框（只读）
+            formula_edit = QTextEdit()
+            formula_edit.setText(item_data.get("formula", ""))
+            formula_edit.setReadOnly(True)
+            formula_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            formula_edit.setFixedHeight(80)
+            form_layout.addRow("公式:", formula_edit)
 
         layout.addLayout(form_layout)
 
@@ -2678,17 +2829,40 @@ class ConfigManagementDialog(QDialog):
 
         dialog.exec_()
 
+    def _set_dialog_size_by_type(self, dialog, item_type):
+        """根据布局类型设置对话框大小---只针对与add_layout_item方法"""
+        size_mapping = {
+            "field": (400, 350),  # 字段类型
+            "combo": (500, 650),  # 下拉框类型（需要更多空间显示选项）
+            "interface": (400, 250),  # 接口类型
+            "sql": (400, 250),  # SQL类型
+            "condition": (500, 650),  # 条件类型（需要显示映射表格）
+            "formula": (400, 400)  # 公式类型
+        }
+
+        width, height = size_mapping.get(item_type, (450, 580))  # 默认大小
+        dialog.setFixedSize(width, height)
+
     def on_add_type_changed(self, item_type):
         """添加布局项类型改变事件 - 修复版"""
-        # 获取实际的类型值（如果是中文显示，需要映射到英文）
+        # 安全检查：确保 add_type_combo 存在
+        if not hasattr(self, 'add_type_combo'):
+            return
+
+            # 获取实际的类型值（如果是中文显示，需要映射到英文）
         type_mapping = {
             "字段": "field",
             "下拉框": "combo",
             "接口": "interface",
             "SQL": "sql",
-            "条件": "condition"  # 新增条件类型
+            "条件": "condition",
+            "公式": "formula"
         }
         actual_type = type_mapping.get(item_type, item_type)
+
+        # 动态调整对话框大小
+        if hasattr(self, '_add_dialog') and self._add_dialog:
+            self._set_dialog_size_by_type(self._add_dialog, actual_type)
 
         # 显示/隐藏相关字段 - 修复：确保所有变量都是布尔值
         is_field_or_combo_or_condition = actual_type in ["field", "combo", "condition"]  # 添加条件类型
@@ -2696,12 +2870,13 @@ class ConfigManagementDialog(QDialog):
         is_sql = actual_type == "sql"
         is_combo = actual_type == "combo"  # 修复：确保这是布尔值，不是元组
         is_condition = actual_type == "condition"  # 新增条件类型判断
+        is_formula = actual_type == "formula"  # 新增公式类型处理
 
-        # 键/名称和标签 - 仅字段、下拉框和条件显示
-        self.add_key_label.setVisible(is_field_or_combo_or_condition)
-        self.add_key_edit.setVisible(is_field_or_combo_or_condition)
-        self.add_label_label.setVisible(is_field_or_combo_or_condition)
-        self.add_label_edit.setVisible(is_field_or_combo_or_condition)
+        # 键/名称和标签 - 仅字段、下拉框、条件和公式显示
+        self.add_key_label.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
+        self.add_key_edit.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
+        self.add_label_label.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
+        self.add_label_edit.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
 
         # 接口名称 - 仅接口显示
         self.add_interface_name_label.setVisible(is_interface)
@@ -2724,12 +2899,20 @@ class ConfigManagementDialog(QDialog):
         self.add_default_label.setVisible(is_field_or_combo_or_condition)
         self.add_default_edit.setVisible(is_field_or_combo_or_condition)
 
-        # 是否展示到前端 - 仅字段和下拉框显示
-        self.add_show_in_ui_label.setVisible(is_field_or_combo_or_condition)
-        self.add_show_in_ui_checkbox.setVisible(is_field_or_combo_or_condition)
+        # 是否展示到前端 - 仅字段、下拉框和公式显示
+        self.add_show_in_ui_label.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
+        self.add_show_in_ui_checkbox.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
 
         # 下拉框枚举配置 - 仅下拉框显示
         self.add_options_group.setVisible(is_combo)  # 修复：这里应该是 is_combo 而不是 is_combo
+
+        # 新增：公式类型选择 - 仅公式类型显示
+        self.add_formula_type_label.setVisible(is_formula)
+        self.add_formula_type_combo.setVisible(is_formula)
+
+        # 新增：公式输入框 - 仅公式类型显示
+        self.add_formula_label.setVisible(is_formula)
+        self.add_formula_edit.setVisible(is_formula)
 
         # 清空字段
         if not is_field_or_combo_or_condition and not is_condition:
@@ -2739,6 +2922,9 @@ class ConfigManagementDialog(QDialog):
             self.add_interface_name_edit.clear()
         if not is_sql:
             self.add_sql_name_edit.clear()
+        if not is_formula:  # 新增：清空公式字段
+            self.add_formula_type_combo.setCurrentIndex(0)  # 重置为默认值
+            self.add_formula_edit.clear()
 
         # 如果是条件类型，初始化条件字段下拉框
         if is_condition:
@@ -2824,7 +3010,7 @@ class ConfigManagementDialog(QDialog):
             self.add_condition_mapping_table.setItem(row, 0, value_item)
 
             # 第二列：变量字段选择（下拉框）
-            combo = QComboBox()
+            combo = NoWheelComboBox()
             combo.addItem("", "")  # 空选项
             for field in field_items:
                 display_text = f"{field['label']} ({field['key']})"
@@ -3083,7 +3269,6 @@ class ConfigManagementDialog(QDialog):
         sql_config = current_item.data(Qt.UserRole)
 
         # 打开SQL配置对话框
-        from src.ui.dialogs.api_tool_sql_config_dialog import SQLConfigDialog
         dialog = SQLConfigDialog(sql_name, sql_config, self)
         if dialog.exec_() == QDialog.Accepted:
             # 更新SQL配置
@@ -3102,7 +3287,6 @@ class ConfigManagementDialog(QDialog):
         sql_config = current_item.data(Qt.UserRole)
 
         # 打开SQL配置对话框，但设置为只读模式
-        from src.ui.dialogs.api_tool_sql_config_dialog import SQLConfigDialog
         dialog = SQLConfigDialog(sql_name, sql_config, self)
         dialog.setWindowTitle(f"查看SQL - {sql_name}")
 
@@ -3117,13 +3301,18 @@ class ConfigManagementDialog(QDialog):
             elif isinstance(widget, QComboBox):
                 widget.setEnabled(False)
             elif isinstance(widget, QPushButton):
-                widget.setEnabled(False)
+                # 不要禁用关闭按钮
+                if widget != dialog.cancel_btn:
+                    widget.setEnabled(False)
             elif isinstance(widget, QTableWidget):
                 widget.setEditTriggers(QTableWidget.NoEditTriggers)
 
         # 隐藏保存按钮，只显示关闭按钮
         dialog.save_btn.setVisible(False)
         dialog.cancel_btn.setText("关闭")
+
+        # 确保关闭按钮是启用的
+        dialog.cancel_btn.setEnabled(True)
 
         dialog.exec_()
 
@@ -3234,3 +3423,10 @@ class ConfigManagementDialog(QDialog):
         except Exception as e:
             Toast.critical(self, "错误", f"保存产品详情配置失败: {str(e)}")
             return False
+
+    def extract_formula_dependencies(self, formula):
+        """提取公式中依赖的变量"""
+        import re
+        pattern = r'\{(\w+)\}'
+        variables = re.findall(pattern, formula)
+        return list(set(variables))  # 去重

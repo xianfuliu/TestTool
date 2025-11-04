@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                             QTableWidget, QTableWidgetItem, QComboBox, QTextEdit, QMessageBox, QTabWidget, QListWidget,
+                             QTableWidget, QTableWidgetItem, QTextEdit, QMessageBox, QTabWidget, QListWidget,
                              QListWidgetItem, QDialog, QFormLayout, QCompleter, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import pymysql
 
+from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.utils.resource_utils import resource_path
 import json
@@ -89,7 +90,7 @@ class DatabaseConfigDialog(QDialog):
         param_selection_layout.addWidget(QLabel("查询条件:"))
 
         # 将列表改为下拉框
-        self.input_fields_combo = QComboBox()
+        self.input_fields_combo = NoWheelComboBox()
         self.input_fields_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.input_fields_combo.setMinimumWidth(200)
         self.input_fields_combo.currentTextChanged.connect(self.on_input_field_selected)
@@ -159,7 +160,7 @@ class DatabaseConfigDialog(QDialog):
         db_selection_layout.addWidget(QLabel("数据库配置:"))
 
         # 将列表改为下拉框
-        self.db_combo = QComboBox()
+        self.db_combo = NoWheelComboBox()
         self.db_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.db_combo.setMinimumWidth(200)
         self.db_combo.currentTextChanged.connect(self.on_db_selected)
@@ -250,7 +251,7 @@ class DatabaseConfigDialog(QDialog):
 
         # 操作配置
         operation_row_layout.addWidget(QLabel("脚本列表:"))
-        self.sql_combo = QComboBox()
+        self.sql_combo = NoWheelComboBox()
         self.sql_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.sql_combo.setMinimumWidth(180)  # 增加宽度
         self.sql_combo.currentTextChanged.connect(self.on_sql_selected)
@@ -279,7 +280,7 @@ class DatabaseConfigDialog(QDialog):
 
         # 数据库配置
         database_row_layout.addWidget(QLabel("配置列表:"))
-        self.sql_db_connection = QComboBox()
+        self.sql_db_connection = NoWheelComboBox()
         self.sql_db_connection.addItem("")
         self.sql_db_connection.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.sql_db_connection.setMinimumWidth(180)  # 增加宽度
@@ -288,7 +289,7 @@ class DatabaseConfigDialog(QDialog):
 
         # 库名
         database_row_layout.addWidget(QLabel("库名:"))
-        self.database_combo = QComboBox()
+        self.database_combo = NoWheelComboBox()
         self.database_combo.setEditable(True)
         self.database_combo.setEnabled(False)
         self.database_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -311,7 +312,7 @@ class DatabaseConfigDialog(QDialog):
 
         # 表名
         database_row_layout.addWidget(QLabel("表名:"))
-        self.table_combo = QComboBox()
+        self.table_combo = NoWheelComboBox()
         self.table_combo.setEditable(True)
         self.table_combo.setEnabled(False)
         self.table_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -340,7 +341,7 @@ class DatabaseConfigDialog(QDialog):
         required_param_layout.setSpacing(10)  # 增加水平间距
         required_param_layout.addWidget(QLabel("查询条件:"))
 
-        self.required_param_combo = QComboBox()
+        self.required_param_combo = NoWheelComboBox()
         self.required_param_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.required_param_combo.setMinimumWidth(220)  # 增加宽度
         required_param_layout.addWidget(self.required_param_combo)

@@ -1,6 +1,5 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-                             QLabel, QLineEdit, QPushButton, QGroupBox, QComboBox,
-                             QFileDialog, QRadioButton, QMenu, QApplication)
+                             QLabel, QLineEdit, QPushButton, QGroupBox, QFileDialog, QRadioButton, QMenu, QApplication)
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt, QTimer
 import random
@@ -8,6 +7,7 @@ import os
 from datetime import datetime
 from src.ui.widgets.copy_button import CopyButton
 from src.ui.widgets.download_button import DownloadButton
+from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.utils.id_card_images_generator import IdCardImageGenerator
 from src.utils.resource_utils import resource_path
@@ -149,7 +149,7 @@ class TestDataTab(QWidget):
 
         # 民族选择
         layout.addWidget(QLabel("民族:"), row, 0)
-        self.ethnic_combo = QComboBox()
+        self.ethnic_combo = NoWheelComboBox()
         self.ethnic_combo.setFixedWidth(120)
         self.ethnic_combo.addItems(
             ["随机", "汉", "蒙古", "回", "藏", "维吾尔", "苗", "彝", "壮", "布依", "朝鲜", "满", "侗", "瑶", "白",
@@ -162,7 +162,7 @@ class TestDataTab(QWidget):
 
         # 身份证号开头数字（下拉框）
         layout.addWidget(QLabel("身份证开头:"), row, 0)
-        self.id_prefix_combo = QComboBox()
+        self.id_prefix_combo = NoWheelComboBox()
         self.id_prefix_combo.setFixedWidth(120)
         self.id_prefix_combo.addItems(["随机"] + list(self.parent_app.generator.area_codes.keys()))
         layout.addWidget(self.id_prefix_combo, row, 1)
@@ -178,7 +178,7 @@ class TestDataTab(QWidget):
 
         # 银行选择
         layout.addWidget(QLabel("银行:"), row, 0)
-        self.bank_combo = QComboBox()
+        self.bank_combo = NoWheelComboBox()
         self.bank_combo.setFixedWidth(120)
         self.bank_combo.addItems(list(self.parent_app.generator.banks.keys()))
         layout.addWidget(self.bank_combo, row, 1)

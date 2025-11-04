@@ -1,7 +1,9 @@
 import json
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QScrollArea, QWidget, QGroupBox, QFormLayout, QLineEdit, QComboBox, \
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QScrollArea, QWidget, QGroupBox, QFormLayout, QLineEdit, \
     QTextEdit, QHBoxLayout, QLabel, QPushButton, QMessageBox
+
+from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 
 
 class InterfaceConfigDialog(QDialog):
@@ -53,7 +55,7 @@ class InterfaceConfigDialog(QDialog):
         basic_layout.addRow("接口地址:", self.url_edit)
 
         # 请求方式
-        self.method_combo = QComboBox()
+        self.method_combo = NoWheelComboBox()
         self.method_combo.addItems(["GET", "POST", "PUT", "DELETE"])
         self.method_combo.setFixedWidth(120)
         basic_layout.addRow("请求方式:", self.method_combo)
@@ -78,7 +80,7 @@ class InterfaceConfigDialog(QDialog):
         type_label = QLabel("类型:")
         type_label.setFixedWidth(70)
         request_type_row_layout.addWidget(type_label)
-        self.request_type_combo = QComboBox()
+        self.request_type_combo = NoWheelComboBox()
         self.request_type_combo.addItems(["普通", "条件"])
         self.request_type_combo.setFixedWidth(100)
         self.request_type_combo.currentTextChanged.connect(self.on_request_type_changed)
@@ -108,7 +110,7 @@ class InterfaceConfigDialog(QDialog):
         field_label = QLabel("条件字段:")
         field_label.setFixedWidth(60)
         condition_field_layout.addWidget(field_label)
-        self.condition_field_combo = QComboBox()
+        self.condition_field_combo = NoWheelComboBox()
         self.condition_field_combo.setFixedWidth(200)
         condition_field_layout.addWidget(self.condition_field_combo)
         condition_field_layout.addStretch()
