@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import traceback
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QGroupBox,
@@ -1813,7 +1814,6 @@ class ApiToolTab(QWidget):
 
         except Exception as e:
             print(f"处理响应映射失败: {str(e)}")
-            import traceback
             traceback.print_exc()
 
     def extract_value_by_jsonpath(self, data, jsonpath_expr):
@@ -1886,7 +1886,6 @@ class ApiToolTab(QWidget):
 
         except Exception as e:
             print(f"JSONPath提取失败: {jsonpath_expr}, 错误: {str(e)}")
-            import traceback
             traceback.print_exc()
             return None
 
@@ -2597,9 +2596,6 @@ class ApiToolTab(QWidget):
 
     def evaluate_date_expression(self, expression):
         """计算日期表达式 - 增强调试信息"""
-        from datetime import datetime, timedelta
-        import re
-
         try:
             print(f"开始计算日期表达式: {expression}")
 
@@ -2650,7 +2646,6 @@ class ApiToolTab(QWidget):
 
         except Exception as e:
             print(f"日期公式计算详细错误: {str(e)}")
-            import traceback
             traceback.print_exc()
             raise ValueError(f"日期公式计算错误: {str(e)}")
 

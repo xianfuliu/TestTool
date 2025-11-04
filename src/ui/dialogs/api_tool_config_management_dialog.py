@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QGroupBox,
                              QComboBox, QCheckBox, QTextEdit, QMessageBox,
@@ -3401,7 +3402,6 @@ class ConfigManagementDialog(QDialog):
 
     def extract_formula_dependencies(self, formula):
         """提取公式中依赖的变量"""
-        import re
         pattern = r'\{(\w+)\}'
         variables = re.findall(pattern, formula)
         return list(set(variables))  # 去重
