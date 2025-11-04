@@ -251,7 +251,7 @@ class InterfaceConfigDialog(QDialog):
                     self.normal_body_edit.setPlainText(json.dumps(body_template, ensure_ascii=False, indent=2))
                 else:
                     # 设置默认请求体
-                    default_body = {"requestId": "{request_id}"}
+                    default_body = {}
                     self.normal_body_edit.setPlainText(json.dumps(default_body, ensure_ascii=False, indent=2))
 
                 # 设置条件请求体为空
@@ -281,7 +281,7 @@ class InterfaceConfigDialog(QDialog):
             self.url_edit.setText("")
             self.method_combo.setCurrentText("POST")
             self.headers_edit.setPlainText('{"Content-Type": "application/json"}')
-            self.normal_body_edit.setPlainText('{"requestId": "{request_id}"}')
+            self.normal_body_edit.setPlainText('{}')
             self.conditional_cases_edit.setPlainText("")
             self.response_mapping_edit.setPlainText("")
             self.field_types_edit.setPlainText("")

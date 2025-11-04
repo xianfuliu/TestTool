@@ -577,17 +577,6 @@ class ConfigManagementDialog(QDialog):
             self.layout_list.setSelectionMode(QListWidget.SingleSelection)
             self.interface_list.setSelectionMode(QListWidget.SingleSelection)
 
-    def set_group_enabled(self, widget, enabled):
-        """设置控件组的启用状态"""
-        if widget:
-            widget.setEnabled(enabled)
-
-        # 如果控件有子控件，也递归设置
-        if hasattr(widget, 'children'):
-            for child in widget.children():
-                if hasattr(child, 'setEnabled'):
-                    child.setEnabled(enabled)
-
     def set_widgets_enabled(self, widget, enabled, exclude_widgets=None):
         """递归设置widget及其所有子控件的启用状态"""
         if exclude_widgets is None:
@@ -630,23 +619,6 @@ class ConfigManagementDialog(QDialog):
 
         # 更新详情Tab的启用状态（但保持产品下拉框可用）
         self.update_detail_tab_enabled(not is_locked)
-
-    def show_locked_message(self):
-        """显示配置已锁定的提示信息"""
-        if not hasattr(self, 'locked_message_label'):
-            self.locked_message_label = QLabel("🔒 该产品配置已锁定，不可修改")
-            self.locked_message_label.setStyleSheet(
-                "color: red; font-weight: bold; padding: 10px; border: 1px solid red; background-color: #ffeeee;")
-            self.locked_message_label.setAlignment(Qt.AlignCenter)
-            # 插入到布局顶部
-            self.detail_layout.insertWidget(0, self.locked_message_label)
-
-        self.locked_message_label.setVisible(True)
-
-    def hide_locked_message(self):
-        """隐藏锁定提示信息"""
-        if hasattr(self, 'locked_message_label'):
-            self.locked_message_label.setVisible(False)
 
     def load_product_detail_config(self, product_name):
         """加载产品详情配置"""
@@ -1090,13 +1062,7 @@ class ConfigManagementDialog(QDialog):
                     "headers": {
                         "Content-Type": "application/json"
                     },
-                    "body_template": {
-                        "requestId": "{request_id}",
-                        "userInfo": {
-                            "name": "{name}",
-                            "idCard": "{id_card}"
-                        }
-                    }
+                    "body_template": {}
                 }
             }
         }
@@ -3160,9 +3126,7 @@ class ConfigManagementDialog(QDialog):
             "headers": {
                 "Content-Type": "application/json"
             },
-            "body_template": {
-                "requestId": "{request_id}"
-            },
+            "body_template": {},
             "response_mapping": {},
             "field_types": {}
         }
