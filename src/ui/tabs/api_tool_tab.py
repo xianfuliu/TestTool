@@ -874,7 +874,7 @@ class ApiToolTab(QWidget):
         self.combined_layout.addWidget(WidthAwareWidget(main_widget, self))
 
     def adjust_all_elements_width_delayed(self):
-        """延迟调整所有元素的宽度 - 确保控件完全渲染后再调整"""
+        """延迟调整所有元素的宽度 - 修复：添加条件字段显示框的宽度调整"""
         # 调整所有字段输入框的宽度
         for field_key, field_input in self.field_inputs.items():
             text = field_input.text()
@@ -891,6 +891,11 @@ class ApiToolTab(QWidget):
                 widget = item.widget()
                 if isinstance(widget, QPushButton):
                     self.adjust_button_width(widget)
+
+        # 新增：调整所有条件字段显示控件的宽度
+        for condition_key, condition_display in self.condition_displays.items():
+            text = condition_display.text()
+            self.adjust_field_width(condition_display, text)
 
         # 新增：调整所有公式显示控件的宽度
         for formula_key, formula_display in self.formula_displays.items():
@@ -944,7 +949,7 @@ class ApiToolTab(QWidget):
         button.setFixedWidth(new_width)
 
     def adjust_all_elements_width(self):
-        """初始调整所有元素的宽度"""
+        """初始调整所有元素的宽度 - 修复：添加条件字段显示框的宽度调整"""
         # 调整所有字段输入框的宽度
         for field_input in self.field_inputs.values():
             text = field_input.text()
@@ -961,6 +966,11 @@ class ApiToolTab(QWidget):
                 widget = item.widget()
                 if isinstance(widget, QPushButton):
                     self.adjust_button_width(widget)
+
+        # 新增：调整所有条件字段显示控件的宽度
+        for condition_display in self.condition_displays.values():
+            text = condition_display.text()
+            self.adjust_field_width(condition_display, text)
 
         # 新增：调整所有公式显示控件的宽度
         for formula_display in self.formula_displays.values():
@@ -2132,7 +2142,7 @@ class ApiToolTab(QWidget):
         self.force_refresh_request_body()
 
     def update_condition_variables_for_field(self, field_key):
-        """更新依赖于指定字段的条件变量 - 修正：只清空条件字段本身"""
+        """更新依赖于指定字段的条件变量 - 修正：只清空条件字段本身，并调整宽度"""
         if not self.current_product:
             return
 
@@ -2184,6 +2194,8 @@ class ApiToolTab(QWidget):
                     if condition_key in self.condition_displays:
                         display_value = str(variable_value) if variable_value is not None else ""
                         self.condition_displays[condition_key].setText(display_value)
+                        # 新增：调整条件字段显示框的宽度
+                        self.adjust_field_width(self.condition_displays[condition_key], display_value)
                         print(f"更新条件显示 {condition_key}: {old_value} -> {variable_value}")
 
                     # 强制刷新请求体
@@ -2193,13 +2205,15 @@ class ApiToolTab(QWidget):
             print(f"更新条件变量时出错: {str(e)}")
 
     def clear_condition_variable(self, condition_key):
-        """清空条件变量 - 只清空条件字段本身"""
+        """清空条件变量 - 只清空条件字段本身，并调整宽度"""
         old_value = self.variable_pool.get(condition_key, "未设置")
         self.variable_pool[condition_key] = ""
 
         # 更新UI显示
         if condition_key in self.condition_displays:
             self.condition_displays[condition_key].setText("")
+            # 新增：调整条件字段显示框的宽度
+            self.adjust_field_width(self.condition_displays[condition_key], "")
             print(f"清空条件变量 {condition_key}: {old_value} -> ''")
 
         # 强制刷新请求体
