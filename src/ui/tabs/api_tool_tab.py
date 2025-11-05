@@ -459,7 +459,7 @@ class ApiToolTab(QWidget):
         self.update_request_id_and_reset_fields()
 
     def on_product_changed(self, product_name, initial_load=False):
-        """首页产品切换事件 - 修复：切换产品时自动生成测试数据"""
+        """首页产品切换事件 - 修复：切换产品时清空相关变量池"""
         if not product_name or product_name == "无可用产品":
             return
 
@@ -467,6 +467,9 @@ class ApiToolTab(QWidget):
         if product_name not in self.api_config.get("products", {}):
             QMessageBox.warning(self, "错误", f"产品 '{product_name}' 不存在于配置中")
             return
+
+        # 清空当前产品的条件字段变量池
+        self.clear_product_variable_pool()
 
         self.current_product = product_name
         # 重置当前接口
@@ -484,6 +487,46 @@ class ApiToolTab(QWidget):
 
         # 无论是初始加载还是切换产品，都更新流水并生成测试数据
         self.update_request_id_and_reset_fields()
+
+    def clear_product_variable_pool(self):
+        """清空当前产品的条件字段变量池"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 清空所有条件字段的变量池
+            for item in layout_config:
+                if item.get("type") == "condition":
+                    condition_key = item.get("key")
+                    if condition_key in self.variable_pool:
+                        old_value = self.variable_pool[condition_key]
+                        self.variable_pool[condition_key] = ""
+                        print(f"清空条件变量池: {condition_key} (原值: {old_value})")
+
+                        # 同时清空显示控件
+                        if condition_key in self.condition_displays:
+                            self.condition_displays[condition_key].setText("")
+                            self.adjust_field_width(self.condition_displays[condition_key], "")
+
+            # 清空所有公式字段的变量池
+            for item in layout_config:
+                if item.get("type") == "formula":
+                    formula_key = item.get("key")
+                    if formula_key in self.variable_pool:
+                        old_value = self.variable_pool[formula_key]
+                        self.variable_pool[formula_key] = ""
+                        print(f"清空公式变量池: {formula_key} (原值: {old_value})")
+
+                        # 同时清空显示控件
+                        if formula_key in self.formula_displays:
+                            self.formula_displays[formula_key].setText("")
+                            self.adjust_field_width(self.formula_displays[formula_key], "")
+
+        except Exception as e:
+            print(f"清空产品变量池时出错: {str(e)}")
 
     def clear_right_panel(self):
         """清空右侧面板内容"""
@@ -1117,8 +1160,69 @@ class ApiToolTab(QWidget):
         # 自动填充到使用这些变量的字段输入框（始终覆盖）
         self.auto_fill_sql_variables_to_fields(sql_name, first_record)
 
+        # 新增：立即刷新所有条件字段的显示
+        self.refresh_all_condition_displays()
+
         # 修复：无论是否勾选发送请求，都强制刷新请求体
         self.force_refresh_request_body()
+
+    def refresh_all_condition_displays(self):
+        """刷新所有条件字段和公式字段的显示 - 从变量池获取最新值"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 刷新条件字段
+            for item in layout_config:
+                if item.get("type") == "condition":
+                    condition_key = item.get("key")
+                    # 获取条件变量的最新值
+                    condition_value = self.get_condition_variable_value(condition_key)
+
+                    # 更新显示控件
+                    if condition_key in self.condition_displays:
+                        display_value = str(condition_value) if condition_value is not None else ""
+                        current_display = self.condition_displays[condition_key].text()
+
+                        # 只有当值发生变化时才更新显示
+                        if display_value != current_display:
+                            self.condition_displays[condition_key].setText(display_value)
+                            # 调整宽度
+                            self.adjust_field_width(self.condition_displays[condition_key], display_value)
+                            print(f"刷新条件字段显示: {condition_key} = {display_value} (原值: {current_display})")
+
+                            # 新增：刷新依赖此条件字段的公式
+                            self.refresh_formulas_dependent_on_condition(condition_key)
+
+        except Exception as e:
+            print(f"刷新条件字段显示时出错: {str(e)}")
+
+    def refresh_formulas_dependent_on_condition(self, condition_key):
+        """刷新依赖指定条件字段的所有公式"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 查找所有公式字段
+            for item in layout_config:
+                if item.get("type") == "formula":
+                    formula_key = item.get("key")
+                    formula_config = self.formula_configs.get(formula_key, {})
+
+                    # 检查公式是否依赖这个条件字段
+                    dependencies = formula_config.get("dependencies", [])
+                    if condition_key in dependencies:
+                        print(f"条件字段 {condition_key} 变化，重新计算公式 {formula_key}")
+                        self.calculate_formula(formula_key)
+
+        except Exception as e:
+            print(f"刷新依赖条件字段的公式时出错: {str(e)}")
 
     def auto_fill_sql_variables_to_fields(self, sql_name, sql_result):
         """将SQL输出结果自动填充到使用这些变量的字段输入框 - 始终覆盖为最新值"""
@@ -1809,12 +1913,36 @@ class ApiToolTab(QWidget):
                     print(
                         f"从响应中提取字段 '{field_key}': '{old_value}' -> '{value}' (路径: {processed_response_path})")
 
+            # 新增：接口查询后立即刷新所有条件字段和依赖的公式字段
+            self.refresh_all_condition_displays()
+
             # 修复：无论是否勾选发送请求，都强制刷新请求体
             self.force_refresh_request_body()
+
+            self.refresh_all_formulas()
 
         except Exception as e:
             print(f"处理响应映射失败: {str(e)}")
             traceback.print_exc()
+
+    def refresh_all_formulas(self):
+        """刷新所有公式字段的值"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 查找所有公式字段并重新计算
+            for item in layout_config:
+                if item.get("type") == "formula":
+                    formula_key = item.get("key")
+                    print(f"主动刷新公式字段: {formula_key}")
+                    self.calculate_formula(formula_key)
+
+        except Exception as e:
+            print(f"刷新所有公式字段时出错: {str(e)}")
 
     def extract_value_by_jsonpath(self, data, jsonpath_expr):
         """使用JSONPath从数据中提取值 - 支持任意深度嵌套"""
@@ -2069,12 +2197,45 @@ class ApiToolTab(QWidget):
     def on_config_saved(self, message):
         """配置保存成功的回调 - 修复：保存后刷新界面并生成测试数据"""
         Toast.success(self, message)
+
+        # 清空所有产品的变量池
+        self.clear_all_variable_pools()
+
         # 刷新界面
         self.refresh_ui()
 
         # 如果当前有产品，重新生成测试数据
         if self.current_product:
             self.update_request_id_and_reset_fields()
+
+    def clear_all_variable_pools(self):
+        """清空所有产品的变量池"""
+        print("清空所有产品的变量池")
+
+        # 清空基础变量池
+        self.variable_pool.clear()
+
+        # 重新初始化基础变量
+        self.init_variable_pool()
+
+        # 清空所有字段输入框
+        for field_input in self.field_inputs.values():
+            field_input.clear()
+
+        # 清空所有下拉框（重置为第一个选项）
+        for combo_box in self.combo_boxes.values():
+            if combo_box.count() > 0:
+                combo_box.setCurrentIndex(0)
+
+        # 清空所有条件字段显示
+        for condition_display in self.condition_displays.values():
+            condition_display.clear()
+
+        # 清空所有公式字段显示
+        for formula_display in self.formula_displays.values():
+            formula_display.clear()
+
+        print("所有变量池已清空")
 
     def refresh_all_fields_from_variable_pool(self):
         """从变量池强制刷新所有字段的值"""
@@ -2200,8 +2361,35 @@ class ApiToolTab(QWidget):
                     # 强制刷新请求体
                     self.force_refresh_request_body()
 
+                    # 新增：条件字段更新后，刷新所有依赖此条件字段的公式
+                    self.refresh_formulas_dependent_on_condition(condition_key)
+
         except Exception as e:
             print(f"更新条件变量时出错: {str(e)}")
+
+    def refresh_formulas_dependent_on_condition(self, condition_key):
+        """刷新依赖指定条件字段的所有公式"""
+        if not self.current_product:
+            return
+
+        try:
+            product_config = self.api_config["products"][self.current_product]
+            layout_config = product_config.get("layout", [])
+
+            # 查找所有公式字段
+            for item in layout_config:
+                if item.get("type") == "formula":
+                    formula_key = item.get("key")
+                    formula_config = self.formula_configs.get(formula_key, {})
+
+                    # 检查公式是否依赖这个条件字段
+                    dependencies = formula_config.get("dependencies", [])
+                    if condition_key in dependencies:
+                        print(f"条件字段 {condition_key} 变化，重新计算公式 {formula_key}")
+                        self.calculate_formula(formula_key)
+
+        except Exception as e:
+            print(f"刷新依赖条件字段的公式时出错: {str(e)}")
 
     def clear_condition_variable(self, condition_key):
         """清空条件变量 - 只清空条件字段本身，并调整宽度"""
@@ -2217,6 +2405,9 @@ class ApiToolTab(QWidget):
 
         # 强制刷新请求体
         self.force_refresh_request_body()
+
+        # 新增：清空条件字段后，也刷新依赖的公式
+        self.refresh_formulas_dependent_on_condition(condition_key)
 
     def update_request_id_and_reset_fields(self):
         """更新请求流水号并重置字段 - 修复：确保刷新当前接口"""
@@ -2250,6 +2441,9 @@ class ApiToolTab(QWidget):
 
             # 重置所有字段：清空无默认值的字段，有默认值的设置为默认值
             self.reset_all_fields(test_data)
+
+            # 清空当前产品的条件字段变量池
+            self.clear_product_variable_pool()
 
         # 修复：无论是否有当前接口，都强制刷新请求体
         self.force_refresh_request_body()
@@ -2517,7 +2711,7 @@ class ApiToolTab(QWidget):
         return list(set(variables))  # 去重
 
     def calculate_formula(self, formula_key):
-        """计算公式的值 - 修复：处理依赖变量为空的情况"""
+        """计算公式的值 - 修复：处理依赖变量为空的情况，并支持条件字段"""
         if formula_key not in self.formula_configs:
             return
 
@@ -2531,14 +2725,31 @@ class ApiToolTab(QWidget):
         missing_dependencies = []
 
         for var in dependencies:
+            # 首先从变量池获取
             if var in self.variable_pool:
                 value = self.variable_pool[var]
                 if value is None or value == "":
-                    missing_dependencies.append(var)
+                    # 如果变量池中没有，检查是否是条件字段
+                    condition_value = self.get_condition_variable_value(var)
+                    if condition_value is not None:
+                        value = condition_value
+                        # 将条件字段的值也更新到变量池中
+                        self.variable_pool[var] = value
+                        print(f"从条件字段获取变量 {var} 的值: {value}")
+                    else:
+                        missing_dependencies.append(var)
                 else:
                     values[var] = value
             else:
-                missing_dependencies.append(var)
+                # 变量池中没有，检查是否是条件字段
+                condition_value = self.get_condition_variable_value(var)
+                if condition_value is not None:
+                    values[var] = condition_value
+                    # 将条件字段的值也更新到变量池中
+                    self.variable_pool[var] = condition_value
+                    print(f"从条件字段获取变量 {var} 的值: {condition_value}")
+                else:
+                    missing_dependencies.append(var)
 
         # 如果有缺失的依赖变量，设置公式值为空
         if missing_dependencies:
@@ -2553,6 +2764,7 @@ class ApiToolTab(QWidget):
                 expression = expression.replace("{" + var + "}", str(val))
 
             print(f"计算公式 '{formula_key}': {expression} (类型: {formula_type})")
+            print(f"公式依赖变量值: {values}")
 
             # 根据公式类型计算公式结果
             if formula_type == "date":
@@ -2649,20 +2861,6 @@ class ApiToolTab(QWidget):
             traceback.print_exc()
             raise ValueError(f"日期公式计算错误: {str(e)}")
 
-    def evaluate_numeric_expression(self, expression):
-        """计算数字表达式"""
-        # 安全地计算数学表达式
-        allowed_chars = set('0123456789+-*/().% ')
-        if not all(c in allowed_chars for c in expression):
-            raise ValueError("表达式包含非法字符")
-
-        # 替换百分比符号
-        expression = expression.replace('%', '/100')
-
-        # 使用 eval 计算（在生产环境中应考虑更安全的替代方案）
-        result = eval(expression)
-        return round(result, 2)  # 保留2位小数
-
     def set_formula_value(self, formula_key, value):
         """设置公式变量的值并更新显示"""
         self.variable_pool[formula_key] = value
@@ -2674,3 +2872,6 @@ class ApiToolTab(QWidget):
         for formula_key, formula_config in self.formula_configs.items():
             if variable_key in formula_config["dependencies"]:
                 self.calculate_formula(formula_key)
+
+        # 同时检查这个变量是否是条件字段的条件字段，如果是，也需要更新相关的条件变量显示
+        self.update_condition_variables_for_field(variable_key)

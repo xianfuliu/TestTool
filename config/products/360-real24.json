@@ -306,13 +306,13 @@
       "type": "interface"
     },
     {
-      "data_type": "string",
-      "default": "",
+      "formula": "{loanTime}-{pre_repay_date}",
+      "formula_type": "date",
       "key": "executeBizDate",
       "label": "操作天数",
       "priority": 33,
       "show_in_ui": true,
-      "type": "field"
+      "type": "formula"
     },
     {
       "name": "修改蓝海还款计划",
@@ -323,17 +323,29 @@
       "data_type": "string",
       "default": "",
       "key": "repayAmt",
-      "label": "还款金额",
+      "label": "当期还款金额",
       "priority": 35,
       "show_in_ui": true,
       "type": "field"
     },
     {
+      "condition_field": "repayType",
+      "key": "repayPrinAmt",
+      "label": "蓝海还款本金",
+      "mappings": {
+        "1": "prinAmt",
+        "2": "before_calc_principal"
+      },
+      "priority": 36,
+      "show_in_ui": true,
+      "type": "condition"
+    },
+    {
       "data_type": "string",
       "default": "",
       "key": "prinAmt",
-      "label": "本金",
-      "priority": 36,
+      "label": "蓝海按期本金",
+      "priority": 37,
       "show_in_ui": true,
       "type": "field"
     },
@@ -341,16 +353,7 @@
       "data_type": "string",
       "default": "",
       "key": "intAmt",
-      "label": "利息",
-      "priority": 37,
-      "show_in_ui": true,
-      "type": "field"
-    },
-    {
-      "data_type": "string",
-      "default": "0",
-      "key": "ointAmt",
-      "label": "罚息",
+      "label": "蓝海利息",
       "priority": 38,
       "show_in_ui": true,
       "type": "field"
@@ -358,18 +361,66 @@
     {
       "data_type": "string",
       "default": "",
-      "key": "pre_repay_date",
-      "label": "应还日期",
+      "key": "ointAmt",
+      "label": "蓝海罚息",
       "priority": 39,
       "show_in_ui": true,
       "type": "field"
     },
     {
+      "formula": "{repayPrinAmt}+{intAmt}+{intAmt}*0.06+{ointAmt}+{ointAmt}*0.03",
+      "formula_type": "numeric",
+      "key": "qifuRepayAmt",
+      "label": "奇富还款金额",
+      "priority": 40,
+      "show_in_ui": true,
+      "type": "formula"
+    },
+    {
+      "condition_field": "repayType",
+      "key": "qifuPrinAmt",
+      "label": "奇富本金",
+      "mappings": {
+        "1": "prinAmt",
+        "2": "before_calc_principal"
+      },
+      "priority": 41,
+      "show_in_ui": true,
+      "type": "condition"
+    },
+    {
+      "formula": "{intAmt}*0.06+{intAmt}",
+      "formula_type": "numeric",
+      "key": "qifuIntAmt",
+      "label": "奇富利息",
+      "priority": 42,
+      "show_in_ui": true,
+      "type": "formula"
+    },
+    {
+      "formula": "{ointAmt}*0.03+{ointAmt}",
+      "formula_type": "numeric",
+      "key": "qifuOintAmt",
+      "label": "奇富罚息",
+      "priority": 43,
+      "show_in_ui": true,
+      "type": "formula"
+    },
+    {
       "data_type": "string",
-      "default": "0",
+      "default": "",
+      "key": "pre_repay_date",
+      "label": "应还日期",
+      "priority": 44,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
       "key": "before_calc_principal",
       "label": "当前剩余本金",
-      "priority": 40,
+      "priority": 45,
       "show_in_ui": true,
       "type": "field"
     },
@@ -388,18 +439,18 @@
           "value": "ALIPAY"
         }
       ],
-      "priority": 41,
+      "priority": 46,
       "show_in_ui": true,
       "type": "combo"
     },
     {
       "name": "还款申请",
-      "priority": 42,
+      "priority": 47,
       "type": "interface"
     },
     {
       "name": "还款结果查询",
-      "priority": 43,
+      "priority": 48,
       "type": "interface"
     }
   ],
@@ -486,7 +537,7 @@
         "cases": {
           "ALIPAY": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"N\",\"rpySource\":\"1\",\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"{ointAmt}\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"N\",\"rpySource\":\"1\",\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{qifuRepayAmt}\",\"intAmt\":\"{qifuIntAmt}\",\"ointAmt\":\"{qifuOintAmt}\",\"prinAmt\":\"{repayPrinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
               "partner": "{partner}",
               "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
               "requestTime": "1775531455763",
@@ -499,7 +550,7 @@
           },
           "BANK": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"baofu\",\"channelSignNo\":\"1202508252020052770017382282\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{repayAmt}\",\"intAmt\":\"{intAmt}\",\"ointAmt\":\"{ointAmt}\",\"prinAmt\":\"{prinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"baofu\",\"channelSignNo\":\"1202508252020052770017382282\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{qifuRepayAmt}\",\"intAmt\":\"{qifuIntAmt}\",\"ointAmt\":\"{qifuOintAmt}\",\"prinAmt\":\"{repayPrinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"0\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"ALL\",\"paymentType\":\"{paymentType}\"}",
               "partner": "{partner}",
               "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
               "requestTime": "1775531455763",
