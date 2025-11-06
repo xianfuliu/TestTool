@@ -482,6 +482,36 @@
       "name": "还款结果查询",
       "priority": 49,
       "type": "interface"
+    },
+    {
+      "condition_field": "channelCode",
+      "key": "channelSignNo",
+      "label": "商户号",
+      "mappings": {
+        "baofu": "baofuChannelSignNo",
+        "yeepay": "yeepayChannelSignNo"
+      },
+      "priority": 50,
+      "show_in_ui": false,
+      "type": "condition"
+    },
+    {
+      "data_type": "string",
+      "default": "1202508252020052770017382282",
+      "key": "baofuChannelSignNo",
+      "label": "宝付商户号",
+      "priority": 51,
+      "show_in_ui": false,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "2547288",
+      "key": "yeepayChannelSignNo",
+      "label": "易宝商户号",
+      "priority": 52,
+      "show_in_ui": false,
+      "type": "field"
     }
   ],
   "interfaces": {
@@ -565,9 +595,9 @@
     "还款申请": {
       "conditional_body": {
         "cases": {
-          "baofu": {
+          "1": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"1202508252020052770017382282\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{qifuRepayAmt}\",\"intAmt\":\"{qifuIntAmt}\",\"ointAmt\":\"{qifuOintAmt}\",\"prinAmt\":\"{repayPrinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"{serviceFeeAmt}\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"{serviceFeeRpyFlag}\",\"paymentType\":\"{paymentType}\"}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{qifuRepayAmt}\",\"intAmt\":\"{qifuIntAmt}\",\"ointAmt\":\"{qifuOintAmt}\",\"prinAmt\":\"{repayPrinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"{serviceFeeAmt}\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"{serviceFeeRpyFlag}\",\"paymentType\":\"{paymentType}\"}",
               "partner": "{partner}",
               "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
               "requestTime": "1775531455763",
@@ -578,9 +608,22 @@
             "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
             "userId": null
           },
-          "yeepay": {
+          "2": {
             "businessRequest": {
-              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"2547288\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{qifuRepayAmt}\",\"intAmt\":\"{qifuIntAmt}\",\"ointAmt\":\"{qifuOintAmt}\",\"prinAmt\":\"{repayPrinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"200.00\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"{serviceFeeRpyFlag}\",\"paymentType\":\"{paymentType}\"}",
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{qifuRepayAmt}\",\"intAmt\":\"{qifuIntAmt}\",\"ointAmt\":\"{qifuOintAmt}\",\"prinAmt\":\"{repayPrinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"{serviceFeeAmt}\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"{serviceFeeRpyFlag}\",\"paymentType\":\"{paymentType}\"}",
+              "partner": "{partner}",
+              "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
+              "requestTime": "1775531455763",
+              "version": "1"
+            },
+            "method": "applyRepayment",
+            "productForm": "support",
+            "url": "https://xj-api-test.hqrzdb.com/stage-api/qfin/api",
+            "userId": null
+          },
+          "3": {
+            "businessRequest": {
+              "input": "{\"userId\":\"SUR{request_id}\",\"repayApplyNo\":\"SRA{request_id}{repay_num}\",\"loanApplyNo\":\"SLN{request_id}{loan_num}\",\"partnerLoanNo\":\"{partnerLoanNo}\",\"repayType\":\"{repayType}\",\"rpyTerm\":\"{rpyTerm}\",\"repayTime\":\"{loanTime}{time}\",\"withholdFlag\":\"Y\",\"rpySource\":\"1\",\"withholdInfo\":{\"channelCode\":\"{channelCode}\",\"channelSignNo\":\"{channelSignNo}\"},\"bankCardInfo\":{\"bankCode\":\"0005\",\"idCardNo\":\"{id_card}\",\"userMobile\":\"{phone}\",\"userName\":\"{name}\",\"bankCardNo\":\"{bank_card_no}\"},\"repayAmt\":\"{qifuRepayAmt}\",\"intAmt\":\"{qifuIntAmt}\",\"ointAmt\":\"{qifuOintAmt}\",\"prinAmt\":\"{repayPrinAmt}\",\"couponDeductAmt\":\"0\",\"otherAmt\":\"0\",\"redLineDeductAmt\":\"0\",\"serviceFee\":{\"serviceFeeAmt\":\"{serviceFeeAmt}\",\"serviceDeductAmt\":\"0\"},\"serviceFeeRpyFlag\":\"{serviceFeeRpyFlag}\",\"paymentType\":\"{paymentType}\"}",
               "partner": "{partner}",
               "requestNo": "18cea17d-54cb-4caa-8a05-86f31cd77c18",
               "requestTime": "1775531455763",
@@ -592,7 +635,7 @@
             "userId": null
           }
         },
-        "field": "channelCode"
+        "field": "repayType"
       },
       "field_types": {},
       "headers": {

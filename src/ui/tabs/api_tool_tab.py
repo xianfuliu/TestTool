@@ -1034,6 +1034,9 @@ class ApiToolTab(QWidget):
         product_config = self.api_config["products"][self.current_product]
         interface_config = product_config["interfaces"][interface_name]
 
+        # 在生成请求体之前，先强制刷新所有条件字段的值
+        self.refresh_all_condition_displays()
+
         # 更新 URL 输入框（并进行变量替换）
         original_url = interface_config["url"]
         replaced_url = self.replace_variables_in_string(original_url)
@@ -1181,6 +1184,10 @@ class ApiToolTab(QWidget):
                     condition_key = item.get("key")
                     # 获取条件变量的最新值
                     condition_value = self.get_condition_variable_value(condition_key)
+
+                    # 更新变量池（确保条件变量在变量池中是最新的）
+                    old_value = self.variable_pool.get(condition_key, "未设置")
+                    self.variable_pool[condition_key] = condition_value if condition_value is not None else ""
 
                     # 更新显示控件
                     if condition_key in self.condition_displays:
@@ -1342,6 +1349,9 @@ class ApiToolTab(QWidget):
 
     def generate_request_body(self, interface_config):
         """生成请求体 - 支持类型转换、条件模板和变量池"""
+        # 在生成请求体之前，先强制更新所有条件字段的值
+        self.refresh_all_condition_displays()
+
         # 检查是否存在条件模板
         if "conditional_body" in interface_config:
             body_template = self.process_conditional_body(interface_config["conditional_body"])
