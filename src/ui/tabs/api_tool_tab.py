@@ -3,13 +3,13 @@ import json
 import re
 import traceback
 from datetime import datetime
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QLineEdit, QPushButton, QGroupBox,
-                             QCheckBox, QTextEdit, QMessageBox, QSplitter, QScrollArea, QSizePolicy)
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
-
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
+                             QLabel, QLineEdit, QPushButton, QGroupBox,
+                             QCheckBox, QTextEdit, QMessageBox, QSplitter, QScrollArea, QSizePolicy,
+                             QShortcut)
+from PyQt5.QtGui import QFont, QKeySequence, QTextCursor, QTextCharFormat, QColor
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.ui.widgets.width_aware import WidthAwareWidget
@@ -313,6 +313,9 @@ class ApiToolTab(QWidget):
         splitter.setSizes([500, 400])  # 左侧500，右侧400
         main_layout.addWidget(splitter, 1)
 
+        # 添加搜索功能
+        self.setup_search_functionality()
+
     def create_global_config_panel(self):
         """创建全局配置面板"""
         panel = QGroupBox("全局配置")
@@ -417,22 +420,36 @@ class ApiToolTab(QWidget):
         panel = QGroupBox("请求信息")
         layout = QVBoxLayout()
 
-        # URL 输入框（原来显示为标签）
+        # URL 输入框
         url_layout = QHBoxLayout()
         url_layout.addWidget(QLabel("URL:"))
-        self.url_input = QLineEdit()  # 改为输入框
+        self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("请输入请求URL或从左侧选择接口自动填充")
         self.url_input.setStyleSheet("color: blue; font-weight: bold; font-size: 14px;")
         url_layout.addWidget(self.url_input, 1)
         layout.addLayout(url_layout)
 
         # 请求体编辑
-        layout.addWidget(QLabel("请求体:"))
+        request_layout = QVBoxLayout()
+        request_header_layout = QHBoxLayout()
+        request_header_layout.addWidget(QLabel("请求体:"))
+        request_header_layout.addStretch()
+        request_layout.addLayout(request_header_layout)
+
+        # 请求体编辑框容器
+        self.request_body_container = QWidget()
+        request_body_container_layout = QVBoxLayout(self.request_body_container)
+        request_body_container_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 创建请求体编辑框
         self.request_body_edit = QTextEdit()
         self.request_body_edit.setPlaceholderText("请求体将在这里生成...")
         # 设置更大的默认字体
         self.request_body_edit.setFont(QFont("Consolas", 12))
-        layout.addWidget(self.request_body_edit, 2)
+        request_body_container_layout.addWidget(self.request_body_edit)
+
+        request_layout.addWidget(self.request_body_container)
+        layout.addLayout(request_layout)
 
         # 手动请求按钮
         self.manual_request_btn = QPushButton("发送请求")
@@ -441,13 +458,30 @@ class ApiToolTab(QWidget):
         layout.addWidget(self.manual_request_btn)
 
         # 响应体显示
-        layout.addWidget(QLabel("响应体:"))
+        response_layout = QVBoxLayout()
+        response_header_layout = QHBoxLayout()
+        response_header_layout.addWidget(QLabel("响应体:"))
+        response_header_layout.addStretch()
+        response_layout.addLayout(response_header_layout)
+
+        # 响应体编辑框容器
+        self.response_body_container = QWidget()
+        response_body_container_layout = QVBoxLayout(self.response_body_container)
+        response_body_container_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 创建响应体编辑框
         self.response_body_edit = QTextEdit()
         self.response_body_edit.setPlaceholderText("响应内容将显示在这里...")
         # 设置更大的默认字体
         self.response_body_edit.setFont(QFont("Consolas", 12))
         self.response_body_edit.setReadOnly(True)
-        layout.addWidget(self.response_body_edit, 3)
+        response_body_container_layout.addWidget(self.response_body_edit)
+
+        response_layout.addWidget(self.response_body_container)
+        layout.addLayout(response_layout)
+
+        # 创建搜索框（在文本编辑器之后创建）
+        self.create_search_boxes()
 
         panel.setLayout(layout)
         return panel
@@ -2242,10 +2276,9 @@ class ApiToolTab(QWidget):
         self.loading_svg.move(x, y)
 
     def resizeEvent(self, event):
-        """重写resizeEvent以确保SVG在按钮中居中"""
+        """重写resizeEvent以确保搜索框在正确位置"""
         super().resizeEvent(event)
-        if hasattr(self, 'loading_svg') and self.loading_svg.isVisible():
-            self.center_svg_in_button()
+        self.update_search_box_positions()
 
     def refresh_ui(self):
         """刷新界面"""
@@ -2964,3 +2997,275 @@ class ApiToolTab(QWidget):
 
         # 同时检查这个变量是否是条件字段的条件字段，如果是，也需要更新相关的条件变量显示
         self.update_condition_variables_for_field(variable_key)
+
+    def setup_search_functionality(self):
+        """为请求体和响应体设置搜索功能 - 修复版：只搜索可见文本"""
+        # 为整个窗口设置搜索快捷键
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.activated.connect(self.handle_global_search)
+
+        # 为搜索框设置ESC快捷键
+        self.escape_shortcut = QShortcut(QKeySequence("Esc"), self)
+        self.escape_shortcut.activated.connect(self.hide_all_search_boxes)
+
+        # 连接搜索框的回车事件
+        self.request_search_input.returnPressed.connect(
+            lambda: self.handle_search_enter(self.request_body_edit, self.request_search_input)
+        )
+        self.response_search_input.returnPressed.connect(
+            lambda: self.handle_search_enter(self.response_body_edit, self.response_search_input)
+        )
+
+        # 连接关闭按钮事件
+        self.request_search_close_btn.clicked.connect(
+            lambda: self.hide_search_box(self.request_search_widget)
+        )
+        self.response_search_close_btn.clicked.connect(
+            lambda: self.hide_search_box(self.response_search_widget)
+        )
+
+        # 存储搜索状态
+        self.current_search_text = ""
+        self.current_search_widget = None
+        self.search_positions = {}
+        self.current_highlights = []
+
+    def show_search_box(self, search_input, close_btn):
+        """显示搜索框"""
+        search_input.setVisible(True)
+        close_btn.setVisible(True)
+        search_input.setFocus()
+        search_input.selectAll()
+
+    def hide_search_box(self, search_widget):
+        """隐藏搜索框 - 修复版"""
+        if search_widget == self.request_search_widget:
+            self.request_search_widget.setVisible(False)
+            self.request_search_input.clear()
+            self.clear_highlight(self.request_body_edit)
+        elif search_widget == self.response_search_widget:
+            self.response_search_widget.setVisible(False)
+            self.response_search_input.clear()
+            self.clear_highlight(self.response_body_edit)
+
+    def clear_highlight(self, text_edit):
+        """清除文本高亮 - 修复版"""
+        # 清除ExtraSelection高亮
+        text_edit.setExtraSelections([])
+        self.current_highlights = []
+
+    def handle_global_search(self):
+        """处理全局搜索 - 显示对应编辑框的搜索框"""
+        focused_widget = self.focusWidget()
+
+        # 先隐藏所有搜索框
+        self.hide_all_search_boxes()
+
+        if focused_widget == self.request_body_edit:
+            self.show_search_box(self.request_search_widget, self.request_search_input, self.request_search_close_btn)
+        elif focused_widget == self.response_body_edit:
+            self.show_search_box(self.response_search_widget, self.response_search_input,
+                                 self.response_search_close_btn)
+        else:
+            # 默认使用响应体
+            self.response_body_edit.setFocus()
+            self.show_search_box(self.response_search_widget, self.response_search_input,
+                                 self.response_search_close_btn)
+
+    def show_search_box(self, search_widget, search_input, close_btn):
+        """显示搜索框"""
+        # 更新位置
+        self.update_search_box_positions()
+
+        search_widget.setVisible(True)
+        search_input.setVisible(True)
+        close_btn.setVisible(True)
+        search_input.setFocus()
+        search_input.selectAll()
+
+    def hide_all_search_boxes(self):
+        """隐藏所有搜索框 - 修复版"""
+        self.hide_search_box(self.request_search_widget)
+        self.hide_search_box(self.response_search_widget)
+
+    def handle_search_enter(self, text_edit, search_input):
+        """处理搜索框回车事件 - 修复版：只搜索纯文本内容"""
+        search_text = search_input.text().strip()
+        if not search_text:
+            return
+
+        # 清除之前的高亮
+        self.clear_highlight(text_edit)
+
+        # 使用纯文本进行搜索和高亮
+        self.highlight_plain_text(text_edit, search_text)
+
+        # 执行搜索
+        if not self.find_plain_text(text_edit, search_text):
+            # 如果没找到，从开头重新开始
+            cursor = text_edit.textCursor()
+            cursor.movePosition(QTextCursor.Start)
+            text_edit.setTextCursor(cursor)
+            self.find_plain_text(text_edit, search_text)
+
+    def find_plain_text(self, text_edit, search_text):
+        """在纯文本中查找 - 修复版"""
+        if not search_text:
+            return False
+
+        # 获取文档和当前光标位置
+        document = text_edit.document()
+        cursor = text_edit.textCursor()
+
+        # 从当前光标位置开始搜索（搜索纯文本）
+        found_cursor = document.find(search_text, cursor)
+
+        if found_cursor.isNull():
+            # 如果没找到，从文档开头重新搜索
+            cursor = QTextCursor(document)
+            found_cursor = document.find(search_text, cursor)
+
+        if not found_cursor.isNull():
+            text_edit.setTextCursor(found_cursor)
+
+            # 确保选中的文本可见
+            text_edit.ensureCursorVisible()
+
+            return True
+
+        return False
+
+    def highlight_plain_text(self, text_edit, search_text):
+        """高亮纯文本内容 - 修复版：不处理HTML标签"""
+        if not search_text:
+            return
+
+        # 获取纯文本内容（不包含HTML标签）
+        plain_text = text_edit.toPlainText()
+
+        # 使用QTextDocument.find在纯文本中查找
+        document = text_edit.document()
+        cursor = QTextCursor(document)
+
+        # 设置高亮格式 - 使用半透明黄色背景
+        highlight_format = QTextCharFormat()
+        highlight_format.setBackground(QColor(255, 255, 0, 100))  # 半透明黄色
+
+        highlights = []
+
+        # 查找所有匹配项
+        while True:
+            cursor = document.find(search_text, cursor)
+            if cursor.isNull():
+                break
+
+            # 创建高亮选择
+            highlight = QTextEdit.ExtraSelection()
+            highlight.cursor = QTextCursor(cursor)  # 创建副本
+            highlight.format = highlight_format
+            highlights.append(highlight)
+
+        # 应用高亮
+        text_edit.setExtraSelections(highlights)
+        self.current_highlights = highlights
+
+
+    def create_search_boxes(self):
+        """创建搜索框 - 修复版：优化搜索提示"""
+        # 请求体搜索框
+        self.request_search_widget = QWidget(self.request_body_container)
+        self.request_search_widget.setFixedHeight(50)
+        self.request_search_layout = QHBoxLayout(self.request_search_widget)
+        self.request_search_layout.setContentsMargins(0, 0, 0, 0)
+        self.request_search_layout.setAlignment(Qt.AlignRight | Qt.AlignTop)
+
+        self.request_search_input = QLineEdit()
+        self.request_search_input.setPlaceholderText("搜索...")
+        self.request_search_input.setFixedWidth(150)  # 稍微加宽以显示完整提示
+
+        self.request_search_close_btn = QPushButton("×")  # 使用乘号，更美观
+        self.request_search_close_btn.setFixedSize(20, 20)
+        self.request_search_close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #fef2f2;
+                border: 1px solid #fecaca;
+                border-radius: 12px;
+                font-weight: bold;
+                color: #dc2626;
+                font-size: 14px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #fee2e2;
+                border: 1px solid #fca5a5;
+                color: #b91c1c;
+            }
+            QPushButton:pressed {
+                background-color: #fecaca;
+                border: 1px solid #ef4444;
+                color: #991b1b;
+            }
+        """)
+
+        self.request_search_layout.addWidget(self.request_search_input)
+        self.request_search_layout.addWidget(self.request_search_close_btn)
+
+        # 响应体搜索框
+        self.response_search_widget = QWidget(self.response_body_container)
+        self.response_search_widget.setFixedHeight(50)
+        self.response_search_layout = QHBoxLayout(self.response_search_widget)
+        self.response_search_layout.setContentsMargins(0, 0, 0, 0)
+        self.response_search_layout.setAlignment(Qt.AlignRight | Qt.AlignTop)
+
+        self.response_search_input = QLineEdit()
+        self.response_search_input.setPlaceholderText("搜索...")
+        self.response_search_input.setFixedWidth(150)
+
+        self.response_search_close_btn = QPushButton("×")
+        self.response_search_close_btn.setFixedSize(20, 20)
+        self.response_search_close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #fef2f2;
+                border: 1px solid #fecaca;
+                border-radius: 12px;
+                font-weight: bold;
+                color: #dc2626;
+                font-size: 14px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: #fee2e2;
+                border: 1px solid #fca5a5;
+                color: #b91c1c;
+            }
+            QPushButton:pressed {
+                background-color: #fecaca;
+                border: 1px solid #ef4444;
+                color: #991b1b;
+            }
+        """)
+
+        self.response_search_layout.addWidget(self.response_search_input)
+        self.response_search_layout.addWidget(self.response_search_close_btn)
+
+        # 初始隐藏搜索框
+        self.hide_all_search_boxes()
+
+        # 设置搜索框位置
+        self.update_search_box_positions()
+
+    def update_search_box_positions(self):
+        """更新搜索框位置"""
+        # 更新请求体搜索框位置
+        if hasattr(self, 'request_search_widget') and self.request_search_widget:
+            self.request_search_widget.move(
+                self.request_body_container.width() - 120,  # 搜索框宽度 + 边距
+                0
+            )
+
+        # 更新响应体搜索框位置
+        if hasattr(self, 'response_search_widget') and self.response_search_widget:
+            self.response_search_widget.move(
+                self.response_body_container.width() - 120,  # 搜索框宽度 + 边距
+                0
+            )

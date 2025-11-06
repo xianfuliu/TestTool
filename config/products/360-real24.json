@@ -398,7 +398,7 @@
       "type": "formula"
     },
     {
-      "formula": "{ointAmt}*0.03+{ointAmt}",
+      "formula": "{ointAmt}*1+{ointAmt}",
       "formula_type": "numeric",
       "key": "qifuOintAmt",
       "label": "奇富罚息",
