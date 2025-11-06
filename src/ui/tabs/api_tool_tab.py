@@ -422,7 +422,7 @@ class ApiToolTab(QWidget):
         url_layout.addWidget(QLabel("URL:"))
         self.url_input = QLineEdit()  # 改为输入框
         self.url_input.setPlaceholderText("请输入请求URL或从左侧选择接口自动填充")
-        self.url_input.setStyleSheet("color: blue; font-weight: bold;")
+        self.url_input.setStyleSheet("color: blue; font-weight: bold; font-size: 14px;")
         url_layout.addWidget(self.url_input, 1)
         layout.addLayout(url_layout)
 
@@ -430,7 +430,8 @@ class ApiToolTab(QWidget):
         layout.addWidget(QLabel("请求体:"))
         self.request_body_edit = QTextEdit()
         self.request_body_edit.setPlaceholderText("请求体将在这里生成...")
-        self.request_body_edit.setFont(QFont("Consolas", 10))
+        # 设置更大的默认字体
+        self.request_body_edit.setFont(QFont("Consolas", 12))
         layout.addWidget(self.request_body_edit, 2)
 
         # 手动请求按钮
@@ -443,7 +444,8 @@ class ApiToolTab(QWidget):
         layout.addWidget(QLabel("响应体:"))
         self.response_body_edit = QTextEdit()
         self.response_body_edit.setPlaceholderText("响应内容将显示在这里...")
-        self.response_body_edit.setFont(QFont("Consolas", 10))
+        # 设置更大的默认字体
+        self.response_body_edit.setFont(QFont("Consolas", 12))
         self.response_body_edit.setReadOnly(True)
         layout.addWidget(self.response_body_edit, 3)
 
@@ -1044,7 +1046,10 @@ class ApiToolTab(QWidget):
 
         # 生成请求体
         request_body = self.generate_request_body(interface_config)
-        self.request_body_edit.setPlainText(json.dumps(request_body, ensure_ascii=False, indent=2))
+
+        # 使用彩色格式化JSON
+        formatted_request_body = self.format_json_with_colors(request_body, indent=2)
+        self.request_body_edit.setHtml(formatted_request_body)
 
         # 启用手动请求按钮
         self.manual_request_btn.setEnabled(True)
@@ -1381,6 +1386,63 @@ class ApiToolTab(QWidget):
 
         # 然后进行类型转换
         return self.convert_field_types(request_body, field_types)
+
+    def format_json_with_colors(self, data, indent=2):
+        """格式化JSON并使用指定颜色，加大字体并加粗"""
+
+        def format_value(obj, level=0):
+            if isinstance(obj, dict):
+                items = []
+                for key, value in obj.items():
+                    # 键使用紫色 #92278f，加粗，字体16px
+                    formatted_key = f'<span style="color: #92278f; font-weight: bold; font-size: 16px;">"{key}"</span>'
+                    formatted_value = format_value(value, level + 1)
+                    items.append(f'{formatted_key}: {formatted_value}')
+
+                indent_str = ' ' * (indent * level)
+                inner_indent = ' ' * (indent * (level + 1))
+                return '{\n' + inner_indent + (',\n' + inner_indent).join(items) + '\n' + indent_str + '}'
+
+            elif isinstance(obj, list):
+                if not obj:
+                    return '[]'
+
+                items = []
+                for item in obj:
+                    formatted_item = format_value(item, level + 1)
+                    items.append(formatted_item)
+
+                indent_str = ' ' * (indent * level)
+                inner_indent = ' ' * (indent * (level + 1))
+
+                # 如果列表元素都是简单类型，在一行显示
+                if all(not isinstance(item, (dict, list)) for item in obj):
+                    return '[' + ', '.join(items) + ']'
+                else:
+                    return '[\n' + inner_indent + (',\n' + inner_indent).join(items) + '\n' + indent_str + ']'
+
+            else:
+                # 值使用绿色 #3ab54a，加粗，字体16px
+                if obj is None:
+                    return '<span style="color: #3ab54a; font-weight: bold; font-size: 16px;">null</span>'
+                elif isinstance(obj, bool):
+                    return f'<span style="color: #3ab54a; font-weight: bold; font-size: 16px;">{str(obj).lower()}</span>'
+                elif isinstance(obj, (int, float)):
+                    return f'<span style="color: #3ab54a; font-weight: bold; font-size: 16px;">{obj}</span>'
+                else:
+                    # 字符串需要转义特殊字符
+                    escaped_str = str(obj).replace('\\', '\\\\').replace('"', '\\"')
+                    return f'<span style="color: #3ab54a; font-weight: bold; font-size: 16px;">"{escaped_str}"</span>'
+
+        try:
+            formatted = format_value(data)
+            # 添加等宽字体样式，整体字体大小16px
+            html_content = f'<pre style="font-family: Consolas, Monaco, monospace; font-size: 16px; white-space: pre-wrap; line-height: 1.4;">{formatted}</pre>'
+            return html_content
+        except Exception as e:
+            print(f"格式化JSON时出错: {str(e)}")
+            # 出错时返回普通格式化的JSON，同样使用16px字体
+            return f'<pre style="font-family: Consolas, Monaco, monospace; font-size: 16px; white-space: pre-wrap; line-height: 1.4;">{json.dumps(data, ensure_ascii=False, indent=indent)}</pre>'
 
     def process_conditional_body(self, conditional_config):
         """处理条件模板，根据字段值选择对应的请求体模板"""
@@ -1862,25 +1924,32 @@ class ApiToolTab(QWidget):
                     parsed_response = json.loads(response_body)
                 else:
                     parsed_response = response_body
-                formatted_response = json.dumps(parsed_response, ensure_ascii=False, indent=2)
+
+                # 使用彩色格式化的JSON
+                formatted_response = self.format_json_with_colors(parsed_response, indent=2)
+                result_text = formatted_response
+
             except:
                 # 如果不是 JSON，直接显示原文
                 if isinstance(response_body, (dict, list)):
                     parsed_response = response_body
-                    formatted_response = json.dumps(response_body, ensure_ascii=False, indent=2)
+                    formatted_response = self.format_json_with_colors(response_body, indent=2)
+                    result_text = formatted_response
                 else:
                     parsed_response = {"raw_response": response_body}  # 将原始响应包装为字典
-                    formatted_response = str(response_body)
+                    # 非JSON内容也使用16px字体
+                    result_text = f'<pre style="font-family: Consolas, Monaco, monospace; font-size: 16px; white-space: pre-wrap; line-height: 1.4;">{str(response_body)}</pre>'
 
-            result_text = formatted_response
-            self.response_body_edit.setPlainText(result_text)
+            self.response_body_edit.setHtml(result_text)
 
             # 新增：处理响应参数映射
             if parsed_response is not None:
                 self.process_response_mapping(parsed_response)
 
         except Exception as e:
-            self.response_body_edit.setPlainText(f"处理响应时出错: {str(e)}")
+            # 错误信息也使用16px字体
+            error_text = f'<pre style="font-family: Consolas, Monaco, monospace; font-size: 16px; white-space: pre-wrap; color: red; line-height: 1.4;">处理响应时出错: {str(e)}</pre>'
+            self.response_body_edit.setHtml(error_text)
 
     def process_response_mapping(self, response_data):
         """处理响应参数映射 - 支持嵌套路径和JSONPath，先替换变量再提取"""
@@ -2468,7 +2537,10 @@ class ApiToolTab(QWidget):
 
                 # 重新生成请求体
                 request_body = self.generate_request_body(interface_config)
-                self.request_body_edit.setPlainText(json.dumps(request_body, ensure_ascii=False, indent=2))
+
+                # 使用彩色格式化JSON
+                formatted_request_body = self.format_json_with_colors(request_body, indent=2)
+                self.request_body_edit.setHtml(formatted_request_body)
 
                 print(f"强制刷新请求体完成，使用最新的变量值")
 
@@ -2485,7 +2557,14 @@ class ApiToolTab(QWidget):
                         processed_body = self.replace_variables_in_string(request_body_text)
                         # 如果处理后的内容不同，则更新
                         if processed_body != request_body_text:
-                            self.request_body_edit.setPlainText(processed_body)
+                            # 尝试解析为JSON并格式化
+                            try:
+                                parsed_body = json.loads(processed_body)
+                                formatted_body = self.format_json_with_colors(parsed_body, indent=2)
+                                self.request_body_edit.setHtml(formatted_body)
+                            except:
+                                # 如果不是有效的JSON，直接显示文本
+                                self.request_body_edit.setPlainText(processed_body)
                             print("已更新独立请求体中的变量")
                 except Exception as e:
                     print(f"刷新独立请求体时出错: {str(e)}")
