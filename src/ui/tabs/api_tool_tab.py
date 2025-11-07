@@ -2998,178 +2998,6 @@ class ApiToolTab(QWidget):
         # 同时检查这个变量是否是条件字段的条件字段，如果是，也需要更新相关的条件变量显示
         self.update_condition_variables_for_field(variable_key)
 
-    def setup_search_functionality(self):
-        """为请求体和响应体设置搜索功能 - 修复版：只搜索可见文本"""
-        # 为整个窗口设置搜索快捷键
-        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
-        self.search_shortcut.activated.connect(self.handle_global_search)
-
-        # 为搜索框设置ESC快捷键
-        self.escape_shortcut = QShortcut(QKeySequence("Esc"), self)
-        self.escape_shortcut.activated.connect(self.hide_all_search_boxes)
-
-        # 连接搜索框的回车事件
-        self.request_search_input.returnPressed.connect(
-            lambda: self.handle_search_enter(self.request_body_edit, self.request_search_input)
-        )
-        self.response_search_input.returnPressed.connect(
-            lambda: self.handle_search_enter(self.response_body_edit, self.response_search_input)
-        )
-
-        # 连接关闭按钮事件
-        self.request_search_close_btn.clicked.connect(
-            lambda: self.hide_search_box(self.request_search_widget)
-        )
-        self.response_search_close_btn.clicked.connect(
-            lambda: self.hide_search_box(self.response_search_widget)
-        )
-
-        # 存储搜索状态
-        self.current_search_text = ""
-        self.current_search_widget = None
-        self.search_positions = {}
-        self.current_highlights = []
-
-    def show_search_box(self, search_input, close_btn):
-        """显示搜索框"""
-        search_input.setVisible(True)
-        close_btn.setVisible(True)
-        search_input.setFocus()
-        search_input.selectAll()
-
-    def hide_search_box(self, search_widget):
-        """隐藏搜索框 - 修复版"""
-        if search_widget == self.request_search_widget:
-            self.request_search_widget.setVisible(False)
-            self.request_search_input.clear()
-            self.clear_highlight(self.request_body_edit)
-        elif search_widget == self.response_search_widget:
-            self.response_search_widget.setVisible(False)
-            self.response_search_input.clear()
-            self.clear_highlight(self.response_body_edit)
-
-    def clear_highlight(self, text_edit):
-        """清除文本高亮 - 修复版"""
-        # 清除ExtraSelection高亮
-        text_edit.setExtraSelections([])
-        self.current_highlights = []
-
-    def handle_global_search(self):
-        """处理全局搜索 - 显示对应编辑框的搜索框"""
-        focused_widget = self.focusWidget()
-
-        # 先隐藏所有搜索框
-        self.hide_all_search_boxes()
-
-        if focused_widget == self.request_body_edit:
-            self.show_search_box(self.request_search_widget, self.request_search_input, self.request_search_close_btn)
-        elif focused_widget == self.response_body_edit:
-            self.show_search_box(self.response_search_widget, self.response_search_input,
-                                 self.response_search_close_btn)
-        else:
-            # 默认使用响应体
-            self.response_body_edit.setFocus()
-            self.show_search_box(self.response_search_widget, self.response_search_input,
-                                 self.response_search_close_btn)
-
-    def show_search_box(self, search_widget, search_input, close_btn):
-        """显示搜索框"""
-        # 更新位置
-        self.update_search_box_positions()
-
-        search_widget.setVisible(True)
-        search_input.setVisible(True)
-        close_btn.setVisible(True)
-        search_input.setFocus()
-        search_input.selectAll()
-
-    def hide_all_search_boxes(self):
-        """隐藏所有搜索框 - 修复版"""
-        self.hide_search_box(self.request_search_widget)
-        self.hide_search_box(self.response_search_widget)
-
-    def handle_search_enter(self, text_edit, search_input):
-        """处理搜索框回车事件 - 修复版：只搜索纯文本内容"""
-        search_text = search_input.text().strip()
-        if not search_text:
-            return
-
-        # 清除之前的高亮
-        self.clear_highlight(text_edit)
-
-        # 使用纯文本进行搜索和高亮
-        self.highlight_plain_text(text_edit, search_text)
-
-        # 执行搜索
-        if not self.find_plain_text(text_edit, search_text):
-            # 如果没找到，从开头重新开始
-            cursor = text_edit.textCursor()
-            cursor.movePosition(QTextCursor.Start)
-            text_edit.setTextCursor(cursor)
-            self.find_plain_text(text_edit, search_text)
-
-    def find_plain_text(self, text_edit, search_text):
-        """在纯文本中查找 - 修复版"""
-        if not search_text:
-            return False
-
-        # 获取文档和当前光标位置
-        document = text_edit.document()
-        cursor = text_edit.textCursor()
-
-        # 从当前光标位置开始搜索（搜索纯文本）
-        found_cursor = document.find(search_text, cursor)
-
-        if found_cursor.isNull():
-            # 如果没找到，从文档开头重新搜索
-            cursor = QTextCursor(document)
-            found_cursor = document.find(search_text, cursor)
-
-        if not found_cursor.isNull():
-            text_edit.setTextCursor(found_cursor)
-
-            # 确保选中的文本可见
-            text_edit.ensureCursorVisible()
-
-            return True
-
-        return False
-
-    def highlight_plain_text(self, text_edit, search_text):
-        """高亮纯文本内容 - 修复版：不处理HTML标签"""
-        if not search_text:
-            return
-
-        # 获取纯文本内容（不包含HTML标签）
-        plain_text = text_edit.toPlainText()
-
-        # 使用QTextDocument.find在纯文本中查找
-        document = text_edit.document()
-        cursor = QTextCursor(document)
-
-        # 设置高亮格式 - 使用半透明黄色背景
-        highlight_format = QTextCharFormat()
-        highlight_format.setBackground(QColor(255, 255, 0, 100))  # 半透明黄色
-
-        highlights = []
-
-        # 查找所有匹配项
-        while True:
-            cursor = document.find(search_text, cursor)
-            if cursor.isNull():
-                break
-
-            # 创建高亮选择
-            highlight = QTextEdit.ExtraSelection()
-            highlight.cursor = QTextCursor(cursor)  # 创建副本
-            highlight.format = highlight_format
-            highlights.append(highlight)
-
-        # 应用高亮
-        text_edit.setExtraSelections(highlights)
-        self.current_highlights = highlights
-
-
     def create_search_boxes(self):
         """创建搜索框 - 修复版：优化搜索提示"""
         # 请求体搜索框
@@ -3269,3 +3097,220 @@ class ApiToolTab(QWidget):
                 self.response_body_container.width() - 120,  # 搜索框宽度 + 边距
                 0
             )
+
+    def setup_search_functionality(self):
+        """为请求体和响应体设置搜索功能"""
+        # 为整个窗口设置搜索快捷键
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.activated.connect(self.handle_global_search)
+
+        # 为搜索框设置ESC快捷键
+        self.escape_shortcut = QShortcut(QKeySequence("Esc"), self)
+        self.escape_shortcut.activated.connect(self.hide_all_search_boxes)
+
+        # 连接搜索框的回车事件
+        self.request_search_input.returnPressed.connect(
+            lambda: self.handle_search_enter(self.request_body_edit, self.request_search_input)
+        )
+        self.response_search_input.returnPressed.connect(
+            lambda: self.handle_search_enter(self.response_body_edit, self.response_search_input)
+        )
+
+        # 连接关闭按钮事件
+        self.request_search_close_btn.clicked.connect(
+            lambda: self.hide_search_box(self.request_search_widget)
+        )
+        self.response_search_close_btn.clicked.connect(
+            lambda: self.hide_search_box(self.response_search_widget)
+        )
+
+        # 存储搜索状态
+        self.current_search_text = ""
+        self.current_search_widget = None
+        self.search_positions = {}
+        self.current_highlights = []
+        self.current_match_index = 0
+        self.total_matches = 0
+
+    def hide_search_box(self, search_widget):
+        """隐藏搜索框"""
+        if search_widget == self.request_search_widget:
+            self.request_search_widget.setVisible(False)
+            self.request_search_input.clear()
+            self.clear_highlight(self.request_body_edit)
+            self.request_search_input.setToolTip("在JSON内容中搜索")
+        elif search_widget == self.response_search_widget:
+            self.response_search_widget.setVisible(False)
+            self.response_search_input.clear()
+            self.clear_highlight(self.response_body_edit)
+            self.response_search_input.setToolTip("在JSON内容中搜索")
+
+    def clear_highlight(self, text_edit):
+        """清除文本高亮"""
+        text_edit.setExtraSelections([])
+        self.current_highlights = []
+        self.current_match_index = 0
+        self.total_matches = 0
+        self.current_search_text = ""
+
+    def handle_global_search(self):
+        """处理全局搜索 - 显示对应编辑框的搜索框"""
+        focused_widget = self.focusWidget()
+
+        # 先隐藏所有搜索框
+        self.hide_all_search_boxes()
+
+        if focused_widget == self.request_body_edit:
+            self.show_search_box(self.request_search_widget, self.request_search_input, self.request_search_close_btn)
+        elif focused_widget == self.response_body_edit:
+            self.show_search_box(self.response_search_widget, self.response_search_input,
+                                 self.response_search_close_btn)
+        else:
+            # 默认使用响应体
+            self.response_body_edit.setFocus()
+            self.show_search_box(self.response_search_widget, self.response_search_input,
+                                 self.response_search_close_btn)
+
+    def show_search_box(self, search_widget, search_input, close_btn):
+        """显示搜索框"""
+        # 更新位置
+        self.update_search_box_positions()
+
+        search_widget.setVisible(True)
+        search_input.setVisible(True)
+        close_btn.setVisible(True)
+        search_input.setFocus()
+        search_input.selectAll()
+
+    def hide_all_search_boxes(self):
+        """隐藏所有搜索框"""
+        self.hide_search_box(self.request_search_widget)
+        self.hide_search_box(self.response_search_widget)
+
+    def handle_search_enter(self, text_edit, search_input):
+        """处理搜索框回车事件 - 修复版：立即显示当前选中项颜色"""
+        search_text = search_input.text().strip()
+        if not search_text:
+            return
+
+        # 如果搜索文本改变，重置搜索状态
+        if search_text != self.current_search_text:
+            self.current_search_text = search_text
+            self.current_match_index = 0
+            self.total_matches = 0
+
+        # 高亮所有匹配项，并突出显示当前选中项
+        self.highlight_with_current_match(text_edit, search_text, search_input)
+
+        # 查找并选中当前匹配项
+        if not self.find_and_select_current_match(text_edit, search_text):
+            # 如果没找到，从开头重新开始
+            self.current_match_index = 0
+            cursor = text_edit.textCursor()
+            cursor.movePosition(QTextCursor.Start)
+            text_edit.setTextCursor(cursor)
+            self.find_and_select_current_match(text_edit, search_text)
+
+        # 强制刷新文本编辑框，立即显示高亮颜色
+        text_edit.viewport().update()
+
+    def highlight_with_current_match(self, text_edit, search_text, search_input):
+        """高亮所有匹配项，当前选中项使用不同颜色 - 修复版：立即生效"""
+        if not search_text:
+            return
+
+        # 清除之前的高亮
+        text_edit.setExtraSelections([])
+
+        # 获取文档
+        document = text_edit.document()
+        cursor = QTextCursor(document)
+
+        # 查找所有匹配项
+        matches = []
+        while True:
+            cursor = document.find(search_text, cursor)
+            if cursor.isNull():
+                break
+            matches.append(QTextCursor(cursor))  # 创建副本
+
+        self.total_matches = len(matches)
+
+        # 如果没有匹配项，直接返回
+        if self.total_matches == 0:
+            self.current_highlights = []
+            search_input.setToolTip("未找到匹配项")
+            return
+
+        # 确保当前索引在有效范围内
+        if self.current_match_index >= self.total_matches:
+            self.current_match_index = 0
+
+        # 创建高亮列表
+        highlights = []
+
+        # 高亮所有匹配项（半透明黄色）
+        yellow_format = QTextCharFormat()
+        yellow_format.setBackground(QColor(255, 255, 0, 100))  # 半透明黄色
+
+        # 当前选中项使用浅蓝色
+        blue_format = QTextCharFormat()
+        blue_format.setBackground(QColor(173, 216, 230, 200))  # 浅蓝色，更不透明
+
+        for i, match_cursor in enumerate(matches):
+            if i == self.current_match_index:
+                # 当前选中项使用浅蓝色
+                highlight = QTextEdit.ExtraSelection()
+                highlight.cursor = match_cursor
+                highlight.format = blue_format
+                highlights.append(highlight)
+            else:
+                # 其他匹配项使用半透明黄色
+                highlight = QTextEdit.ExtraSelection()
+                highlight.cursor = match_cursor
+                highlight.format = yellow_format
+                highlights.append(highlight)
+
+        # 应用高亮
+        text_edit.setExtraSelections(highlights)
+        self.current_highlights = highlights
+
+        # 更新搜索框提示，显示当前匹配位置
+        if self.total_matches > 0:
+            search_input.setToolTip(f"找到 {self.total_matches} 个匹配项，当前第 {self.current_match_index + 1} 个")
+        else:
+            search_input.setToolTip("未找到匹配项")
+
+    def find_and_select_current_match(self, text_edit, search_text):
+        """查找并选中当前匹配项 - 修复版：确保立即显示"""
+        if not search_text or self.total_matches == 0:
+            return False
+
+        # 获取所有匹配项
+        document = text_edit.document()
+        cursor = QTextCursor(document)
+        matches = []
+
+        while True:
+            cursor = document.find(search_text, cursor)
+            if cursor.isNull():
+                break
+            matches.append(QTextCursor(cursor))
+
+        # 确保当前索引在有效范围内
+        if self.current_match_index >= len(matches):
+            self.current_match_index = 0
+
+        # 选中当前匹配项
+        if matches and self.current_match_index < len(matches):
+            text_edit.setTextCursor(matches[self.current_match_index])
+            text_edit.ensureCursorVisible()
+
+            # 移动到下一个匹配项，为下一次搜索做准备
+            self.current_match_index = (self.current_match_index + 1) % len(matches)
+
+            # 强制刷新，确保高亮立即显示
+            text_edit.viewport().update()
+            return True
+
+        return False
