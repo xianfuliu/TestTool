@@ -1,5 +1,4 @@
 import os
-import json
 from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox)
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from PyQt5.QtCore import Qt
