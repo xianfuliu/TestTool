@@ -4,7 +4,7 @@ import re
 import traceback
 from datetime import datetime
 from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QGroupBox,
                              QCheckBox, QTextEdit, QMessageBox, QSplitter, QScrollArea, QSizePolicy,
@@ -71,6 +71,9 @@ class ApiToolTab(QWidget):
         self.init_ui()
         # 加载配置，配置加载完成后会自动更新流水
         self.load_products_config()
+
+        # 在初始化完成后强制刷新一次搜索框
+        QTimer.singleShot(100, self.update_search_box_positions)
 
     def init_variable_pool(self):
         """初始化变量池"""
@@ -275,7 +278,7 @@ class ApiToolTab(QWidget):
                         "Content-Type": "application/json"
                     },
                     "body_template": {
-                        "requestId": "{request_id}",
+                        "requestId": "",
                         "userInfo": {
                             "name": "{name}",
                             "idCard": "{id_card}",
@@ -425,7 +428,7 @@ class ApiToolTab(QWidget):
         url_layout.addWidget(QLabel("URL:"))
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("请输入请求URL或从左侧选择接口自动填充")
-        self.url_input.setStyleSheet("color: blue; font-weight: bold; font-size: 14px;")
+        self.url_input.setStyleSheet("color: blue; font-weight: bold; font-size: 12px;")
         url_layout.addWidget(self.url_input, 1)
         layout.addLayout(url_layout)
 
@@ -445,7 +448,7 @@ class ApiToolTab(QWidget):
         self.request_body_edit = QTextEdit()
         self.request_body_edit.setPlaceholderText("请求体将在这里生成...")
         # 设置更大的默认字体
-        self.request_body_edit.setFont(QFont("Consolas", 12))
+        self.request_body_edit.setFont(QFont("Consolas", 9))
         request_body_container_layout.addWidget(self.request_body_edit)
 
         request_layout.addWidget(self.request_body_container)
@@ -473,7 +476,7 @@ class ApiToolTab(QWidget):
         self.response_body_edit = QTextEdit()
         self.response_body_edit.setPlaceholderText("响应内容将显示在这里...")
         # 设置更大的默认字体
-        self.response_body_edit.setFont(QFont("Consolas", 12))
+        self.response_body_edit.setFont(QFont("Consolas", 9))
         self.response_body_edit.setReadOnly(True)
         response_body_container_layout.addWidget(self.response_body_edit)
 
@@ -3009,7 +3012,7 @@ class ApiToolTab(QWidget):
 
         self.request_search_input = QLineEdit()
         self.request_search_input.setPlaceholderText("搜索...")
-        self.request_search_input.setFixedWidth(150)  # 稍微加宽以显示完整提示
+        self.request_search_input.setFixedWidth(250)  # 稍微加宽以显示完整提示
 
         self.request_search_close_btn = QPushButton("×")  # 使用乘号，更美观
         self.request_search_close_btn.setFixedSize(20, 20)
@@ -3047,7 +3050,7 @@ class ApiToolTab(QWidget):
 
         self.response_search_input = QLineEdit()
         self.response_search_input.setPlaceholderText("搜索...")
-        self.response_search_input.setFixedWidth(150)
+        self.response_search_input.setFixedWidth(250)
 
         self.response_search_close_btn = QPushButton("×")
         self.response_search_close_btn.setFixedSize(20, 20)
@@ -3083,20 +3086,39 @@ class ApiToolTab(QWidget):
         self.update_search_box_positions()
 
     def update_search_box_positions(self):
-        """更新搜索框位置"""
-        # 更新请求体搜索框位置
-        if hasattr(self, 'request_search_widget') and self.request_search_widget:
-            self.request_search_widget.move(
-                self.request_body_container.width() - 120,  # 搜索框宽度 + 边距
-                0
-            )
+        """更新搜索框位置和宽度 - 动态适应"""
+        # 动态计算宽度（容器宽度的30%，最大300px）
+        container_width = self.request_body_container.width()
+        dynamic_width = min(max(200, int(container_width * 0.3)), 300)
 
-        # 更新响应体搜索框位置
+        if hasattr(self, 'request_search_widget') and self.request_search_widget:
+            # 设置搜索输入框宽度
+            self.request_search_input.setFixedWidth(dynamic_width)
+
+            # 设置整个搜索部件的宽度（包括关闭按钮）
+            self.request_search_widget.setFixedWidth(dynamic_width + 30)
+
+            # 重新定位
+            x_position = container_width - dynamic_width - 40
+            self.request_search_widget.move(x_position, 0)
+
+            # 强制刷新
+            self.request_search_widget.update()
+            self.request_search_input.update()
+
+        # 同样处理响应体搜索框
         if hasattr(self, 'response_search_widget') and self.response_search_widget:
-            self.response_search_widget.move(
-                self.response_body_container.width() - 120,  # 搜索框宽度 + 边距
-                0
-            )
+            container_width = self.response_body_container.width()
+            dynamic_width = min(max(200, int(container_width * 0.3)), 300)
+
+            self.response_search_input.setFixedWidth(dynamic_width)
+            self.response_search_widget.setFixedWidth(dynamic_width + 30)
+
+            x_position = container_width - dynamic_width - 40
+            self.response_search_widget.move(x_position, 0)
+
+            self.response_search_widget.update()
+            self.response_search_input.update()
 
     def setup_search_functionality(self):
         """为请求体和响应体设置搜索功能"""

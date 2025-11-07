@@ -201,16 +201,17 @@ class InterfaceConfigDialog(QDialog):
                 default_headers = {"Content-Type": "application/json"}
                 self.headers_edit.setPlainText(json.dumps(default_headers, ensure_ascii=False, indent=2))
 
-            # 加载条件字段选项（从布局中获取所有字段）
+            # 加载条件字段选项（仅限下拉框字段）
             self.condition_field_combo.clear()
             self.condition_field_combo.addItem("")  # 空选项
 
-            # 从父窗口的布局列表中获取所有字段
+            # 从父窗口的布局列表中获取仅限下拉框字段
             if hasattr(self.parent(), 'layout_list'):
                 for i in range(self.parent().layout_list.count()):
                     item = self.parent().layout_list.item(i)
                     layout_data = item.data(Qt.UserRole)
-                    if layout_data and layout_data.get("type") in ["field", "combo"]:
+                    # 只添加类型为"combo"的下拉框字段
+                    if layout_data and layout_data.get("type") == "combo":
                         field_key = layout_data.get("key")
                         field_label = layout_data.get("label", field_key)
                         display_text = f"{field_label} ({field_key})"
@@ -229,10 +230,12 @@ class InterfaceConfigDialog(QDialog):
                 if index >= 0:
                     self.condition_field_combo.setCurrentIndex(index)
                 else:
-                    # 如果没有找到，添加并选择
+                    # 如果没有找到，检查是否为下拉框字段
                     if field:
-                        self.condition_field_combo.addItem(f"{field} ({field})", field)
-                        self.condition_field_combo.setCurrentText(f"{field} ({field})")
+                        # 如果不是下拉框字段，清空选择
+                        self.condition_field_combo.setCurrentIndex(0)
+                        # 提示用户
+                        QMessageBox.warning(self, "警告", f"条件字段 '{field}' 不是下拉框字段，已清空选择")
 
                 # 条件cases
                 cases = conditional_body.get("cases", {})
@@ -323,9 +326,29 @@ class InterfaceConfigDialog(QDialog):
                     return
             else:
                 # 条件请求模板
-                # 注意：这里需要获取条件字段的实际值，而不是显示文本
+                # 获取条件字段的实际值
                 selected_data = self.condition_field_combo.currentData()
                 field_value = selected_data if selected_data else self.condition_field_combo.currentText()
+
+                # 验证条件字段是否为空
+                if not field_value:
+                    QMessageBox.warning(self, "输入错误", "请选择条件字段")
+                    return
+
+                # 验证条件字段是否为下拉框字段
+                if hasattr(self.parent(), 'layout_list'):
+                    is_combo_field = False
+                    for i in range(self.parent().layout_list.count()):
+                        item = self.parent().layout_list.item(i)
+                        layout_data = item.data(Qt.UserRole)
+                        if (layout_data and layout_data.get("type") == "combo" and
+                                layout_data.get("key") == field_value):
+                            is_combo_field = True
+                            break
+
+                    if not is_combo_field:
+                        QMessageBox.warning(self, "输入错误", "条件字段必须是下拉框字段")
+                        return
 
                 conditional_body = {
                     "field": field_value,
