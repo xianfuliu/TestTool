@@ -387,7 +387,7 @@ class ApiToolTab(QWidget):
         first_row_layout.addStretch(1)
 
         # 配置管理按钮
-        self.config_manage_btn = QPushButton("配置管理")
+        self.config_manage_btn = QPushButton("配置")
         self.config_manage_btn.clicked.connect(self.open_config_management)
         self.config_manage_btn.setFixedWidth(100)
         first_row_layout.addWidget(self.config_manage_btn)
