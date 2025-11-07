@@ -389,7 +389,7 @@ class ApiToolTab(QWidget):
         # 配置管理按钮
         self.config_manage_btn = QPushButton("配置")
         self.config_manage_btn.clicked.connect(self.open_config_management)
-        self.config_manage_btn.setFixedWidth(100)
+        self.config_manage_btn.setFixedWidth(80)
         first_row_layout.addWidget(self.config_manage_btn)
 
         # 添加弹性空间使控件左对齐
