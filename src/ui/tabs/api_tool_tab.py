@@ -321,7 +321,7 @@ class ApiToolTab(QWidget):
 
     def create_global_config_panel(self):
         """创建全局配置面板"""
-        panel = QGroupBox("全局配置")
+        panel = QGroupBox()
         main_vertical_layout = QVBoxLayout(panel)
 
         # 第一行：水平布局，包含所有主要控件
@@ -402,7 +402,7 @@ class ApiToolTab(QWidget):
 
     def create_left_panel(self):
         """创建左侧面板 - 接口按钮和参数字段混合在一起，左对齐"""
-        panel = QGroupBox("产品要素")
+        panel = QGroupBox()
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 修改：面板布局左对齐
 
@@ -420,7 +420,7 @@ class ApiToolTab(QWidget):
         return panel
 
     def create_right_panel(self):
-        panel = QGroupBox("请求信息")
+        panel = QGroupBox()
         layout = QVBoxLayout()
 
         # URL 输入框

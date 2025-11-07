@@ -57,7 +57,7 @@ class TestDataTab(QWidget):
 
     def create_config_panel(self):
         """创建参数配置面板"""
-        panel = QGroupBox("参数配置")
+        panel = QGroupBox()
         layout = QGridLayout()
         layout.setSpacing(12)
         layout.setContentsMargins(15, 20, 15, 15)
@@ -297,7 +297,7 @@ class TestDataTab(QWidget):
 
     def create_data_panel(self):
         """创建数据信息面板"""
-        panel = QGroupBox("数据信息")
+        panel = QGroupBox()
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(15, 20, 15, 15)
@@ -392,7 +392,7 @@ class TestDataTab(QWidget):
 
     def create_preview_panel(self):
         """创建图片预览面板"""
-        panel = QGroupBox("图片预览")
+        panel = QGroupBox()
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(15, 20, 15, 15)

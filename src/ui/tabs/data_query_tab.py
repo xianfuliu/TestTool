@@ -58,7 +58,7 @@ class DataQueryTab(QWidget):
 
     def create_input_panel(self):
         """创建输入面板"""
-        panel = QGroupBox("查询条件")
+        panel = QGroupBox()
         layout = QVBoxLayout()
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -247,7 +247,7 @@ class DataQueryTab(QWidget):
         old_input_panel = None
         for i in range(self.layout().count()):
             item = self.layout().itemAt(i)
-            if item and item.widget() and isinstance(item.widget(), QGroupBox) and item.widget().title() == "查询条件":
+            if item and item.widget() and isinstance(item.widget(), QGroupBox) and item.widget().title() == "":
                 old_input_panel = item.widget()
                 break
 

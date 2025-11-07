@@ -23,7 +23,7 @@ class ConfigManagementDialog(QDialog):
     def __init__(self, parent=None, api_tool_tab=None):
         super().__init__(parent)
         self.api_tool_tab = api_tool_tab
-        self.setWindowTitle("配置管理")
+        self.setWindowTitle("配置")
         self.setModal(True)
         self.setFixedSize(900, 800)  # 固定尺寸，更加紧凑
 
@@ -75,7 +75,7 @@ class ConfigManagementDialog(QDialog):
         layout.setContentsMargins(8, 8, 8, 8)
 
         # 产品编辑区域
-        product_edit_group = QGroupBox("产品信息")
+        product_edit_group = QGroupBox()
         product_edit_group.setContentsMargins(8, 12, 8, 8)
         product_edit_layout = QVBoxLayout(product_edit_group)
         product_edit_layout.setSpacing(10)
