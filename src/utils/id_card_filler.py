@@ -5,6 +5,7 @@ from src.utils.resource_utils import resource_path
 
 class IDCardFiller:
     """身份证图片填充"""
+
     def __init__(self, template_path):
         """初始化身份证填充器"""
         # 使用 resource_path 处理模板路径
@@ -48,7 +49,8 @@ class IDCardFiller:
 
             if not os.path.exists(actual_face_path):
                 # 如果找不到文件，尝试直接使用 resources 目录下的文件
-                static_face_path = os.path.normpath(os.path.join("src/resources/images", os.path.basename(face_image_path)))
+                static_face_path = os.path.normpath(
+                    os.path.join("src/resources/images", os.path.basename(face_image_path)))
                 if os.path.exists(static_face_path):
                     actual_face_path = static_face_path
                     print(f"使用静态目录下的人脸图片: {actual_face_path}")
@@ -60,11 +62,18 @@ class IDCardFiller:
             face_img = Image.open(actual_face_path).convert("RGBA")
             # 调整人脸图片大小
             face_img = face_img.resize(face_size, Image.Resampling.LANCZOS)
-            # 将人脸图片粘贴到身份证上
-            image.paste(face_img, face_position)
-            print(f"成功添加人脸图片: {actual_face_path}")
 
+            # 创建一个与身份证图片相同大小的透明图层
+            overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+            # 将人脸图片放到透明图层的正确位置
+            overlay.paste(face_img, face_position)
+
+            # 将透明图层与身份证图片合成
+            image = Image.alpha_composite(image, overlay)
+
+            print(f"成功添加人脸图片: {actual_face_path}")
             return image
+
         except Exception as e:
             print(f"添加人脸图片时出错: {e}")
             return image
