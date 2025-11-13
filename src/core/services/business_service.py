@@ -7,6 +7,18 @@ class BusinessService:
 
     def __init__(self):
         self.db = Database()
+        self.database_available = self._check_database_connection()
+    
+    def _check_database_connection(self) -> bool:
+        """检查数据库连接是否可用"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                return True
+        except Exception as e:
+            print(f"数据库连接检查失败: {e}")
+            return False
 
     def get_all_groups(self) -> List[Dict[str, Any]]:
         """获取所有业务分组"""

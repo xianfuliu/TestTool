@@ -4,3 +4,7 @@ __pycache__
 build
 dist
 TestTool.spec
+.trae/
+README_TRAE.md
+test_env.py
+activate_trae_env.py

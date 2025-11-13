@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QScrollArea, QWidget, QGroupBo
     QTextEdit, QHBoxLayout, QLabel, QPushButton, QMessageBox
 
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
+from src.ui.widgets.toast_tips import Toast
 
 
 class InterfaceConfigDialog(QDialog):
@@ -235,7 +236,7 @@ class InterfaceConfigDialog(QDialog):
                         # 如果不是下拉框字段，清空选择
                         self.condition_field_combo.setCurrentIndex(0)
                         # 提示用户
-                        QMessageBox.warning(self, "警告", f"条件字段 '{field}' 不是下拉框字段，已清空选择")
+                        Toast.warning(self, f"条件字段 '{field}' 不是下拉框字段，已清空选择")
 
                 # 条件cases
                 cases = conditional_body.get("cases", {})
@@ -279,7 +280,7 @@ class InterfaceConfigDialog(QDialog):
             self.on_request_type_changed(current_request_type)
 
         except Exception as e:
-            QMessageBox.warning(self, "警告", f"加载接口配置失败: {str(e)}")
+            Toast.warning(self, f"加载接口配置失败: {str(e)}")
             # 设置默认值以防出错
             self.url_edit.setText("")
             self.method_combo.setCurrentText("POST")
@@ -305,7 +306,7 @@ class InterfaceConfigDialog(QDialog):
                 else:
                     self.interface_config["headers"] = {"Content-Type": "application/json"}
             except json.JSONDecodeError:
-                QMessageBox.warning(self, "格式错误", "请求头格式错误，必须是有效的JSON")
+                Toast.warning(self, "请求头格式错误，必须是有效的JSON")
                 return
 
             # 根据请求类型保存请求体配置
@@ -322,7 +323,7 @@ class InterfaceConfigDialog(QDialog):
                     else:
                         self.interface_config["body_template"] = {}
                 except json.JSONDecodeError:
-                    QMessageBox.warning(self, "格式错误", "请求体格式错误，必须是有效的JSON")
+                    Toast.warning(self, "请求体格式错误，必须是有效的JSON")
                     return
             else:
                 # 条件请求模板
@@ -332,7 +333,7 @@ class InterfaceConfigDialog(QDialog):
 
                 # 验证条件字段是否为空
                 if not field_value:
-                    QMessageBox.warning(self, "输入错误", "请选择条件字段")
+                    Toast.warning(self, "请选择条件字段")
                     return
 
                 # 验证条件字段是否为下拉框字段
@@ -347,7 +348,7 @@ class InterfaceConfigDialog(QDialog):
                             break
 
                     if not is_combo_field:
-                        QMessageBox.warning(self, "输入错误", "条件字段必须是下拉框字段")
+                        Toast.warning(self, "条件字段必须是下拉框字段")
                         return
 
                 conditional_body = {
@@ -365,7 +366,7 @@ class InterfaceConfigDialog(QDialog):
                     if "body_template" in self.interface_config:
                         del self.interface_config["body_template"]
                 except json.JSONDecodeError:
-                    QMessageBox.warning(self, "格式错误", "条件Cases格式错误，必须是有效的JSON")
+                    Toast.warning(self, "条件Cases格式错误，必须是有效的JSON")
                     return
 
             # 响应映射
@@ -376,7 +377,7 @@ class InterfaceConfigDialog(QDialog):
                 else:
                     self.interface_config["response_mapping"] = {}
             except json.JSONDecodeError:
-                QMessageBox.warning(self, "格式错误", "响应映射格式错误，必须是有效的JSON")
+                Toast.warning(self, "响应映射格式错误，必须是有效的JSON")
                 return
 
             # 字段类型
@@ -387,10 +388,10 @@ class InterfaceConfigDialog(QDialog):
                 else:
                     self.interface_config["field_types"] = {}
             except json.JSONDecodeError:
-                QMessageBox.warning(self, "格式错误", "字段类型格式错误，必须是有效的JSON")
+                Toast.warning(self, "字段类型格式错误，必须是有效的JSON")
                 return
 
             self.accept()
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存配置失败: {str(e)}")
+            Toast.error(self, f"保存配置失败: {str(e)}")

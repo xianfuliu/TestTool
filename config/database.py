@@ -3,6 +3,12 @@ from pymysql.cursors import DictCursor
 from datetime import datetime
 import json
 from typing import Dict, Any, List, Optional
+import sys
+import os
+
+# 添加项目根目录到Python路径，以便能够导入settings模块
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -108,12 +114,14 @@ DB_TABLES = {
             params JSON,
             body JSON,
             description TEXT,
+            sort_order INT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
             INDEX idx_project_id (project_id),
             INDEX idx_name (name),
-            INDEX idx_method (method)
+            INDEX idx_method (method),
+            INDEX idx_sort_order (sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
@@ -126,6 +134,7 @@ DB_TABLES = {
             description TEXT,
             environment_id INT,
             global_vars JSON,
+            sort_order INT DEFAULT 0,
             created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -133,7 +142,8 @@ DB_TABLES = {
             FOREIGN KEY (environment_id) REFERENCES environments(id) ON DELETE SET NULL,
             INDEX idx_project_id (project_id),
             INDEX idx_name (name),
-            INDEX idx_created_at (created_at)
+            INDEX idx_created_at (created_at),
+            INDEX idx_sort_order (sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
@@ -469,6 +479,7 @@ class ApiTemplate(DataModel):
         self.params: Dict[str, Any] = {}
         self.body: Dict[str, Any] = {}
         self.description: str = ""
+        self.sort_order: int = 0
         self.created_at: Optional[datetime] = None
         self.updated_at: Optional[datetime] = None
 

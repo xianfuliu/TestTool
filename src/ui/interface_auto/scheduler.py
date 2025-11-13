@@ -4,16 +4,18 @@ from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QTabWidget, QGroupBox, QFormLayout, QComboBox,
+                             QGroupBox, QFormLayout,
                              QHeaderView, QInputDialog, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
                              QAction, QToolButton, QMenu, QApplication, QDateTimeEdit)
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QFont, QColor
 from src.core.services.scheduler_service import SchedulerService
 from src.core.services.test_case_service import TestCaseService
 from src.core.models.interface_models import TestScheduler
 from src.utils.interface_utils.cron_parser import CronParser
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelTabWidget
 
 
 class SchedulerDialog(QDialog):
@@ -23,8 +25,10 @@ class SchedulerDialog(QDialog):
         super().__init__(parent)
         self.scheduler_data = scheduler_data or {}
         self.is_edit = bool(scheduler_data)
-        self.test_case_service = TestCaseService()
+        self.test_case_service = None  # 延迟初始化
         self.init_ui()
+        # 延迟加载数据，避免启动时数据库连接失败导致弹窗
+        QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
         self.setWindowTitle("编辑调度" if self.is_edit else "新增调度")
@@ -33,7 +37,7 @@ class SchedulerDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # 创建Tab页
-        tab_widget = QTabWidget()
+        tab_widget = NoWheelTabWidget()
 
         # 基本信息Tab
         basic_tab = QWidget()
@@ -131,7 +135,7 @@ class SchedulerDialog(QDialog):
             "每月1号": "0 0 0 1 * ?"
         }
 
-        self.common_cron_combo = QComboBox()
+        self.common_cron_combo = NoWheelComboBox()
         for name, expr in common_crons.items():
             self.common_cron_combo.addItem(name, expr)
         self.common_cron_combo.currentIndexChanged.connect(self.on_common_cron_selected)
@@ -155,7 +159,7 @@ class SchedulerDialog(QDialog):
         simple_group = QGroupBox("简单调度配置")
         simple_layout = QFormLayout(simple_group)
 
-        self.simple_type_combo = QComboBox()
+        self.simple_type_combo = NoWheelComboBox()
         self.simple_type_combo.addItems(["每天", "每周", "每月"])
         self.simple_type_combo.currentIndexChanged.connect(self.on_simple_type_changed)
 
@@ -163,9 +167,10 @@ class SchedulerDialog(QDialog):
         self.simple_time_edit.setDisplayFormat("HH:mm:ss")
         self.simple_time_edit.setTime(QDateTime.currentDateTime().time())
 
-        self.simple_day_combo = QComboBox()
+        self.simple_day_combo = NoWheelComboBox()
         self.simple_day_combo.addItems(["周一", "周二", "周三", "周四", "周五", "周六", "周日"])
-
+        self.simple_day_combo.setVisible(False)
+         
         self.simple_date_spin = QSpinBox()
         self.simple_date_spin.setRange(1, 31)
         self.simple_date_spin.setValue(1)
@@ -221,8 +226,24 @@ class SchedulerDialog(QDialog):
         layout.addWidget(wechat_group)
         layout.addStretch()
 
+    def delayed_load_data(self):
+        """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
+        try:
+            # 初始化服务对象
+            self.test_case_service = TestCaseService()
+            # 重新加载测试用例
+            self.load_test_cases()
+        except Exception as e:
+            # 静默处理，不显示弹窗
+            print(f"延迟加载数据失败: {str(e)}")
+
     def load_test_cases(self):
         """加载测试用例列表"""
+        # 检查服务对象是否已初始化
+        if self.test_case_service is None:
+            print("测试用例服务未初始化，跳过加载测试用例")
+            return
+            
         try:
             cases = self.test_case_service.get_all_cases()
             for case in cases:
@@ -382,12 +403,13 @@ class SchedulerManager(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.scheduler_service = SchedulerService()
+        self.scheduler_service = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_next_run_times)
         self.timer.start(60000)  # 每分钟更新一次
         self.init_ui()
-        self.load_schedulers()
+        # 延迟加载数据，避免启动时数据库连接失败导致弹窗
+        QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -464,6 +486,17 @@ class SchedulerManager(QWidget):
             }
         """)
 
+    def delayed_load_data(self):
+        """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
+        try:
+            # 初始化服务对象
+            self.scheduler_service = SchedulerService()
+            # 加载数据
+            self.load_schedulers()
+        except Exception as e:
+            # 静默处理，不显示弹窗
+            print(f"延迟加载数据失败: {str(e)}")
+
     def get_icon(self, icon_name):
         """获取图标"""
         try:
@@ -476,6 +509,12 @@ class SchedulerManager(QWidget):
 
     def load_schedulers(self):
         """加载调度列表"""
+        # 检查服务对象是否已初始化
+        if self.scheduler_service is None:
+            print("调度服务未初始化，跳过加载调度列表")
+            self.status_label.setText("调度服务未就绪")
+            return
+            
         try:
             schedulers = self.scheduler_service.get_all_schedulers()
             self.table_widget.setRowCount(len(schedulers))
@@ -522,7 +561,8 @@ class SchedulerManager(QWidget):
             self.status_label.setText(f"共 {len(schedulers)} 个调度任务")
 
         except Exception as e:
-            QMessageBox.warning(self, "加载失败", f"加载调度列表失败: {str(e)}")
+            # 静默处理，不显示弹窗
+            print(f"加载调度列表失败: {str(e)}")
             self.status_label.setText("加载失败")
 
     def update_next_run_times(self):

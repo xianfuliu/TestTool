@@ -5,7 +5,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTreeWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QTabWidget, QGroupBox, QFormLayout, QComboBox,
+                             QGroupBox, QFormLayout,
                              QHeaderView, QInputDialog, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
                              QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
@@ -22,6 +22,8 @@ from src.core.models.interface_models import TestCase, TestCaseStep
 from src.ui.interface_auto.components.api_card import ApiCard
 from src.utils.interface_utils.variable_manager import get_global_variable_manager
 from src.utils.interface_utils.request_engine import RequestEngine
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox
+from src.ui.widgets.toast_tips import Toast
 
 
 class CaseExecutionThread(QThread):
@@ -348,7 +350,7 @@ class CaseEditor(QWidget):
         self.case_desc_edit.setPlaceholderText("请输入用例描述")
         self.case_desc_edit.textChanged.connect(self.on_case_changed)
 
-        self.env_combo = QComboBox()
+        self.env_combo = NoWheelComboBox()
         self.env_combo.currentIndexChanged.connect(self.on_case_changed)
 
         # 加载环境列表
@@ -544,7 +546,7 @@ class CaseEditor(QWidget):
     def add_step_from_api(self, api_data):
         """从接口模板添加步骤"""
         if not self.current_case:
-            QMessageBox.warning(self, "提示", "请先创建或选择测试用例")
+            Toast.warning(self, "请先创建或选择测试用例")
             return
 
         step_data = {
@@ -614,7 +616,7 @@ class CaseEditor(QWidget):
     def save_case(self):
         """保存用例"""
         if not self.current_case:
-            QMessageBox.warning(self, "提示", "没有可保存的用例")
+            Toast.warning(self, "没有可保存的用例")
             return
 
         try:
@@ -626,7 +628,7 @@ class CaseEditor(QWidget):
             # 验证数据
             is_valid, error_msg = self.current_case.validate()
             if not is_valid:
-                QMessageBox.warning(self, "输入错误", error_msg)
+                Toast.warning(self, error_msg)
                 return
 
             # 保存到数据库
@@ -638,7 +640,7 @@ class CaseEditor(QWidget):
                 # 保存步骤
                 self.save_steps()
 
-                QMessageBox.information(self, "成功", "用例更新成功")
+                Toast.success(self, "用例更新成功")
             else:
                 # 创建新用例
                 case_dict = self.current_case.to_dict(for_db=True)
@@ -648,13 +650,13 @@ class CaseEditor(QWidget):
                 # 保存步骤
                 self.save_steps()
 
-                QMessageBox.information(self, "成功", "用例创建成功")
+                Toast.success(self, "用例创建成功")
 
             # 发射保存信号
             self.case_saved.emit(self.current_case.to_dict())
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存用例失败: {str(e)}")
+            Toast.error(self, f"保存用例失败: {str(e)}")
 
     def save_steps(self):
         """保存步骤数据"""
@@ -675,7 +677,7 @@ class CaseEditor(QWidget):
     def execute_case(self):
         """执行用例"""
         if not self.current_case:
-            QMessageBox.warning(self, "提示", "请先加载测试用例")
+            Toast.warning(self, "请先加载测试用例")
             return
 
         # 清空日志

@@ -504,6 +504,13 @@ def get_global_variable_manager() -> VariableManager:
     global _global_variable_manager
     if _global_variable_manager is None:
         _global_variable_manager = VariableManager()
+        # 初始化时从数据库加载全局变量
+        try:
+            from src.core.services.global_variable_service import get_global_variable_service
+            service = get_global_variable_service()
+            service.sync_to_variable_manager(_global_variable_manager)
+        except Exception as e:
+            print(f"从数据库加载全局变量失败: {e}")
     return _global_variable_manager
 
 

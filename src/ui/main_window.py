@@ -1,7 +1,7 @@
 import os
 from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox)
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_filler import IDCardFiller
@@ -12,7 +12,6 @@ from src.utils.resource_utils import resource_path
 try:
     from src.ui.tabs.interface_auto_tab import InterfaceAutoTab
     INTERFACE_AUTO_AVAILABLE = True
-    TOOL_CARDS_AVAILABLE = True
 except ImportError as e:
     print(f"接口自动化模块不可用: {e}")
     INTERFACE_AUTO_AVAILABLE = False
@@ -176,6 +175,7 @@ class MainWindow(QMainWindow):
 
         # 创建Tab Widget
         tab_widget = QTabWidget()
+        tab_widget.setContentsMargins(0, 0, 0, 0)
 
         # 设置Tab位置为上方（默认），并设置对齐方式为左对齐
         tab_widget.setTabPosition(QTabWidget.North)
@@ -195,10 +195,11 @@ class MainWindow(QMainWindow):
         if self.enable_interface_auto and INTERFACE_AUTO_AVAILABLE:
             try:
                 self.interface_auto_tab = InterfaceAutoTab(self)
-                self.tool_cards_tab = ToolCardsTab(self)
                 tab_widget.addTab(self.interface_auto_tab, "接口自动化")
-                tab_widget.addTab(self.tool_cards_tab, '卡片工具')
                 print("接口自动化标签页已加载")
+                
+                # 延迟初始化接口自动化标签页，避免启动时出现短暂小窗口
+                QTimer.singleShot(800, self.interface_auto_tab.delayed_init)
             except Exception as e:
                 print(f"加载接口自动化标签页失败: {e}")
         else:

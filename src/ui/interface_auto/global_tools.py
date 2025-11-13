@@ -6,18 +6,20 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QTabWidget, QGroupBox, QFormLayout, QComboBox,
+                             QGroupBox, QFormLayout,
                              QHeaderView, QInputDialog, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
                              QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
                              QProgressBar, QTreeWidget, QTreeWidgetItem, QFrame,
                              QScrollArea, QGridLayout, QRadioButton, QButtonGroup)
+from src.ui.widgets.toast_tips import Toast
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QThread, pyqtSignal as Signal
 from PyQt5.QtGui import QIcon, QFont, QColor, QTextCursor
 from src.core.services.global_tool_service import GlobalToolService
 from src.core.models.interface_models import GlobalTool
 from src.utils.interface_utils.database_utils import DatabaseUtils
 from src.utils.interface_utils.script_engine import ScriptEngine
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 
 
 class ToolTestThread(QThread):
@@ -190,7 +192,7 @@ class GlobalToolDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # 创建Tab页
-        tab_widget = QTabWidget()
+        tab_widget = NoWheelTabWidget()
 
         # 基本信息Tab
         basic_tab = QWidget()
@@ -229,7 +231,7 @@ class GlobalToolDialog(QDialog):
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("请输入工具名称")
 
-        self.type_combo = QComboBox()
+        self.type_combo = NoWheelComboBox()
         self.type_combo.addItems([
             "SQL查询工具", "随机数生成器", "Python脚本执行器",
             "等待定时器", "HTTP请求工具", "自定义工具"
@@ -323,7 +325,7 @@ class GlobalToolDialog(QDialog):
         group = QGroupBox("SQL查询工具配置")
         layout = QFormLayout(group)
 
-        self.sql_database_type = QComboBox()
+        self.sql_database_type = NoWheelComboBox()
         self.sql_database_type.addItems(["MySQL", "PostgreSQL", "SQLite", "Oracle", "SQL Server"])
 
         self.sql_host = QLineEdit()
@@ -342,11 +344,11 @@ class GlobalToolDialog(QDialog):
         self.sql_database = QLineEdit()
         self.sql_database.setPlaceholderText("数据库名")
 
-        self.sql_charset = QComboBox()
+        self.sql_charset = NoWheelComboBox()
         self.sql_charset.addItems(["utf8", "utf8mb4", "gbk", "latin1"])
         self.sql_charset.setCurrentText("utf8mb4")
 
-        self.sql_result_type = QComboBox()
+        self.sql_result_type = NoWheelComboBox()
         self.sql_result_type.addItems(["single", "multiple", "count"])
         self.sql_result_type.setToolTip("single: 返回单条记录\nmultiple: 返回多条记录\ncount: 返回计数")
 
@@ -366,7 +368,7 @@ class GlobalToolDialog(QDialog):
         group = QGroupBox("随机数生成器配置")
         layout = QFormLayout(group)
 
-        self.random_type = QComboBox()
+        self.random_type = NoWheelComboBox()
         self.random_type.addItems(["integer", "float", "string"])
         self.random_type.currentIndexChanged.connect(self.on_random_type_changed)
 
@@ -383,7 +385,7 @@ class GlobalToolDialog(QDialog):
         self.random_length.setValue(10)
         self.random_length.setVisible(False)  # 默认隐藏，字符串类型时显示
 
-        self.random_charset = QComboBox()
+        self.random_charset = NoWheelComboBox()
         self.random_charset.addItems(["letters", "digits", "alphanumeric", "custom"])
         self.random_charset.setVisible(False)
 
@@ -645,7 +647,7 @@ class GlobalToolDialog(QDialog):
 
         # 验证基本数据
         if not tool_data['name']:
-            QMessageBox.warning(self, "输入错误", "工具名称不能为空")
+            Toast.warning(self, "工具名称不能为空")
             return
 
         # 禁用测试按钮，防止重复测试
@@ -684,9 +686,11 @@ class GlobalToolsManager(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.tool_service = GlobalToolService()
+        self.tool_service = None  # 延迟初始化，避免启动时数据库连接检查
         self.init_ui()
-        self.load_tools()
+        # 延迟加载数据，避免启动时弹窗
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -763,6 +767,16 @@ class GlobalToolsManager(QWidget):
             }
         """)
 
+    def delayed_load_data(self):
+        """延迟加载数据，避免启动时弹窗"""
+        try:
+            from src.core.services.global_tool_service import GlobalToolService
+            self.tool_service = GlobalToolService()
+            self.load_tools()
+        except Exception as e:
+            # 静默处理异常，避免启动时弹窗
+            print(f"GlobalToolsManager初始化失败: {e}")
+
     def get_icon(self, icon_name):
         """获取图标"""
         try:
@@ -775,6 +789,11 @@ class GlobalToolsManager(QWidget):
 
     def load_tools(self):
         """加载工具列表"""
+        # 检查服务对象是否已初始化
+        if self.tool_service is None:
+            print("GlobalToolsManager: tool_service未初始化，跳过加载")
+            return
+            
         try:
             tools = self.tool_service.get_all_tools()
             self.table_widget.setRowCount(len(tools))
@@ -823,7 +842,8 @@ class GlobalToolsManager(QWidget):
             self.status_label.setText(f"共 {len(tools)} 个全局工具")
 
         except Exception as e:
-            QMessageBox.warning(self, "加载失败", f"加载工具列表失败: {str(e)}")
+            # 静默处理异常，避免启动时弹窗
+            print(f"GlobalToolsManager加载工具列表失败: {e}")
             self.status_label.setText("加载失败")
 
     def get_selected_tool_id(self):
@@ -846,46 +866,47 @@ class GlobalToolsManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                QMessageBox.warning(self, "输入错误", "工具名称不能为空")
+                Toast.warning(self, "工具名称不能为空")
                 return
 
             try:
                 self.tool_service.create_tool(data)
                 self.load_tools()
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "工具创建成功")
+                Toast.success(self, "工具创建成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"创建工具失败: {str(e)}")
+                Toast.error(self, f"创建工具失败: {str(e)}")
 
     def edit_selected_tool(self):
         """编辑选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            QMessageBox.warning(self, "提示", "请先选择一个工具")
+            Toast.warning(self, "请先选择一个工具")
             return
 
         dialog = GlobalToolDialog(self, tool_data)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                QMessageBox.warning(self, "输入错误", "工具名称不能为空")
+                Toast.warning(self, "工具名称不能为空")
                 return
 
             try:
                 self.tool_service.update_tool(tool_data['id'], data)
                 self.load_tools()
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "工具更新成功")
+                Toast.success(self, "工具更新成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"更新工具失败: {str(e)}")
+                Toast.error(self, f"更新工具失败: {str(e)}")
 
     def delete_selected_tool(self):
         """删除选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            QMessageBox.warning(self, "提示", "请先选择一个工具")
+            Toast.warning(self, "请先选择一个工具")
             return
 
+        # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
         reply = QMessageBox.question(
             self, "确认删除",
             f"确定要删除工具 '{tool_data['name']}' 吗？",
@@ -897,15 +918,15 @@ class GlobalToolsManager(QWidget):
                 self.tool_service.delete_tool(tool_data['id'])
                 self.load_tools()
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "工具删除成功")
+                Toast.success(self, "工具删除成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除工具失败: {str(e)}")
+                Toast.error(self, f"删除工具失败: {str(e)}")
 
     def test_selected_tool(self):
         """测试选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            QMessageBox.warning(self, "提示", "请先选择一个工具")
+            Toast.warning(self, "请先选择一个工具")
             return
 
         # 打开测试对话框
@@ -918,7 +939,7 @@ class GlobalToolsManager(QWidget):
         """启用/禁用选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            QMessageBox.warning(self, "提示", "请先选择一个工具")
+            Toast.warning(self, "请先选择一个工具")
             return
 
         new_status = not tool_data['enabled']
@@ -928,9 +949,9 @@ class GlobalToolsManager(QWidget):
             self.tool_service.update_tool_status(tool_data['id'], new_status)
             self.load_tools()
             self.data_changed.emit()
-            QMessageBox.information(self, "成功", f"工具已{status_text}")
+            Toast.success(self, f"工具已{status_text}")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"{status_text}工具失败: {str(e)}")
+            Toast.error(self, f"{status_text}工具失败: {str(e)}")
 
     def show_table_context_menu(self, position):
         """显示表格右键菜单"""

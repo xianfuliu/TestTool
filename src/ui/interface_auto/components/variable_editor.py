@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List, Union
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QTabWidget, QGroupBox, QFormLayout, QComboBox,
+                             QGroupBox, QFormLayout,
                              QHeaderView, QInputDialog, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
                              QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
@@ -12,6 +12,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QFont, QColor
 from src.utils.interface_utils.variable_manager import VariableManager, VariableValidator, VariableStorage
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
+from src.ui.widgets.toast_tips import Toast
 
 
 class VariableEditorDialog(QDialog):
@@ -53,8 +55,8 @@ class VariableEditorDialog(QDialog):
             else:
                 self.value_edit.setText(str(value))
 
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["string", "number", "boolean", "json", "function"])
+        self.type_combo = NoWheelComboBox()
+        self.type_combo.addItems(["string", "number", "boolean", "list", "dict"])
         self.type_combo.currentIndexChanged.connect(self.on_type_changed)
         if self.variable_data:
             var_type = self.variable_data.get('type', 'string')
@@ -147,7 +149,7 @@ class VariableManagerDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # 创建Tab页
-        tab_widget = QTabWidget()
+        tab_widget = NoWheelTabWidget()
 
         # 全局变量Tab
         global_tab = QWidget()
@@ -304,24 +306,50 @@ class VariableManagerDialog(QDialog):
 
     def load_global_variables(self):
         """加载全局变量"""
-        global_vars = self.variable_manager.global_variables
-        self.global_table.setRowCount(len(global_vars))
+        try:
+            # 从数据库加载全局变量
+            from src.core.services.global_variable_service import get_global_variable_service
+            service = get_global_variable_service()
+            global_vars = service.get_all_global_variables()
+            
+            # 同步到内存管理器
+            var_dict = {}
+            for var in global_vars:
+                var_dict[var['name']] = var['value']
+            self.variable_manager.set_global_variables(var_dict)
+            
+            # 显示在表格中
+            self.global_table.setRowCount(len(global_vars))
 
-        for row, (name, value) in enumerate(global_vars.items()):
-            self.global_table.setItem(row, 0, QTableWidgetItem(name))
+            for row, var in enumerate(global_vars):
+                self.global_table.setItem(row, 0, QTableWidgetItem(var['name']))
+                self.global_table.setItem(row, 1, QTableWidgetItem(var.get('variable_type', 'string')))
+                
+                # 值
+                value_str = str(var['value'])
+                if len(value_str) > 50:
+                    value_str = value_str[:50] + '...'
+                self.global_table.setItem(row, 2, QTableWidgetItem(value_str))
+                self.global_table.setItem(row, 3, QTableWidgetItem(var.get('description', '')))
 
-            # 类型
-            var_type = type(value).__name__
-            self.global_table.setItem(row, 1, QTableWidgetItem(var_type))
+            self.global_table.resizeColumnsToContents()
+        except Exception as e:
+            print(f"加载全局变量失败: {e}")
+            # 降级处理：使用内存中的变量
+            global_vars = self.variable_manager.global_variables
+            self.global_table.setRowCount(len(global_vars))
 
-            # 值
-            value_str = str(value)
-            if len(value_str) > 50:
-                value_str = value_str[:50] + '...'
-            self.global_table.setItem(row, 2, QTableWidgetItem(value_str))
-            self.global_table.setItem(row, 3, QTableWidgetItem(''))  # 描述
+            for row, (name, value) in enumerate(global_vars.items()):
+                self.global_table.setItem(row, 0, QTableWidgetItem(name))
+                self.global_table.setItem(row, 1, QTableWidgetItem(type(value).__name__))
+                
+                value_str = str(value)
+                if len(value_str) > 50:
+                    value_str = value_str[:50] + '...'
+                self.global_table.setItem(row, 2, QTableWidgetItem(value_str))
+                self.global_table.setItem(row, 3, QTableWidgetItem(''))
 
-        self.global_table.resizeColumnsToContents()
+            self.global_table.resizeColumnsToContents()
 
     def load_local_variables(self):
         """加载局部变量"""
@@ -388,16 +416,25 @@ class VariableManagerDialog(QDialog):
             is_valid, error_msg = self.validate_variable_data(data)
 
             if is_valid:
-                self.variable_manager.set_global_variables({data['name']: data['value']})
-                self.load_global_variables()
+                # 同时保存到数据库和内存
+                try:
+                    from src.core.services.global_variable_service import get_global_variable_service
+                    service = get_global_variable_service()
+                    service.create_global_variable(data)
+                    
+                    # 同步到内存管理器
+                    self.variable_manager.set_global_variables({data['name']: data['value']})
+                    self.load_global_variables()
+                except Exception as e:
+                    Toast.error(self, f"保存全局变量失败: {str(e)}")
             else:
-                QMessageBox.warning(self, "输入错误", error_msg)
+                Toast.warning(self, error_msg)
 
     def edit_global_variable(self):
         """编辑全局变量"""
         selected_items = self.global_table.selectedItems()
         if not selected_items:
-            QMessageBox.warning(self, "提示", "请先选择一个全局变量")
+            Toast.warning(self, "请先选择一个全局变量")
             return
 
         row = selected_items[0].row()
@@ -416,18 +453,33 @@ class VariableManagerDialog(QDialog):
             is_valid, error_msg = self.validate_variable_data(data)
 
             if is_valid:
-                # 删除旧变量，添加新变量
-                del self.variable_manager.global_variables[var_name]
-                self.variable_manager.set_global_variables({data['name']: data['value']})
-                self.load_global_variables()
+                # 同时更新数据库和内存
+                try:
+                    from src.core.services.global_variable_service import get_global_variable_service
+                    service = get_global_variable_service()
+                    
+                    # 获取变量ID
+                    var_info = service.get_global_variable_by_name(var_name)
+                    if var_info:
+                        # 更新数据库
+                        service.update_global_variable(var_info['id'], data)
+                        
+                        # 更新内存管理器
+                        del self.variable_manager.global_variables[var_name]
+                        self.variable_manager.set_global_variables({data['name']: data['value']})
+                        self.load_global_variables()
+                    else:
+                        Toast.error(self, "找不到要编辑的全局变量")
+                except Exception as e:
+                    Toast.error(self, f"更新全局变量失败: {str(e)}")
             else:
-                QMessageBox.warning(self, "输入错误", error_msg)
+                Toast.warning(self, error_msg)
 
     def delete_global_variable(self):
         """删除全局变量"""
         selected_items = self.global_table.selectedItems()
         if not selected_items:
-            QMessageBox.warning(self, "提示", "请先选择一个全局变量")
+            Toast.warning(self, "请先选择一个全局变量")
             return
 
         row = selected_items[0].row()
@@ -440,8 +492,16 @@ class VariableManagerDialog(QDialog):
         )
 
         if reply == QMessageBox.Yes:
-            del self.variable_manager.global_variables[var_name]
-            self.load_global_variables()
+            # 同时从数据库和内存中删除
+            try:
+                from src.core.services.global_variable_service import get_global_variable_service
+                service = get_global_variable_service()
+                service.delete_global_variable_by_name(var_name)
+                
+                del self.variable_manager.global_variables[var_name]
+                self.load_global_variables()
+            except Exception as e:
+                Toast.error(self, f"删除全局变量失败: {str(e)}")
 
     def clear_global_variables(self):
         """清空全局变量"""
@@ -452,8 +512,20 @@ class VariableManagerDialog(QDialog):
         )
 
         if reply == QMessageBox.Yes:
-            self.variable_manager.clear_global_variables()
-            self.load_global_variables()
+            # 同时清空数据库和内存中的全局变量
+            try:
+                from src.core.services.global_variable_service import get_global_variable_service
+                service = get_global_variable_service()
+                
+                # 获取所有变量并逐个删除
+                all_vars = service.get_all_global_variables()
+                for var in all_vars:
+                    service.delete_global_variable(var['id'])
+                
+                self.variable_manager.clear_global_variables()
+                self.load_global_variables()
+            except Exception as e:
+                Toast.error(self, f"清空全局变量失败: {str(e)}")
 
     def add_local_variable(self):
         """新增局部变量"""
@@ -466,13 +538,13 @@ class VariableManagerDialog(QDialog):
                 self.variable_manager.set_local_variables({data['name']: data['value']})
                 self.load_local_variables()
             else:
-                QMessageBox.warning(self, "输入错误", error_msg)
+                Toast.warning(self, error_msg)
 
     def edit_local_variable(self):
         """编辑局部变量"""
         selected_items = self.local_table.selectedItems()
         if not selected_items:
-            QMessageBox.warning(self, "提示", "请先选择一个局部变量")
+            Toast.warning(self, "请先选择一个局部变量")
             return
 
         row = selected_items[0].row()
@@ -496,13 +568,13 @@ class VariableManagerDialog(QDialog):
                 self.variable_manager.set_local_variables({data['name']: data['value']})
                 self.load_local_variables()
             else:
-                QMessageBox.warning(self, "输入错误", error_msg)
+                Toast.warning(self, error_msg)
 
     def delete_local_variable(self):
         """删除局部变量"""
         selected_items = self.local_table.selectedItems()
         if not selected_items:
-            QMessageBox.warning(self, "提示", "请先选择一个局部变量")
+            Toast.warning(self, "请先选择一个局部变量")
             return
 
         row = selected_items[0].row()
@@ -559,9 +631,9 @@ class VariableManagerDialog(QDialog):
                     'local': self.variable_manager.local_variables
                 }
                 self.variable_storage.export_variables(file_path, all_variables)
-                QMessageBox.information(self, "成功", "变量导出成功")
+                Toast.success(self, "变量导出成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"导出变量失败: {str(e)}")
+                Toast.error(self, f"导出变量失败: {str(e)}")
 
     def import_variables(self):
         """导入变量"""
@@ -581,9 +653,9 @@ class VariableManagerDialog(QDialog):
                     self.variable_manager.set_local_variables(imported_vars['local'])
 
                 self.load_variables()
-                QMessageBox.information(self, "成功", "变量导入成功")
+                Toast.success(self, "变量导入成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"导入变量失败: {str(e)}")
+                Toast.error(self, f"导入变量失败: {str(e)}")
 
     def preview_variables(self):
         """预览变量"""

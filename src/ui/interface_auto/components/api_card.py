@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                             QPushButton, QTabWidget, QToolButton, QMenu)
+                             QPushButton, QToolButton, QMenu)
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelTabWidget
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 
@@ -29,7 +30,7 @@ class ApiCard(QWidget):
         header_layout.addWidget(self.status_btn)
 
         # Tab区域
-        self.tab_widget = QTabWidget()
+        self.tab_widget = NoWheelTabWidget()
 
         # 前置处理Tab
         self.pre_process_tab = QWidget()

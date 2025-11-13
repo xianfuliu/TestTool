@@ -1,14 +1,21 @@
 import os
+import json
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTreeWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QTabWidget, QGroupBox, QFormLayout, QComboBox,
-                             QHeaderView, QInputDialog)
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QIcon, QFont
+                             QGroupBox, QFormLayout,
+                             QHeaderView, QInputDialog, QCheckBox, QSpinBox,
+                             QListWidget, QListWidgetItem, QSplitter, QToolBar,
+                             QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
+                             QProgressBar, QFrame, QScrollArea, QGridLayout,
+                             QTableWidget, QTableWidgetItem, QListWidget, QAbstractItemView,
+                             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit)
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QMimeData, QPoint
+from PyQt5.QtGui import QIcon, QFont, QColor, QDrag, QPixmap, QCursor
 from src.core.services.project_service import ProjectService
 from src.core.services.business_service import BusinessService
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelTabWidget
 
 
 
@@ -115,12 +122,13 @@ class BusinessManagement(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.business_service = BusinessService()
-        self.project_service = ProjectService()
+        self.business_service = None
+        self.project_service = None
         self.current_group = None
         self.current_project = None
         self.init_ui()
-        self.load_data()
+        # 延迟加载数据，避免启动时数据库连接失败导致弹窗
+        QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -161,7 +169,7 @@ class BusinessManagement(QWidget):
         self.detail_container = QWidget()
         self.detail_container.hide()
 
-        detail_tabs = QTabWidget()
+        detail_tabs = NoWheelTabWidget()
 
         # 基本信息Tab
         basic_info_tab = QWidget()
@@ -251,9 +259,23 @@ class BusinessManagement(QWidget):
             return dt.strftime('%Y-%m-%d %H:%M:%S')
         return str(dt)
 
+    def delayed_load_data(self):
+        """延迟加载数据，初始化服务对象"""
+        try:
+            self.business_service = BusinessService()
+            self.project_service = ProjectService()
+            self.load_data()
+        except Exception as e:
+            print(f"初始化服务失败: {e}")
+            # 静默处理，不显示弹窗
+
     def load_data(self):
         """加载业务分组和项目数据"""
         self.tree_widget.clear()
+
+        # 检查服务对象是否已初始化
+        if self.business_service is None or self.project_service is None:
+            return
 
         try:
             # 加载业务分组
@@ -275,7 +297,8 @@ class BusinessManagement(QWidget):
                 group_item.setExpanded(True)
 
         except Exception as e:
-            QMessageBox.warning(self, "加载失败", f"加载业务数据失败: {str(e)}")
+            print(f"加载业务数据失败: {str(e)}")
+            # 静默处理，不显示弹窗
 
     def on_tree_item_clicked(self, item):
         """树形项目点击事件"""

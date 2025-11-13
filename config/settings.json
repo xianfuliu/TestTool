@@ -1,7 +1,7 @@
 {
   "features": {
-    "interface_automation": false,
-    "tool_cards": false
+    "interface_automation": true,
+    "tool_cards": true
   },
   "app": {
     "name": "测试工具",

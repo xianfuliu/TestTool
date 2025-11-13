@@ -368,7 +368,7 @@
       "type": "field"
     },
     {
-      "formula": "{repayPrinAmt}+{intAmt}+{intAmt}*0.06+{ointAmt}+{ointAmt}*0.03",
+      "formula": "{repayPrinAmt}+{intAmt}+{intAmt}*0.06+{ointAmt}+{ointAmt}*1",
       "formula_type": "numeric",
       "key": "qifuRepayAmt",
       "label": "奇富还款金额",

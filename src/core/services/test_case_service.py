@@ -291,3 +291,103 @@ class TestCaseService:
         except Exception as e:
             print(f"更新测试用例步骤顺序失败: {e}")
             raise e
+
+    def get_all_cases(self) -> List[Dict[str, Any]]:
+        """获取所有测试用例列表"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT id, project_id, folder_id, name, description, 
+                               environment_id, global_vars, created_by, created_at, updated_at
+                        FROM test_cases 
+                        ORDER BY created_at DESC
+                    """)
+                    cases = cursor.fetchall()
+
+                    # 处理JSON字段
+                    for case in cases:
+                        if case.get('global_vars'):
+                            try:
+                                case['global_vars'] = json.loads(case['global_vars'])
+                            except (json.JSONDecodeError, TypeError):
+                                case['global_vars'] = {}
+
+                    return cases
+        except Exception as e:
+            print(f"获取所有测试用例失败: {e}")
+            return []
+
+    def check_case_name_exists(self, project_id: int, name: str, folder_id: int = None, exclude_case_id: int = None) -> bool:
+        """检查测试用例名称是否已存在"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    if exclude_case_id:
+                        cursor.execute("""
+                            SELECT id FROM test_cases 
+                            WHERE project_id = %s AND name = %s AND folder_id = %s AND id != %s
+                        """, (project_id, name, folder_id, exclude_case_id))
+                    else:
+                        cursor.execute("""
+                            SELECT id FROM test_cases 
+                            WHERE project_id = %s AND name = %s AND folder_id = %s
+                        """, (project_id, name, folder_id))
+                    
+                    return cursor.fetchone() is not None
+        except Exception as e:
+            print(f"检查测试用例名称是否存在失败: {e}")
+            return False
+
+    def get_cases_by_folder(self, project_id: int, folder_id: int = None) -> List[Dict[str, Any]]:
+        """根据文件夹获取测试用例列表"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    if folder_id is None:
+                        cursor.execute("""
+                            SELECT id, project_id, folder_id, name, description, 
+                                   environment_id, global_vars, created_by, created_at, updated_at
+                            FROM test_cases 
+                            WHERE project_id = %s AND folder_id IS NULL
+                            ORDER BY created_at
+                        """, (project_id,))
+                    else:
+                        cursor.execute("""
+                            SELECT id, project_id, folder_id, name, description, 
+                                   environment_id, global_vars, created_by, created_at, updated_at
+                            FROM test_cases 
+                            WHERE project_id = %s AND folder_id = %s
+                            ORDER BY created_at
+                        """, (project_id, folder_id))
+                    
+                    cases = cursor.fetchall()
+
+                    # 处理JSON字段
+                    for case in cases:
+                        if case.get('global_vars'):
+                            try:
+                                case['global_vars'] = json.loads(case['global_vars'])
+                            except (json.JSONDecodeError, TypeError):
+                                case['global_vars'] = {}
+
+                    return cases
+        except Exception as e:
+            print(f"根据文件夹获取测试用例失败: {e}")
+            return []
+
+    def update_case_order(self, case_id: int, folder_id: int, order_value: int) -> bool:
+        """更新测试用例的排序顺序"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE test_cases 
+                        SET folder_id = %s, sort_order = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    """, (folder_id, order_value, case_id))
+                    conn.commit()
+                    return cursor.rowcount > 0
+        except Exception as e:
+            print(f"更新测试用例排序失败: {e}")
+            return False

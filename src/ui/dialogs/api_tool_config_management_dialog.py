@@ -985,12 +985,13 @@ class ConfigManagementDialog(QDialog):
 
             product_name = current_text.replace(" (默认)", "")
 
+            # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
             reply = QMessageBox.question(
-                self, "确认删除",
-                f"确定要删除产品 '{product_name}' 吗？\n此操作将删除产品配置文件，且不可恢复！",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No  # 默认选择"No"更安全
-            )
+            self, "确认删除",
+            f"确定要删除产品 '{product_name}' 吗？\n此操作将删除产品配置文件，且不可恢复！",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No  # 默认选择"No"更安全
+        )
 
             if reply == QMessageBox.Yes:
                 # 删除产品配置文件
@@ -1305,6 +1306,7 @@ class ConfigManagementDialog(QDialog):
         task_name = task_data.get("name", "未知任务")
         task_id = task_data.get("id", "未知ID")
 
+        # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
         reply = QMessageBox.question(
             self, "确认删除",
             f"确定要删除定时任务 '{task_name}' (ID: {task_id}) 吗？",
@@ -2521,6 +2523,7 @@ class ConfigManagementDialog(QDialog):
         display_text = current_item.text()
 
         # 二次确认弹窗
+        # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
         reply = QMessageBox.question(
             self, "确认删除",
             f"确定要删除布局项 '{display_text}' 吗？\n此操作将同时删除相关的接口配置！",

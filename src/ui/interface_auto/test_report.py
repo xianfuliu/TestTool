@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QTabWidget, QGroupBox, QFormLayout, QComboBox,
+                             QGroupBox, QFormLayout,
                              QHeaderView, QInputDialog, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
                              QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
@@ -17,6 +17,7 @@ from src.core.services.test_report_service import TestReportService
 from src.core.services.test_case_service import TestCaseService
 from src.core.models.interface_models import TestReport, TestStepResult
 from src.utils.interface_utils.report_generator import HTMLReportGenerator
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 
 
 class ReportDetailDialog(QDialog):
@@ -36,7 +37,7 @@ class ReportDetailDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # 创建Tab页
-        tab_widget = QTabWidget()
+        tab_widget = NoWheelTabWidget()
 
         # 概览Tab
         overview_tab = QWidget()
@@ -378,11 +379,12 @@ class TestReportManager(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.report_service = TestReportService()
-        self.case_service = TestCaseService()
-        self.scheduler_service = SchedulerService()
+        self.report_service = None
+        self.case_service = None
+        self.scheduler_service = None
         self.init_ui()
-        self.load_reports()
+        # 延迟加载数据，避免启动时数据库连接失败导致弹窗
+        QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -393,7 +395,7 @@ class TestReportManager(QWidget):
 
         # 时间筛选
         filter_toolbar.addWidget(QLabel("时间范围:"))
-        self.time_range_combo = QComboBox()
+        self.time_range_combo = NoWheelComboBox()
         self.time_range_combo.addItems([
             "全部", "今天", "最近7天", "最近30天", "最近90天", "自定义"
         ])
@@ -402,14 +404,14 @@ class TestReportManager(QWidget):
 
         # 状态筛选
         filter_toolbar.addWidget(QLabel("状态:"))
-        self.status_combo = QComboBox()
+        self.status_combo = NoWheelComboBox()
         self.status_combo.addItems(["全部", "成功", "失败", "错误", "执行中"])
         self.status_combo.currentIndexChanged.connect(self.on_filter_changed)
         filter_toolbar.addWidget(self.status_combo)
 
         # 用例筛选
         filter_toolbar.addWidget(QLabel("测试用例:"))
-        self.case_combo = QComboBox()
+        self.case_combo = NoWheelComboBox()
         self.case_combo.addItem("全部", 0)
         self.load_test_cases()
         self.case_combo.currentIndexChanged.connect(self.on_filter_changed)
@@ -493,6 +495,19 @@ class TestReportManager(QWidget):
             }
         """)
 
+    def delayed_load_data(self):
+        """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
+        try:
+            # 初始化服务对象
+            self.report_service = TestReportService()
+            self.case_service = TestCaseService()
+            self.scheduler_service = SchedulerService()
+            # 加载数据
+            self.load_reports()
+        except Exception as e:
+            # 静默处理，不显示弹窗
+            print(f"延迟加载数据失败: {str(e)}")
+
     def get_icon(self, icon_name):
         """获取图标"""
         try:
@@ -505,6 +520,11 @@ class TestReportManager(QWidget):
 
     def load_test_cases(self):
         """加载测试用例列表"""
+        # 检查服务对象是否已初始化
+        if self.case_service is None:
+            print("测试用例服务未初始化，跳过加载测试用例")
+            return
+            
         try:
             cases = self.case_service.get_all_cases()
             for case in cases:
@@ -514,6 +534,12 @@ class TestReportManager(QWidget):
 
     def load_reports(self):
         """加载报告列表"""
+        # 检查服务对象是否已初始化
+        if self.report_service is None:
+            print("报告服务未初始化，跳过加载报告列表")
+            self.status_label.setText("报告服务未就绪")
+            return
+            
         try:
             # 获取筛选条件
             filters = self.get_filters()
@@ -584,7 +610,8 @@ class TestReportManager(QWidget):
             self.status_label.setText(f"共 {len(reports)} 个测试报告")
 
         except Exception as e:
-            QMessageBox.warning(self, "加载失败", f"加载测试报告失败: {str(e)}")
+            # 静默处理，不显示弹窗
+            print(f"加载测试报告失败: {str(e)}")
             self.status_label.setText("加载失败")
 
     def get_filters(self):
