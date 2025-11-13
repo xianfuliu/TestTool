@@ -709,6 +709,18 @@ class TestCaseManager(QWidget):
             pass
         return QIcon()
 
+    def get_api_icon_by_method(self, method):
+        """根据HTTP方法获取对应的API图标"""
+        method = method.upper() if method else "GET"
+        icon_map = {
+            "GET": "http_get.png",
+            "POST": "http_post.png", 
+            "PUT": "http_put.png",
+            "DELETE": "http_del.png"
+        }
+        icon_name = icon_map.get(method, "api.png")
+        return self.get_icon(icon_name)
+
     def load_projects(self):
         """加载项目列表"""
         # 检查服务对象是否已初始化
@@ -902,8 +914,8 @@ class TestCaseManager(QWidget):
                 template_item.setData(0, Qt.UserRole, {'type': 'template', 'data': template})
                 template_item.setToolTip(0, f"{template['method']} {template['url_path']}\n{template.get('description', '')}")
                 
-                # 设置接口模板图标
-                template_item.setIcon(0, self.get_icon("api.png"))
+                # 设置接口模板图标（根据HTTP方法动态设置）
+                template_item.setIcon(0, self.get_api_icon_by_method(template.get('method')))
                 
                 # 添加到对应文件夹
                 folder_id = template.get('folder_id')
@@ -974,8 +986,8 @@ class TestCaseManager(QWidget):
                     template_item.setData(0, Qt.UserRole, {'type': 'template', 'data': template})
                     template_item.setToolTip(0, f"{template['method']} {template['url_path']}\n{template.get('description', '')}")
                     
-                    # 设置接口模板图标
-                    template_item.setIcon(0, self.get_icon("api.png"))
+                    # 设置接口模板图标（根据HTTP方法动态设置）
+                    template_item.setIcon(0, self.get_api_icon_by_method(template.get('method')))
                     
                     # 添加到对应文件夹
                     folder_id = template.get('folder_id')

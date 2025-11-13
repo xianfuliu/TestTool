@@ -409,19 +409,20 @@ class TemplateTabWidget(QWidget):
         # 基本信息区域 - 请求方法和URL路径
         basic_layout = QHBoxLayout()
         
-        # 请求方法
+        # 请求方法 - 仅保留GET/POST/PUT/DELETE
         basic_layout.addWidget(QLabel("请求方法:"))
         self.method_combo = NoWheelComboBox()
-        self.method_combo.addItems(["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+        self.method_combo.addItems(["GET", "POST", "PUT", "DELETE"])
         self.method_combo.currentTextChanged.connect(self.on_content_changed)
         self.method_combo.setMaximumWidth(100)
         basic_layout.addWidget(self.method_combo)
         
-        # URL路径
+        # URL路径 - 进一步增加输入框宽度
         basic_layout.addWidget(QLabel("URL路径:"))
         self.url_edit = QLineEdit()
         self.url_edit.setPlaceholderText("例如: /api/v1/users")
         self.url_edit.textChanged.connect(self.on_content_changed)
+        self.url_edit.setMinimumWidth(600)  # 设置更大的最小宽度
         basic_layout.addWidget(self.url_edit)
         
         # 添加弹性空间
@@ -533,18 +534,67 @@ class TemplateTabWidget(QWidget):
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: transparent;
+            }
+        """)
         
         # 主容器
         container = QWidget()
         layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)  # 增加边距避免边框重叠
+        layout.setSpacing(10)
         
         # 请求头表格
         self.headers_table = QTableWidget()
         self.headers_table.setColumnCount(2)
         self.headers_table.setHorizontalHeaderLabels(["Header名称", "Header值"])
         self.headers_table.horizontalHeader().setStretchLastSection(True)
+        self.headers_table.verticalHeader().setVisible(False)  # 隐藏序号列
         self.headers_table.cellChanged.connect(self.on_content_changed)
+        # 优化表格样式
+        self.headers_table.setAlternatingRowColors(True)
+        self.headers_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+            QTableWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QHeaderView::section {
+                background-color: #d0d0d0;
+                color: #333333;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 6px;
+                border: none;
+                border-right: 1px solid #b0b0b0;
+                min-height: 25px;
+            }
+            QTableCornerButton::section {
+                background-color: #4caf50;
+                border: none;
+            }
+        """)
         self.headers_table.setMinimumHeight(300)  # 增加表格最小高度
+        self.headers_table.verticalHeader().setDefaultSectionSize(50)  # 进一步增加行高确保内容完全可见
         layout.addWidget(self.headers_table)
         
         # 操作按钮
@@ -553,6 +603,31 @@ class TemplateTabWidget(QWidget):
         remove_header_btn = QPushButton("删除")
         add_header_btn.clicked.connect(self.add_header_row)
         remove_header_btn.clicked.connect(self.remove_header_row)
+        
+        # 优化按钮样式
+        button_style = """
+            QPushButton {
+                background-color: #4caf50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #388e3c;
+            }
+            QPushButton:pressed {
+                background-color: #2e7d32;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """
+        add_header_btn.setStyleSheet(button_style)
+        remove_header_btn.setStyleSheet(button_style)
+        
         button_layout.addWidget(add_header_btn)
         button_layout.addWidget(remove_header_btn)
         button_layout.addStretch()
@@ -570,18 +645,67 @@ class TemplateTabWidget(QWidget):
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: transparent;
+            }
+        """)
         
         # 主容器
         container = QWidget()
         layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
         
         # 参数表格
         self.params_table = QTableWidget()
         self.params_table.setColumnCount(2)
         self.params_table.setHorizontalHeaderLabels(["参数名", "参数值"])
         self.params_table.horizontalHeader().setStretchLastSection(True)
+        self.params_table.verticalHeader().setVisible(False)  # 隐藏序号列
         self.params_table.cellChanged.connect(self.on_content_changed)
+        # 优化表格样式
+        self.params_table.setAlternatingRowColors(True)
+        self.params_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+            QTableWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QHeaderView::section {
+                background-color: #d0d0d0;
+                color: #333333;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 6px;
+                border: none;
+                border-right: 1px solid #b0b0b0;
+                min-height: 25px;
+            }
+            QTableCornerButton::section {
+                background-color: #4caf50;
+                border: none;
+            }
+        """)
         self.params_table.setMinimumHeight(300)  # 增加表格最小高度
+        self.params_table.verticalHeader().setDefaultSectionSize(50)  # 进一步增加行高确保内容完全可见
         layout.addWidget(self.params_table)
         
         # 操作按钮
@@ -590,6 +714,31 @@ class TemplateTabWidget(QWidget):
         remove_param_btn = QPushButton("删除")
         add_param_btn.clicked.connect(self.add_param_row)
         remove_param_btn.clicked.connect(self.remove_param_row)
+        
+        # 优化按钮样式
+        button_style = """
+            QPushButton {
+                background-color: #4caf50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #388e3c;
+            }
+            QPushButton:pressed {
+                background-color: #2e7d32;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """
+        add_param_btn.setStyleSheet(button_style)
+        remove_param_btn.setStyleSheet(button_style)
+        
         button_layout.addWidget(add_param_btn)
         button_layout.addWidget(remove_param_btn)
         button_layout.addStretch()
@@ -607,26 +756,77 @@ class TemplateTabWidget(QWidget):
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: transparent;
+            }
+        """)
         
         # 主容器
         container = QWidget()
         layout = QVBoxLayout(container)
+        layout.setContentsMargins(10, 5, 10, 10)
+        layout.setSpacing(8)
         
         # 操作按钮布局
         button_layout = QHBoxLayout()
         
+        button_layout.addStretch()  # 将按钮推到右边
+        
         # JSON美化按钮
         beautify_btn = QPushButton("美化")
         beautify_btn.clicked.connect(self.beautify_json)
-        button_layout.addWidget(beautify_btn)
         
-        button_layout.addStretch()
+        # 使用绿色按钮样式
+        button_style = """
+            QPushButton {
+                background-color: #4caf50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-weight: bold;
+                margin: 0px;
+            }
+            QPushButton:hover {
+                background-color: #388e3c;
+            }
+            QPushButton:pressed {
+                background-color: #2e7d32;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """
+        beautify_btn.setStyleSheet(button_style)
+        
+        button_layout.addWidget(beautify_btn)
         layout.addLayout(button_layout)
         
         # 请求体编辑器
         self.body_edit = QTextEdit()
         self.body_edit.setPlaceholderText('请输入JSON格式的请求体，例如: {"key": "value"}')
         self.body_edit.textChanged.connect(self.on_content_changed)
+        self.body_edit.setStyleSheet("""
+            QTextEdit {
+                background-color: #fafafa;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            QTextEdit:focus {
+                border-color: #b0b0b0;
+                background-color: #ffffff;
+            }
+        """)
         self.body_edit.setMinimumHeight(300)  # 增加编辑器最小高度
         layout.addWidget(self.body_edit)
         
@@ -642,10 +842,21 @@ class TemplateTabWidget(QWidget):
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: white;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: white;
+            }
+        """)
         
         # 主容器
         container = QWidget()
+        container.setStyleSheet("background-color: white;")
         layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # 超时设置
         timeout_layout = QHBoxLayout()

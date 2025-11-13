@@ -106,43 +106,166 @@ class ApiTemplateDialog(QDialog):
     def setup_request_tab(self, parent):
         layout = QVBoxLayout(parent)
 
-        # 请求方法选择
+        # 请求方法选择 - 仅保留GET/POST/PUT/DELETE
         method_layout = QHBoxLayout()
         method_layout.addWidget(QLabel("请求方法:"))
         self.method_combo = NoWheelComboBox()
-        self.method_combo.addItems(["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
+        self.method_combo.addItems(["GET", "POST", "PUT", "DELETE"])
         method_layout.addWidget(self.method_combo)
         method_layout.addStretch()
 
-        # URL路径
+        # URL路径 - 进一步增加输入框宽度
         url_layout = QFormLayout()
         self.url_edit = QLineEdit()
         self.url_edit.setPlaceholderText("例如: /api/v1/users")
+        self.url_edit.setMinimumWidth(700)  # 设置更大的最小宽度
         url_layout.addRow("URL路径:", self.url_edit)
 
         # Headers配置
         headers_group = QGroupBox("请求头(Headers)")
+        headers_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid #2196f3;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: #f8fdff;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+                color: #1976d2;
+            }
+        """)
         headers_layout = QVBoxLayout(headers_group)
         self.headers_table = QTableWidget()
         self.headers_table.setColumnCount(2)
         self.headers_table.setHorizontalHeaderLabels(["Header名称", "Header值"])
         self.headers_table.horizontalHeader().setStretchLastSection(True)
+        # 优化表格样式
+        self.headers_table.setAlternatingRowColors(True)
+        self.headers_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+            QHeaderView::section {
+                background-color: #2196f3;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border: none;
+                border-right: 1px solid #1976d2;
+            }
+        """)
+        self.headers_table.setMinimumHeight(200)
         headers_layout.addWidget(self.headers_table)
 
         # 参数配置
         params_group = QGroupBox("查询参数(Query Parameters)")
+        params_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid #4caf50;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: #f8fff8;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+                color: #388e3c;
+            }
+        """)
         params_layout = QVBoxLayout(params_group)
         self.params_table = QTableWidget()
         self.params_table.setColumnCount(2)
         self.params_table.setHorizontalHeaderLabels(["参数名", "参数值"])
         self.params_table.horizontalHeader().setStretchLastSection(True)
+        # 优化表格样式
+        self.params_table.setAlternatingRowColors(True)
+        self.params_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+            QHeaderView::section {
+                background-color: #4caf50;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border: none;
+                border-right: 1px solid #388e3c;
+            }
+        """)
+        self.params_table.setMinimumHeight(200)
         params_layout.addWidget(self.params_table)
 
         # 请求体配置
         body_group = QGroupBox("请求体(Body)")
+        body_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid #ff9800;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: #fff8f0;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+                color: #f57c00;
+            }
+        """)
         body_layout = QVBoxLayout(body_group)
         self.body_edit = QTextEdit()
         self.body_edit.setPlaceholderText('请输入JSON格式的请求体，例如: {"key": "value"}')
+        self.body_edit.setStyleSheet("""
+            QTextEdit {
+                background-color: #fafafa;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 10px;
+            }
+            QTextEdit:focus {
+                border-color: #2196f3;
+                background-color: #ffffff;
+            }
+        """)
+        self.body_edit.setMinimumHeight(150)
         body_layout.addWidget(self.body_edit)
 
         layout.addLayout(method_layout)
@@ -703,35 +826,11 @@ class ApiTemplateManager(QWidget):
         self.detail_widget = QWidget()
         detail_layout = QVBoxLayout(self.detail_widget)
 
-        # 提示信息容器 - 专门用于居中显示提示文本
-        self.info_container = QWidget()
-        info_container_layout = QVBoxLayout(self.info_container)
-        info_container_layout.setContentsMargins(0, 0, 0, 0)
-        info_container_layout.setSpacing(0)
-        
-        # 添加弹性空间使文本垂直居中
-        info_container_layout.addStretch()
-        
-        # 提示信息
+        # 直接创建提示信息标签，参考business_management.py的实现
         self.info_label = QLabel("请先在左侧新增接口或选择对应接口")
         self.info_label.setAlignment(Qt.AlignCenter)
-        self.info_label.setStyleSheet("color: #666; font-size: 14px; margin: 0px; padding: 0px;")
+        self.info_label.setStyleSheet("color: #666; font-size: 14px; margin: 20px;")
         
-        info_container_layout.addWidget(self.info_label)
-        
-        # 添加弹性空间使文本垂直居中
-        info_container_layout.addStretch()
-
-        # 详情容器（已废弃，保留但隐藏）
-        self.detail_container = QWidget()
-        self.detail_container.hide()
-        detail_container_layout = QVBoxLayout(self.detail_container)
-        
-        # 编辑容器（已废弃，保留但隐藏）
-        self.editor_container = QWidget()
-        self.editor_layout = QVBoxLayout(self.editor_container)
-        self.editor_container.hide()
-
         # 多标签页编辑器容器
         self.tabbed_editor_container = QWidget()
         self.tabbed_editor_layout = QVBoxLayout(self.tabbed_editor_container)
@@ -745,13 +844,10 @@ class ApiTemplateManager(QWidget):
         # 连接标签页关闭信号
         self.tabbed_editor.tab_closed.connect(self.on_tab_closed)
         
-        # 默认显示信息容器
-        self.info_container.show()
+        # 默认显示提示信息，隐藏编辑器
         self.tabbed_editor_container.hide()
 
-        detail_layout.addWidget(self.info_container)
-        detail_layout.addWidget(self.detail_container)
-        detail_layout.addWidget(self.editor_container)
+        detail_layout.addWidget(self.info_label)
         detail_layout.addWidget(self.tabbed_editor_container)
 
         self.splitter.addWidget(left_container)
@@ -943,6 +1039,18 @@ class ApiTemplateManager(QWidget):
             pass
         return QIcon()
 
+    def get_api_icon_by_method(self, method):
+        """根据HTTP方法获取对应的API图标"""
+        method = method.upper() if method else "GET"
+        icon_map = {
+            "GET": "http_get.png",
+            "POST": "http_post.png", 
+            "PUT": "http_put.png",
+            "DELETE": "http_del.png"
+        }
+        icon_name = icon_map.get(method, "api.png")
+        return self.get_icon(icon_name)
+
     def load_projects(self):
         """加载项目列表"""
         # 检查服务对象是否已初始化
@@ -966,10 +1074,76 @@ class ApiTemplateManager(QWidget):
     def on_project_changed(self, index):
         """项目选择变化"""
         if index >= 0:
+            # 保存当前项目选择，用于可能的恢复
+            self.previous_project = getattr(self, 'current_project', None)
+            
+            # 检查是否有未保存的标签页
+            if hasattr(self, 'tabbed_editor') and self.tabbed_editor:
+                if self.tabbed_editor.has_modified_tabs():
+                    # 显示保存确认弹窗
+                    msg_box = QMessageBox(self)
+                    msg_box.setWindowTitle('保存确认')
+                    msg_box.setText('有未保存的接口模板，切换项目将关闭所有标签页。请选择操作：')
+                    
+                    # 添加自定义按钮
+                    save_all_btn = msg_box.addButton('保存全部', QMessageBox.AcceptRole)
+                    ignore_btn = msg_box.addButton('忽略', QMessageBox.DestructiveRole)
+                    cancel_btn = msg_box.addButton('取消', QMessageBox.RejectRole)
+                    
+                    # 设置默认按钮
+                    msg_box.setDefaultButton(save_all_btn)
+                    
+                    msg_box.exec_()
+                    
+                    clicked_button = msg_box.clickedButton()
+                    
+                    if clicked_button == save_all_btn:
+                        # 保存所有未保存的标签页
+                        self.save_all_modified_tabs()
+                        # 关闭所有标签页
+                        self.tabbed_editor.close_all_tabs()
+                    elif clicked_button == ignore_btn:
+                        # 忽略修改，直接关闭所有标签页
+                        self.tabbed_editor.close_all_tabs()
+                    else:
+                        # 取消切换项目，恢复之前的选择
+                        self.restore_previous_project_selection()
+                        return
+                else:
+                    # 没有未保存的标签页，直接关闭所有标签页
+                    self.tabbed_editor.close_all_tabs()
+            
+            # 更新当前项目
             self.current_project = self.project_combo.currentData()
             self.current_folder = None
             self.delete_folder_btn.setEnabled(False)
             self.load_api_tree()
+    
+    def save_all_modified_tabs(self):
+        """保存所有未保存的标签页"""
+        if not hasattr(self, 'tabbed_editor') or not self.tabbed_editor:
+            return
+            
+        # 遍历所有标签页，保存未保存的
+        for tab_id, tab_data in self.tabbed_editor.tabs.items():
+            if tab_data['modified']:
+                # 保存标签页
+                tab_data['widget'].save_template()
+                # 标记为已保存
+                self.tabbed_editor.set_tab_modified(tab_id, False)
+    
+    def restore_previous_project_selection(self):
+        """恢复之前的项目选择"""
+        if hasattr(self, 'previous_project') and self.previous_project:
+            # 在项目下拉列表中查找之前的项目
+            for i in range(self.project_combo.count()):
+                if self.project_combo.itemData(i) == self.previous_project:
+                    self.project_combo.setCurrentIndex(i)
+                    break
+        else:
+            # 如果没有之前的项目，选择第一个项目
+            if self.project_combo.count() > 0:
+                self.project_combo.setCurrentIndex(0)
 
     def load_api_tree(self):
         """加载接口树"""
@@ -1011,7 +1185,7 @@ class ApiTemplateManager(QWidget):
                 template_item = QTreeWidgetItem()
                 template_item.setText(0, template['name'])
                 template_item.setData(0, Qt.UserRole, {'type': 'template', 'data': template})
-                template_item.setIcon(0, self.get_icon("api.png"))
+                template_item.setIcon(0, self.get_api_icon_by_method(template.get('method')))
 
                 # 添加到对应文件夹
                 folder_id = template.get('folder_id')
@@ -1054,9 +1228,8 @@ class ApiTemplateManager(QWidget):
             # 点击接口使用多标签页编辑器打开
             self.tabbed_editor.open_template(item_data)
             
-            # 隐藏详情容器，显示多标签页编辑器
+            # 隐藏提示信息，显示多标签页编辑器
             self.info_label.hide()
-            self.detail_container.hide()
             self.tabbed_editor_container.show()
             # 选中接口模板时禁用删除按钮
             self.delete_folder_btn.setEnabled(False)
@@ -1071,9 +1244,8 @@ class ApiTemplateManager(QWidget):
             # 双击接口使用多标签页编辑器打开
             self.tabbed_editor.open_template(data['data'])
             
-            # 隐藏详情容器，显示多标签页编辑器
+            # 隐藏提示信息，显示多标签页编辑器
             self.info_label.hide()
-            self.detail_container.hide()
             self.tabbed_editor_container.show()
             
     def on_item_copy_requested(self, item):
@@ -1508,8 +1680,8 @@ class ApiTemplateManager(QWidget):
                     template_item.setData(0, Qt.UserRole, {'type': 'template', 'data': template})
                     template_item.setToolTip(0, f"{template['method']} {template['url_path']}\n{template.get('description', '')}")
                     
-                    # 设置接口模板图标
-                    template_item.setIcon(0, self.get_icon("api.png"))
+                    # 设置接口模板图标（根据HTTP方法动态设置）
+                    template_item.setIcon(0, self.get_api_icon_by_method(template.get('method')))
                     
                     # 添加到对应文件夹
                     folder_id = template.get('folder_id')
@@ -1548,10 +1720,9 @@ class ApiTemplateManager(QWidget):
 
     def show_folder_info(self):
         """显示文件夹信息"""
-        # 隐藏详情容器和多标签页编辑器，显示提示信息容器
-        self.detail_container.hide()
+        # 显示提示信息，隐藏编辑器
+        self.info_label.show()
         self.tabbed_editor_container.hide()
-        self.info_container.show()
     
     def on_tab_closed(self):
         """标签页关闭事件处理"""
@@ -1687,9 +1858,8 @@ class ApiTemplateManager(QWidget):
         # 使用多标签页编辑器打开新模板
         self.tabbed_editor.open_template(template_data)
         
-        # 隐藏详情容器，显示多标签页编辑器
-        self.info_container.hide()
-        self.detail_container.hide()
+        # 隐藏提示信息，显示多标签页编辑器
+        self.info_label.hide()
         self.tabbed_editor_container.show()
         
     def add_api_template_to_folder(self, folder_data):
@@ -1714,9 +1884,8 @@ class ApiTemplateManager(QWidget):
         # 使用多标签页编辑器打开新模板
         self.tabbed_editor.open_template(template_data)
         
-        # 隐藏详情容器，显示多标签页编辑器
-        self.info_container.hide()
-        self.detail_container.hide()
+        # 隐藏提示信息，显示多标签页编辑器
+        self.info_label.hide()
         self.tabbed_editor_container.show()
 
     # edit_api_template方法已删除，接口模板编辑功能通过多标签页编辑器实现
@@ -1790,11 +1959,15 @@ class ApiTemplateManager(QWidget):
                     template_data['sort_order'] = latest_template.get('sort_order', 0)
                 
                 # 更新现有模板
+                print(f"开始更新模板，模板ID: {template_data['id']}")
+                print(f"模板数据: {template_data}")
                 save_success = self.api_service.update_template(template_data['id'], template_data)
+                print(f"更新结果: {save_success}")
                 if save_success:
                     Toast.success(self, "接口模板更新成功")
                 else:
-                    QMessageBox.critical(self, "错误", "接口模板更新失败")
+                    Toast.critical(self, "错误", "接口模板更新失败")
+                    print("更新失败，检查模板数据格式和数据库连接")
             else:
                 # 创建新模板
                 new_template_id = self.api_service.create_template(template_data)
@@ -1926,10 +2099,8 @@ class ApiTemplateManager(QWidget):
                 if hasattr(self, 'tabbed_editor') and self.tabbed_editor:
                     if self.tabbed_editor.tab_widget.count() == 0:
                         self.info_label.show()
-                        self.detail_container.hide()
                 else:
                     self.info_label.show()
-                    self.detail_container.hide()
                 
                 # 使用Toast提示替代QMessageBox，避免二次点击
                 Toast.success(self, "接口模板删除成功")
@@ -2017,10 +2188,6 @@ class ApiTemplateManager(QWidget):
             except Exception as e:
                 Toast.error(self, f"更新文件夹失败: {str(e)}")
 
-    # copy_api_folder方法已删除，文件夹不允许复制
-
-    # _copy_folder_structure方法已删除，文件夹不允许复制
-
     def copy_api_template_to_edit(self, template_data):
         """复制接口模板并自动进入编辑页面"""
         # 检查项目是否已选择
@@ -2051,9 +2218,8 @@ class ApiTemplateManager(QWidget):
             if tab_id in self.tabbed_editor.tabs:
                 self.tabbed_editor.set_tab_modified(tab_id, True)
             
-            # 隐藏详情容器，显示多标签页编辑器
+            # 隐藏提示信息，显示多标签页编辑器
             self.info_label.hide()
-            self.detail_container.hide()
             self.tabbed_editor_container.show()
         except Exception as e:
             pass
@@ -2122,7 +2288,6 @@ class ApiTemplateManager(QWidget):
                 # 自动打开编辑页面
                 self.tabbed_editor.open_template(new_template)
                 self.info_label.hide()
-                self.detail_container.hide()
                 self.tabbed_editor_container.show()
                 
             except Exception as e:
@@ -2162,7 +2327,6 @@ class ApiTemplateManager(QWidget):
                 # 自动打开编辑页面
                 self.tabbed_editor.open_template(new_template)
                 self.info_label.hide()
-                self.detail_container.hide()
                 self.tabbed_editor_container.show()
                 
             except Exception as e:
@@ -2190,7 +2354,6 @@ class ApiTemplateManager(QWidget):
                 self.load_api_tree()
                 self.data_changed.emit()
                 self.info_label.show()
-                self.detail_container.hide()
                 # 删除后重置当前选中的文件夹
                 self.current_folder = None
                 self.delete_folder_btn.setEnabled(False)
