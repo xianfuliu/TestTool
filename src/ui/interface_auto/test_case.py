@@ -19,7 +19,6 @@ from src.core.services.project_service import ProjectService
 from src.core.services.test_case_service import TestCaseService
 from src.core.models.interface_models import TestCase, TestCaseStep
 from src.ui.interface_auto.components.api_card import ApiCard
-from src.ui.interface_auto.components.case_editor import CaseEditor
 from src.ui.interface_auto.components.tabbed_case_editor import TabbedCaseEditor
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from src.utils.interface_utils.variable_manager import get_global_variable_manager
@@ -186,7 +185,7 @@ class TestCaseDialog(QDialog):
     def open_variable_manager(self):
         """打开变量管理器"""
         from src.ui.interface_auto.components.variable_editor import VariableManagerDialog
-        dialog = VariableManagerDialog(self)
+        dialog = VariableManagerDialog(self, self.project_id)
         dialog.exec_()
 
 
@@ -1105,7 +1104,7 @@ class TestCaseManager(QWidget):
             )
 
         except Exception as e:
-            Toast.warning(self, f"加载用例详情失败: {str(e)}")
+            Toast.warning(self, "错误", f"加载用例详情失败: {str(e)}")
 
     def load_case_details(self, case_data):
         """加载用例详情"""
@@ -1113,10 +1112,11 @@ class TestCaseManager(QWidget):
             # 获取用例完整数据（包括步骤）
             full_case_data = self.case_service.get_case_with_steps(case_data['id'])
             self.current_case_data = full_case_data
-            self.case_editor.load_case(full_case_data)
+            # 使用tabbed_case_editor打开用例进行编辑
+            self.tabbed_case_editor.open_case(full_case_data, self.current_project, case_data.get('folder_id'))
 
         except Exception as e:
-            Toast.warning(self, f"加载用例详情失败: {str(e)}")
+            Toast.warning(self, "错误", f"加载用例详情失败: {str(e)}")
 
     def on_case_dragged(self, source_item, target_item):
         """处理测试用例拖拽事件"""

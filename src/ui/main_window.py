@@ -1,5 +1,5 @@
 import os
-from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox)
+from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox, QMenuBar, QMenu, QAction)
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from PyQt5.QtCore import Qt, QTimer
 
@@ -23,6 +23,14 @@ try:
 except ImportError as e:
     print(f"卡片工具模块不可用: {e}")
     TOOL_CARDS_AVAILABLE = False
+
+# 条件导入变量管理对话框
+try:
+    from src.ui.interface_auto.variable_management import VariableManagement
+    VARIABLE_MANAGEMENT_AVAILABLE = True
+except ImportError as e:
+    print(f"变量管理模块不可用: {e}")
+    VARIABLE_MANAGEMENT_AVAILABLE = False
 
 
 class MainWindow(QMainWindow):
@@ -219,6 +227,9 @@ class MainWindow(QMainWindow):
         # 设置Tab Widget为中心部件
         self.setCentralWidget(tab_widget)
 
+        # 创建菜单栏
+        self.create_menu_bar()
+
         # 标记UI已初始化
         self._ui_initialized = True
 
@@ -281,3 +292,31 @@ class MainWindow(QMainWindow):
         painter.end()
 
         return QIcon(pixmap)
+
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        # 创建菜单栏
+        menu_bar = QMenuBar(self)
+        self.setMenuBar(menu_bar)
+
+        # 创建工具菜单
+        tools_menu = QMenu("工具", self)
+        menu_bar.addMenu(tools_menu)
+
+        # 添加变量管理菜单项
+        variable_management_action = QAction("变量管理", self)
+        variable_management_action.triggered.connect(self.open_variable_management)
+        tools_menu.addAction(variable_management_action)
+
+    def open_variable_management(self):
+        """打开变量管理对话框"""
+        if not VARIABLE_MANAGEMENT_AVAILABLE:
+            QMessageBox.warning(self, "功能不可用", "变量管理模块不可用，请检查模块依赖")
+            return
+
+        try:
+            # 创建变量管理对话框
+            dialog = VariableManagement(self)
+            dialog.exec_()
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"打开变量管理失败: {str(e)}")

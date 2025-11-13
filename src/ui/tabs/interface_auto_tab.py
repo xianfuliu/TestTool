@@ -9,6 +9,7 @@ from src.ui.interface_auto.test_case import TestCaseManager
 from src.ui.interface_auto.scheduler import SchedulerManager
 from src.ui.interface_auto.test_report import TestReportManager
 from src.ui.interface_auto.global_tools import GlobalToolsManager
+from src.ui.interface_auto.variable_management import VariableManagement
 from src.ui.interface_auto.components.collapse_button import CollapseButton
 
 
@@ -41,6 +42,7 @@ class InterfaceAutoTab(QWidget):
         self.scheduler = None
         self.test_report = None
         self.global_tools = None
+        self.variable_management = None
         self.left_nav = None
         self.stacked_widget = None
 
@@ -147,7 +149,7 @@ class InterfaceAutoTab(QWidget):
         # 添加导航项
         nav_items = [
             "业务管理", "接口模板", "用例管理",
-            "定时调度", "测试报告", "全局工具"
+            "定时调度", "测试报告", "全局工具", "变量管理"
         ]
         for item in nav_items:
             self.left_nav.addItem(item)
@@ -189,6 +191,7 @@ class InterfaceAutoTab(QWidget):
         self.scheduler = SchedulerManager(self)
         self.test_report = TestReportManager(self)
         self.global_tools = GlobalToolsManager(self)
+        self.variable_management = VariableManagement(self)
 
         # 添加到堆叠窗口
         self.stacked_widget.addWidget(self.business_management)
@@ -197,6 +200,7 @@ class InterfaceAutoTab(QWidget):
         self.stacked_widget.addWidget(self.scheduler)
         self.stacked_widget.addWidget(self.test_report)
         self.stacked_widget.addWidget(self.global_tools)
+        self.stacked_widget.addWidget(self.variable_management)
 
         # 添加到分割器
         self.splitter.addWidget(self.left_container)

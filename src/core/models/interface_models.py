@@ -1219,6 +1219,16 @@ class TestCase:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    @property
+    def global_variables(self) -> Dict[str, Any]:
+        """全局变量属性别名（兼容旧代码）"""
+        return self.global_vars
+
+    @global_variables.setter
+    def global_variables(self, value: Dict[str, Any]):
+        """设置全局变量"""
+        self.global_vars = value
+
     # 关联数据（非数据库字段）
     steps: List['TestCaseStep'] = field(default_factory=list)
     environment_name: str = ""
@@ -1543,6 +1553,50 @@ class TestCaseStep:
     def has_assertions(self) -> bool:
         """检查是否有断言"""
         return bool(self.assertions)
+
+    def update_from_dict(self, data: Dict[str, Any]):
+        """从字典更新对象属性"""
+        if 'name' in data:
+            self.name = data['name']
+        if 'enabled' in data:
+            self.enabled = bool(data['enabled'])
+        if 'pre_processing' in data:
+            pre_processing = data['pre_processing']
+            if isinstance(pre_processing, str):
+                try:
+                    pre_processing = json.loads(pre_processing) if pre_processing else {}
+                except json.JSONDecodeError:
+                    pre_processing = {}
+            self.pre_processing = pre_processing
+        if 'post_processing' in data:
+            post_processing = data['post_processing']
+            if isinstance(post_processing, str):
+                try:
+                    post_processing = json.loads(post_processing) if post_processing else {}
+                except json.JSONDecodeError:
+                    post_processing = {}
+            self.post_processing = post_processing
+        if 'assertions' in data:
+            assertions = data['assertions']
+            if isinstance(assertions, str):
+                try:
+                    assertions = json.loads(assertions) if assertions else {}
+                except json.JSONDecodeError:
+                    assertions = {}
+            self.assertions = assertions
+        if 'variables' in data:
+            variables = data['variables']
+            if isinstance(variables, str):
+                try:
+                    variables = json.loads(variables) if variables else {}
+                except json.JSONDecodeError:
+                    variables = {}
+            self.variables = variables
+        if 'api_template' in data:
+            self.api_template_id = data['api_template'].get('id')
+            self.api_name = data['api_template'].get('name', '')
+            self.api_method = data['api_template'].get('method', '')
+            self.api_url_path = data['api_template'].get('url_path', '')
 
     def clone(self) -> 'TestCaseStep':
         """创建副本"""

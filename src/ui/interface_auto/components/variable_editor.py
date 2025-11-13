@@ -1,16 +1,10 @@
 import os
 import json
-from typing import Optional, Dict, Any, List, Union
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
-                             QTableWidgetItem, QPushButton, QLabel, QLineEdit,
+from typing import Dict, Any
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTableWidget,
+                             QTableWidgetItem, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,
-                             QHeaderView, QInputDialog, QCheckBox, QSpinBox,
-                             QListWidget, QListWidgetItem, QSplitter, QToolBar,
-                             QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
-                             QProgressBar, QTreeWidget, QTreeWidgetItem, QFrame)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
-from PyQt5.QtGui import QIcon, QFont, QColor
+                             QFormLayout, QHeaderView)
 from src.utils.interface_utils.variable_manager import VariableManager, VariableValidator, VariableStorage
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from src.ui.widgets.toast_tips import Toast
@@ -135,8 +129,9 @@ class VariableEditorDialog(QDialog):
 class VariableManagerDialog(QDialog):
     """变量管理器对话框"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, project_id=0):
         super().__init__(parent)
+        self.project_id = project_id
         self.variable_manager = VariableManager()
         self.variable_storage = VariableStorage()
         self.init_ui()
@@ -163,83 +158,136 @@ class VariableManagerDialog(QDialog):
         system_tab = QWidget()
         self.setup_system_tab(system_tab)
 
-        # 导入导出Tab
-        import_export_tab = QWidget()
-        self.setup_import_export_tab(import_export_tab)
-
         tab_widget.addTab(global_tab, "全局变量")
         tab_widget.addTab(local_tab, "局部变量")
         tab_widget.addTab(system_tab, "系统变量")
-        tab_widget.addTab(import_export_tab, "导入导出")
 
         layout.addWidget(tab_widget)
 
     def setup_global_tab(self, parent):
         layout = QVBoxLayout(parent)
 
-        # 工具栏
-        toolbar = QHBoxLayout()
-
-        self.add_global_btn = QPushButton("新增全局变量")
-        self.add_global_btn.clicked.connect(self.add_global_variable)
-
-        self.edit_global_btn = QPushButton("编辑")
-        self.edit_global_btn.clicked.connect(self.edit_global_variable)
-
-        self.delete_global_btn = QPushButton("删除")
-        self.delete_global_btn.clicked.connect(self.delete_global_variable)
-
-        self.clear_global_btn = QPushButton("清空")
-        self.clear_global_btn.clicked.connect(self.clear_global_variables)
-
-        toolbar.addWidget(self.add_global_btn)
-        toolbar.addWidget(self.edit_global_btn)
-        toolbar.addWidget(self.delete_global_btn)
-        toolbar.addWidget(self.clear_global_btn)
-        toolbar.addStretch()
+        # 全局变量说明
+        info_label = QLabel("全局变量是可在所有测试用例中使用的变量，仅支持查看")
+        info_label.setStyleSheet("color: #666; padding: 10px;")
+        layout.addWidget(info_label)
 
         # 全局变量表格
         self.global_table = QTableWidget()
         self.global_table.setColumnCount(4)
         self.global_table.setHorizontalHeaderLabels(["变量名", "类型", "值", "描述"])
-        self.global_table.horizontalHeader().setStretchLastSection(True)
+        
+        # 设置列宽 - 固定初始宽度，用户可以调整
+        self.global_table.setColumnWidth(0, 300)  # 变量名列宽
+        self.global_table.setColumnWidth(1, 150)   # 类型列宽
+        self.global_table.setColumnWidth(2, 400)  # 值列宽
+        self.global_table.setColumnWidth(3, 300)  # 描述列宽
+        
+        # 允许用户调整列宽，最后一列跟随窗口拉伸
+        self.global_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.global_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)  # 最后一列自动拉伸
         self.global_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.global_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        # 参考变量管理的表格样式
+        self.global_table.setAlternatingRowColors(True)
+        self.global_table.verticalHeader().setVisible(False)  # 隐藏序号列
+        self.global_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+            QTableWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QHeaderView::section {
+                background-color: #d0d0d0;
+                color: #333333;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 6px;
+                border: none;
+                border-right: 1px solid #b0b0b0;
+                min-height: 25px;
+            }
+        """)
+        self.global_table.setMinimumHeight(400)  # 增加表格高度
+        self.global_table.verticalHeader().setDefaultSectionSize(50)
 
-        layout.addLayout(toolbar)
         layout.addWidget(self.global_table)
 
     def setup_local_tab(self, parent):
         layout = QVBoxLayout(parent)
 
-        # 工具栏
-        toolbar = QHBoxLayout()
-
-        self.add_local_btn = QPushButton("新增局部变量")
-        self.add_local_btn.clicked.connect(self.add_local_variable)
-
-        self.edit_local_btn = QPushButton("编辑")
-        self.edit_local_btn.clicked.connect(self.edit_local_variable)
-
-        self.delete_local_btn = QPushButton("删除")
-        self.delete_local_btn.clicked.connect(self.delete_local_variable)
-
-        self.clear_local_btn = QPushButton("清空")
-        self.clear_local_btn.clicked.connect(self.clear_local_variables)
-
-        toolbar.addWidget(self.add_local_btn)
-        toolbar.addWidget(self.edit_local_btn)
-        toolbar.addWidget(self.delete_local_btn)
-        toolbar.addWidget(self.clear_local_btn)
-        toolbar.addStretch()
+        # 局部变量说明
+        info_label = QLabel("局部变量是仅在当前测试用例中使用的变量，仅支持查看")
+        info_label.setStyleSheet("color: #666; padding: 10px;")
+        layout.addWidget(info_label)
 
         # 局部变量表格
         self.local_table = QTableWidget()
         self.local_table.setColumnCount(4)
         self.local_table.setHorizontalHeaderLabels(["变量名", "类型", "值", "描述"])
-        self.local_table.horizontalHeader().setStretchLastSection(True)
+        
+        # 设置列宽 - 固定初始宽度，用户可以调整
+        self.local_table.setColumnWidth(0, 300)  # 变量名列宽
+        self.local_table.setColumnWidth(1, 150)   # 类型列宽
+        self.local_table.setColumnWidth(2, 400)  # 值列宽
+        self.local_table.setColumnWidth(3, 300)  # 描述列宽
+        
+        # 允许用户调整列宽，最后一列跟随窗口拉伸
+        self.local_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.local_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)  # 最后一列自动拉伸
         self.local_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.local_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        # 参考变量管理的表格样式
+        self.local_table.setAlternatingRowColors(True)
+        self.local_table.verticalHeader().setVisible(False)  # 隐藏序号列
+        self.local_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+            QTableWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QHeaderView::section {
+                background-color: #d0d0d0;
+                color: #333333;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 6px;
+                border: none;
+                border-right: 1px solid #b0b0b0;
+                min-height: 25px;
+            }
+        """)
+        self.local_table.setMinimumHeight(400)  # 增加表格高度
+        self.local_table.verticalHeader().setDefaultSectionSize(50)
 
-        layout.addLayout(toolbar)
         layout.addWidget(self.local_table)
 
     def setup_system_tab(self, parent):
@@ -254,50 +302,59 @@ class VariableManagerDialog(QDialog):
         self.system_table = QTableWidget()
         self.system_table.setColumnCount(3)
         self.system_table.setHorizontalHeaderLabels(["变量名", "值", "描述"])
-        self.system_table.horizontalHeader().setStretchLastSection(True)
+        
+        # 设置列宽 - 固定初始宽度，用户可以调整
+        self.system_table.setColumnWidth(0, 250)  # 变量名列宽
+        self.system_table.setColumnWidth(1, 300)  # 值列宽
+        self.system_table.setColumnWidth(2, 200)  # 描述列宽
+        
+        # 允许用户调整列宽，最后一列跟随窗口拉伸
+        self.system_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.system_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)  # 最后一列自动拉伸
         self.system_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        # 参考变量管理的表格样式
+        self.system_table.setAlternatingRowColors(True)
+        self.system_table.verticalHeader().setVisible(False)  # 隐藏序号列
+        self.system_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+            }
+            QTableWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QHeaderView::section {
+                background-color: #d0d0d0;
+                color: #333333;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 6px;
+                border: none;
+                border-right: 1px solid #b0b0b0;
+                min-height: 25px;
+            }
+        """)
+        self.system_table.setMinimumHeight(400)  # 增加表格高度
+        self.system_table.verticalHeader().setDefaultSectionSize(50)
 
         layout.addWidget(self.system_table)
 
         # 加载系统变量
         self.load_system_variables()
 
-    def setup_import_export_tab(self, parent):
-        layout = QVBoxLayout(parent)
 
-        # 导出区域
-        export_group = QGroupBox("导出变量")
-        export_layout = QVBoxLayout(export_group)
-
-        export_btn = QPushButton("导出所有变量")
-        export_btn.clicked.connect(self.export_variables)
-
-        export_layout.addWidget(QLabel("将当前所有变量导出为JSON文件:"))
-        export_layout.addWidget(export_btn)
-
-        # 导入区域
-        import_group = QGroupBox("导入变量")
-        import_layout = QVBoxLayout(import_group)
-
-        import_btn = QPushButton("导入变量")
-        import_btn.clicked.connect(self.import_variables)
-
-        import_layout.addWidget(QLabel("从JSON文件导入变量:"))
-        import_layout.addWidget(import_btn)
-
-        # 变量预览
-        self.preview_text = QTextEdit()
-        self.preview_text.setReadOnly(True)
-        self.preview_text.setMaximumHeight(200)
-
-        preview_btn = QPushButton("预览当前变量")
-        preview_btn.clicked.connect(self.preview_variables)
-
-        layout.addWidget(export_group)
-        layout.addWidget(import_group)
-        layout.addWidget(QLabel("变量预览:"))
-        layout.addWidget(preview_btn)
-        layout.addWidget(self.preview_text)
 
     def load_variables(self):
         """加载变量"""
@@ -310,7 +367,7 @@ class VariableManagerDialog(QDialog):
             # 从数据库加载全局变量
             from src.core.services.global_variable_service import get_global_variable_service
             service = get_global_variable_service()
-            global_vars = service.get_all_global_variables()
+            global_vars = service.get_global_variables_by_project(self.project_id)
             
             # 同步到内存管理器
             var_dict = {}
@@ -332,7 +389,6 @@ class VariableManagerDialog(QDialog):
                 self.global_table.setItem(row, 2, QTableWidgetItem(value_str))
                 self.global_table.setItem(row, 3, QTableWidgetItem(var.get('description', '')))
 
-            self.global_table.resizeColumnsToContents()
         except Exception as e:
             print(f"加载全局变量失败: {e}")
             # 降级处理：使用内存中的变量
@@ -348,8 +404,6 @@ class VariableManagerDialog(QDialog):
                     value_str = value_str[:50] + '...'
                 self.global_table.setItem(row, 2, QTableWidgetItem(value_str))
                 self.global_table.setItem(row, 3, QTableWidgetItem(''))
-
-            self.global_table.resizeColumnsToContents()
 
     def load_local_variables(self):
         """加载局部变量"""
@@ -369,8 +423,6 @@ class VariableManagerDialog(QDialog):
                 value_str = value_str[:50] + '...'
             self.local_table.setItem(row, 2, QTableWidgetItem(value_str))
             self.local_table.setItem(row, 3, QTableWidgetItem(''))  # 描述
-
-        self.local_table.resizeColumnsToContents()
 
     def load_system_variables(self):
         """加载系统变量"""
@@ -405,8 +457,6 @@ class VariableManagerDialog(QDialog):
             # 描述
             desc = descriptions.get(name, '系统变量')
             self.system_table.setItem(row, 2, QTableWidgetItem(desc))
-
-        self.system_table.resizeColumnsToContents()
 
     def add_global_variable(self):
         """新增全局变量"""
@@ -615,50 +665,3 @@ class VariableManagerDialog(QDialog):
             return False, error_msg
 
         return True, ""
-
-    def export_variables(self):
-        """导出变量"""
-        from PyQt5.QtWidgets import QFileDialog
-
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "导出变量", "variables.json", "JSON Files (*.json)"
-        )
-
-        if file_path:
-            try:
-                all_variables = {
-                    'global': self.variable_manager.global_variables,
-                    'local': self.variable_manager.local_variables
-                }
-                self.variable_storage.export_variables(file_path, all_variables)
-                Toast.success(self, "变量导出成功")
-            except Exception as e:
-                Toast.error(self, f"导出变量失败: {str(e)}")
-
-    def import_variables(self):
-        """导入变量"""
-        from PyQt5.QtWidgets import QFileDialog
-
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "导入变量", "", "JSON Files (*.json)"
-        )
-
-        if file_path:
-            try:
-                imported_vars = self.variable_storage.import_variables(file_path)
-
-                if 'global' in imported_vars:
-                    self.variable_manager.set_global_variables(imported_vars['global'])
-                if 'local' in imported_vars:
-                    self.variable_manager.set_local_variables(imported_vars['local'])
-
-                self.load_variables()
-                Toast.success(self, "变量导入成功")
-            except Exception as e:
-                Toast.error(self, f"导入变量失败: {str(e)}")
-
-    def preview_variables(self):
-        """预览变量"""
-        all_vars = self.variable_manager.get_all_variables()
-        preview_text = json.dumps(all_vars, indent=2, ensure_ascii=False)
-        self.preview_text.setText(preview_text)

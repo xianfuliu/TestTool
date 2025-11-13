@@ -259,13 +259,16 @@ DB_TABLES = {
     'global_variables': '''
         CREATE TABLE IF NOT EXISTS global_variables (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(100) NOT NULL UNIQUE,
+            project_id INT NOT NULL DEFAULT 0,
+            name VARCHAR(100) NOT NULL,
             value TEXT,
             variable_type ENUM('string', 'number', 'boolean', 'json') DEFAULT 'string',
             description TEXT,
             created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_project_name (project_id, name),
+            INDEX idx_project_id (project_id),
             INDEX idx_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
