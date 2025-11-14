@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
                              QTabWidget, QPushButton, QLabel, QFrame, QMenu,
                              QAction, QMessageBox, QApplication, QSizePolicy)
 from src.ui.widgets.toast_tips import Toast
@@ -30,8 +30,7 @@ class ToolCardWidget(QFrame):
                 padding: 0px;
             }
             QFrame:hover {
-                border: 1px solid #4299e1;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+                border: 2px solid #4299e1;
             }
         """)
 
@@ -336,16 +335,14 @@ class ToolCardsTab(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("QScrollArea { border: none; background: #f8fafc; }")
 
-        # 卡片容器
+        # 卡片容器 - 使用网格布局实现自动换行
         self.cards_container = QWidget()
-        self.cards_layout = QHBoxLayout(self.cards_container)
+        self.cards_layout = QGridLayout(self.cards_container)
         self.cards_layout.setSpacing(15)
         self.cards_layout.setContentsMargins(15, 15, 15, 15)
+        self.cards_layout.setAlignment(Qt.AlignTop)
 
-        # 设置卡片容器为可换行的流式布局
-        self.cards_container.setLayout(self.cards_layout)
         scroll_area.setWidget(self.cards_container)
-
         parent_layout.addWidget(scroll_area, 1)
 
     def load_config(self):
@@ -459,15 +456,24 @@ class ToolCardsTab(QWidget):
 
         # 清空卡片区域
         for i in reversed(range(self.cards_layout.count())):
-            widget = self.cards_layout.itemAt(i).widget()
-            if widget is not None:
-                widget.deleteLater()
+            item = self.cards_layout.itemAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
 
-        # 添加卡片
+        # 添加卡片 - 使用网格布局，每行最多3个卡片
         cards = current_sub_business.get('cards', [])
-        for card_data in cards:
+        max_columns = 3  # 每行最多显示3个卡片
+        
+        for i, card_data in enumerate(cards):
             card_widget = ToolCardWidget(card_data, self)
-            self.cards_layout.addWidget(card_widget)
+            # 设置卡片固定大小
+            card_widget.setFixedSize(280, 180)  # 固定卡片大小
+            
+            # 计算网格位置
+            row = i // max_columns
+            column = i % max_columns
+            
+            self.cards_layout.addWidget(card_widget, row, column)
 
     def open_config_dialog(self):
         """打开配置对话框"""

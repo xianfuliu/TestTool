@@ -26,18 +26,51 @@ class Database:
     def __init__(self):
         from config.settings import DATABASE_CONFIG
         self.config = DATABASE_CONFIG
+        self._connection_pool = []
+        self._max_pool_size = 5
 
     def get_connection(self):
-        """获取数据库连接"""
-        return pymysql.connect(
-            host=self.config['host'],
-            port=self.config['port'],
-            user=self.config['user'],
-            password=self.config['password'],
-            database=self.config['database'],
-            charset='utf8mb4',
-            cursorclass=DictCursor
-        )
+        """获取数据库连接（带重连机制）"""
+        try:
+            conn = pymysql.connect(
+                host=self.config['host'],
+                port=self.config['port'],
+                user=self.config['user'],
+                password=self.config['password'],
+                database=self.config['database'],
+                charset='utf8mb4',
+                cursorclass=DictCursor,
+                connect_timeout=30,  # 连接超时30秒
+                read_timeout=60,     # 读取超时60秒
+                write_timeout=60,    # 写入超时60秒
+                autocommit=False     # 关闭自动提交，手动控制事务
+            )
+            
+            # 测试连接是否有效
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            
+            return conn
+        except pymysql.Error as e:
+            print(f"数据库连接失败: {e}")
+            # 等待1秒后重试
+            import time
+            time.sleep(1)
+            
+            # 重试连接
+            return pymysql.connect(
+                host=self.config['host'],
+                port=self.config['port'],
+                user=self.config['user'],
+                password=self.config['password'],
+                database=self.config['database'],
+                charset='utf8mb4',
+                cursorclass=DictCursor,
+                connect_timeout=30,
+                read_timeout=60,
+                write_timeout=60,
+                autocommit=False
+            )
 
     def init_database(self):
         """初始化数据库表结构"""

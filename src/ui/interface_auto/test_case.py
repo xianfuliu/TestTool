@@ -25,6 +25,57 @@ from src.utils.interface_utils.variable_manager import get_global_variable_manag
 from src.ui.widgets.toast_tips import Toast
 
 
+class ApiTemplateTreeWidget(QTreeWidget):
+    """自定义接口模板树控件，支持拖拽接口模板到步骤区域"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_manager = parent
+    
+    def startDrag(self, supported_actions):
+        """重写拖拽开始事件"""
+        # 获取当前选中的项
+        selected_items = self.selectedItems()
+        if not selected_items:
+            return
+            
+        item = selected_items[0]
+        data = item.data(0, Qt.UserRole)
+        
+        # 只允许拖拽接口模板，不允许拖拽文件夹
+        if not data or data['type'] != 'template':
+            return
+            
+        template_data = data['data']
+        
+        # 创建拖拽数据
+        mime_data = QMimeData()
+        
+        # 设置拖拽数据为JSON格式
+        import json
+        drag_data = {
+            'type': 'api_template',
+            'template_id': template_data['id'],
+            'template_name': template_data['name'],
+            'method': template_data.get('method', 'GET'),
+            'url': template_data.get('url', '')
+        }
+        
+        mime_data.setData('application/json', json.dumps(drag_data).encode('utf-8'))
+        mime_data.setText(f"API模板: {template_data['name']}")
+        
+        # 创建拖拽对象
+        drag = QDrag(self)
+        drag.setMimeData(mime_data)
+        
+        # 设置拖拽图标
+        if self.parent_manager:
+            icon = self.parent_manager.get_api_icon_by_method(template_data.get('method', 'GET'))
+            drag.setPixmap(icon.pixmap(32, 32))
+        
+        drag.exec_(supported_actions)
+
+
 class TestCaseDialog(QDialog):
     """测试用例编辑对话框"""
 
@@ -535,6 +586,7 @@ class DropArea(QFrame):
 class TestCaseManager(QWidget):
     """测试用例管理页面"""
     data_changed = pyqtSignal()  # 数据变化信号
+    api_template_edit_requested = pyqtSignal(str)  # 接口模板编辑请求信号
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -632,7 +684,7 @@ class TestCaseManager(QWidget):
         middle_layout.addLayout(search_layout)
 
         # 接口模板树形结构
-        self.api_tree = QTreeWidget()
+        self.api_tree = ApiTemplateTreeWidget(self)
         self.api_tree.setHeaderLabels(["接口模板"])
         self.api_tree.setDragEnabled(True)  # 启用拖拽
         self.api_tree.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -640,6 +692,9 @@ class TestCaseManager(QWidget):
         
         # 设置拖拽模式 - 只允许拖拽，不允许放置
         self.api_tree.setDragDropMode(QAbstractItemView.DragOnly)
+        
+        # 设置拖拽数据格式
+        self.api_tree.setDragDropOverwriteMode(False)
         
         middle_layout.addWidget(self.api_tree)
 
@@ -652,6 +707,8 @@ class TestCaseManager(QWidget):
         self.tabbed_case_editor.tab_closed.connect(self.on_tab_closed)
         # 连接保存信号
         self.tabbed_case_editor.saved.connect(self.on_case_saved)
+        # 连接接口模板编辑请求信号
+        self.tabbed_case_editor.api_template_edit_requested.connect(self.api_template_edit_requested.emit)
         right_layout.addWidget(self.tabbed_case_editor)
 
         # 添加到分割器
@@ -1187,15 +1244,22 @@ class TestCaseManager(QWidget):
 
     def on_case_saved(self, case_data):
         """用例保存事件"""
+        print(f"[DEBUG] on_case_saved接收到数据: id={case_data.get('id')}, name={case_data.get('name')}")
+        print(f"[DEBUG] 数据包含steps字段: {'steps' in case_data}, steps数量: {len(case_data.get('steps', []))}")
+        
         try:
             if 'id' in case_data and case_data['id']:
+                print("[DEBUG] 执行更新用例操作")
                 # 更新现有用例
                 self.case_service.update_case(case_data['id'], case_data)
+                print("[DEBUG] 用例更新成功")
                 Toast.success(self, "测试用例已成功更新")
             else:
+                print("[DEBUG] 执行创建新用例操作")
                 # 创建新用例
                 case_id = self.case_service.create_case(case_data)
                 case_data['id'] = case_id
+                print(f"[DEBUG] 用例创建成功，ID: {case_id}")
                 Toast.success(self, "测试用例已成功创建")
             
             # 刷新用例树和数据
@@ -1203,7 +1267,12 @@ class TestCaseManager(QWidget):
             self.data_changed.emit()
             
         except Exception as e:
+            print(f"[ERROR] 保存用例时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
             Toast.error(self, f"保存测试用例失败: {str(e)}")
+        
+        print("[DEBUG] on_case_saved方法执行完成")
 
     def on_case_executed(self, case_id, result):
         """用例执行事件"""
@@ -1739,3 +1808,45 @@ class TestCaseManager(QWidget):
             else:
                 self.del_folder_icon.setEnabled(False)
                 self.del_folder_icon.setStyleSheet("opacity: 0.5;")
+
+    def start_api_template_drag(self, supported_actions):
+        """开始接口模板拖拽"""
+        # 获取当前选中的项
+        selected_items = self.api_tree.selectedItems()
+        if not selected_items:
+            return None
+            
+        item = selected_items[0]
+        data = item.data(0, Qt.UserRole)
+        
+        # 只允许拖拽接口模板，不允许拖拽文件夹
+        if not data or data['type'] != 'template':
+            return None
+            
+        template_data = data['data']
+        
+        # 创建拖拽数据
+        mime_data = QMimeData()
+        
+        # 设置拖拽数据为JSON格式
+        import json
+        drag_data = {
+            'type': 'api_template',
+            'template_id': template_data['id'],
+            'template_name': template_data['name'],
+            'method': template_data.get('method', 'GET'),
+            'url': template_data.get('url', '')
+        }
+        
+        mime_data.setData('application/json', json.dumps(drag_data).encode('utf-8'))
+        mime_data.setText(f"API模板: {template_data['name']}")
+        
+        # 创建拖拽对象
+        drag = QDrag(self.api_tree)
+        drag.setMimeData(mime_data)
+        
+        # 设置拖拽图标
+        icon = self.get_api_icon_by_method(template_data.get('method', 'GET'))
+        drag.setPixmap(icon.pixmap(32, 32))
+        
+        return drag.exec_(supported_actions)

@@ -179,6 +179,31 @@ class MainWindow(QMainWindow):
                 font-size: 14px;
                 spacing: 6px;
             }
+            QMessageBox {
+                background-color: white;
+                color: #333333;
+                font-size: 14px;
+            }
+            QMessageBox QLabel {
+                color: #333333;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                background-color: #4CAF50;
+                color: white;
+                min-width: 80px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #45a049;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #3d8b40;
+            }
         """)
 
         # 创建Tab Widget

@@ -57,6 +57,9 @@ class InterfaceAutoTab(QWidget):
         
         # 当业务管理页面数据变化时，刷新测试用例管理页面的项目列表
         self.business_management.data_changed.connect(self.test_case.refresh_project_list)
+        
+        # 当测试用例管理页面请求编辑接口模板时，跳转到接口模板标签页并打开对应模板
+        self.test_case.api_template_edit_requested.connect(self.on_api_template_edit_requested)
 
         # 如果需要，也可以连接其他页面的信号
         # self.business_management.data_changed.connect(self.test_case.refresh_project_list)
@@ -232,3 +235,24 @@ class InterfaceAutoTab(QWidget):
             self.left_nav.hide()
             self.left_container.setFixedWidth(24)  # 只保留按钮宽度
             self.splitter.setSizes([24, 1000])
+    
+    def on_api_template_edit_requested(self, api_template_id):
+        """处理接口模板编辑请求，跳转到接口模板标签页并打开对应模板
+        
+        Args:
+            api_template_id: 接口模板ID
+        """
+        try:
+            # 跳转到接口模板标签页（索引为1）
+            self.left_nav.setCurrentRow(1)
+            
+            # 检查api_template对象是否有open_template_by_id方法
+            if hasattr(self.api_template, 'open_template_by_id'):
+                # 调用open_template_by_id方法打开对应模板
+                self.api_template.open_template_by_id(api_template_id)
+                print(f"成功跳转到接口模板编辑页面，模板ID: {api_template_id}")
+            else:
+                print("ApiTemplateManager类中没有open_template_by_id方法")
+                
+        except Exception as e:
+            print(f"跳转到接口模板编辑页面失败: {str(e)}")

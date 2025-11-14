@@ -2,13 +2,15 @@ import json
 from datetime import datetime
 from PyQt5.QtCore import pyqtSignal, Qt, QDataStream, QIODevice, QSize, QThread
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QLabel, 
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QLabel, 
     QLineEdit, QTextEdit, QComboBox, QPushButton, QMessageBox, QSplitter, QMenu,
     QToolBar, QScrollArea, QDialog, QSizePolicy
 )
 from PyQt5.QtGui import QFont, QTextCursor
+from .flow_layout import FlowLayout
 from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.api_card import ApiCard
+from src.ui.interface_auto.components.interface_step_card import InterfaceStepCard
 from src.ui.interface_auto.components.variable_editor import VariableManagerDialog
 from src.core.models.interface_models import TestCase, TestCaseStep
 from src.core.services.environment_service import EnvironmentService
@@ -121,11 +123,94 @@ class CaseExecutionThread(QThread):
 
     def execute_pre_processing(self, pre_processing):
         """执行前置处理"""
+        # 执行前置处理器中的工具
+        for tool_id, tool_config in pre_processing.items():
+            if not isinstance(tool_config, dict):
+                continue
+                
+            if not tool_config.get('enabled', True):
+                continue
+                
+            tool_type = tool_config.get('type')
+            config = tool_config.get('config', {})
+            
+            if tool_type == 'http_request':
+                self.execute_http_request_tool(config)
+            else:
+                self.log_message.emit(f"未知的前置处理工具类型: {tool_type}", "warning")
+        
         # 这里可以执行变量设置、脚本执行等前置操作
         variables = pre_processing.get('variables', {})
         if variables:
             self.variable_manager.set_local_variables(variables)
             self.log_message.emit(f"设置局部变量: {variables}", "info")
+
+    def execute_http_request_tool(self, config):
+        """执行HTTP请求工具"""
+        try:
+            # 获取请求配置
+            method = config.get('method', 'GET')
+            url = config.get('url', '')
+            headers = config.get('headers', {})
+            body = config.get('body', {})
+            timeout = config.get('timeout', 30)
+            extractors = config.get('extractors', {})
+            
+            if not url:
+                self.log_message.emit("HTTP请求工具配置错误: URL不能为空", "error")
+                return
+            
+            # 替换变量
+            all_variables = {}
+            all_variables.update(self.variable_manager.global_variables)
+            all_variables.update(self.variable_manager.local_variables)
+            
+            url = self.variable_manager.replace_variables(url, all_variables)
+            headers = self.variable_manager.replace_variables_in_dict(headers, all_variables)
+            body = self.variable_manager.replace_variables_in_dict(body, all_variables)
+            
+            # 记录请求日志
+            self.log_message.emit(f"前置处理器HTTP请求: {method} {url}", "info")
+            
+            # 执行请求
+            request_data = {
+                'method': method,
+                'url': url,
+                'headers': headers,
+                'body': body,
+                'timeout': timeout
+            }
+            
+            response = self.request_engine.execute_request(request_data)
+            
+            if response.get('success'):
+                # 请求成功，处理响应
+                response_data = response.get('response_data', {})
+                status_code = response.get('status_code', 0)
+                
+                self.log_message.emit(f"前置处理器HTTP请求成功: 状态码 {status_code}", "info")
+                
+                # 提取变量
+                if extractors:
+                    for var_name, json_path in extractors.items():
+                        try:
+                            # 从响应中提取数据
+                            value = self.extract_value(response_data, json_path)
+                            if value is not None:
+                                # 将提取的变量保存到变量管理器
+                                self.variable_manager.set_local_variables({var_name: value})
+                                self.log_message.emit(f"提取变量 {var_name} = {value}", "info")
+                            else:
+                                self.log_message.emit(f"提取变量 {var_name} 失败: JSON路径 {json_path} 未找到数据", "warning")
+                        except Exception as e:
+                            self.log_message.emit(f"提取变量 {var_name} 失败: {str(e)}", "error")
+            else:
+                # 请求失败
+                error_msg = response.get('error', '未知错误')
+                self.log_message.emit(f"前置处理器HTTP请求失败: {error_msg}", "error")
+                
+        except Exception as e:
+            self.log_message.emit(f"执行HTTP请求工具失败: {str(e)}", "error")
 
     def execute_post_processing(self, post_processing, step_result):
         """执行后置处理"""
@@ -290,6 +375,7 @@ class CaseTabWidget(QWidget):
     
     modified_signal = pyqtSignal(bool)  # 修改状态信号
     saved = pyqtSignal(dict)  # 保存信号
+    api_template_edit_requested = pyqtSignal(str)  # 接口模板编辑请求信号
     
     def __init__(self, case_data=None, project_id=None, folder_id=None):
         super().__init__()
@@ -323,18 +409,19 @@ class CaseTabWidget(QWidget):
         layout.setSpacing(2)  # 大幅减少主布局垂直间距，从5改为2
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # 用例信息区域（上半部分）
+        # 用例信息区域（上半部分）- 固定高度，不拉伸
         case_info_widget = QWidget()
         self.setup_case_info_tab(case_info_widget)
+        case_info_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         
-        # 测试步骤区域（下半部分）
+        # 测试步骤区域（下半部分）- 可拉伸，自适应高度
         steps_widget = QWidget()
         self.setup_steps_tab(steps_widget)
+        steps_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        # 直接添加两个区域到布局中，移除分割器，并设置置顶显示
+        # 直接添加两个区域到布局中
         layout.addWidget(case_info_widget)
         layout.addWidget(steps_widget)
-        layout.addStretch()  # 添加拉伸项，将内容推到顶部
         
         # 底部按钮
         button_layout = QHBoxLayout()
@@ -354,12 +441,12 @@ class CaseTabWidget(QWidget):
     def setup_case_info_tab(self, parent):
         """设置用例信息区域"""
         layout = QVBoxLayout(parent)
-        layout.setSpacing(1)  # 大幅减少垂直间距，从3改为1
-        layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0，压缩到最小
+        layout.setSpacing(5)  # 增加垂直间距，从1改为5
+        layout.setContentsMargins(5, 5, 5, 5)  # 设置边距为5，增加外层边距
         
         # 用例名称（标题和输入框在同一行）
         name_layout = QHBoxLayout()
-        name_layout.setSpacing(3)  # 大幅减少水平间距，从5改为3
+        name_layout.setSpacing(5)  # 增加水平间距，从3改为5
         name_layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0
         name_layout.addWidget(QLabel("名称:"))
         self.name_edit = QLineEdit()
@@ -370,7 +457,7 @@ class CaseTabWidget(QWidget):
         
         # 用例描述（标题和输入框在同一行）
         desc_layout = QHBoxLayout()
-        desc_layout.setSpacing(3)  # 大幅减少水平间距，从5改为3
+        desc_layout.setSpacing(5)  # 增加水平间距，从3改为5
         desc_layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0
         desc_layout.addWidget(QLabel("描述:"))
         self.description_edit = QTextEdit()
@@ -382,7 +469,7 @@ class CaseTabWidget(QWidget):
         
         # 环境选择（标题和输入框在同一行）
         env_layout = QHBoxLayout()
-        env_layout.setSpacing(3)  # 大幅减少水平间距，从5改为3
+        env_layout.setSpacing(5)  # 增加水平间距，从3改为5
         env_layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0
         env_layout.setAlignment(Qt.AlignLeft)  # 设置整个布局靠左对齐
         env_layout.addWidget(QLabel("环境:"))
@@ -396,21 +483,20 @@ class CaseTabWidget(QWidget):
     def setup_steps_tab(self, parent):
         """设置测试步骤区域"""
         layout = QVBoxLayout(parent)
-        layout.setSpacing(5)
+        layout.setSpacing(5)  # 增加布局间距，从3改为5
+        layout.setContentsMargins(5, 5, 5, 5)  # 设置边距为5，增加外层边距
         
         # 步骤操作工具栏
         steps_toolbar = QToolBar()
         steps_toolbar.setIconSize(QSize(16, 16))
-        steps_toolbar.setStyleSheet("QToolBar { spacing: 2px; }")  # 大幅减少工具栏间距，从10px改为2px
+        steps_toolbar.setStyleSheet("QToolBar { spacing: 5px; }")  # 增加工具栏间距，从2px改为5px
 
         # 查询变量按钮（绿色）
         self.query_vars_btn = QPushButton("查询变量")
         self.query_vars_btn.clicked.connect(self.edit_global_variables)
         self.query_vars_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold;")
 
-        self.add_step_btn = QPushButton("添加步骤")
-        self.add_step_btn.clicked.connect(self.add_empty_step)
-        self.add_step_btn.setStyleSheet("padding: 8px 15px; border-radius: 4px;")
+
 
         self.run_case_btn = QPushButton("调试")
         self.run_case_btn.clicked.connect(self.execute_case)
@@ -426,10 +512,9 @@ class CaseTabWidget(QWidget):
         self.log_btn_toolbar.clicked.connect(self.show_execution_logs)
         self.log_btn_toolbar.setStyleSheet("padding: 8px 15px; border-radius: 4px;")
 
-        # 将查询变量按钮放在添加步骤按钮前面，增加间距
+        # 将查询变量按钮放在前面，增加间距
         steps_toolbar.addWidget(self.query_vars_btn)
         steps_toolbar.addSeparator()  # 添加分隔符
-        steps_toolbar.addWidget(self.add_step_btn)
         steps_toolbar.addWidget(self.run_case_btn)
         steps_toolbar.addWidget(self.stop_case_btn)
         steps_toolbar.addSeparator()  # 添加分隔符
@@ -437,30 +522,42 @@ class CaseTabWidget(QWidget):
 
         layout.addWidget(steps_toolbar)
 
-        # 步骤列表容器（可滚动）- 增加高度
+        # 步骤列表容器（可滚动）- 自适应高度
         self.steps_scroll = QScrollArea()
         self.steps_scroll.setWidgetResizable(True)
         self.steps_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.steps_scroll.setMinimumHeight(400)  # 增加最小高度
+        self.steps_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # 设置为可拉伸
+        self.steps_scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: #f8f9fa;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 6px;  /* 减少内边距，从8px改为6px */
+            }
+            QScrollArea QWidget {
+                background-color: transparent;
+            }
+        """)
 
         self.steps_widget = QWidget()
-        self.steps_layout = QVBoxLayout(self.steps_widget)
-        self.steps_layout.setAlignment(Qt.AlignTop)
+        self.steps_layout = FlowLayout(self.steps_widget)
+        self.steps_layout.setSpacing(10)  # 流式布局间距
+        self.steps_layout.setContentsMargins(5, 5, 5, 5)  # 设置边距
 
         # 初始提示
         self.steps_placeholder = QLabel("暂无测试步骤，请添加步骤或从左侧拖拽接口")
         self.steps_placeholder.setAlignment(Qt.AlignCenter)
-        self.steps_placeholder.setStyleSheet("color: #999; font-style: italic; padding: 50px;")
+        self.steps_placeholder.setStyleSheet("color: #999; font-style: italic; padding: 30px;")  # 减少内边距，从50px改为30px
         self.steps_layout.addWidget(self.steps_placeholder)
 
         self.steps_scroll.setWidget(self.steps_widget)
         layout.addWidget(self.steps_scroll)
 
-        # 启用拖拽功能
-        self.steps_scroll.setAcceptDrops(True)
-        self.steps_scroll.dragEnterEvent = self.drag_enter_event
-        self.steps_scroll.dragMoveEvent = self.drag_move_event
-        self.steps_scroll.dropEvent = self.drop_event
+        # 启用拖拽功能 - 设置到步骤容器上，而不是滚动区域
+        self.steps_widget.setAcceptDrops(True)
+        self.steps_widget.dragEnterEvent = self.drag_enter_event
+        self.steps_widget.dragMoveEvent = self.drag_move_event
+        self.steps_widget.dropEvent = self.drop_event
     
     def on_content_changed(self):
         """内容变化时标记为已修改"""
@@ -485,9 +582,7 @@ class CaseTabWidget(QWidget):
             index = self.env_combo.findData(self.current_case.environment_id)
             if index >= 0:
                 self.env_combo.setCurrentIndex(index)
-        
-        # 全局变量功能已移除，不再加载到表格
-        
+                
         # 加载测试步骤
         self.load_steps()
         
@@ -497,8 +592,11 @@ class CaseTabWidget(QWidget):
     
     def save_case(self):
         """保存用例"""
+        print("[DEBUG] save_case方法开始执行")
+        
         # 更新当前用例数据
         if not self.current_case:
+            print("[DEBUG] 创建新的TestCase对象")
             self.current_case = TestCase()
         
         self.current_case.name = self.name_edit.text().strip()
@@ -508,21 +606,31 @@ class CaseTabWidget(QWidget):
         self.current_case.project_id = self.project_id
         self.current_case.folder_id = self.folder_id
         
+        print(f"[DEBUG] 用例数据: name={self.current_case.name}, steps_count={len(self.current_case.steps) if self.current_case.steps else 0}")
+        
         # 验证数据
         if not self.current_case.name:
+            print("[DEBUG] 用例名称为空，显示警告")
             Toast.warning(self, "用例名称不能为空")
             return
         
         # 如果是编辑模式，添加ID
         if self.is_edit and 'id' in self.case_data:
             self.current_case.id = self.case_data['id']
+            print(f"[DEBUG] 编辑模式，设置用例ID: {self.current_case.id}")
+        
+        # 转换为字典并检查步骤数据
+        case_dict = self.current_case.to_dict()
+        print(f"[DEBUG] 转换后的用例字典: steps字段存在={'steps' in case_dict}, steps数量={len(case_dict.get('steps', []))}")
         
         # 发送保存信号
-        self.saved.emit(self.current_case.to_dict())
+        print("[DEBUG] 发送saved信号")
+        self.saved.emit(case_dict)
         
         # 标记为已保存
         self.modified = False
         self.modified_signal.emit(False)
+        print("[DEBUG] save_case方法执行完成")
     
     def cancel(self):
         """取消编辑"""
@@ -554,7 +662,9 @@ class CaseTabWidget(QWidget):
     def drag_enter_event(self, event):
         """拖拽进入事件"""
         # 检查拖拽数据是否包含接口模板信息
-        if event.mimeData().hasFormat("application/x-qabstractitemmodeldatalist"):
+        if (event.mimeData().hasFormat("application/json") or 
+            event.mimeData().hasFormat("application/x-qabstractitemmodeldatalist") or 
+            event.mimeData().hasText()):
             event.acceptProposedAction()
         else:
             event.ignore()
@@ -562,16 +672,43 @@ class CaseTabWidget(QWidget):
     def drag_move_event(self, event):
         """拖拽移动事件"""
         # 检查拖拽数据是否包含接口模板信息
-        if event.mimeData().hasFormat("application/x-qabstractitemmodeldatalist"):
+        if (event.mimeData().hasFormat("application/json") or 
+            event.mimeData().hasFormat("application/x-qabstractitemmodeldatalist") or 
+            event.mimeData().hasText()):
             event.acceptProposedAction()
         else:
             event.ignore()
     
     def drop_event(self, event):
         """拖拽放置事件"""
-        if event.mimeData().hasFormat("application/x-qabstractitemmodeldatalist"):
-            # 解析拖拽数据
-            mime_data = event.mimeData()
+        mime_data = event.mimeData()
+        
+        # 首先尝试解析JSON格式的数据（ApiTemplateTreeWidget的拖拽数据）
+        if mime_data.hasFormat("application/json"):
+            try:
+                import json
+                json_data = mime_data.data("application/json").data().decode('utf-8')
+                drag_data = json.loads(json_data)
+                
+                if drag_data.get('type') == 'api_template':
+                    # 获取模板的完整数据
+                    template_id = drag_data.get('template_id')
+                    if template_id:
+                        # 从服务中获取完整的模板数据
+                        from src.core.services.api_template_service import ApiTemplateService
+                        api_service = ApiTemplateService()
+                        template_data = api_service.get_template_by_id(template_id)
+                        
+                        if template_data:
+                            # 添加接口模板到测试步骤
+                            self.add_api_template_to_steps(template_data)
+                            event.acceptProposedAction()
+                            return
+            except Exception as e:
+                print(f"解析JSON格式拖拽数据失败: {e}")
+        
+        # 然后尝试解析QAbstractItemModel格式的数据
+        elif mime_data.hasFormat("application/x-qabstractitemmodeldatalist"):
             item_data = self.parse_drag_data(mime_data)
             
             if item_data and item_data.get('type') == 'template':
@@ -579,6 +716,29 @@ class CaseTabWidget(QWidget):
                 self.add_api_template_to_steps(item_data['data'])
                 event.acceptProposedAction()
                 return
+        
+        # 最后尝试解析文本格式的数据（接口模板列表的拖拽数据）
+        elif mime_data.hasText():
+            try:
+                import json
+                drag_data = json.loads(mime_data.text())
+                
+                if drag_data.get('type') == 'template':
+                    # 获取模板的完整数据
+                    template_id = drag_data.get('id')
+                    if template_id:
+                        # 从服务中获取完整的模板数据
+                        from src.core.services.api_template_service import ApiTemplateService
+                        api_service = ApiTemplateService()
+                        template_data = api_service.get_template_by_id(template_id)
+                        
+                        if template_data:
+                            # 添加接口模板到测试步骤
+                            self.add_api_template_to_steps(template_data)
+                            event.acceptProposedAction()
+                            return
+            except Exception as e:
+                print(f"解析文本格式拖拽数据失败: {e}")
         
         event.ignore()
     
@@ -623,110 +783,66 @@ class CaseTabWidget(QWidget):
             self.current_case.description = self.description_edit.toPlainText().strip()
             self.current_case.environment_id = self.env_combo.currentData()
 
-        # 创建步骤数据
-        step_data = {
+        # 计算新步骤的序号（基于当前最大序号+1）
+        max_order = 0
+        if self.current_case and self.current_case.steps:
+            max_order = max(step.step_order for step in self.current_case.steps)
+        
+        # 创建步骤数据（只包含TestCaseStep支持的字段）
+        step_data_for_model = {
+            'id': None,  # 新步骤的id为None，将在保存时由数据库生成
             'case_id': self.current_case.id if self.current_case else 0,
-            'step_order': len(self.current_case.steps) if self.current_case else 0,
-            'name': template_data.get('name', f"步骤 {len(self.current_case.steps) + 1 if self.current_case else 1}"),
+            'step_order': max_order + 1,
+            'name': template_data.get('name', f"步骤 {max_order + 1}"),
             'enabled': True,
             'pre_processing': {},
             'post_processing': {},
             'assertions': {},
             'variables': {},
-            'api_template': template_data
+            'api_template_id': template_data.get('id'),
+            'api_name': template_data.get('name', ''),
+            'api_method': template_data.get('method', ''),
+            'api_url_path': template_data.get('url_path', '')
         }
 
-        step = TestCaseStep.from_dict(step_data)
+        # 创建步骤卡片数据（包含完整的模板数据）
+        step_data_for_card = step_data_for_model.copy()
+        step_data_for_card['api_template'] = template_data
+
+        step = TestCaseStep.from_dict(step_data_for_model)
         if self.current_case:
             self.current_case.add_step(step)
-        self.add_step_card(step_data)
+        self.add_step_card(step_data_for_card)
+
+        # 更新所有步骤的序号显示
+        self.update_step_orders()
 
         # 隐藏占位符
         self.steps_placeholder.hide()
         self.on_case_changed()
-        try:
-            # 获取当前步骤文本
-            current_steps = self.steps_edit.toPlainText().strip()
-            
-            # 创建步骤描述
-            step_description = f"""
-步骤名称: {template_data.get('name', '未命名接口')}
-接口方法: {template_data.get('method', 'GET')}
-接口路径: {template_data.get('url_path', '')}
-描述: {template_data.get('description', '')}
-
-请求参数:
-{template_data.get('request_params', '')}
-
-请求头:
-{template_data.get('request_headers', '')}
-
-请求体:
-{template_data.get('request_body', '')}
-
-预期结果:
-{template_data.get('expected_result', '')}
-
----
-"""
-            
-            # 添加到步骤中
-            if current_steps:
-                new_steps = current_steps + "\n" + step_description
-            else:
-                new_steps = step_description
-            
-            self.steps_edit.setPlainText(new_steps)
-            
-            # 标记为已修改
-            if not self.modified:
-                self.modified = True
-                self.modified_signal.emit(True)
-                
-        except Exception as e:
-            Toast.error(self, f"添加接口模板到测试步骤失败: {str(e)}")
+        
+        # 标记为已修改
+        if not self.modified:
+            self.modified = True
+            self.modified_signal.emit(True)
     
     def add_test_step(self):
         """添加测试步骤"""
         Toast.info(self, "添加测试步骤功能将在后续版本中实现")
 
-    def add_empty_step(self):
-        """添加空步骤"""
-        if not self.current_case:
-            # 创建新的测试用例对象
-            self.current_case = TestCase()
-            self.current_case.name = self.name_edit.text().strip() or "未命名用例"
-            self.current_case.description = self.description_edit.toPlainText().strip()
-            self.current_case.environment_id = self.env_combo.currentData()
 
-        step_data = {
-            'case_id': self.current_case.id if self.current_case else 0,
-            'step_order': len(self.current_case.steps) if self.current_case else 0,
-            'name': f"步骤 {len(self.current_case.steps) + 1 if self.current_case else 1}",
-            'api_name': f"步骤 {len(self.current_case.steps) + 1 if self.current_case else 1}",
-            'enabled': True,
-            'pre_processing': {},
-            'post_processing': {},
-            'assertions': {},
-            'variables': {}
-        }
-
-        step = TestCaseStep.from_dict(step_data)
-        if self.current_case:
-            self.current_case.add_step(step)
-        self.add_step_card(step_data)
-
-        # 隐藏占位符
-        self.steps_placeholder.hide()
-        self.on_case_changed()
 
     def add_step_card(self, step_data):
         """添加步骤卡片"""
-        step_card = ApiCard(step_data, self)
+        # 使用新的InterfaceStepCard组件
+        step_card = InterfaceStepCard(step_data, self)
         step_card.step_updated.connect(self.on_step_updated)
         step_card.step_deleted.connect(self.on_step_deleted)
         step_card.step_moved.connect(self.on_step_moved)
+        step_card.api_template_clicked.connect(self.on_api_template_clicked)
+        step_card.step_copied.connect(self.on_step_copied)
 
+        # 添加到流式布局
         self.steps_layout.addWidget(step_card)
 
     def on_step_updated(self, step_data):
@@ -739,11 +855,24 @@ class CaseTabWidget(QWidget):
                     break
         self.on_case_changed()
 
-    def on_step_deleted(self, step_data):
+    def on_step_deleted(self, step_id):
         """步骤删除事件"""
+        # 从UI中移除步骤卡片
+        for i in reversed(range(self.steps_layout.count())):
+            item = self.steps_layout.itemAt(i)
+            if item.widget() and hasattr(item.widget(), 'step_id') and item.widget().step_id == step_id:
+                item.widget().deleteLater()
+                break
+        
+        # 从内存中删除步骤数据
         if self.current_case:
             self.current_case.steps = [step for step in self.current_case.steps 
-                                     if step.id != step_data.get('id') and step.name != step_data.get('name')]
+                                     if step.id != step_id]
+        
+        # 如果没有步骤了，显示占位符
+        if not self.current_case or not self.current_case.steps:
+            self.steps_placeholder.show()
+        
         self.on_case_changed()
 
     def on_step_moved(self, from_index, to_index):
@@ -751,7 +880,89 @@ class CaseTabWidget(QWidget):
         if self.current_case and 0 <= from_index < len(self.current_case.steps) and 0 <= to_index < len(self.current_case.steps):
             step = self.current_case.steps.pop(from_index)
             self.current_case.steps.insert(to_index, step)
+            
+            # 重新加载步骤列表以更新流式布局
+            self.load_steps()
+            
             self.on_case_changed()
+    
+    def on_api_template_clicked(self, api_template_id):
+        """接口模板点击事件 - 跳转到对应接口模板编辑tab"""
+        # 发送信号通知主窗口跳转到接口模板编辑tab
+        self.api_template_edit_requested.emit(api_template_id)
+    
+    def on_step_copied(self, step_id, copied_step_data):
+        """步骤复制事件"""
+        try:
+            # 确保当前用例存在
+            if not self.current_case:
+                # 创建新的测试用例对象
+                self.current_case = TestCase()
+                self.current_case.name = self.name_edit.text().strip() or "未命名用例"
+                self.current_case.description = self.description_edit.toPlainText().strip()
+                self.current_case.environment_id = self.env_combo.currentData()
+            
+            # 计算新步骤的序号（插入到原步骤后面）
+            source_step_index = -1
+            for i, step in enumerate(self.current_case.steps):
+                if step.id == step_id or step.name == copied_step_data.get('name', '').replace('(副本)', ''):
+                    source_step_index = i
+                    break
+            
+            # 如果找到原步骤，插入到其后面；否则添加到末尾
+            insert_index = source_step_index + 1 if source_step_index >= 0 else len(self.current_case.steps)
+            
+            # 创建新的步骤对象
+            new_step = TestCaseStep.from_dict(copied_step_data)
+            
+            # 插入新步骤
+            if insert_index < len(self.current_case.steps):
+                self.current_case.steps.insert(insert_index, new_step)
+            else:
+                self.current_case.steps.append(new_step)
+            
+            # 更新所有步骤的序号
+            self.update_step_orders()
+            
+            # 重新加载步骤列表
+            self.load_steps()
+            
+            # 隐藏占位符
+            self.steps_placeholder.hide()
+            
+            # 标记为已修改
+            if not self.modified:
+                self.modified = True
+                self.modified_signal.emit(True)
+            
+            print(f"步骤复制成功: 从步骤 {step_id} 复制到新步骤 {new_step.id}")
+            
+        except Exception as e:
+            print(f"步骤复制失败: {str(e)}")
+            Toast.error(self, f"步骤复制失败: {str(e)}")
+    
+    def update_step_orders(self):
+        """更新所有步骤的序号"""
+        if not self.current_case or not self.current_case.steps:
+            return
+            
+        # 更新步骤数据中的序号
+        for i, step in enumerate(self.current_case.steps, 1):
+            step.step_order = i
+            
+        # 更新UI中步骤卡片的序号显示
+        # 需要找到每个步骤对应的卡片，并更新其序号
+        for i, step in enumerate(self.current_case.steps, 1):
+            # 在布局中找到对应的步骤卡片
+            for j in range(self.steps_layout.count()):
+                item = self.steps_layout.itemAt(j)
+                if item and item.widget():
+                    widget = item.widget()
+                    # 检查这个卡片是否对应当前的步骤
+                    if hasattr(widget, 'step_data') and widget.step_data.get('id') == step.id:
+                        if hasattr(widget, 'update_step_order'):
+                            widget.update_step_order(i)
+                        break
 
     def on_case_changed(self):
         """用例数据变化"""
@@ -854,15 +1065,7 @@ class CaseTabWidget(QWidget):
         # 格式化日志消息
         log_entry = f"<span style='color: gray;'>[{timestamp}]</span> <span style='color: {color};'>{prefix}</span> {message}"
         
-        # 添加到日志文本框
-        self.logs_text.append(log_entry)
-        
-        # 自动滚动到底部
-        cursor = self.logs_text.textCursor()
-        cursor.movePosition(QTextCursor.End)
-        self.logs_text.setTextCursor(cursor)
-        
-        # 保存到日志列表
+        # 保存到日志列表（不操作不存在的日志文本控件）
         self.execution_logs.append({
             'timestamp': timestamp,
             'level': level,
@@ -871,7 +1074,7 @@ class CaseTabWidget(QWidget):
 
     def clear_logs(self):
         """清空日志"""
-        self.logs_text.clear()
+        # 只清空执行日志列表，不操作日志文本控件
         self.execution_logs = []
 
     def clear_steps(self):
@@ -908,8 +1111,7 @@ class CaseTabWidget(QWidget):
         # 执行按钮状态
         self.run_case_btn.setEnabled(has_steps and not self.is_executing)
         self.stop_case_btn.setEnabled(self.is_executing)
-        self.save_case_btn.setEnabled(not self.is_executing)
-        self.add_step_btn.setEnabled(not self.is_executing)
+        self.save_btn.setEnabled(not self.is_executing)
         
         # 根据执行状态设置按钮样式
         if self.is_executing:
@@ -920,7 +1122,7 @@ class CaseTabWidget(QWidget):
             self.stop_case_btn.setStyleSheet("background-color: #9E9E9E; color: white;")
         
         # 保存按钮始终可用（除非正在执行）
-        self.save_case_btn.setStyleSheet("background-color: #2196F3; color: white;")
+        self.save_btn.setStyleSheet("background-color: #2196F3; color: white;")
 
     def load_environments(self):
         """加载环境列表"""
@@ -947,6 +1149,7 @@ class TabbedCaseEditor(QWidget):
     
     tab_closed = pyqtSignal()  # 标签页关闭信号
     saved = pyqtSignal(dict)    # 保存信号
+    api_template_edit_requested = pyqtSignal(str)  # 接口模板编辑请求信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1061,6 +1264,7 @@ class TabbedCaseEditor(QWidget):
         # 连接信号
         editor_widget.modified_signal.connect(lambda modified: self.set_tab_modified(tab_id, modified))
         editor_widget.saved.connect(lambda data: self.case_saved(tab_id, data))
+        editor_widget.api_template_edit_requested.connect(self.on_api_template_edit_requested)
         
         # 添加到标签页
         tab_name = case_data.get('name', '新增用例') if case_data else '新增用例'
@@ -1210,6 +1414,11 @@ class TabbedCaseEditor(QWidget):
             
             # 发出保存信号，让外部处理实际的保存逻辑
             self.saved.emit(case_data)
+    
+    def on_api_template_edit_requested(self, api_template_id):
+        """处理接口模板编辑请求"""
+        # 发送信号通知主窗口跳转到接口模板编辑tab
+        self.api_template_edit_requested.emit(api_template_id)
 
 
 class ExecutionLogsDialog(QDialog):

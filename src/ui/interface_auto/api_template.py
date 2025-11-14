@@ -2362,3 +2362,33 @@ class ApiTemplateManager(QWidget):
                 Toast.error(self, f"删除文件夹失败: {str(e)}")
 
     # rename_api_template方法已删除，接口模板重命名功能已移除
+
+    def open_template_by_id(self, template_id):
+        """通过模板ID打开对应的接口模板进行编辑
+        
+        Args:
+            template_id: 接口模板ID
+        """
+        try:
+            # 检查服务是否已初始化
+            if not self.api_service:
+                print("API服务未初始化，无法打开模板")
+                return
+                
+            # 根据模板ID获取模板数据
+            template_data = self.api_service.get_template_by_id(template_id)
+            if not template_data:
+                print(f"未找到ID为 {template_id} 的接口模板")
+                return
+                
+            # 使用多标签页编辑器打开模板
+            self.tabbed_editor.open_template(template_data)
+            
+            # 隐藏提示信息，显示多标签页编辑器
+            self.info_label.hide()
+            self.tabbed_editor_container.show()
+            
+            print(f"成功打开接口模板: {template_data.get('name', '未命名')}")
+            
+        except Exception as e:
+            print(f"打开接口模板失败: {str(e)}")

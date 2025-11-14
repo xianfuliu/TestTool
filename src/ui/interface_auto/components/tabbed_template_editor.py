@@ -4,14 +4,16 @@
 """
 
 import json
+import os
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
                              QLineEdit, QTextEdit, QTableWidget,
                              QTableWidgetItem, QPushButton, QGroupBox,
                              QLabel, QCheckBox, QScrollArea,
                              QMessageBox, QDialog, QDialogButtonBox,
-                             QShortcut, QMenu)
+                             QShortcut, QMenu, QToolButton)
 from PyQt5.QtCore import pyqtSignal, Qt, QEvent
-from PyQt5.QtGui import QFont, QKeySequence
+from PyQt5.QtGui import QFont, QKeySequence, QIcon
+from PyQt5.QtCore import QSize
 from .no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from src.ui.widgets.toast_tips import Toast
 
@@ -777,30 +779,41 @@ class TemplateTabWidget(QWidget):
         
         button_layout.addStretch()  # 将按钮推到右边
         
-        # JSON美化按钮
-        beautify_btn = QPushButton("美化")
+        # JSON美化图标按钮
+        beautify_btn = QToolButton()
+        beautify_btn.setToolTip("美化JSON")
         beautify_btn.clicked.connect(self.beautify_json)
         
-        # 使用绿色按钮样式
+        # 设置图标 - 修正路径构建逻辑
+        # 从当前文件路径计算项目根目录
+        current_file_path = os.path.abspath(__file__)
+        # 当前文件路径：d:\workspace\TestTool\src\ui\interface_auto\components\tabbed_template_editor.py
+        # 项目根目录应该是：d:\workspace\TestTool
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))))
+        icon_path = os.path.join(base_dir, "src", "resources", "icons", "beauty.png")
+        if os.path.exists(icon_path):
+            beautify_btn.setIcon(QIcon(icon_path))
+        else:
+            # 如果图标文件不存在，使用文本作为备选
+            beautify_btn.setText("美化")
+        
+        # 设置图标大小
+        beautify_btn.setIconSize(QSize(16, 16))
+        
+        # 使用工具按钮样式
         button_style = """
-            QPushButton {
-                background-color: #4caf50;
-                color: white;
+            QToolButton {
+                background-color: transparent;
                 border: none;
                 border-radius: 4px;
-                padding: 2px 6px;
-                font-weight: bold;
+                padding: 2px 4px;
                 margin: 0px;
             }
-            QPushButton:hover {
-                background-color: #388e3c;
+            QToolButton:hover {
+                background-color: #f0f0f0;
             }
-            QPushButton:pressed {
-                background-color: #2e7d32;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
+            QToolButton:pressed {
+                background-color: #e0e0e0;
             }
         """
         beautify_btn.setStyleSheet(button_style)
