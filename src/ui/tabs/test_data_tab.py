@@ -396,6 +396,7 @@ class TestDataTab(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         layout.setContentsMargins(15, 20, 15, 15)
+        layout.setAlignment(Qt.AlignTop)
 
         # 正面图片
         front_layout = QHBoxLayout()
@@ -411,7 +412,7 @@ class TestDataTab(QWidget):
         layout.addWidget(front_widget)
 
         self.id_front_label = QLabel()
-        self.id_front_label.setAlignment(Qt.AlignCenter)
+        self.id_front_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self.id_front_label.setMinimumSize(400, 375)
         self.id_front_label.setText("身份证正面将显示在这里")
         self.id_front_label.setStyleSheet("""
@@ -441,7 +442,7 @@ class TestDataTab(QWidget):
         layout.addWidget(back_widget)
 
         self.id_back_label = QLabel()
-        self.id_back_label.setAlignment(Qt.AlignCenter)
+        self.id_back_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self.id_back_label.setMinimumSize(400, 375)
         self.id_back_label.setText("身份证反面将显示在这里")
         self.id_back_label.setStyleSheet("""

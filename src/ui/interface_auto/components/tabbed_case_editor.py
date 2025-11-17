@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QTextEdit, QComboBox, QPushButton, QMessageBox, QSplitter, QMenu,
     QToolBar, QScrollArea, QDialog, QSizePolicy
 )
-from PyQt5.QtGui import QFont, QTextCursor
+from PyQt5.QtGui import QFont, QTextCursor, QIcon
 from .flow_layout import FlowLayout
 from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.api_card import ApiCard
@@ -423,20 +423,7 @@ class CaseTabWidget(QWidget):
         layout.addWidget(case_info_widget)
         layout.addWidget(steps_widget)
         
-        # 底部按钮
-        button_layout = QHBoxLayout()
-        
-        self.save_btn = QPushButton("保存")
-        self.save_btn.clicked.connect(self.save_case)
-        
-        self.cancel_btn = QPushButton("取消")
-        self.cancel_btn.clicked.connect(self.cancel)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(self.save_btn)
-        button_layout.addWidget(self.cancel_btn)
-        
-        layout.addLayout(button_layout)
+        # 底部按钮已移除，保存按钮已移到环境选择后面
     
     def setup_case_info_tab(self, parent):
         """设置用例信息区域"""
@@ -478,6 +465,70 @@ class CaseTabWidget(QWidget):
         self.load_environments()
         self.env_combo.currentTextChanged.connect(self.on_content_changed)
         env_layout.addWidget(self.env_combo)
+        
+        # 在环境选择后面添加操作按钮
+        env_layout.addSpacing(20)  # 添加间距
+        
+        # 查询变量按钮（绿色）
+        self.query_vars_btn = QPushButton("变量")
+        self.query_vars_btn.clicked.connect(self.edit_global_variables)
+        self.query_vars_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;")
+        env_layout.addWidget(self.query_vars_btn)
+        
+        # 调试/停止按钮（合并为一个按钮，根据执行状态切换图标）
+        self.run_stop_btn = QPushButton()
+        self.run_stop_btn.setIcon(QIcon("src/resources/icons/running.png"))
+        self.run_stop_btn.setIconSize(QSize(26, 26))
+        self.run_stop_btn.setToolTip("调试用例")
+        self.run_stop_btn.clicked.connect(self.toggle_execution)
+        self.run_stop_btn.setStyleSheet("""
+            QPushButton {
+                border: none; 
+                background: transparent; 
+                padding: 8px; 
+                margin: 4px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+        """)
+        env_layout.addWidget(self.run_stop_btn)
+        
+        # 日志按钮（图标替换）
+        self.log_btn_toolbar = QPushButton()
+        self.log_btn_toolbar.setIcon(QIcon("src/resources/icons/log.png"))
+        self.log_btn_toolbar.setIconSize(QSize(26, 26))
+        self.log_btn_toolbar.setToolTip("查看执行日志")
+        self.log_btn_toolbar.clicked.connect(self.show_execution_logs)
+        self.log_btn_toolbar.setStyleSheet("""
+            QPushButton {
+                border: none; 
+                background: transparent; 
+                padding: 8px; 
+                margin: 4px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+        """)
+        env_layout.addWidget(self.log_btn_toolbar)
+        
+        # 保存按钮
+        self.save_btn = QPushButton("保存")
+        self.save_btn.clicked.connect(self.save_case)
+        self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;")
+        env_layout.addWidget(self.save_btn)
+        
+        env_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
+        
         layout.addLayout(env_layout)
     
     def setup_steps_tab(self, parent):
@@ -486,41 +537,7 @@ class CaseTabWidget(QWidget):
         layout.setSpacing(5)  # 增加布局间距，从3改为5
         layout.setContentsMargins(5, 5, 5, 5)  # 设置边距为5，增加外层边距
         
-        # 步骤操作工具栏
-        steps_toolbar = QToolBar()
-        steps_toolbar.setIconSize(QSize(16, 16))
-        steps_toolbar.setStyleSheet("QToolBar { spacing: 5px; }")  # 增加工具栏间距，从2px改为5px
-
-        # 查询变量按钮（绿色）
-        self.query_vars_btn = QPushButton("查询变量")
-        self.query_vars_btn.clicked.connect(self.edit_global_variables)
-        self.query_vars_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold;")
-
-
-
-        self.run_case_btn = QPushButton("调试")
-        self.run_case_btn.clicked.connect(self.execute_case)
-        self.run_case_btn.setStyleSheet("background-color: #2196F3; color: white; padding: 8px 15px; border-radius: 4px;")
-
-        self.stop_case_btn = QPushButton("停止")
-        self.stop_case_btn.clicked.connect(self.stop_execution)
-        self.stop_case_btn.setEnabled(False)
-        self.stop_case_btn.setStyleSheet("background-color: #f44336; color: white; padding: 8px 15px; border-radius: 4px;")
-
-        # 添加日志按钮到工具栏
-        self.log_btn_toolbar = QPushButton("日志")
-        self.log_btn_toolbar.clicked.connect(self.show_execution_logs)
-        self.log_btn_toolbar.setStyleSheet("padding: 8px 15px; border-radius: 4px;")
-
-        # 将查询变量按钮放在前面，增加间距
-        steps_toolbar.addWidget(self.query_vars_btn)
-        steps_toolbar.addSeparator()  # 添加分隔符
-        steps_toolbar.addWidget(self.run_case_btn)
-        steps_toolbar.addWidget(self.stop_case_btn)
-        steps_toolbar.addSeparator()  # 添加分隔符
-        steps_toolbar.addWidget(self.log_btn_toolbar)
-
-        layout.addWidget(steps_toolbar)
+        # 步骤操作工具栏已移除，添加步骤功能通过拖拽实现
 
         # 步骤列表容器（可滚动）- 自适应高度
         self.steps_scroll = QScrollArea()
@@ -544,11 +561,18 @@ class CaseTabWidget(QWidget):
         self.steps_layout.setSpacing(10)  # 流式布局间距
         self.steps_layout.setContentsMargins(5, 5, 5, 5)  # 设置边距
 
-        # 初始提示
+        # 初始提示 - 使用容器包装以实现居中显示
+        placeholder_container = QWidget()
+        placeholder_layout = QVBoxLayout(placeholder_container)
+        placeholder_layout.setContentsMargins(0, 0, 0, 0)
+        placeholder_layout.setSpacing(0)
+        
         self.steps_placeholder = QLabel("暂无测试步骤，请添加步骤或从左侧拖拽接口")
         self.steps_placeholder.setAlignment(Qt.AlignCenter)
         self.steps_placeholder.setStyleSheet("color: #999; font-style: italic; padding: 30px;")  # 减少内边距，从50px改为30px
-        self.steps_layout.addWidget(self.steps_placeholder)
+        
+        placeholder_layout.addWidget(self.steps_placeholder)
+        self.steps_layout.addWidget(placeholder_container)
 
         self.steps_scroll.setWidget(self.steps_widget)
         layout.addWidget(self.steps_scroll)
@@ -558,6 +582,10 @@ class CaseTabWidget(QWidget):
         self.steps_widget.dragEnterEvent = self.drag_enter_event
         self.steps_widget.dragMoveEvent = self.drag_move_event
         self.steps_widget.dropEvent = self.drop_event
+        
+        # 设置步骤区域的右键菜单
+        self.steps_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.steps_widget.customContextMenuRequested.connect(self.show_steps_context_menu)
     
     def on_content_changed(self):
         """内容变化时标记为已修改"""
@@ -591,7 +619,7 @@ class CaseTabWidget(QWidget):
         self.modified_signal.emit(False)
     
     def save_case(self):
-        """保存用例"""
+        """保存用例 - 基于前端ID系统更新步骤顺序"""
         print("[DEBUG] save_case方法开始执行")
         
         # 更新当前用例数据
@@ -607,6 +635,45 @@ class CaseTabWidget(QWidget):
         self.current_case.folder_id = self.folder_id
         
         print(f"[DEBUG] 用例数据: name={self.current_case.name}, steps_count={len(self.current_case.steps) if self.current_case.steps else 0}")
+        
+        # 基于前端ID顺序更新步骤顺序
+        if self.current_case and self.current_case.steps and hasattr(self, 'steps_layout'):
+            # 获取布局中所有步骤的前端ID顺序
+            current_step_ids = []
+            for i in range(self.steps_layout.count()):
+                item = self.steps_layout.itemAt(i)
+                if item and item.widget() and hasattr(item.widget(), 'step_id'):
+                    current_step_ids.append(item.widget().step_id)
+            
+            # 根据前端ID顺序重新排序步骤列表
+            if len(current_step_ids) == len(self.current_case.steps):
+                new_steps_order = []
+                for step_id in current_step_ids:
+                    # 找到对应前端ID的步骤
+                    for step in self.current_case.steps:
+                        step_dict = step.to_dict()
+                        if step_dict.get('frontend_id') == step_id:
+                            new_steps_order.append(step)
+                            break
+                
+                # 更新步骤列表和序号
+                if len(new_steps_order) == len(self.current_case.steps):
+                    self.current_case.steps = new_steps_order
+                    
+                    # 更新步骤序号
+                    for i, step in enumerate(self.current_case.steps, 1):
+                        step.step_order = i
+                    
+                    print(f"[DEBUG] 基于前端ID系统更新步骤顺序: 共{len(self.current_case.steps)}个步骤")
+        
+        # 详细检查步骤数据
+        if self.current_case and self.current_case.steps:
+            print(f"[DEBUG] 当前步骤列表:")
+            for i, step in enumerate(self.current_case.steps):
+                step_dict = step.to_dict()
+                print(f"  [{i}] ID: {step.id}, FrontendID: {step_dict.get('frontend_id')}, Name: {step.name}, Order: {step.step_order}")
+        else:
+            print("[DEBUG] 当前没有步骤数据")
         
         # 验证数据
         if not self.current_case.name:
@@ -680,8 +747,11 @@ class CaseTabWidget(QWidget):
             event.ignore()
     
     def drop_event(self, event):
-        """拖拽放置事件"""
+        """拖拽放置事件 - 支持在任意位置插入新步骤"""
         mime_data = event.mimeData()
+        
+        # 获取拖拽位置
+        drop_position = event.pos()
         
         # 首先尝试解析JSON格式的数据（ApiTemplateTreeWidget的拖拽数据）
         if mime_data.hasFormat("application/json"):
@@ -700,8 +770,8 @@ class CaseTabWidget(QWidget):
                         template_data = api_service.get_template_by_id(template_id)
                         
                         if template_data:
-                            # 添加接口模板到测试步骤
-                            self.add_api_template_to_steps(template_data)
+                            # 添加接口模板到测试步骤，支持在拖拽位置插入
+                            self.add_api_template_to_steps(template_data, drop_position)
                             event.acceptProposedAction()
                             return
             except Exception as e:
@@ -712,8 +782,8 @@ class CaseTabWidget(QWidget):
             item_data = self.parse_drag_data(mime_data)
             
             if item_data and item_data.get('type') == 'template':
-                # 添加接口模板到测试步骤
-                self.add_api_template_to_steps(item_data['data'])
+                # 添加接口模板到测试步骤，支持在拖拽位置插入
+                self.add_api_template_to_steps(item_data['data'], drop_position)
                 event.acceptProposedAction()
                 return
         
@@ -733,8 +803,8 @@ class CaseTabWidget(QWidget):
                         template_data = api_service.get_template_by_id(template_id)
                         
                         if template_data:
-                            # 添加接口模板到测试步骤
-                            self.add_api_template_to_steps(template_data)
+                            # 添加接口模板到测试步骤，支持在拖拽位置插入
+                            self.add_api_template_to_steps(template_data, drop_position)
                             event.acceptProposedAction()
                             return
             except Exception as e:
@@ -774,8 +844,8 @@ class CaseTabWidget(QWidget):
             print(f"解析拖拽数据失败: {str(e)}")
             return None
     
-    def add_api_template_to_steps(self, template_data):
-        """添加接口模板到测试步骤"""
+    def add_api_template_to_steps(self, template_data, drop_position=None):
+        """添加接口模板到测试步骤 - 支持在任意位置插入并重新生成前端ID"""
         if not self.current_case:
             # 创建新的测试用例对象
             self.current_case = TestCase()
@@ -783,17 +853,55 @@ class CaseTabWidget(QWidget):
             self.current_case.description = self.description_edit.toPlainText().strip()
             self.current_case.environment_id = self.env_combo.currentData()
 
-        # 计算新步骤的序号（基于当前最大序号+1）
-        max_order = 0
+        # 计算插入位置
+        insert_index = len(self.current_case.steps) if self.current_case.steps else 0
+        
+        # 如果有拖拽位置，计算插入位置
+        if drop_position and hasattr(self, 'steps_layout') and self.steps_layout:
+            # drop_position已经是步骤容器的局部坐标，直接使用
+            local_pos = drop_position
+            
+            # 查找最近的步骤卡片位置
+            for i in range(self.steps_layout.count()):
+                item = self.steps_layout.itemAt(i)
+                if item and item.widget() and hasattr(item.widget(), 'step_id'):
+                    widget = item.widget()
+                    widget_rect = widget.geometry()
+                    
+                    # 检查拖拽位置是否在该步骤卡片的上半部分
+                    if local_pos.y() < widget_rect.center().y():
+                        insert_index = i
+                        break
+                    else:
+                        insert_index = i + 1
+        
+        # 计算新步骤的序号（基于插入位置）
         if self.current_case and self.current_case.steps:
-            max_order = max(step.step_order for step in self.current_case.steps)
+            # 如果插入到中间，需要重新计算所有后续步骤的序号
+            if insert_index < len(self.current_case.steps):
+                # 插入到中间，新步骤的序号为插入位置的序号
+                new_order = insert_index + 1
+                
+                # 更新后续步骤的序号
+                for i in range(insert_index, len(self.current_case.steps)):
+                    self.current_case.steps[i].step_order = i + 2
+            else:
+                # 插入到末尾，新步骤的序号为最大序号+1
+                new_order = max(step.step_order for step in self.current_case.steps) + 1
+        else:
+            new_order = 1
+            
+        # 确保新步骤的序号是唯一的
+        existing_orders = {step.step_order for step in (self.current_case.steps if self.current_case else [])}
+        while new_order in existing_orders:
+            new_order += 1
         
         # 创建步骤数据（只包含TestCaseStep支持的字段）
         step_data_for_model = {
             'id': None,  # 新步骤的id为None，将在保存时由数据库生成
             'case_id': self.current_case.id if self.current_case else 0,
-            'step_order': max_order + 1,
-            'name': template_data.get('name', f"步骤 {max_order + 1}"),
+            'step_order': new_order,
+            'name': template_data.get('name', f"步骤 {new_order}"),
             'enabled': True,
             'pre_processing': {},
             'post_processing': {},
@@ -808,23 +916,162 @@ class CaseTabWidget(QWidget):
         # 创建步骤卡片数据（包含完整的模板数据）
         step_data_for_card = step_data_for_model.copy()
         step_data_for_card['api_template'] = template_data
+        # 添加order字段用于步骤卡片显示
+        step_data_for_card['order'] = new_order
 
+        # 创建步骤对象并插入到指定位置
         step = TestCaseStep.from_dict(step_data_for_model)
         if self.current_case:
-            self.current_case.add_step(step)
+            if insert_index < len(self.current_case.steps):
+                self.current_case.steps.insert(insert_index, step)
+            else:
+                self.current_case.steps.append(step)
+        
+        # 直接添加步骤卡片，而不是通过load_steps重新加载
+        # 这样可以确保order字段正确传递给步骤卡片
         self.add_step_card(step_data_for_card)
-
+        
         # 更新所有步骤的序号显示
         self.update_step_orders()
 
-        # 隐藏占位符
-        self.steps_placeholder.hide()
+        # 隐藏占位符（如果存在且有效）
+        if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
+            try:
+                # 检查占位符是否仍然有效
+                if hasattr(self.steps_placeholder, 'isVisible'):
+                    self.steps_placeholder.hide()
+                    print("[DEBUG] add_api_template_to_steps: 隐藏占位符")
+            except RuntimeError:
+                # 如果占位符已被删除，忽略错误
+                print("[DEBUG] add_api_template_to_steps: 占位符已被删除，忽略错误")
+                pass
+        
         self.on_case_changed()
         
         # 标记为已修改
         if not self.modified:
             self.modified = True
             self.modified_signal.emit(True)
+            
+        print(f"接口模板添加成功: 在位置 {insert_index} 插入新步骤，前端ID已重新生成")
+    
+    def show_steps_context_menu(self, pos):
+        """显示步骤区域右键菜单 - 支持在任意位置插入空白步骤"""
+        # 创建右键菜单
+        menu = QMenu(self)
+        
+        # 添加菜单项
+        insert_blank_step_action = menu.addAction("插入空白步骤")
+        
+        # 执行菜单
+        action = menu.exec_(self.steps_widget.mapToGlobal(pos))
+        
+        if action == insert_blank_step_action:
+            # 获取点击位置对应的插入位置
+            self.insert_blank_step_at_position(pos)
+    
+    def insert_blank_step_at_position(self, pos):
+        """在指定位置插入空白步骤 - 支持动态ID重排"""
+        if not self.current_case:
+            # 创建新的测试用例对象
+            self.current_case = TestCase()
+            self.current_case.name = self.name_edit.text().strip() or "未命名用例"
+            self.current_case.description = self.description_edit.toPlainText().strip()
+            self.current_case.environment_id = self.env_combo.currentData()
+        
+        # 计算插入位置
+        insert_index = len(self.current_case.steps) if self.current_case.steps else 0
+        
+        # 如果有点击位置，计算插入位置
+        if hasattr(self, 'steps_layout') and self.steps_layout:
+            # 将局部坐标转换为步骤容器的局部坐标
+            local_pos = pos
+            
+            # 查找最近的步骤卡片位置
+            for i in range(self.steps_layout.count()):
+                item = self.steps_layout.itemAt(i)
+                if item and item.widget() and hasattr(item.widget(), 'step_id'):
+                    widget = item.widget()
+                    widget_rect = widget.geometry()
+                    
+                    # 检查点击位置是否在该步骤卡片的上半部分
+                    if local_pos.y() < widget_rect.center().y():
+                        insert_index = i
+                        break
+                    else:
+                        insert_index = i + 1
+        
+        # 计算新步骤的序号（基于插入位置）
+        if self.current_case and self.current_case.steps:
+            # 如果插入到中间，需要重新计算所有后续步骤的序号
+            if insert_index < len(self.current_case.steps):
+                # 插入到中间，新步骤的序号为插入位置的序号
+                new_order = insert_index + 1
+                
+                # 更新后续步骤的序号
+                for i in range(insert_index, len(self.current_case.steps)):
+                    self.current_case.steps[i].step_order = i + 2
+            else:
+                # 插入到末尾，新步骤的序号为最大序号+1
+                new_order = max(step.step_order for step in self.current_case.steps) + 1
+        else:
+            new_order = 1
+        
+        # 创建空白步骤数据
+        step_data_for_model = {
+            'id': None,  # 新步骤的id为None，将在保存时由数据库生成
+            'case_id': self.current_case.id if self.current_case else 0,
+            'step_order': new_order,
+            'name': f"步骤 {new_order}",
+            'enabled': True,
+            'pre_processing': {},
+            'post_processing': {},
+            'assertions': {},
+            'variables': {},
+            'api_template_id': None,
+            'api_name': '',
+            'api_method': '',
+            'api_url_path': ''
+        }
+
+        # 创建步骤卡片数据
+        step_data_for_card = step_data_for_model.copy()
+        step_data_for_card['api_template'] = None
+
+        # 创建步骤对象并插入到指定位置
+        step = TestCaseStep.from_dict(step_data_for_model)
+        if self.current_case:
+            if insert_index < len(self.current_case.steps):
+                self.current_case.steps.insert(insert_index, step)
+            else:
+                self.current_case.steps.append(step)
+        
+        # 重新生成所有步骤的前端ID（基于新的顺序）
+        self.regenerate_step_ids()
+        
+        # 重新加载步骤列表以更新UI
+        self.load_steps()
+
+        # 隐藏占位符（如果存在且有效）
+        if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
+            try:
+                # 检查占位符是否仍然有效
+                if hasattr(self.steps_placeholder, 'isVisible'):
+                    self.steps_placeholder.hide()
+                    print("[DEBUG] insert_blank_step_at_position: 隐藏占位符")
+            except RuntimeError:
+                # 如果占位符已被删除，忽略错误
+                print("[DEBUG] insert_blank_step_at_position: 占位符已被删除，忽略错误")
+                pass
+        
+        self.on_case_changed()
+        
+        # 标记为已修改
+        if not self.modified:
+            self.modified = True
+            self.modified_signal.emit(True)
+            
+        print(f"空白步骤插入成功: 在位置 {insert_index} 插入新步骤，前端ID已重新生成")
     
     def add_test_step(self):
         """添加测试步骤"""
@@ -834,8 +1081,17 @@ class CaseTabWidget(QWidget):
 
     def add_step_card(self, step_data):
         """添加步骤卡片"""
+        # 确保步骤数据包含正确的order字段（步骤卡片期望order字段）
+        step_data_for_card = step_data.copy()
+        # 如果step_data包含step_order字段，将其转换为order字段
+        if 'step_order' in step_data_for_card:
+            step_data_for_card['order'] = step_data_for_card['step_order']
+        elif 'order' not in step_data_for_card:
+            # 如果既没有step_order也没有order，默认设为1
+            step_data_for_card['order'] = 1
+        
         # 使用新的InterfaceStepCard组件
-        step_card = InterfaceStepCard(step_data, self)
+        step_card = InterfaceStepCard(step_data_for_card, self)
         step_card.step_updated.connect(self.on_step_updated)
         step_card.step_deleted.connect(self.on_step_deleted)
         step_card.step_moved.connect(self.on_step_moved)
@@ -856,35 +1112,102 @@ class CaseTabWidget(QWidget):
         self.on_case_changed()
 
     def on_step_deleted(self, step_id):
-        """步骤删除事件"""
-        # 从UI中移除步骤卡片
-        for i in reversed(range(self.steps_layout.count())):
-            item = self.steps_layout.itemAt(i)
-            if item.widget() and hasattr(item.widget(), 'step_id') and item.widget().step_id == step_id:
-                item.widget().deleteLater()
-                break
+        """步骤删除事件 - 支持动态ID重排"""
+        print(f"[DEBUG] on_step_deleted: 开始删除步骤 {step_id}")
         
         # 从内存中删除步骤数据
         if self.current_case:
-            self.current_case.steps = [step for step in self.current_case.steps 
-                                     if step.id != step_id]
-        
-        # 如果没有步骤了，显示占位符
-        if not self.current_case or not self.current_case.steps:
-            self.steps_placeholder.show()
-        
-        self.on_case_changed()
-
-    def on_step_moved(self, from_index, to_index):
-        """步骤移动事件"""
-        if self.current_case and 0 <= from_index < len(self.current_case.steps) and 0 <= to_index < len(self.current_case.steps):
-            step = self.current_case.steps.pop(from_index)
-            self.current_case.steps.insert(to_index, step)
+            original_count = len(self.current_case.steps)
             
-            # 重新加载步骤列表以更新流式布局
+            # 方法1：通过布局中的步骤卡片位置来删除对应步骤
+            step_index_to_delete = -1
+            for i in range(self.steps_layout.count()):
+                item = self.steps_layout.itemAt(i)
+                if item and item.widget() and hasattr(item.widget(), 'step_id'):
+                    if item.widget().step_id == step_id:
+                        step_index_to_delete = i
+                        break
+            
+            if step_index_to_delete >= 0 and step_index_to_delete < len(self.current_case.steps):
+                # 删除对应位置的步骤
+                del self.current_case.steps[step_index_to_delete]
+                new_count = len(self.current_case.steps)
+                print(f"[DEBUG] 步骤数据更新: 从 {original_count} 个步骤变为 {new_count} 个步骤")
+            else:
+                # 方法2：如果方法1失败，使用备用方法（基于前端ID）
+                self.current_case.steps = [step for step in self.current_case.steps 
+                                         if step.to_dict().get('frontend_id') != step_id]
+                new_count = len(self.current_case.steps)
+                print(f"[DEBUG] 备用方法: 步骤数据更新: 从 {original_count} 个步骤变为 {new_count} 个步骤")
+        
+        # 重新生成所有步骤的ID（基于新的顺序）
+        self.regenerate_step_ids()
+        
+        # 更新所有步骤的序号
+        self.update_step_orders()
+        
+        # 重新加载步骤列表以更新UI
+        self.load_steps()
+        
+        # 标记用例数据已修改
+        self.on_case_changed()
+        print("[DEBUG] on_step_deleted: 删除完成，前端ID和序号已重新生成")
+
+    def on_step_moved(self, dragged_step_id, target_step_id, from_index, to_index):
+        """步骤移动事件 - 基于位置索引直接移动步骤"""
+        print(f"[DEBUG] on_step_moved接收到信号: dragged_step_id={dragged_step_id}, target_step_id={target_step_id}, from_index={from_index}, to_index={to_index}")
+        
+        if not self.current_case or not self.current_case.steps:
+            print("[DEBUG] on_step_moved: 当前用例或步骤列表为空，忽略移动")
+            return
+            
+        # 获取布局中所有步骤的前端ID顺序
+        if not hasattr(self, 'steps_layout') or not self.steps_layout:
+            print("[DEBUG] on_step_moved: 步骤布局不存在，忽略移动")
+            return
+            
+        # 根据拖动的位置重新排序步骤列表
+        if from_index >= 0 and to_index >= 0 and from_index != to_index:
+            # 检查索引是否在有效范围内
+            if from_index >= len(self.current_case.steps) or to_index > len(self.current_case.steps):
+                print(f"[DEBUG] 索引超出范围: from_index={from_index}, to_index={to_index}, 步骤总数={len(self.current_case.steps)}")
+                return
+                
+            # 直接基于位置索引移动步骤
+            print(f"[DEBUG] 开始移动步骤: 从位置 {from_index} 移动到 {to_index}")
+            
+            # 从原位置移除步骤
+            dragged_step = self.current_case.steps.pop(from_index)
+            
+            # 插入到新位置
+            # 注意：由于已经移除了原位置的步骤，后续步骤的索引会前移
+            # 如果目标位置在原位置之后，不需要调整索引，因为我们是在移除元素后再插入
+            # 如果目标位置在原位置之前，也不需要调整索引
+            
+            # 插入到新位置
+            self.current_case.steps.insert(to_index, dragged_step)
+            
+            # 调试：打印实际的移动结果
+            print(f"[DEBUG] 实际移动结果: 从位置 {from_index} 移动到 {to_index}")
+            print(f"[DEBUG] 移动后步骤顺序: {[step.to_dict().get('name', '未命名') for step in self.current_case.steps]}")
+            
+            # 重新生成所有步骤的ID（基于新的顺序）
+            self.regenerate_step_ids()
+            
+            # 更新步骤序号
+            self.update_step_orders()
+            
+            # 重新加载步骤列表以更新UI显示
             self.load_steps()
             
-            self.on_case_changed()
+            # 标记为已修改
+            if not self.modified:
+                self.modified = True
+                self.modified_signal.emit(True)
+            
+            print(f"步骤移动成功: 从位置 {from_index} 移动到 {to_index}，前端ID已重新生成")
+        else:
+            print(f"[DEBUG] 无效的移动参数: from_index={from_index}, to_index={to_index}")
     
     def on_api_template_clicked(self, api_template_id):
         """接口模板点击事件 - 跳转到对应接口模板编辑tab"""
@@ -892,7 +1215,7 @@ class CaseTabWidget(QWidget):
         self.api_template_edit_requested.emit(api_template_id)
     
     def on_step_copied(self, step_id, copied_step_data):
-        """步骤复制事件"""
+        """步骤复制事件 - 支持动态ID重排"""
         try:
             # 确保当前用例存在
             if not self.current_case:
@@ -905,7 +1228,8 @@ class CaseTabWidget(QWidget):
             # 计算新步骤的序号（插入到原步骤后面）
             source_step_index = -1
             for i, step in enumerate(self.current_case.steps):
-                if step.id == step_id or step.name == copied_step_data.get('name', '').replace('(副本)', ''):
+                # 使用前端ID进行查找
+                if step.to_dict().get('frontend_id') == step_id:
                     source_step_index = i
                     break
             
@@ -921,25 +1245,66 @@ class CaseTabWidget(QWidget):
             else:
                 self.current_case.steps.append(new_step)
             
+            # 重新生成所有步骤的ID（基于新的顺序）
+            self.regenerate_step_ids()
+            
             # 更新所有步骤的序号
             self.update_step_orders()
             
             # 重新加载步骤列表
             self.load_steps()
             
-            # 隐藏占位符
-            self.steps_placeholder.hide()
+            # 隐藏占位符（如果存在且有效）
+            if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
+                try:
+                    # 检查占位符是否仍然有效
+                    if hasattr(self.steps_placeholder, 'isVisible'):
+                        self.steps_placeholder.hide()
+                except RuntimeError:
+                    # 如果占位符已被删除，忽略错误
+                    print("[DEBUG] on_step_copied: 占位符已被删除，忽略错误")
+                    pass
             
             # 标记为已修改
             if not self.modified:
                 self.modified = True
                 self.modified_signal.emit(True)
             
-            print(f"步骤复制成功: 从步骤 {step_id} 复制到新步骤 {new_step.id}")
+            print(f"步骤复制成功: 从步骤 {step_id} 复制到新步骤，前端ID已重新生成")
             
         except Exception as e:
             print(f"步骤复制失败: {str(e)}")
             Toast.error(self, f"步骤复制失败: {str(e)}")
+    
+    def regenerate_step_ids(self):
+        """重新生成所有步骤的前端ID - 基于当前布局顺序"""
+        if not self.current_case or not self.current_case.steps:
+            return
+            
+        # 获取当前布局中的步骤顺序
+        if not hasattr(self, 'steps_layout') or not self.steps_layout:
+            return
+            
+        # 生成新的前端ID映射表
+        new_frontend_ids = {}
+        for i in range(self.steps_layout.count()):
+            item = self.steps_layout.itemAt(i)
+            if item and item.widget() and hasattr(item.widget(), 'step_id'):
+                old_step_id = item.widget().step_id
+                # 生成新的前端ID（基于位置）
+                new_step_id = f"step_{i+1}_{id(item.widget())}"
+                new_frontend_ids[old_step_id] = new_step_id
+                
+                # 同时更新步骤卡片的step_id
+                item.widget().step_id = new_step_id
+        
+        # 更新步骤数据中的前端ID
+        for step in self.current_case.steps:
+            step_dict = step.to_dict()
+            old_frontend_id = step_dict.get('frontend_id')
+            if old_frontend_id in new_frontend_ids:
+                step_dict['frontend_id'] = new_frontend_ids[old_frontend_id]
+                step.update_from_dict(step_dict)
     
     def update_step_orders(self):
         """更新所有步骤的序号"""
@@ -951,18 +1316,15 @@ class CaseTabWidget(QWidget):
             step.step_order = i
             
         # 更新UI中步骤卡片的序号显示
-        # 需要找到每个步骤对应的卡片，并更新其序号
-        for i, step in enumerate(self.current_case.steps, 1):
-            # 在布局中找到对应的步骤卡片
-            for j in range(self.steps_layout.count()):
-                item = self.steps_layout.itemAt(j)
-                if item and item.widget():
-                    widget = item.widget()
-                    # 检查这个卡片是否对应当前的步骤
-                    if hasattr(widget, 'step_data') and widget.step_data.get('id') == step.id:
-                        if hasattr(widget, 'update_step_order'):
-                            widget.update_step_order(i)
-                        break
+        # 使用布局顺序来匹配步骤卡片和步骤数据
+        for i in range(self.steps_layout.count()):
+            item = self.steps_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                # 检查是否是步骤卡片（有step_id属性）
+                if hasattr(widget, 'step_id') and hasattr(widget, 'update_step_order'):
+                    # 直接使用布局中的位置来更新序号
+                    widget.update_step_order(i + 1)
 
     def on_case_changed(self):
         """用例数据变化"""
@@ -1004,6 +1366,15 @@ class CaseTabWidget(QWidget):
         
         # 记录开始执行日志
         self.log_message(f"开始执行用例: {self.current_case.name}", "info")
+
+    def toggle_execution(self):
+        """切换执行状态（调试/停止）"""
+        if self.is_executing:
+            # 当前正在执行，点击则停止
+            self.stop_execution()
+        else:
+            # 当前未执行，点击则开始调试
+            self.execute_case()
 
     def stop_execution(self):
         """停止执行"""
@@ -1082,11 +1453,37 @@ class CaseTabWidget(QWidget):
         # 移除所有步骤卡片
         for i in reversed(range(self.steps_layout.count())):
             item = self.steps_layout.itemAt(i)
-            if item.widget() and item.widget() != self.steps_placeholder:
-                item.widget().deleteLater()
+            if item and item.widget():
+                # 检查是否是占位符（如果占位符存在且有效）
+                is_placeholder = False
+                if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
+                    try:
+                        is_placeholder = (item.widget() == self.steps_placeholder)
+                    except RuntimeError:
+                        # 如果占位符已被删除，忽略错误
+                        is_placeholder = False
+                
+                if not is_placeholder:
+                    # 安全删除：检查widget是否仍然有效
+                    try:
+                        widget = item.widget()
+                        # 检查widget是否仍然有效（没有被删除）
+                        if widget and hasattr(widget, 'isVisible'):
+                            widget.deleteLater()
+                    except RuntimeError as e:
+                        # 如果widget已经被删除，忽略错误
+                        print(f"[DEBUG] clear_steps: 忽略已删除的widget: {e}")
+                        pass
 
-        # 显示占位符
-        self.steps_placeholder.show()
+        # 显示占位符（如果存在且有效）
+        if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
+            try:
+                self.steps_placeholder.show()
+                print("[DEBUG] clear_steps: 显示占位符")
+            except RuntimeError:
+                # 如果占位符已被删除，忽略错误
+                print("[DEBUG] clear_steps: 占位符已被删除，忽略错误")
+                pass
 
     def load_steps(self):
         """加载步骤列表"""
@@ -1096,8 +1493,17 @@ class CaseTabWidget(QWidget):
         if not self.current_case or not self.current_case.steps:
             return
 
-        # 隐藏占位符
-        self.steps_placeholder.hide()
+        # 隐藏占位符（如果存在且有效）
+        if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
+            try:
+                # 检查占位符是否仍然有效
+                if hasattr(self.steps_placeholder, 'isVisible'):
+                    self.steps_placeholder.hide()
+                    print("[DEBUG] load_steps: 隐藏占位符")
+            except RuntimeError:
+                # 如果占位符已被删除，忽略错误
+                print("[DEBUG] load_steps: 占位符已被删除，忽略错误")
+                pass
 
         # 添加步骤卡片
         for step in self.current_case.steps:
@@ -1109,20 +1515,24 @@ class CaseTabWidget(QWidget):
         has_steps = self.current_case and len(self.current_case.steps) > 0
         
         # 执行按钮状态
-        self.run_case_btn.setEnabled(has_steps and not self.is_executing)
-        self.stop_case_btn.setEnabled(self.is_executing)
-        self.save_btn.setEnabled(not self.is_executing)
+        self.run_stop_btn.setEnabled(has_steps)
+        # 保存按钮始终可用，不受执行状态影响
+        self.save_btn.setEnabled(True)
         
-        # 根据执行状态设置按钮样式
+        # 根据执行状态设置按钮图标和样式
         if self.is_executing:
-            self.run_case_btn.setStyleSheet("background-color: #9E9E9E; color: white;")
-            self.stop_case_btn.setStyleSheet("background-color: #f44336; color: white;")
+            # 运行中：显示停止图标
+            self.run_stop_btn.setIcon(QIcon("src/resources/icons/stoping.png"))
+            self.run_stop_btn.setToolTip("停止执行")
+            self.run_stop_btn.setStyleSheet("border: none; background: transparent; padding: 8px; margin: 4px;")
         else:
-            self.run_case_btn.setStyleSheet("background-color: #4CAF50; color: white;")
-            self.stop_case_btn.setStyleSheet("background-color: #9E9E9E; color: white;")
+            # 未运行：显示调试图标
+            self.run_stop_btn.setIcon(QIcon("src/resources/icons/running.png"))
+            self.run_stop_btn.setToolTip("调试用例")
+            self.run_stop_btn.setStyleSheet("border: none; background: transparent; padding: 8px; margin: 4px;")
         
-        # 保存按钮始终可用（除非正在执行）
-        self.save_btn.setStyleSheet("background-color: #2196F3; color: white;")
+        # 保存按钮样式保持不变，不重置样式表
+        # 仅在初始化时设置一次样式，避免调试按钮点击时影响保存按钮样式
 
     def load_environments(self):
         """加载环境列表"""

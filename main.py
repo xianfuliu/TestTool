@@ -94,6 +94,6 @@ if __name__ == "__main__":
     # 设置应用程序图标（使用已经创建的主窗口实例）
     app.setWindowIcon(window.create_icon())
 
-    # 显示窗口
-    window.show()
+    # 显示窗口（最大化模式）
+    window.showMaximized()
     sys.exit(app.exec_())

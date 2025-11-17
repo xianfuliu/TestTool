@@ -254,6 +254,14 @@ class TestCaseService:
                                     # 短暂延迟，避免数据库压力
                                     import time
                                     time.sleep(0.1)
+                    else:
+                        # 当步骤数量为0时，也需要删除现有步骤
+                        print("[DEBUG] 步骤数量为0，删除现有步骤")
+                        with self.db.get_connection() as delete_conn:
+                            with delete_conn.cursor() as delete_cursor:
+                                delete_cursor.execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
+                                delete_conn.commit()
+                                print("[DEBUG] 现有步骤删除完成")
 
                     print("[DEBUG] update_case执行完成")
                     return True
