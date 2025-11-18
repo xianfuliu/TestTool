@@ -1673,8 +1673,9 @@ class CaseTabWidget(QWidget):
         self.execution_thread.case_finished.connect(self.on_case_finished)
         self.execution_thread.log_message.connect(self.log_message_with_step)
         
-        # 清空日志（在执行线程启动前）
-        self.clear_logs()
+        # 不再清空日志，保留之前的执行日志
+        print(f"[DEBUG] 执行前日志数量: {len(self.execution_logs)}")
+        # self.clear_logs()
         
         # 记录详细的调试信息
         self.log_debug_info()
@@ -1775,6 +1776,9 @@ class CaseTabWidget(QWidget):
 
     def on_case_finished(self, case_result):
         """用例执行完成 - 修复版本"""
+        # 记录执行完成时的日志状态
+        print(f"[DEBUG] on_case_finished开始，当前日志数量: {len(self.execution_logs)}")
+        
         # 等待线程完全退出
         if self.execution_thread and self.execution_thread.isRunning():
             print("[DEBUG] 等待线程安全退出...")
@@ -1806,6 +1810,9 @@ class CaseTabWidget(QWidget):
         status = "成功" if success_count == total_count else "失败"
         
         self.log_message(f"用例执行完成: {status} (成功: {success_count}/{total_count})", "info")
+        
+        # 记录执行完成后的日志状态
+        print(f"[DEBUG] on_case_finished结束，当前日志数量: {len(self.execution_logs)}")
 
     def log_message(self, message, level="info"):
         """记录日志消息（无步骤信息）"""
@@ -1885,7 +1892,10 @@ class CaseTabWidget(QWidget):
     def clear_logs(self):
         """清空日志"""
         # 只清空执行日志列表，不操作日志文本控件
-        self.execution_logs = []
+        print(f"[DEBUG] clear_logs被调用，当前日志数量: {len(self.execution_logs)}")
+        # 不再清空日志列表，保留执行日志
+        # self.execution_logs = []
+        print(f"[DEBUG] clear_logs已禁用，日志列表保持不变")
 
     def clear_steps(self):
         """清空步骤列表"""
@@ -2224,17 +2234,28 @@ class TabbedCaseEditor(QWidget):
         """显示执行日志弹窗"""
         # 调试信息：追踪日志列表状态
         print(f"[DEBUG] === 开始显示执行日志弹窗 ===")
-        print(f"[DEBUG] 当前日志列表对象ID: {id(self.execution_logs)}")
-        print(f"[DEBUG] 当前日志列表数量: {len(self.execution_logs)}")
         print(f"[DEBUG] 当前标签页对象ID: {id(self)}")
+        
+        # 获取当前活动标签页的日志列表
+        current_logs = []
+        if self.current_tab_id and self.current_tab_id in self.tabs:
+            current_tab_widget = self.tabs[self.current_tab_id]['widget']
+            if hasattr(current_tab_widget, 'execution_logs'):
+                current_logs = current_tab_widget.execution_logs
+                print(f"[DEBUG] 当前标签页日志列表对象ID: {id(current_logs)}")
+                print(f"[DEBUG] 当前标签页日志列表数量: {len(current_logs)}")
+            else:
+                print("[DEBUG] 当前标签页没有execution_logs属性")
+        else:
+            print("[DEBUG] 没有当前活动标签页")
         
         # 创建执行日志弹窗
         self.execution_logs_dialog = ExecutionLogsDialog(self)
         
         # 如果测试正在执行，将已记录的日志添加到弹窗中
-        if hasattr(self, 'execution_logs') and self.execution_logs:
-            print(f"[DEBUG] 弹窗创建时加载已记录日志，共 {len(self.execution_logs)} 条")
-            for log_entry in self.execution_logs:
+        if current_logs:
+            print(f"[DEBUG] 弹窗创建时加载已记录日志，共 {len(current_logs)} 条")
+            for log_entry in current_logs:
                 step_index = log_entry.get('step_index', -1)
                 step_info = "通用信息" if step_index == -1 else f"步骤 {step_index + 1}"
                 print(f"[DEBUG] 加载日志 - {step_info}: {log_entry['message'][:50]}...")
