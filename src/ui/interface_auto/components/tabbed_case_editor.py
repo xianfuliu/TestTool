@@ -1673,14 +1673,7 @@ class CaseTabWidget(QWidget):
         self.execution_thread.case_finished.connect(self.on_case_finished)
         self.execution_thread.log_message.connect(self.log_message_with_step)
         
-        # 开始执行
-        self.execution_thread.start()
-        self.is_executing = True
-        
-        # 更新按钮状态
-        self.update_buttons_state()
-        
-        # 清空日志
+        # 清空日志（在执行线程启动前）
         self.clear_logs()
         
         # 记录详细的调试信息
@@ -1688,6 +1681,13 @@ class CaseTabWidget(QWidget):
         
         # 记录开始执行日志
         self.log_message(f"开始执行用例: {self.current_case.name}", "info")
+        
+        # 开始执行
+        self.execution_thread.start()
+        self.is_executing = True
+        
+        # 更新按钮状态
+        self.update_buttons_state()
     
     def log_debug_info(self):
         """记录调试信息 - 用例配置详情"""
@@ -1865,13 +1865,22 @@ class CaseTabWidget(QWidget):
             'step_index': step_index
         })
         
+        # 调试信息：显示日志发射详情
+        step_info = "通用信息" if step_index == -1 else f"步骤 {step_index + 1}"
+        print(f"[DEBUG] 日志发射 - {step_info}: {message[:50]}... (level: {level}, 时间: {timestamp})")
+        print(f"[DEBUG] 当前日志列表数量: {len(self.execution_logs)}")
+        
         # 如果执行日志弹窗已打开，则直接添加日志到弹窗
         if hasattr(self, 'execution_logs_dialog') and self.execution_logs_dialog:
+            print(f"[DEBUG] 弹窗存在，正在添加日志到弹窗")
             try:
                 self.execution_logs_dialog.add_log_with_step(message, level, step_index)
             except RuntimeError:
                 # 弹窗已被删除，忽略错误
+                print("[DEBUG] 弹窗已被删除，忽略错误")
                 pass
+        else:
+            print(f"[DEBUG] 弹窗不存在，日志已保存到列表")
 
     def clear_logs(self):
         """清空日志"""
@@ -2213,15 +2222,38 @@ class TabbedCaseEditor(QWidget):
 
     def show_execution_logs(self):
         """显示执行日志弹窗"""
+        # 调试信息：追踪日志列表状态
+        print(f"[DEBUG] === 开始显示执行日志弹窗 ===")
+        print(f"[DEBUG] 当前日志列表对象ID: {id(self.execution_logs)}")
+        print(f"[DEBUG] 当前日志列表数量: {len(self.execution_logs)}")
+        print(f"[DEBUG] 当前标签页对象ID: {id(self)}")
+        
         # 创建执行日志弹窗
         self.execution_logs_dialog = ExecutionLogsDialog(self)
         
-        # 添加一些示例日志
-        self.execution_logs_dialog.add_log("执行日志弹窗已打开", "info")
-        self.execution_logs_dialog.add_log("可以查看测试用例的执行日志", "success")
+        # 如果测试正在执行，将已记录的日志添加到弹窗中
+        if hasattr(self, 'execution_logs') and self.execution_logs:
+            print(f"[DEBUG] 弹窗创建时加载已记录日志，共 {len(self.execution_logs)} 条")
+            for log_entry in self.execution_logs:
+                step_index = log_entry.get('step_index', -1)
+                step_info = "通用信息" if step_index == -1 else f"步骤 {step_index + 1}"
+                print(f"[DEBUG] 加载日志 - {step_info}: {log_entry['message'][:50]}...")
+                self.execution_logs_dialog.add_log_with_step(
+                    log_entry['message'], 
+                    log_entry['level'], 
+                    step_index
+                )
+            print(f"[DEBUG] 所有日志已加载到弹窗")
+        else:
+            # 添加一些示例日志
+            print("[DEBUG] 没有已记录日志，添加示例日志")
+            self.execution_logs_dialog.add_log("执行日志弹窗已打开", "info")
+            self.execution_logs_dialog.add_log("可以查看测试用例的执行日志", "success")
         
         # 显示弹窗
         self.execution_logs_dialog.show()
+        print("[DEBUG] 日志弹窗已显示")
+        print(f"[DEBUG] === 显示执行日志弹窗完成 ===")
 
     def add_execution_log(self, message, level="info"):
         """添加执行日志"""
@@ -2311,7 +2343,12 @@ class StepLogItem(QWidget):
         self.expand_btn.clicked.connect(self.toggle_expand)
         
         # 步骤序号和名称
-        self.step_label = QLabel(f"步骤 {self.step_index + 1}: {self.step_name}")
+        if self.step_index == -1:
+            # 通用信息，不显示步骤序号
+            self.step_label = QLabel(f"{self.step_name}")
+        else:
+            # 具体步骤，显示步骤序号
+            self.step_label = QLabel(f"步骤 {self.step_index + 1}: {self.step_name}")
         self.step_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         
         # 日志数量
