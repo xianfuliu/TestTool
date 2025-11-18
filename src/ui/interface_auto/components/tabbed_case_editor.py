@@ -1,4 +1,5 @@
 import json
+import traceback
 from datetime import datetime
 from PyQt5.QtCore import pyqtSignal, Qt, QDataStream, QIODevice, QSize, QThread
 from PyQt5.QtWidgets import (
@@ -23,10 +24,10 @@ from src.utils.interface_utils.request_engine import RequestEngine
 
 class CaseExecutionThread(QThread):
     """用例执行线程"""
-    step_started = pyqtSignal(str)  # 步骤名称
+    step_started = pyqtSignal(str, int)  # 步骤名称, 步骤索引
     step_finished = pyqtSignal(dict)  # 执行结果
     case_finished = pyqtSignal(dict)  # 用例执行结果
-    log_message = pyqtSignal(str, str)  # 日志消息, 级别
+    log_message = pyqtSignal(str, str, int)  # 日志消息, 级别, 步骤索引
 
     def __init__(self, case_data, environment_config=None):
         super().__init__()
@@ -35,35 +36,140 @@ class CaseExecutionThread(QThread):
         self.variable_manager = get_global_variable_manager()
         self.request_engine = RequestEngine()
         self.is_running = True
+    
+    def stop(self):
+        """停止线程执行 - 修复版本"""
+        if not self.isRunning():
+            return
+            
+        # 设置停止标志
+        self.is_running = False
+        
+        # 等待线程安全结束，增加等待时间到5秒
+        if not self.wait(5000):  # 最多等待5秒
+            print("[WARNING] 线程未在5秒内正常退出，尝试强制终止")
+            # 如果线程没有正常结束，强制终止
+            self.terminate()
+            # 等待终止完成
+            self.wait(2000)
+        
+        print("[DEBUG] 线程已安全停止")
+
+    def format_debug_message(self, message, level="info", step_index=None):
+        """格式化调试信息，使日志更易读"""
+        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]  # 毫秒级时间戳
+        
+        if step_index is not None:
+            prefix = f"[{timestamp}] [步骤{step_index + 1}]"
+        else:
+            prefix = f"[{timestamp}] [用例]"
+            
+        # 根据日志级别添加颜色标记
+        level_markers = {
+            "debug": "🔍",
+            "info": "ℹ️",
+            "warning": "⚠️",
+            "error": "❌"
+        }
+        
+        marker = level_markers.get(level, "ℹ️")
+        
+        # 格式化消息内容
+        formatted_message = f"{prefix} {marker} {message}"
+        
+        return formatted_message
 
     def run(self):
         """执行测试用例"""
         try:
-            self.log_message.emit(f"开始执行测试用例: {self.case_data['name']}", "info")
+            # [DEBUG] 终端打印 - 用例执行开始
+            print("[DEBUG] 用例执行开始")
+            print(f"[DEBUG] 用例名称: {self.case_data.get('name', '未命名')}")
+            print(f"[DEBUG] 环境配置: {self.environment_config}")
+            print(f"[DEBUG] 总步骤数: {len(self.case_data.get('steps', []))}")
+            
+            # 记录详细的调试信息
+            self.log_message.emit(self.format_debug_message("用例执行调试信息开始", "debug", -1), "debug", -1)
+            self.log_message.emit(self.format_debug_message(f"用例ID: {self.case_data.get('id', '未保存')}", "debug", -1), "debug", -1)
+            self.log_message.emit(self.format_debug_message(f"用例名称: {self.case_data.get('name', '未命名')}", "debug", -1), "debug", -1)
+            self.log_message.emit(self.format_debug_message(f"环境配置: {self.environment_config}", "debug", -1), "debug", -1)
+            self.log_message.emit(self.format_debug_message(f"总步骤数: {len(self.case_data.get('steps', []))}", "debug", -1), "debug", -1)
+            
+            # 记录全局变量信息
+            global_vars = self.case_data.get('global_vars', {})
+            self.log_message.emit(self.format_debug_message(f"全局变量数量: {len(global_vars)}", "debug", -1), "debug", -1)
+            for var_name, var_value in global_vars.items():
+                self.log_message.emit(self.format_debug_message(f"  - {var_name}: {var_value}", "debug", -1), "debug", -1)
+            
+            self.log_message.emit(self.format_debug_message(f"开始执行测试用例: {self.case_data['name']}", "info", -1), "info", -1)
 
             # 初始化变量管理器
             self.variable_manager.clear_local_variables()
-            global_vars = self.case_data.get('global_vars', {})
             self.variable_manager.set_global_variables(global_vars)
 
             # 执行每个步骤
             steps = self.case_data.get('steps', [])
             enabled_steps = [step for step in steps if step.get('enabled', True)]
+            
+            # [DEBUG] 终端打印 - 步骤信息
+            print(f"[DEBUG] 启用步骤数: {len(enabled_steps)}")
+            
+            self.log_message.emit(self.format_debug_message(f"启用步骤数: {len(enabled_steps)}", "debug", -1), "debug", -1)
 
             for step_index, step in enumerate(enabled_steps):
                 if not self.is_running:
+                    print("[DEBUG] 执行被中断")
+                    self.log_message.emit(self.format_debug_message("执行被中断", "debug", step_index), "debug", step_index)
                     break
 
-                self.step_started.emit(step.get('name', f"步骤 {step_index + 1}"))
+                # [DEBUG] 终端打印 - 步骤开始执行
+                print(f"[DEBUG] 开始执行步骤 {step_index + 1}")
+                print(f"[DEBUG] 步骤名称: {step.get('name', '未命名步骤')}")
+                print(f"[DEBUG] 接口模板ID: {step.get('api_template_id', '无')}")
+                
+                # 记录步骤开始执行的调试信息
+                self.log_message.emit(self.format_debug_message(f"开始执行步骤 {step_index + 1}", "debug", step_index), "debug", step_index)
+                self.log_message.emit(self.format_debug_message(f"步骤名称: {step.get('name', '未命名步骤')}", "debug", step_index), "debug", step_index)
+                self.log_message.emit(self.format_debug_message(f"步骤顺序: {step.get('step_order', step_index + 1)}", "debug", step_index), "debug", step_index)
+                self.log_message.emit(self.format_debug_message(f"接口模板ID: {step.get('api_template_id', '无')}", "debug", step_index), "debug", step_index)
+                
+                self.step_started.emit(step.get('name', f"步骤 {step_index + 1}"), step_index)
                 result = self.execute_step(step, step_index)
                 self.step_finished.emit(result)
+                
+                # [DEBUG] 终端打印 - 步骤执行结果
+                print(f"[DEBUG] 步骤 {step_index + 1} 执行完成")
+                print(f"[DEBUG] 执行结果: {'成功' if result.get('success', False) else '失败'}")
+                print(f"[DEBUG] 响应状态码: {result.get('response_status_code', '无')}")
+                print(f"[DEBUG] 执行耗时: {result.get('duration', 0):.2f}秒")
+                
+                # 记录步骤执行结果的调试信息
+                self.log_message.emit(self.format_debug_message(f"步骤 {step_index + 1} 执行完成", "debug", step_index), "debug", step_index)
+                self.log_message.emit(self.format_debug_message(f"执行结果: {'成功' if result.get('success', False) else '失败'}", "debug", step_index), "debug", step_index)
+                self.log_message.emit(self.format_debug_message(f"响应状态码: {result.get('response_status_code', '无')}", "debug", step_index), "debug", step_index)
+                self.log_message.emit(self.format_debug_message(f"执行耗时: {result.get('duration', 0):.2f}秒", "debug", step_index), "debug", step_index)
+                
+                # 如果步骤执行失败，停止执行后续步骤
+                if not result.get('success', False):
+                    print("[DEBUG] 步骤执行失败，停止执行后续步骤")
+                    self.log_message.emit(self.format_debug_message("步骤执行失败，停止执行后续步骤", "debug", step_index), "debug", step_index)
+                    break
 
+            # [DEBUG] 终端打印 - 用例执行完成
+            print("[DEBUG] 用例执行完成")
+            
             self.case_finished.emit({
                 'success': True,
                 'message': '用例执行完成'
             })
+            
+            self.log_message.emit(self.format_debug_message("用例执行调试信息结束", "debug", -1), "debug", -1)
 
         except Exception as e:
+            # [DEBUG] 终端打印 - 用例执行异常
+            print(f"[DEBUG] 用例执行异常: {str(e)}")
+            
+            self.log_message.emit(self.format_debug_message(f"用例执行异常: {str(e)}", "error", -1), "error", -1)
             self.case_finished.emit({
                 'success': False,
                 'error': str(e)
@@ -74,17 +180,43 @@ class CaseExecutionThread(QThread):
         try:
             step_start_time = datetime.now()
 
+            # [DEBUG] 终端打印 - 步骤执行开始
+            print(f"[DEBUG] 步骤 {step_index + 1} 执行详情开始")
+            print(f"[DEBUG] 步骤配置: {step}")
+            
+            # 记录步骤开始执行的详细调试信息
+            self.log_message.emit(self.format_debug_message(f"步骤 {step_index + 1} 执行详情开始", "debug", step_index), "debug", step_index)
+            self.log_message.emit(self.format_debug_message(f"步骤配置: {step}", "debug", step_index), "debug", step_index)
+            
             # 记录开始日志
-            self.log_message.emit(f"执行步骤 {step_index + 1}: {step.get('name', '未命名步骤')}", "info")
+            self.log_message.emit(self.format_debug_message(f"执行步骤 {step_index + 1}: {step.get('name', '未命名步骤')}", "info", step_index), "info", step_index)
 
             # 执行前置处理
-            self.execute_pre_processing(step.get('pre_processing', {}))
+            pre_processing = step.get('pre_processing', {})
+            print(f"[DEBUG] 前置处理工具数量: {len(pre_processing)}")
+            self.log_message.emit(self.format_debug_message(f"前置处理工具数量: {len(pre_processing)}", "debug", step_index), "debug", step_index)
+            self.execute_pre_processing(pre_processing, step_index)
 
             # 执行接口请求
             api_template_id = step.get('api_template_id')
             if api_template_id:
-                result = self.execute_api_request(step, api_template_id)
+                print(f"[DEBUG] 执行接口请求，模板ID: {api_template_id}")
+                self.log_message.emit(self.format_debug_message(f"执行接口请求，模板ID: {api_template_id}", "debug", step_index), "debug", step_index)
+                try:
+                    result = self.execute_api_request(step, step_index)
+                    print(f"[DEBUG] execute_api_request方法执行完成，结果: {result}")
+                except Exception as e:
+                    print(f"[DEBUG] execute_api_request方法执行异常: {str(e)}")
+                    print(f"[DEBUG] 异常堆栈: {traceback.format_exc()}")
+                    result = {
+                        'success': False,
+                        'error': str(e),
+                        'status': 'error',
+                        'duration': 0
+                    }
             else:
+                print("[DEBUG] 跳过接口执行（无接口模板）")
+                self.log_message.emit(self.format_debug_message("跳过接口执行（无接口模板）", "debug", step_index), "debug", step_index)
                 result = {
                     'success': True,
                     'message': '跳过接口执行（无接口模板）',
@@ -93,11 +225,17 @@ class CaseExecutionThread(QThread):
 
             # 执行后置处理
             if result.get('success'):
-                self.execute_post_processing(step.get('post_processing', {}), result)
+                post_processing = step.get('post_processing', {})
+                print(f"[DEBUG] 后置处理工具数量: {len(post_processing)}")
+                self.log_message.emit(self.format_debug_message(f"后置处理工具数量: {len(post_processing)}", "debug", step_index), "debug", step_index)
+                self.execute_post_processing(post_processing, result, step_index)
 
             # 执行断言
             if result.get('success'):
-                assertion_result = self.execute_assertions(step.get('assertions', {}), result)
+                assertions = step.get('assertions', {})
+                print(f"[DEBUG] 断言数量: {len(assertions)}")
+                self.log_message.emit(self.format_debug_message(f"断言数量: {len(assertions)}", "debug", step_index), "debug", step_index)
+                assertion_result = self.execute_assertions(assertions, result, step_index)
                 result['assertions_result'] = assertion_result
 
             # 计算执行时长
@@ -105,15 +243,24 @@ class CaseExecutionThread(QThread):
             duration = (step_end_time - step_start_time).total_seconds()
             result['duration'] = duration
 
-            # 记录完成日志
+            # [DEBUG] 终端打印 - 步骤执行完成
             status = result.get('status', 'success' if result.get('success') else 'failure')
+            print(f"[DEBUG] 步骤 {step_index + 1} 执行完成: {status}, 耗时: {duration:.2f}秒")
+            print(f"[DEBUG] 步骤执行结果详情: {result}")
+            
+            # 记录完成日志
             log_level = "info" if status == "success" else "warning"
-            self.log_message.emit(f"步骤 {step_index + 1} 执行完成: {status}, 耗时: {duration:.2f}秒", log_level)
+            self.log_message.emit(self.format_debug_message(f"步骤 {step_index + 1} 执行完成: {status}, 耗时: {duration:.2f}秒", log_level, step_index), log_level, step_index)
+            
+            # 记录步骤执行结果的详细调试信息
+            self.log_message.emit(self.format_debug_message(f"步骤执行结果详情: {result}", "debug", step_index), "debug", step_index)
+            self.log_message.emit(self.format_debug_message(f"步骤 {step_index + 1} 执行详情结束", "debug", step_index), "debug", step_index)
 
             return result
 
         except Exception as e:
-            self.log_message.emit(f"步骤 {step_index + 1} 执行错误: {str(e)}", "error")
+            self.log_message.emit(self.format_debug_message(f"步骤 {step_index + 1} 执行错误: {str(e)}", "error", step_index), "error", step_index)
+            self.log_message.emit(self.format_debug_message(f"错误详情: {traceback.format_exc()}", "debug", step_index), "debug", step_index)
             return {
                 'success': False,
                 'error': str(e),
@@ -121,32 +268,81 @@ class CaseExecutionThread(QThread):
                 'duration': 0
             }
 
-    def execute_pre_processing(self, pre_processing):
+    def execute_pre_processing(self, pre_processing, step_index):
         """执行前置处理"""
+        print(f"[DEBUG] 开始执行前置处理，输入参数: {pre_processing}")
+        
+        if not pre_processing:
+            print("[DEBUG] 前置处理: 无配置，直接返回")
+            self.log_message.emit(self.format_debug_message("前置处理: 无配置", "debug", step_index), "debug", step_index)
+            return
+            
+        print(f"[DEBUG] 前置处理配置类型: {type(pre_processing)}")
+        print(f"[DEBUG] 前置处理配置长度: {len(pre_processing)}")
+        
+        self.log_message.emit(self.format_debug_message("开始执行前置处理", "debug", step_index), "debug", step_index)
+        
         # 执行前置处理器中的工具
+        tool_count = 0
+        print(f"[DEBUG] 开始遍历前置处理工具，共 {len(pre_processing)} 个")
+        
         for tool_id, tool_config in pre_processing.items():
+            print(f"[DEBUG] 处理工具ID: {tool_id}")
+            print(f"[DEBUG] 工具配置: {tool_config}")
+            
             if not isinstance(tool_config, dict):
+                print(f"[DEBUG] 工具 {tool_id} 配置不是字典类型，跳过")
                 continue
                 
-            if not tool_config.get('enabled', True):
+            enabled = tool_config.get('enabled', True)
+            print(f"[DEBUG] 工具 {tool_id} 启用状态: {enabled}")
+            
+            if not enabled:
+                print(f"[DEBUG] 前置处理工具 {tool_id} 已禁用，跳过")
+                self.log_message.emit(self.format_debug_message(f"前置处理工具 {tool_id} 已禁用，跳过", "debug", step_index), "debug", step_index)
                 continue
                 
             tool_type = tool_config.get('type')
             config = tool_config.get('config', {})
             
+            print(f"[DEBUG] 工具 {tool_id} 类型: {tool_type}")
+            print(f"[DEBUG] 工具 {tool_id} 配置详情: {config}")
+            
+            self.log_message.emit(self.format_debug_message(f"执行前置处理工具: {tool_type}", "debug", step_index), "debug", step_index)
+            
             if tool_type == 'http_request':
-                self.execute_http_request_tool(config)
+                print(f"[DEBUG] 开始执行HTTP请求工具")
+                self.execute_http_request_tool(config, step_index)
+                print(f"[DEBUG] HTTP请求工具执行完成")
             else:
-                self.log_message.emit(f"未知的前置处理工具类型: {tool_type}", "warning")
+                print(f"[DEBUG] 未知的前置处理工具类型: {tool_type}")
+                self.log_message.emit(self.format_debug_message(f"未知的前置处理工具类型: {tool_type}", "warning", step_index), "warning", step_index)
+            
+            tool_count += 1
+            print(f"[DEBUG] 工具 {tool_id} 执行完成，当前已执行工具数: {tool_count}")
         
         # 这里可以执行变量设置、脚本执行等前置操作
         variables = pre_processing.get('variables', {})
+        print(f"[DEBUG] 变量设置配置: {variables}")
+        
         if variables:
+            print(f"[DEBUG] 开始设置局部变量")
+            self.log_message.emit(self.format_debug_message(f"设置局部变量: {variables}", "debug", step_index), "debug", step_index)
             self.variable_manager.set_local_variables(variables)
-            self.log_message.emit(f"设置局部变量: {variables}", "info")
+            self.log_message.emit(self.format_debug_message(f"局部变量设置完成", "info", step_index), "info", step_index)
+            print(f"[DEBUG] 局部变量设置完成")
+        else:
+            print("[DEBUG] 无变量需要设置")
+        
+        print(f"[DEBUG] 前置处理完成，共执行 {tool_count} 个工具")
+        self.log_message.emit(self.format_debug_message(f"前置处理完成，共执行 {tool_count} 个工具", "debug", step_index), "debug", step_index)
+        self.log_message.emit(self.format_debug_message("前置处理执行结束", "debug", step_index), "debug", step_index)
+        print("[DEBUG] 前置处理执行结束")
 
-    def execute_http_request_tool(self, config):
+    def execute_http_request_tool(self, config, step_index=-1):
         """执行HTTP请求工具"""
+        print(f"[DEBUG] 开始执行HTTP请求工具，配置: {config}")
+        
         try:
             # 获取请求配置
             method = config.get('method', 'GET')
@@ -156,8 +352,14 @@ class CaseExecutionThread(QThread):
             timeout = config.get('timeout', 30)
             extractors = config.get('extractors', {})
             
+            print(f"[DEBUG] HTTP请求配置 - 方法: {method}, URL: {url}, 超时: {timeout}")
+            print(f"[DEBUG] HTTP请求配置 - 请求头: {headers}")
+            print(f"[DEBUG] HTTP请求配置 - 请求体: {body}")
+            print(f"[DEBUG] HTTP请求配置 - 提取器: {extractors}")
+            
             if not url:
-                self.log_message.emit("HTTP请求工具配置错误: URL不能为空", "error")
+                print("[DEBUG] HTTP请求工具配置错误: URL不能为空")
+                self.log_message.emit(self.format_debug_message("HTTP请求工具配置错误: URL不能为空", "error", step_index), "error", step_index)
                 return
             
             # 替换变量
@@ -165,12 +367,20 @@ class CaseExecutionThread(QThread):
             all_variables.update(self.variable_manager.global_variables)
             all_variables.update(self.variable_manager.local_variables)
             
+            print(f"[DEBUG] 变量替换前 - URL: {url}")
+            print(f"[DEBUG] 可用变量: {all_variables}")
+            
             url = self.variable_manager.replace_variables(url, all_variables)
             headers = self.variable_manager.replace_variables_in_dict(headers, all_variables)
             body = self.variable_manager.replace_variables_in_dict(body, all_variables)
             
+            print(f"[DEBUG] 变量替换后 - URL: {url}")
+            print(f"[DEBUG] 变量替换后 - 请求头: {headers}")
+            print(f"[DEBUG] 变量替换后 - 请求体: {body}")
+            
             # 记录请求日志
-            self.log_message.emit(f"前置处理器HTTP请求: {method} {url}", "info")
+            print(f"[DEBUG] 前置处理器HTTP请求: {method} {url}")
+            self.log_message.emit(self.format_debug_message(f"前置处理器HTTP请求: {method} {url}", "info", step_index), "info", step_index)
             
             # 执行请求
             request_data = {
@@ -181,49 +391,78 @@ class CaseExecutionThread(QThread):
                 'timeout': timeout
             }
             
+            print(f"[DEBUG] 发送请求数据: {request_data}")
+            
             response = self.request_engine.execute_request(request_data)
+            print(f"[DEBUG] 请求响应: {response}")
             
             if response.get('success'):
                 # 请求成功，处理响应
                 response_data = response.get('response_data', {})
                 status_code = response.get('status_code', 0)
                 
-                self.log_message.emit(f"前置处理器HTTP请求成功: 状态码 {status_code}", "info")
+                print(f"[DEBUG] 前置处理器HTTP请求成功: 状态码 {status_code}")
+                self.log_message.emit(self.format_debug_message(f"前置处理器HTTP请求成功: 状态码 {status_code}", "info", step_index), "info", step_index)
                 
                 # 提取变量
                 if extractors:
+                    print(f"[DEBUG] 开始提取变量，提取器数量: {len(extractors)}")
                     for var_name, json_path in extractors.items():
                         try:
+                            print(f"[DEBUG] 提取变量 {var_name}，JSON路径: {json_path}")
                             # 从响应中提取数据
                             value = self.extract_value(response_data, json_path)
                             if value is not None:
                                 # 将提取的变量保存到变量管理器
                                 self.variable_manager.set_local_variables({var_name: value})
-                                self.log_message.emit(f"提取变量 {var_name} = {value}", "info")
+                                print(f"[DEBUG] 提取变量成功: {var_name} = {value}")
+                                self.log_message.emit(self.format_debug_message(f"提取变量 {var_name} = {value}", "info", step_index), "info", step_index)
                             else:
-                                self.log_message.emit(f"提取变量 {var_name} 失败: JSON路径 {json_path} 未找到数据", "warning")
+                                print(f"[DEBUG] 提取变量失败: {var_name}，JSON路径 {json_path} 未找到数据")
+                                self.log_message.emit(self.format_debug_message(f"提取变量 {var_name} 失败: JSON路径 {json_path} 未找到数据", "warning", step_index), "warning", step_index)
                         except Exception as e:
-                            self.log_message.emit(f"提取变量 {var_name} 失败: {str(e)}", "error")
+                            print(f"[DEBUG] 提取变量异常: {var_name}，错误: {str(e)}")
+                            self.log_message.emit(self.format_debug_message(f"提取变量 {var_name} 失败: {str(e)}", "error", step_index), "error", step_index)
+                else:
+                    print("[DEBUG] 无变量需要提取")
             else:
                 # 请求失败
                 error_msg = response.get('error', '未知错误')
-                self.log_message.emit(f"前置处理器HTTP请求失败: {error_msg}", "error")
+                print(f"[DEBUG] 前置处理器HTTP请求失败: {error_msg}")
+                self.log_message.emit(self.format_debug_message(f"前置处理器HTTP请求失败: {error_msg}", "error", step_index), "error", step_index)
                 
         except Exception as e:
-            self.log_message.emit(f"执行HTTP请求工具失败: {str(e)}", "error")
+            print(f"[DEBUG] 执行HTTP请求工具异常: {str(e)}")
+            self.log_message.emit(self.format_debug_message(f"执行HTTP请求工具失败: {str(e)}", "error", step_index), "error", step_index)
+        
+        print("[DEBUG] HTTP请求工具执行结束")
 
-    def execute_post_processing(self, post_processing, step_result):
+    def execute_post_processing(self, post_processing, step_result, step_index):
         """执行后置处理"""
+        if not post_processing:
+            self.log_message.emit(self.format_debug_message("后置处理: 无配置", "debug", step_index), "debug", step_index)
+            return
+            
+        self.log_message.emit(self.format_debug_message("开始执行后置处理", "debug", step_index), "debug", step_index)
+        
         # 这里可以执行变量提取、数据转换等后置操作
         extractors = post_processing.get('extractors', {})
+        self.log_message.emit(self.format_debug_message(f"后置处理提取器数量: {len(extractors)}", "debug", step_index), "debug", step_index)
+        
+        extracted_count = 0
         for var_name, extractor in extractors.items():
             try:
+                self.log_message.emit(self.format_debug_message(f"提取变量: {var_name}", "debug", step_index), "debug", step_index)
                 # 从响应中提取数据
                 value = self.extract_value(step_result.get('response_data', {}), extractor)
                 self.variable_manager.set_local_variables({var_name: value})
-                self.log_message.emit(f"提取变量 {var_name} = {value}", "info")
+                self.log_message.emit(self.format_debug_message(f"提取变量 {var_name} = {value}", "info", step_index), "info", step_index)
+                extracted_count += 1
             except Exception as e:
-                self.log_message.emit(f"提取变量 {var_name} 失败: {str(e)}", "error")
+                self.log_message.emit(self.format_debug_message(f"提取变量 {var_name} 失败: {str(e)}", "error", step_index), "error", step_index)
+        
+        self.log_message.emit(self.format_debug_message(f"后置处理完成，共提取 {extracted_count} 个变量", "debug", step_index), "debug", step_index)
+        self.log_message.emit(self.format_debug_message("后置处理执行结束", "debug", step_index), "debug", step_index)
 
     def extract_value(self, response_data, extractor):
         """从响应数据中提取值"""
@@ -256,37 +495,81 @@ class CaseExecutionThread(QThread):
                 return None
         return current
 
-    def execute_api_request(self, step, api_template_id):
+    def execute_api_request(self, step, step_index):
         """执行接口请求"""
         try:
+            # [DEBUG] 终端打印 - 开始执行接口请求
+            print(f"[DEBUG] 开始执行接口请求，步骤索引: {step_index}")
+            print(f"[DEBUG] 步骤数据: {step}")
+            
             # 获取接口模板数据
             api_service = ApiTemplateService()
+            api_template_id = step.get('api_template_id')
+            print(f"[DEBUG] 接口模板ID: {api_template_id}")
+            
             api_template = api_service.get_template_by_id(api_template_id)
             if not api_template:
+                print(f"[DEBUG] 接口模板不存在: {api_template_id}")
                 return {
                     'success': False,
                     'error': f'接口模板不存在: {api_template_id}',
                     'status': 'error'
                 }
 
+            print(f"[DEBUG] 接口模板数据: {api_template}")
+
             # 准备请求数据
             request_data = self.prepare_request_data(api_template, step.get('variables', {}))
+            print(f"[DEBUG] 请求数据准备完成: {request_data['method']} {request_data['url']}")
+            print(f"[DEBUG] 请求头: {request_data['headers']}")
+            print(f"[DEBUG] 请求参数: {request_data['params']}")
+            print(f"[DEBUG] 请求体: {request_data['body']}")
 
             # 记录请求日志
-            self.log_message.emit(f"发送请求: {request_data['method']} {request_data['url']}", "info")
+            self.log_message.emit(self.format_debug_message(f"发送请求: {request_data['method']} {request_data['url']}", "info", step_index), "info", step_index)
+            
+            try:
+                print("[DEBUG] 开始发送HTTP请求")
+                # 构建符合 execute_request 方法要求的 API 数据格式
+                api_data = {
+                    'method': request_data['method'],
+                    'url': request_data['url'],
+                    'headers': request_data['headers'],
+                    'params': request_data['params'],
+                    'body': request_data['body']
+                }
+                print(f"[DEBUG] 发送的API数据: {api_data}")
+                
+                response = self.request_engine.execute_request(api_data, step.get('variables', {}))
+                
+                if response['success']:
+                    print(f"[DEBUG] 请求成功: 状态码 {response['status_code']}")
+                    print(f"[DEBUG] 响应头: {response.get('headers', {})}")
+                    print(f"[DEBUG] 响应体: {response.get('body', {})}")
+                    print(f"[DEBUG] 响应文本: {response.get('text', '')}")
+                    print(f"[DEBUG] 执行耗时: {response.get('elapsed', 0)}秒")
+                    self.log_message.emit(self.format_debug_message(f"请求成功: 状态码 {response['status_code']}", "info", step_index), "info", step_index)
+                else:
+                    print(f"[DEBUG] 请求失败: {response.get('error', '未知错误')}")
+                    print(f"[DEBUG] 完整错误响应: {response}")
+                    self.log_message.emit(self.format_debug_message(f"请求失败: {response.get('error', '未知错误')}", "error", step_index), "error", step_index)
 
-            # 执行请求
-            response = self.request_engine.execute_request(request_data)
+                print(f"[DEBUG] HTTP请求执行完成，返回结果: {response}")
+                return response
 
-            # 记录响应日志
-            if response.get('success'):
-                self.log_message.emit(f"请求成功: 状态码 {response['status_code']}", "info")
-            else:
-                self.log_message.emit(f"请求失败: {response.get('error', '未知错误')}", "error")
-
-            return response
-
+            except Exception as e:
+                print(f"[DEBUG] HTTP请求异常: {str(e)}")
+                import traceback
+                print(f"[DEBUG] 异常堆栈: {traceback.format_exc()}")
+                return {
+                    'success': False,
+                    'error': str(e),
+                    'status': 'error'
+                }
         except Exception as e:
+            print(f"[DEBUG] 执行接口请求外层异常: {str(e)}")
+            import traceback
+            print(f"[DEBUG] 外层异常堆栈: {traceback.format_exc()}")
             return {
                 'success': False,
                 'error': str(e),
@@ -295,26 +578,40 @@ class CaseExecutionThread(QThread):
 
     def prepare_request_data(self, api_template, step_variables):
         """准备请求数据"""
+        print(f"[DEBUG] 准备请求数据开始")
+        print(f"[DEBUG] 接口模板: {api_template}")
+        print(f"[DEBUG] 步骤变量: {step_variables}")
+        
         # 合并变量
         all_variables = {}
         all_variables.update(self.variable_manager.global_variables)
         all_variables.update(self.variable_manager.local_variables)
         all_variables.update(step_variables)
+        
+        print(f"[DEBUG] 合并后的变量: {all_variables}")
 
         # 替换变量
         url = self.variable_manager.replace_variables(api_template['url_path'], all_variables)
         headers = self.variable_manager.replace_variables_in_dict(api_template.get('headers', {}), all_variables)
         params = self.variable_manager.replace_variables_in_dict(api_template.get('params', {}), all_variables)
         body = self.variable_manager.replace_variables_in_dict(api_template.get('body', {}), all_variables)
+        
+        print(f"[DEBUG] 替换变量后 - URL: {url}")
+        print(f"[DEBUG] 替换变量后 - 请求头: {headers}")
+        print(f"[DEBUG] 替换变量后 - 请求参数: {params}")
+        print(f"[DEBUG] 替换变量后 - 请求体: {body}")
 
         # 构建完整URL
         base_url = self.environment_config.get('base_url', '')
+        print(f"[DEBUG] 基础URL: {base_url}")
         if base_url:
             full_url = base_url.rstrip('/') + '/' + url.lstrip('/')
         else:
             full_url = url
+            
+        print(f"[DEBUG] 完整URL: {full_url}")
 
-        return {
+        result = {
             'method': api_template['method'],
             'url': full_url,
             'headers': headers,
@@ -322,28 +619,40 @@ class CaseExecutionThread(QThread):
             'body': body,
             'timeout': api_template.get('timeout', 30)
         }
+        
+        print(f"[DEBUG] 准备请求数据完成: {result}")
+        return result
 
-    def execute_assertions(self, assertions, step_result):
+    def execute_assertions(self, assertions, step_result, step_index):
         """执行断言"""
+        if not assertions:
+            self.log_message.emit(self.format_debug_message("断言: 无配置", "debug", step_index), "debug", step_index)
+            return {}
+            
+        self.log_message.emit(self.format_debug_message("开始执行断言", "debug", step_index), "debug", step_index)
+        self.log_message.emit(self.format_debug_message(f"断言数量: {len(assertions)}", "debug", step_index), "debug", step_index)
+        
         results = {}
         response_data = step_result.get('response_data', {})
 
         for assertion_name, assertion_config in assertions.items():
             try:
+                self.log_message.emit(self.format_debug_message(f"执行断言: {assertion_name}", "debug", step_index), "debug", step_index)
+                
                 if assertion_config.get('type') == 'status_code':
                     expected = assertion_config.get('value')
                     actual = step_result.get('status_code')
                     results[assertion_name] = expected == actual
                     log_level = "info" if results[assertion_name] else "warning"
                     self.log_message.emit(
-                        f"断言 {assertion_name}: 状态码 {actual} {'==' if expected == actual else '!='} {expected}", log_level)
+                        self.format_debug_message(f"断言 {assertion_name}: 状态码 {actual} {'==' if expected == actual else '!='} {expected}", log_level, step_index), log_level, step_index)
 
                 elif assertion_config.get('type') == 'response_contains':
                     expected = assertion_config.get('value')
                     actual = json.dumps(response_data)
                     results[assertion_name] = expected in actual
                     log_level = "info" if results[assertion_name] else "warning"
-                    self.log_message.emit(f"断言 {assertion_name}: 响应包含 '{expected}' -> {expected in actual}", log_level)
+                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 响应包含 '{expected}' -> {expected in actual}", log_level, step_index), log_level, step_index)
 
                 elif assertion_config.get('type') == 'json_path':
                     path = assertion_config.get('path')
@@ -352,16 +661,26 @@ class CaseExecutionThread(QThread):
                     results[assertion_name] = expected == actual
                     log_level = "info" if results[assertion_name] else "warning"
                     self.log_message.emit(
-                        f"断言 {assertion_name}: {path} = {actual} {'==' if expected == actual else '!='} {expected}", log_level)
+                        self.format_debug_message(f"断言 {assertion_name}: {path} = {actual} {'==' if expected == actual else '!='} {expected}", log_level, step_index), log_level, step_index)
+
+                else:
+                    self.log_message.emit(self.format_debug_message(f"未知断言类型: {assertion_config.get('type')}", "warning", step_index), "warning", step_index)
+                    results[assertion_name] = False
 
             except Exception as e:
                 results[assertion_name] = False
-                self.log_message.emit(f"断言 {assertion_name} 执行错误: {str(e)}", "error")
+                self.log_message.emit(self.format_debug_message(f"断言 {assertion_name} 执行错误: {str(e)}", "error", step_index), "error", step_index)
 
         # 检查所有断言是否通过
+        passed_count = sum(1 for result in results.values() if result)
         all_passed = all(results.values())
+        
+        self.log_message.emit(self.format_debug_message(f"断言结果: {passed_count}/{len(assertions)} 通过", "debug", step_index), "debug", step_index)
+        
         step_result['success'] = all_passed
         step_result['status'] = 'success' if all_passed else 'failure'
+        
+        self.log_message.emit(self.format_debug_message("断言执行结束", "debug", step_index), "debug", step_index)
 
         return results
 
@@ -1352,7 +1671,7 @@ class CaseTabWidget(QWidget):
         self.execution_thread.step_started.connect(self.on_step_started)
         self.execution_thread.step_finished.connect(self.on_step_finished)
         self.execution_thread.case_finished.connect(self.on_case_finished)
-        self.execution_thread.log_message.connect(self.log_message)
+        self.execution_thread.log_message.connect(self.log_message_with_step)
         
         # 开始执行
         self.execution_thread.start()
@@ -1364,8 +1683,62 @@ class CaseTabWidget(QWidget):
         # 清空日志
         self.clear_logs()
         
+        # 记录详细的调试信息
+        self.log_debug_info()
+        
         # 记录开始执行日志
         self.log_message(f"开始执行用例: {self.current_case.name}", "info")
+    
+    def log_debug_info(self):
+        """记录调试信息 - 用例配置详情"""
+        if not self.current_case:
+            return
+            
+        # 记录用例基本信息
+        self.log_message("=== 用例配置调试信息 ===", "info")
+        self.log_message(f"用例名称: {self.current_case.name}", "info")
+        self.log_message(f"用例描述: {self.current_case.description}", "info")
+        self.log_message(f"环境ID: {self.current_case.environment_id}", "info")
+        self.log_message(f"项目ID: {self.current_case.project_id}", "info")
+        self.log_message(f"文件夹ID: {self.current_case.folder_id}", "info")
+        
+        # 记录步骤信息
+        steps = self.current_case.steps
+        self.log_message(f"步骤总数: {len(steps)}", "info")
+        
+        # 记录每个步骤的详细信息
+        for i, step in enumerate(steps):
+            step_dict = step.to_dict()
+            self.log_message(f"步骤 {i+1}: {step_dict.get('name', '未命名步骤')}", "info")
+            self.log_message(f"  - 接口模板ID: {step_dict.get('api_template_id', '无')}", "info")
+            self.log_message(f"  - 是否启用: {step_dict.get('enabled', True)}", "info")
+            self.log_message(f"  - 步骤顺序: {step_dict.get('step_order', i+1)}", "info")
+            
+            # 记录前置处理信息
+            pre_processing = step_dict.get('pre_processing', {})
+            if pre_processing:
+                self.log_message(f"  - 前置处理工具数量: {len(pre_processing)}", "info")
+            
+            # 记录后置处理信息
+            post_processing = step_dict.get('post_processing', {})
+            if post_processing:
+                self.log_message(f"  - 后置处理工具数量: {len(post_processing)}", "info")
+            
+            # 记录断言信息
+            assertions = step_dict.get('assertions', {})
+            if assertions:
+                self.log_message(f"  - 断言数量: {len(assertions)}", "info")
+        
+        # 记录全局变量信息
+        global_vars = self.current_case.global_vars
+        if global_vars:
+            self.log_message(f"全局变量数量: {len(global_vars)}", "info")
+            for var_name, var_value in global_vars.items():
+                self.log_message(f"  - {var_name}: {var_value}", "info")
+        else:
+            self.log_message("全局变量: 无", "info")
+        
+        self.log_message("=== 调试信息记录完成 ===", "info")
 
     def toggle_execution(self):
         """切换执行状态（调试/停止）"""
@@ -1391,9 +1764,9 @@ class CaseTabWidget(QWidget):
         # 记录停止执行日志
         self.log_message("用例执行已停止", "warning")
 
-    def on_step_started(self, step_name):
+    def on_step_started(self, step_name, step_index):
         """步骤开始执行"""
-        self.log_message(f"开始执行步骤: {step_name}", "info")
+        self.log_message_with_step(f"开始执行步骤: {step_name}", "info", step_index)
 
     def on_step_finished(self, step_result):
         """步骤执行完成"""
@@ -1401,9 +1774,28 @@ class CaseTabWidget(QWidget):
         self.log_message(f"步骤执行完成: {step_result.get('step_name')} - {status}", "info")
 
     def on_case_finished(self, case_result):
-        """用例执行完成"""
+        """用例执行完成 - 修复版本"""
+        # 等待线程完全退出
+        if self.execution_thread and self.execution_thread.isRunning():
+            print("[DEBUG] 等待线程安全退出...")
+            self.execution_thread.wait(3000)  # 等待3秒确保线程完全退出
+        
         self.is_executing = False
-        self.execution_thread = None
+        
+        # 安全地清理线程资源
+        if self.execution_thread:
+            # 断开所有信号连接
+            try:
+                self.execution_thread.step_started.disconnect()
+                self.execution_thread.step_finished.disconnect()
+                self.execution_thread.case_finished.disconnect()
+                self.execution_thread.log_message.disconnect()
+            except:
+                pass  # 忽略断开连接时的错误
+            
+            # 删除线程对象
+            self.execution_thread.deleteLater()
+            self.execution_thread = None
         
         # 更新按钮状态
         self.update_buttons_state()
@@ -1416,7 +1808,7 @@ class CaseTabWidget(QWidget):
         self.log_message(f"用例执行完成: {status} (成功: {success_count}/{total_count})", "info")
 
     def log_message(self, message, level="info"):
-        """记录日志消息"""
+        """记录日志消息（无步骤信息）"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         
         # 根据级别设置颜色
@@ -1440,8 +1832,46 @@ class CaseTabWidget(QWidget):
         self.execution_logs.append({
             'timestamp': timestamp,
             'level': level,
-            'message': message
+            'message': message,
+            'step_index': -1  # 无步骤信息
         })
+
+    def log_message_with_step(self, message, level="info", step_index=-1):
+        """记录带步骤信息的日志消息"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # 根据级别设置颜色
+        if level == "error":
+            color = "red"
+            prefix = "[ERROR]"
+        elif level == "warning":
+            color = "orange"
+            prefix = "[WARN]"
+        elif level == "success":
+            color = "green"
+            prefix = "[SUCCESS]"
+        else:
+            color = "blue"
+            prefix = "[INFO]"
+        
+        # 格式化日志消息
+        log_entry = f"<span style='color: gray;'>[{timestamp}]</span> <span style='color: {color};'>{prefix}</span> {message}"
+        
+        # 保存到日志列表（不操作不存在的日志文本控件）
+        self.execution_logs.append({
+            'timestamp': timestamp,
+            'level': level,
+            'message': message,
+            'step_index': step_index
+        })
+        
+        # 如果执行日志弹窗已打开，则直接添加日志到弹窗
+        if hasattr(self, 'execution_logs_dialog') and self.execution_logs_dialog:
+            try:
+                self.execution_logs_dialog.add_log_with_step(message, level, step_index)
+            except RuntimeError:
+                # 弹窗已被删除，忽略错误
+                pass
 
     def clear_logs(self):
         """清空日志"""
@@ -1831,58 +2261,106 @@ class TabbedCaseEditor(QWidget):
         self.api_template_edit_requested.emit(api_template_id)
 
 
-class ExecutionLogsDialog(QDialog):
-    """执行日志弹窗"""
+class StepLogItem(QWidget):
+    """步骤日志项组件"""
     
-    def __init__(self, parent=None):
+    def __init__(self, step_name, step_index, parent=None):
         super().__init__(parent)
+        self.step_name = step_name
+        self.step_index = step_index
+        # 默认展开步骤日志项，让用户能看到日志内容
+        self.is_expanded = True
         self.logs = []
-        self.setWindowTitle("执行日志")
-        self.setMinimumSize(800, 600)
         self.init_ui()
     
     def init_ui(self):
         """初始化界面"""
         layout = QVBoxLayout(self)
-        layout.setSpacing(5)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(0)
+        layout.setContentsMargins(5, 5, 5, 5)
         
-        # 日志工具栏
-        toolbar_layout = QHBoxLayout()
+        # 步骤标题栏
+        self.header_widget = QWidget()
+        header_layout = QHBoxLayout(self.header_widget)
+        header_layout.setContentsMargins(10, 5, 10, 5)
         
-        self.clear_logs_btn = QPushButton("清空日志")
-        self.clear_logs_btn.clicked.connect(self.clear_logs)
+        # 展开/收起按钮
+        self.expand_btn = QPushButton("▶")
+        self.expand_btn.setFixedSize(20, 20)
+        self.expand_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                font-size: 12px;
+                color: #666;
+            }
+            QPushButton:hover {
+                background: #f0f0f0;
+                border-radius: 3px;
+            }
+        """)
+        self.expand_btn.clicked.connect(self.toggle_expand)
         
-        self.export_logs_btn = QPushButton("导出日志")
-        self.export_logs_btn.clicked.connect(self.export_logs)
+        # 步骤序号和名称
+        self.step_label = QLabel(f"步骤 {self.step_index + 1}: {self.step_name}")
+        self.step_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         
-        toolbar_layout.addWidget(self.clear_logs_btn)
-        toolbar_layout.addWidget(self.export_logs_btn)
-        toolbar_layout.addStretch()
+        # 日志数量
+        self.log_count_label = QLabel("0 条日志")
+        self.log_count_label.setStyleSheet("color: #666; font-size: 12px;")
         
-        # 关闭按钮
-        self.close_btn = QPushButton("关闭")
-        self.close_btn.clicked.connect(self.close)
-        toolbar_layout.addWidget(self.close_btn)
+        header_layout.addWidget(self.expand_btn)
+        header_layout.addWidget(self.step_label)
+        header_layout.addStretch()
+        header_layout.addWidget(self.log_count_label)
         
-        layout.addLayout(toolbar_layout)
+        # 步骤日志内容区域
+        self.content_widget = QWidget()
+        self.content_widget.setVisible(False)
+        content_layout = QVBoxLayout(self.content_widget)
+        content_layout.setContentsMargins(30, 5, 10, 5)
         
         # 日志文本框
         self.logs_text = QTextEdit()
         self.logs_text.setReadOnly(True)
-        self.logs_text.setFont(QFont("Consolas", 10))
-        self.logs_text.setPlaceholderText("执行日志将显示在这里...")
-        layout.addWidget(self.logs_text)
+        self.logs_text.setFont(QFont("Consolas", 9))
+        # 移除最大高度限制，让日志文本框可以自动扩展
+        # self.logs_text.setMaximumHeight(200)
+        self.logs_text.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #ddd;
+                border-radius: 3px;
+                background: #fafafa;
+            }
+        """)
+        content_layout.addWidget(self.logs_text)
+        
+        layout.addWidget(self.header_widget)
+        layout.addWidget(self.content_widget)
+        
+        # 设置样式
+        self.setStyleSheet("""
+            StepLogItem {
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                background: white;
+                margin: 2px;
+            }
+            StepLogItem:hover {
+                border-color: #c0c0c0;
+            }
+        """)
     
-    def clear_logs(self):
-        """清空日志"""
-        self.logs_text.clear()
-        self.logs = []
-    
-    def export_logs(self):
-        """导出日志"""
-        # 导出日志功能将在后续版本中实现
-        Toast.info(self, "导出日志功能将在后续版本中实现")
+    def toggle_expand(self):
+        """切换展开/收起状态"""
+        self.is_expanded = not self.is_expanded
+        self.content_widget.setVisible(self.is_expanded)
+        
+        # 更新按钮图标
+        if self.is_expanded:
+            self.expand_btn.setText("▼")
+        else:
+            self.expand_btn.setText("▶")
     
     def add_log(self, message, level="info"):
         """添加日志消息"""
@@ -1919,6 +2397,130 @@ class ExecutionLogsDialog(QDialog):
             'level': level,
             'message': message
         })
+        
+        # 更新日志数量
+        self.log_count_label.setText(f"{len(self.logs)} 条日志")
+
+
+class ExecutionLogsDialog(QDialog):
+    """执行日志弹窗"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.step_logs = {}  # 按步骤存储日志项
+        self.step_order = []  # 步骤执行顺序
+        self.setWindowTitle("执行日志")
+        self.setMinimumSize(900, 700)
+        self.init_ui()
+    
+    def init_ui(self):
+        """初始化界面"""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(5)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # 步骤日志容器
+        self.steps_container = QWidget()
+        self.steps_layout = QVBoxLayout(self.steps_container)
+        self.steps_layout.setSpacing(5)
+        self.steps_layout.setContentsMargins(5, 5, 5, 5)
+        self.steps_layout.addStretch()
+        
+        scroll_area.setWidget(self.steps_container)
+        layout.addWidget(scroll_area)
+        
+        # 设置样式
+        self.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: white;
+            }
+            QPushButton:hover {
+                background: #f0f0f0;
+            }
+            QPushButton:pressed {
+                background: #e0e0e0;
+            }
+        """)
+    
+    def clear_logs(self):
+        """清空日志"""
+        # 清空所有步骤日志项
+        for i in reversed(range(self.steps_layout.count())):
+            item = self.steps_layout.itemAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
+        
+        self.step_logs = {}
+        self.step_order = []
+    
+    def export_logs(self):
+        """导出日志"""
+        # 导出日志功能将在后续版本中实现
+        Toast.info(self, "导出日志功能将在后续版本中实现")
+    
+    def expand_all(self):
+        """展开所有步骤"""
+        for step_log in self.step_logs.values():
+            if not step_log.is_expanded:
+                step_log.toggle_expand()
+    
+    def collapse_all(self):
+        """收起所有步骤"""
+        for step_log in self.step_logs.values():
+            if step_log.is_expanded:
+                step_log.toggle_expand()
+    
+    def add_step_log(self, step_name, step_index):
+        """添加步骤日志项"""
+        if step_index in self.step_logs:
+            return self.step_logs[step_index]
+        
+        # 创建新的步骤日志项
+        step_log = StepLogItem(step_name, step_index, self)
+        self.step_logs[step_index] = step_log
+        self.step_order.append(step_index)
+        
+        # 插入到布局中（按执行顺序）
+        insert_position = len(self.step_order) - 1
+        self.steps_layout.insertWidget(insert_position, step_log)
+        
+        return step_log
+    
+    def add_log_to_step(self, step_index, message, level="info"):
+        """向指定步骤添加日志"""
+        if step_index in self.step_logs:
+            self.step_logs[step_index].add_log(message, level)
+    
+    def add_log(self, message, level="info"):
+        """添加通用日志（不关联到具体步骤）"""
+        # 不显示通用日志，只显示步骤相关的日志
+        pass
+
+    def add_log_with_step(self, message, level="info", step_index=-1):
+        """添加带步骤信息的日志"""
+        # 简化逻辑：直接根据step_index创建或获取步骤日志项
+        if step_index == -1:
+            # 通用信息日志
+            step_name = "通用信息"
+        else:
+            # 具体步骤日志
+            step_name = f"步骤 {step_index + 1}"
+        
+        # 确保步骤日志项存在
+        if step_index not in self.step_logs:
+            self.add_step_log(step_name, step_index)
+        
+        # 添加日志到对应步骤
+        self.add_log_to_step(step_index, message, level)
 
 
 class ExecutionLogsTab(QWidget):
@@ -1934,21 +2536,6 @@ class ExecutionLogsTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(5)
         layout.setContentsMargins(10, 10, 10, 10)
-        
-        # 日志工具栏
-        toolbar_layout = QHBoxLayout()
-        
-        self.clear_logs_btn = QPushButton("清空日志")
-        self.clear_logs_btn.clicked.connect(self.clear_logs)
-        
-        self.export_logs_btn = QPushButton("导出日志")
-        self.export_logs_btn.clicked.connect(self.export_logs)
-        
-        toolbar_layout.addWidget(self.clear_logs_btn)
-        toolbar_layout.addWidget(self.export_logs_btn)
-        toolbar_layout.addStretch()
-        
-        layout.addLayout(toolbar_layout)
         
         # 日志文本框
         self.logs_text = QTextEdit()

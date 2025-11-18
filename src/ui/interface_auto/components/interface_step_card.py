@@ -231,7 +231,7 @@ class InterfaceStepCard(QFrame):
         layout = QHBoxLayout(self.interface_frame)
         
         # 请求方式
-        method = self.step_data.get('api_template', {}).get('method', 'GET')
+        method = self.step_data.get('api_method') or self.step_data.get('api_template', {}).get('method', 'GET')
         self.method_label = QLabel(method)
         self.method_label.setFont(QFont("Arial", 12, QFont.Bold))
         self.method_label.setStyleSheet("""
@@ -2067,8 +2067,8 @@ class InterfaceStepCard(QFrame):
         """设置是否可拖拽"""
         self.setAcceptDrops(draggable)
         if draggable:
-            # 设置拖动光标为手掌形状
-            self.setCursor(Qt.OpenHandCursor)
+            # 设置拖动光标为箭头形状，而不是手掌形状
+            self.setCursor(Qt.ArrowCursor)
         else:
             # 保持普通箭头光标
             self.setCursor(Qt.ArrowCursor)
@@ -2146,6 +2146,10 @@ class InterfaceStepCard(QFrame):
 
     def mouseMoveEvent(self, event):
         """鼠标移动事件"""
+        # 导入Qt模块
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import QApplication
+        
         if not (event.buttons() & Qt.LeftButton):
             print(f"[DEBUG] mouseMoveEvent: 不是左键拖动，忽略")
             return
@@ -2169,6 +2173,9 @@ class InterfaceStepCard(QFrame):
             return
             
         print(f"[DEBUG] mouseMoveEvent: 开始拖拽，步骤ID: {self.step_id}")
+        
+        # 设置拖拽光标为箭头，而不是默认的手掌形状
+        QApplication.setOverrideCursor(Qt.ArrowCursor)
         
         # 创建拖拽对象
         drag = QDrag(self)

@@ -90,7 +90,7 @@ class TestCaseService:
                     """, (case_id,))
                     steps = cursor.fetchall()
 
-                    # 处理JSON字段
+                    # 处理JSON字段和字段映射
                     for step in steps:
                         json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
                         for field in json_fields:
@@ -99,6 +99,12 @@ class TestCaseService:
                                     step[field] = json.loads(step[field])
                                 except (json.JSONDecodeError, TypeError):
                                     step[field] = {}
+                        
+                        # 映射字段：将method映射到api_method，url_path映射到api_url_path
+                        if 'method' in step:
+                            step['api_method'] = step['method']
+                        if 'url_path' in step:
+                            step['api_url_path'] = step['url_path']
 
                     return steps
         except Exception as e:
