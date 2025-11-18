@@ -5,7 +5,7 @@ from PyQt5.QtCore import pyqtSignal, Qt, QDataStream, QIODevice, QSize, QThread
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QLabel, 
     QLineEdit, QTextEdit, QComboBox, QPushButton, QMessageBox, QSplitter, QMenu,
-    QToolBar, QScrollArea, QDialog, QSizePolicy
+    QToolBar, QScrollArea, QDialog, QSizePolicy, QApplication
 )
 from PyQt5.QtGui import QFont, QTextCursor, QIcon
 from .flow_layout import FlowLayout
@@ -2272,6 +2272,15 @@ class StepLogItem(QWidget):
         self.is_expanded = True
         self.logs = []
         self.init_ui()
+        # 确保初始化后组件可见
+        self.ensure_visibility()
+    
+    def ensure_visibility(self):
+        """确保组件可见性正确设置"""
+        # 设置content_widget的可见性
+        self.content_widget.setVisible(self.is_expanded)
+        # 确保自身可见
+        self.setVisible(True)
     
     def init_ui(self):
         """初始化界面"""
@@ -2316,7 +2325,8 @@ class StepLogItem(QWidget):
         
         # 步骤日志内容区域
         self.content_widget = QWidget()
-        self.content_widget.setVisible(False)
+        # 默认展开状态应该与is_expanded一致
+        self.content_widget.setVisible(self.is_expanded)
         content_layout = QVBoxLayout(self.content_widget)
         content_layout.setContentsMargins(30, 5, 10, 5)
         
@@ -2493,6 +2503,21 @@ class ExecutionLogsDialog(QDialog):
         insert_position = len(self.step_order) - 1
         self.steps_layout.insertWidget(insert_position, step_log)
         
+        # 强制刷新布局并确保可见性
+        step_log.ensure_visibility()
+        step_log.setVisible(True)
+        step_log.header_widget.setVisible(True)
+        step_log.content_widget.setVisible(step_log.is_expanded)
+        
+        # 强制更新布局
+        step_log.updateGeometry()
+        self.steps_container.updateGeometry()
+        self.steps_layout.update()
+        
+        # 如果对话框已经显示，则立即刷新界面
+        if self.isVisible():
+            QApplication.processEvents()
+        
         return step_log
     
     def add_log_to_step(self, step_index, message, level="info"):
@@ -2502,8 +2527,8 @@ class ExecutionLogsDialog(QDialog):
     
     def add_log(self, message, level="info"):
         """添加通用日志（不关联到具体步骤）"""
-        # 不显示通用日志，只显示步骤相关的日志
-        pass
+        # 添加通用日志到-1步骤
+        self.add_log_with_step(message, level, -1)
 
     def add_log_with_step(self, message, level="info", step_index=-1):
         """添加带步骤信息的日志"""
@@ -2521,6 +2546,24 @@ class ExecutionLogsDialog(QDialog):
         
         # 添加日志到对应步骤
         self.add_log_to_step(step_index, message, level)
+        
+        # 强制刷新界面以确保日志显示
+        if self.isVisible():
+            # 确保步骤日志项可见
+            if step_index in self.step_logs:
+                step_log = self.step_logs[step_index]
+                step_log.ensure_visibility()
+                step_log.setVisible(True)
+                step_log.header_widget.setVisible(True)
+                step_log.content_widget.setVisible(step_log.is_expanded)
+            
+            # 强制刷新布局
+            self.steps_layout.update()
+            self.steps_container.updateGeometry()
+            self.updateGeometry()
+            
+            # 处理事件队列，确保界面更新
+            QApplication.processEvents()
 
 
 class ExecutionLogsTab(QWidget):
