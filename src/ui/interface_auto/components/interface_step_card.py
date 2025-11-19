@@ -63,13 +63,13 @@ class InterfaceStepCard(QFrame):
         """)
         
         # 设置步骤容器高度适应流式布局
-        self.setMinimumHeight(485)  # 最小高度
-        self.setMaximumHeight(600)  # 最大高度
+        self.setMinimumHeight(475)  # 最小高度
+        self.setMaximumHeight(475)  # 最大高度
         
         # 设置自适应宽度，适应流式布局
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.setMinimumWidth(400)  # 最小宽度
-        self.setMaximumWidth(500)  # 最大宽度
+        self.setMinimumWidth(360)  # 最小宽度
+        self.setMaximumWidth(360)  # 最大宽度
 
         # 1. 顶部：启用/停用、删除
         self.create_header()
@@ -247,11 +247,22 @@ class InterfaceStepCard(QFrame):
         # 接口名称（可点击跳转）
         # 优先使用api_name字段，如果不存在则从api_template对象获取
         api_name = self.step_data.get('api_name') or self.step_data.get('api_template', {}).get('name', '未命名接口')
-        self.api_name_label = QLabel(f"<a href=\"#\" style=\"text-decoration: none; color: #2c3e50; font-weight: 600; font-size: 13px; font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;\">{api_name}</a>")
+        self.api_name_label = QLabel(api_name)
         self.api_name_label.setFont(QFont("Microsoft YaHei", 12, QFont.DemiBold))
-        self.api_name_label.setOpenExternalLinks(False)
-        self.api_name_label.setCursor(Qt.PointingHandCursor)  # 只在接口名称上设置手型指针
-        self.api_name_label.linkActivated.connect(self.on_api_name_clicked)
+        self.api_name_label.setStyleSheet("""
+            QLabel {
+                color: #2c3e50;
+                font-weight: 600;
+                font-size: 13px;
+                font-family: 'Microsoft YaHei';
+                text-decoration: none;
+            }
+        """)
+        self.api_name_label.setToolTip(api_name)  # 设置tooltip显示完整标题
+        self.api_name_label.setCursor(Qt.PointingHandCursor)  # 设置手型指针表示可点击
+        self.api_name_label.mousePressEvent = lambda event: self.on_api_name_clicked()  # 连接点击事件
+        self.api_name_label.setFixedWidth(200)  # 固定宽度以防止影响卡片布局
+        self.api_name_label.setWordWrap(False)  # 不换行
         
         layout.addWidget(self.method_label)
         layout.addWidget(self.api_name_label)
@@ -426,6 +437,9 @@ class InterfaceStepCard(QFrame):
         
         # 设置内容到滚动区域
         scroll_area.setWidget(content_widget)
+        
+        # 初始化时显示已添加的工具
+        self.refresh_assertion_tools_display_with_layout(layout)
         
         return scroll_area
 
@@ -646,36 +660,9 @@ class InterfaceStepCard(QFrame):
         menu.exec_(self.add_tool_btn.mapToGlobal(QPoint(0, self.add_tool_btn.height())))
 
     def show_assertion_menu(self):
-        """显示断言菜单"""
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: white;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 12px;
-                border-radius: 2px;
-                color: #333;
-                font-size: 12px;
-            }
-            QMenu::item:selected {
-                background-color: #f3e5f5;
-                color: #7b1fa2;
-            }
-            QMenu::item:hover {
-                background-color: #f5f5f5;
-            }
-        """)
-        
-        assertions = ["状态码断言", "响应时间断言", "JSON路径断言", "正则表达式断言", "XPath断言"]
-        for assertion in assertions:
-            action = menu.addAction(assertion)
-            action.triggered.connect(lambda checked, assertion_name=assertion: self.on_assertion_selected(assertion_name))
-        
-        menu.exec_(self.add_tool_btn.mapToGlobal(QPoint(0, self.add_tool_btn.height())))
+        """显示断言菜单 - 直接新增一条默认断言"""
+        # 直接添加一条默认的JSON路径断言，不显示菜单
+        self.add_assertion_tool("json_path", "断言")
 
     def show_post_tool_menu(self):
         """显示后置处理工具菜单"""
@@ -712,7 +699,20 @@ class InterfaceStepCard(QFrame):
     def on_assertion_selected(self, assertion_name):
         """断言工具选择"""
         print(f"选择断言工具: {assertion_name}")
-        # 这里可以添加具体的断言添加逻辑
+        
+        # 映射断言类型名称到配置类型
+        assertion_type_map = {
+            "状态码断言": "status_code",
+            "响应时间断言": "response_time", 
+            "JSON路径断言": "json_path",
+            "正则表达式断言": "regex",
+            "XPath断言": "xpath"
+        }
+        
+        assertion_type = assertion_type_map.get(assertion_name, "status_code")
+        
+        # 添加断言工具
+        self.add_assertion_tool(assertion_type, assertion_name)
 
     def on_post_tool_selected(self, tool_name):
         """后置处理工具选择"""
@@ -767,6 +767,58 @@ class InterfaceStepCard(QFrame):
             print(f"添加HTTP请求工具失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
             Toast.error(self, f"添加HTTP请求工具失败: {str(e)}")
+    
+    def add_assertion_tool(self, assertion_type, assertion_name):
+        """添加断言工具到断言配置"""
+        try:
+            # 先创建默认配置，不打开对话框
+            if 'assertions' not in self.step_data:
+                self.step_data['assertions'] = {}
+            
+            # 生成唯一的工具ID
+            tool_id = f"assertion_{len(self.step_data.get('assertions', {})) + 1}"
+            
+            # 创建默认配置
+            default_config = {
+                'type': assertion_type,
+                'config': {
+                    'name': assertion_name,  # 使用断言名称
+                    'enabled': True,
+                    'expected_value': '',
+                    'comparison_operator': 'equals',
+                    'description': f'{assertion_name}配置'
+                },
+                'enabled': True,
+                'priority': len(self.step_data.get('assertions', {}))  # 添加优先级字段，按添加顺序排序
+            }
+            
+            # 根据断言类型设置特定的默认值
+            if assertion_type == 'status_code':
+                default_config['config']['expected_value'] = '200'
+            elif assertion_type == 'response_time':
+                default_config['config']['expected_value'] = '1000'
+                default_config['config']['comparison_operator'] = 'less_than'
+            elif assertion_type == 'json_path':
+                default_config['config']['json_path'] = '$.data'
+            elif assertion_type == 'regex':
+                default_config['config']['pattern'] = '.*'
+            elif assertion_type == 'xpath':
+                default_config['config']['xpath'] = '//data'
+            
+            # 保存默认配置
+            self.step_data['assertions'][tool_id] = default_config
+            
+            # 发送更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 刷新显示
+            self.refresh_assertion_tools_display()
+            
+            print(f"断言工具添加成功: {tool_id}")
+        except Exception as e:
+            print(f"添加断言工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"添加断言工具失败: {str(e)}")
     
     def on_http_request_saved(self, config_data):
         """HTTP请求配置保存回调"""
@@ -844,37 +896,40 @@ class InterfaceStepCard(QFrame):
         # 获取滚动区域内的内容容器的布局
         if hasattr(self.assertion_tab, 'widget') and self.assertion_tab.widget():
             layout = self.assertion_tab.widget().layout()
-            
-            # 清空现有显示（包括拉伸项）
-            for i in reversed(range(layout.count())):
-                item = layout.itemAt(i)
-                if item.widget():
-                    item.widget().deleteLater()
-                else:
-                    # 移除拉伸项等非widget项
-                    layout.removeItem(item)
-            
-            # 获取断言配置
-            assertions = self.step_data.get('assertions', {})
-            
-            if not assertions:
-                # 如果没有工具，显示提示信息
-                no_tools_label = QLabel("暂无断言工具")
-                no_tools_label.setStyleSheet("color: #999; font-style: italic; padding: 10px; font-size: 12px;")
-                no_tools_label.setAlignment(Qt.AlignCenter)
-                # 添加拉伸项确保居中显示
-                layout.addStretch()
-                layout.addWidget(no_tools_label)
-                layout.addStretch()
-                return
-            
-            # 按照优先级字段对工具进行排序
-            sorted_tools = sorted(assertions.items(), 
-                                 key=lambda x: x[1].get('priority', 0))
-            
-            # 显示已添加的工具（按优先级排序）
-            for tool_id, tool_config in sorted_tools:
-                self.add_assertion_tool_widget(tool_id, tool_config, layout)
+            self.refresh_assertion_tools_display_with_layout(layout)
+    
+    def refresh_assertion_tools_display_with_layout(self, layout):
+        """使用指定布局刷新断言工具显示"""
+        # 清空现有显示（包括拉伸项）
+        for i in reversed(range(layout.count())):
+            item = layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
+            else:
+                # 移除拉伸项等非widget项
+                layout.removeItem(item)
+        
+        # 获取断言配置
+        assertions = self.step_data.get('assertions', {})
+        
+        if not assertions:
+            # 如果没有工具，显示提示信息
+            no_tools_label = QLabel("暂无断言工具")
+            no_tools_label.setStyleSheet("color: #999; font-style: italic; padding: 10px; font-size: 12px;")
+            no_tools_label.setAlignment(Qt.AlignCenter)
+            # 添加拉伸项确保居中显示
+            layout.addStretch()
+            layout.addWidget(no_tools_label)
+            layout.addStretch()
+            return
+        
+        # 按照优先级字段对工具进行排序
+        sorted_tools = sorted(assertions.items(), 
+                             key=lambda x: x[1].get('priority', 0))
+        
+        # 显示已添加的工具（按优先级排序）
+        for tool_id, tool_config in sorted_tools:
+            self.add_assertion_tool_widget(tool_id, tool_config, layout)
     
     def refresh_post_tools_display(self):
         """刷新后置处理工具显示"""
@@ -977,18 +1032,35 @@ class InterfaceStepCard(QFrame):
         else:
             # 如果图标文件不存在，使用默认emoji
             icon_label.setText("🌐")
-            icon_label.setStyleSheet("font-size: 14px;")
+        
+        # 设置图标样式 - 无悬浮效果，无边框
+        icon_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        icon_label.setCursor(Qt.ArrowCursor)
         
         config = tool_config.get('config', {})
         name = config.get('name', 'HTTP请求')  # 只显示名称
         
         name_label = QLabel(name)
         name_label.setStyleSheet("""
-            font-weight: bold; 
-            color: #1976d2;
-            font-size: 11px;
+            QLabel {
+                font-weight: bold; 
+                color: #1976d2;
+                font-size: 11px;
+                background-color: transparent;
+                border: none;
+            }
         """)
         name_label.setWordWrap(False)
+        name_label.setCursor(Qt.ArrowCursor)
+        # 设置固定宽度和省略号显示
+        name_label.setFixedWidth(150)  # 固定宽度
+        name_label.setToolTip(name)  # hover时显示完整标题
         
         # 复制按钮 - 使用图标
         copy_btn = QPushButton()
@@ -1124,18 +1196,50 @@ class InterfaceStepCard(QFrame):
         drag_handle.installEventFilter(self)
         
         # 工具图标和名称
-        icon_label = QLabel("✅")
-        icon_label.setStyleSheet("font-size: 14px;")
+        icon_label = QLabel()
+        # 使用断言图标文件
+        assrt_icon_path = os.path.join("src", "resources", "icons", "assrt.png")
+        if os.path.exists(assrt_icon_path):
+            icon_pixmap = QPixmap(assrt_icon_path).scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_label.setPixmap(icon_pixmap)
+        else:
+            # 如果图标文件不存在，使用默认emoji
+            icon_label.setText("✅")
         
-        name = tool_config.get('name', '断言')  # 只显示名称
+        # 设置图标样式 - 无悬浮效果，无边框
+        icon_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        icon_label.setCursor(Qt.ArrowCursor)
+        
+        # 获取断言名称 - 支持新旧两种数据结构
+        name = '断言'  # 默认值
+        if 'config' in tool_config and 'name' in tool_config['config']:
+            # 新格式：{'type': 'field_path_assertion', 'config': {'name': '名称', ...}}
+            name = tool_config['config']['name']
+        elif 'name' in tool_config:
+            # 旧格式：{'name': '名称', 'assertions': [...]}
+            name = tool_config['name']
         
         name_label = QLabel(name)
         name_label.setStyleSheet("""
-            font-weight: bold; 
-            color: #f57c00;
-            font-size: 11px;
+            QLabel {
+                font-weight: bold; 
+                color: #f57c00;
+                font-size: 11px;
+                background-color: transparent;
+                border: none;
+            }
         """)
         name_label.setWordWrap(False)
+        name_label.setCursor(Qt.ArrowCursor)
+        # 设置固定宽度和省略号显示
+        name_label.setFixedWidth(150)  # 固定宽度
+        name_label.setToolTip(name)  # hover时显示完整标题
         
         # 复制按钮 - 使用图标
         copy_btn = QPushButton()
@@ -1271,17 +1375,30 @@ class InterfaceStepCard(QFrame):
         
         # 工具图标和名称
         icon_label = QLabel("🔧")
-        icon_label.setStyleSheet("font-size: 14px;")
+        # 设置图标样式 - 无悬浮效果，无边框
+        icon_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        icon_label.setCursor(Qt.ArrowCursor)
         
         name = tool_config.get('name', '后置处理')  # 只显示名称
         
         name_label = QLabel(name)
         name_label.setStyleSheet("""
-            font-weight: bold; 
-            color: #7b1fa2;
-            font-size: 11px;
+            QLabel {
+                font-weight: bold; 
+                color: #7b1fa2;
+                font-size: 11px;
+                background-color: transparent;
+                border: none;
+            }
         """)
         name_label.setWordWrap(False)
+        name_label.setCursor(Qt.ArrowCursor)
         
         # 复制按钮 - 使用图标
         copy_btn = QPushButton()

@@ -1,26 +1,50 @@
 import json
+import re
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                              QComboBox, QPushButton, QGroupBox, QFormLayout,
-                             QDialogButtonBox, QMessageBox, QTextEdit, QCheckBox)
-from PyQt5.QtCore import Qt, pyqtSignal
+                             QDialogButtonBox, QMessageBox, QTextEdit, QCheckBox,
+                             QSpinBox, QDoubleSpinBox, QRadioButton, QButtonGroup, 
+                             QWidget, QScrollArea, QFrame)
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtGui import QIcon
 from src.ui.widgets.toast_tips import Toast
 
 
 class AssertionDialog(QDialog):
-    """断言工具配置对话框"""
+    """断言工具配置对话框 - 新版支持多行断言配置"""
     
     assertion_saved = pyqtSignal(dict)  # 断言配置保存信号
+    
+    # 断言符号选项
+    ASSERTION_SYMBOLS = {
+        "equal": "=",
+        "not_equal": "!=",
+        "contains": "~",
+        "not_contains": "!~",
+        "greater": ">",
+        "less": "<",
+        "greater_equal": "≥",
+        "less_equal": "≤"
+    }
     
     def __init__(self, parent=None, assertion_data=None):
         super().__init__(parent)
         self.assertion_data = assertion_data or {}
         self.is_edit = bool(assertion_data)
+        self.assertion_rows = []  # 存储断言行控件
         self.init_ui()
         
     def init_ui(self):
         """初始化界面"""
         self.setWindowTitle("编辑断言" if self.is_edit else "新增断言")
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(800, 500)
+        
+        # 设置断言图标
+        try:
+            icon_path = "src/resources/icons/assrt.png"
+            self.setWindowIcon(QIcon(icon_path))
+        except Exception as e:
+            print(f"设置断言图标失败: {e}")
         
         # 设置对话框样式
         self.setStyleSheet("""
@@ -75,62 +99,50 @@ class AssertionDialog(QDialog):
                 border-radius: 3px;
                 padding: 4px;
             }
+            .assertion-row {
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                padding: 8px;
+                margin: 4px 0;
+                background-color: #fafafa;
+            }
+            .assertion-row:hover {
+                background-color: #f0f0f0;
+            }
         """)
         
         layout = QVBoxLayout(self)
         
-        # 断言基本信息组
-        basic_group = QGroupBox("断言基本信息")
-        basic_layout = QFormLayout(basic_group)
-        
-        # 名称字段
+        # 名称字段 - 直接添加到主布局，不分组
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("名称:"))
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("请输入断言名称")
-        basic_layout.addRow("名称:", self.name_edit)
+        name_layout.addWidget(self.name_edit)
+        name_layout.addStretch()
+        layout.addLayout(name_layout)
         
-        # 断言类型
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["equal", "contains", "regex", "status_code", "json_path"])
-        self.type_combo.currentTextChanged.connect(self.on_type_changed)
-        basic_layout.addRow("断言类型:", self.type_combo)
+        # 断言配置区域 - 去掉分组标题和边框
+        config_widget = QWidget()
+        config_layout = QVBoxLayout(config_widget)
+        config_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
         
-        layout.addWidget(basic_group)
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMinimumHeight(300)
+        scroll_area.setFrameShape(QFrame.NoFrame)  # 移除边框
         
-        # 断言配置组
-        self.config_group = QGroupBox("断言配置")
-        self.config_layout = QFormLayout(self.config_group)
+        # 滚动区域内容
+        scroll_content = QWidget()
+        self.scroll_layout = QVBoxLayout(scroll_content)
+        self.scroll_layout.setSpacing(8)
+        self.scroll_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
         
-        # 期望值
-        self.expected_edit = QLineEdit()
-        self.expected_edit.setPlaceholderText("请输入期望值")
-        self.config_layout.addRow("期望值:", self.expected_edit)
+        scroll_area.setWidget(scroll_content)
+        config_layout.addWidget(scroll_area)
         
-        # 实际值路径（用于JSON路径断言）
-        self.path_edit = QLineEdit()
-        self.path_edit.setPlaceholderText("请输入JSON路径，如: $.data.name")
-        self.config_layout.addRow("JSON路径:", self.path_edit)
-        
-        # 正则表达式
-        self.regex_edit = QLineEdit()
-        self.regex_edit.setPlaceholderText("请输入正则表达式")
-        self.config_layout.addRow("正则表达式:", self.regex_edit)
-        
-        # 忽略大小写
-        self.ignore_case_check = QCheckBox("忽略大小写")
-        self.config_layout.addRow("", self.ignore_case_check)
-        
-        layout.addWidget(self.config_group)
-        
-        # 描述信息
-        desc_group = QGroupBox("描述信息")
-        desc_layout = QVBoxLayout(desc_group)
-        
-        self.desc_edit = QTextEdit()
-        self.desc_edit.setPlaceholderText("请输入断言描述（可选）")
-        self.desc_edit.setMaximumHeight(80)
-        desc_layout.addWidget(self.desc_edit)
-        
-        layout.addWidget(desc_group)
+        layout.addWidget(config_widget)
         
         # 按钮布局
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -146,70 +158,178 @@ class AssertionDialog(QDialog):
         # 加载数据
         if self.is_edit:
             self.load_assertion_data()
-        
-        # 初始显示配置
-        self.on_type_changed(self.type_combo.currentText())
-    
-    def on_type_changed(self, assertion_type):
-        """断言类型改变时的处理"""
-        # 隐藏所有配置项
-        for i in range(self.config_layout.rowCount()):
-            item = self.config_layout.itemAt(i, QFormLayout.FieldRole)
-            if item and item.widget():
-                item.widget().hide()
+        else:
+            # 默认添加一行断言
+            self.add_assertion_row()
             
-            item = self.config_layout.itemAt(i, QFormLayout.LabelRole)
-            if item and item.widget():
-                item.widget().hide()
+        # 确保第一行从顶部开始显示，不居中
+        self.scroll_layout.addStretch()
+    
+    def add_assertion_row(self, insert_after_row=None):
+        """添加一行断言配置"""
+        row_widget = QWidget()
+        row_widget.setObjectName("assertion-row")
+        row_widget.setStyleSheet("""
+            QWidget#assertion-row {
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                padding: 8px;
+                margin: 4px 0;
+                background-color: #fafafa;
+            }
+            QWidget#assertion-row:hover {
+                background-color: #f0f0f0;
+            }
+        """)
         
-        # 根据类型显示相应的配置项
-        if assertion_type == "equal":
-            self.config_layout.labelForField(self.expected_edit).show()
-            self.expected_edit.show()
-            self.ignore_case_check.show()
-            self.config_group.setTitle("相等断言配置")
-        elif assertion_type == "contains":
-            self.config_layout.labelForField(self.expected_edit).show()
-            self.expected_edit.show()
-            self.ignore_case_check.show()
-            self.config_group.setTitle("包含断言配置")
-        elif assertion_type == "regex":
-            self.config_layout.labelForField(self.regex_edit).show()
-            self.regex_edit.show()
-            self.config_group.setTitle("正则断言配置")
-        elif assertion_type == "status_code":
-            self.config_layout.labelForField(self.expected_edit).show()
-            self.expected_edit.show()
-            self.config_group.setTitle("状态码断言配置")
-        elif assertion_type == "json_path":
-            self.config_layout.labelForField(self.path_edit).show()
-            self.path_edit.show()
-            self.config_layout.labelForField(self.expected_edit).show()
-            self.expected_edit.show()
-            self.config_group.setTitle("JSON路径断言配置")
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setSpacing(10)
+        
+        # 添加按钮 - 使用图标
+        add_button = QPushButton()
+        add_button.setFixedSize(22, 22)
+        # 使用add.png图标
+        add_icon_path = "src/resources/icons/add.png"
+        add_button.setIcon(QIcon(add_icon_path))
+        add_button.setIconSize(QSize(14, 14))
+        add_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #e8f5e8;
+                border-radius: 3px;
+            }
+        """)
+        
+        # 断言字段输入框
+        field_edit = QLineEdit()
+        field_edit.setPlaceholderText("支持${变量名}或jsonpath")
+        field_edit.setMinimumWidth(200)
+        
+        # 断言符号选择下拉框
+        symbol_combo = QComboBox()
+        for symbol_key, symbol_text in self.ASSERTION_SYMBOLS.items():
+            symbol_combo.addItem(symbol_text, symbol_key)
+        symbol_combo.setCurrentText("=")  # 默认选择"="
+        
+        # 预期值输入框
+        expected_edit = QLineEdit()
+        expected_edit.setPlaceholderText("预期值（可为空）")
+        expected_edit.setMinimumWidth(150)
+        
+        # 删除按钮 - 使用图标
+        delete_button = QPushButton()
+        delete_button.setFixedSize(22, 22)
+        # 使用sub.png图标
+        sub_icon_path = "src/resources/icons/sub.png"
+        delete_button.setIcon(QIcon(sub_icon_path))
+        delete_button.setIconSize(QSize(14, 14))
+        delete_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #ffebee;
+                border-radius: 3px;
+            }
+        """)
+        
+        # 存储行信息
+        row_data = {
+            'widget': row_widget,
+            'field_edit': field_edit,
+            'symbol_combo': symbol_combo,
+            'expected_edit': expected_edit,
+            'add_button': add_button,
+            'delete_button': delete_button
+        }
+        
+        # 连接按钮事件 - 传递当前行信息以便在正确位置插入
+        add_button.clicked.connect(lambda checked, row=row_data: self.add_assertion_row(row))
+        delete_button.clicked.connect(lambda: self.remove_assertion_row(row_data))
+        
+        # 添加到布局 - 添加按钮在删除按钮旁边
+        row_layout.addWidget(field_edit)
+        row_layout.addWidget(symbol_combo)
+        row_layout.addWidget(expected_edit)
+        row_layout.addWidget(add_button)
+        row_layout.addWidget(delete_button)
+        
+        # 确定插入位置
+        if insert_after_row is None:
+            # 默认添加到末尾
+            self.scroll_layout.addWidget(row_widget)
+            self.assertion_rows.append(row_data)
+        else:
+            # 在当前行下方插入新行
+            insert_index = self.assertion_rows.index(insert_after_row) + 1
+            self.scroll_layout.insertWidget(insert_index, row_widget)
+            self.assertion_rows.insert(insert_index, row_data)
+    
+    def remove_assertion_row(self, row_data):
+        """删除一行断言配置"""
+        if len(self.assertion_rows) <= 1:
+            Toast.info(self, "至少需要保留一行断言配置")
+            return
+            
+        # 从布局中移除
+        self.scroll_layout.removeWidget(row_data['widget'])
+        row_data['widget'].deleteLater()
+        
+        # 从列表中移除
+        self.assertion_rows.remove(row_data)
     
     def load_assertion_data(self):
-        """加载断言数据"""
+        """加载断言数据 - 支持新旧两种格式"""
         try:
+            if not self.assertion_data:
+                return
+            
+            # 判断数据格式：新格式包含type字段，旧格式直接包含name和assertions
+            if 'type' in self.assertion_data:
+                # 新格式：{'type': 'assertion_type', 'config': {...}}
+                config = self.assertion_data.get('config', {})
+                name = config.get('name', '')
+                assertions = config.get('assertions', [])
+            else:
+                # 旧格式：{'name': '名称', 'assertions': [...]}
+                name = self.assertion_data.get('name', '')
+                assertions = self.assertion_data.get('assertions', [])
+            
             # 名称
-            self.name_edit.setText(self.assertion_data.get('name', ''))
+            self.name_edit.setText(name)
             
-            # 类型
-            assertion_type = self.assertion_data.get('type', 'equal')
-            index = self.type_combo.findText(assertion_type)
-            if index >= 0:
-                self.type_combo.setCurrentIndex(index)
+            # 清除现有行
+            for row_data in self.assertion_rows:
+                self.scroll_layout.removeWidget(row_data['widget'])
+                row_data['widget'].deleteLater()
+            self.assertion_rows.clear()
             
-            # 配置
-            config = self.assertion_data.get('config', {})
-            self.expected_edit.setText(config.get('expected', ''))
-            self.path_edit.setText(config.get('path', ''))
-            self.regex_edit.setText(config.get('regex', ''))
-            self.ignore_case_check.setChecked(config.get('ignore_case', False))
-            
-            # 描述
-            self.desc_edit.setText(self.assertion_data.get('description', ''))
-            
+            # 加载断言行
+            if assertions:
+                for assertion in assertions:
+                    self.add_assertion_row()
+                    row_data = self.assertion_rows[-1]
+                    
+                    # 填充数据
+                    row_data['field_edit'].setText(assertion.get('field', ''))
+                    
+                    symbol = assertion.get('symbol', 'equal')
+                    symbol_text = self.ASSERTION_SYMBOLS.get(symbol, '=')
+                    index = row_data['symbol_combo'].findText(symbol_text)
+                    if index >= 0:
+                        row_data['symbol_combo'].setCurrentIndex(index)
+                    
+                    # 期望值：保持原值，包括None（显示为空字符串）
+                    expected = assertion.get('expected')
+                    row_data['expected_edit'].setText(expected if expected is not None else '')
+            else:
+                # 如果没有数据，添加默认行
+                self.add_assertion_row()
+                
         except Exception as e:
             print(f"加载断言数据失败: {str(e)}")
     
@@ -222,43 +342,37 @@ class AssertionDialog(QDialog):
                 Toast.error(self, "请输入断言名称")
                 return
             
-            assertion_type = self.type_combo.currentText()
-            
-            # 根据类型验证配置
-            config = {}
-            if assertion_type in ["equal", "contains", "status_code"]:
-                expected = self.expected_edit.text().strip()
-                if not expected:
-                    Toast.error(self, f"请输入期望值")
+            # 验证断言行
+            assertions = []
+            for row_data in self.assertion_rows:
+                field = row_data['field_edit'].text().strip()
+                if not field:
+                    Toast.error(self, "断言字段不能为空")
                     return
-                config['expected'] = expected
-                config['ignore_case'] = self.ignore_case_check.isChecked()
+                
+                symbol_text = row_data['symbol_combo'].currentText()
+                symbol = row_data['symbol_combo'].currentData()
+                expected = row_data['expected_edit'].text().strip()
+                # 如果期望值为空字符串，设置为None
+                if expected == '':
+                    expected = None
+                
+                assertions.append({
+                    'field': field,
+                    'symbol': symbol,
+                    'symbol_text': symbol_text,
+                    'expected': expected
+                })
             
-            elif assertion_type == "regex":
-                regex = self.regex_edit.text().strip()
-                if not regex:
-                    Toast.error(self, "请输入正则表达式")
-                    return
-                config['regex'] = regex
-            
-            elif assertion_type == "json_path":
-                path = self.path_edit.text().strip()
-                expected = self.expected_edit.text().strip()
-                if not path:
-                    Toast.error(self, "请输入JSON路径")
-                    return
-                if not expected:
-                    Toast.error(self, "请输入期望值")
-                    return
-                config['path'] = path
-                config['expected'] = expected
-            
-            # 构建断言配置
+            # 构建断言配置 - 使用新的字段路径提取断言类型
+            # 所有符号都映射到同一个断言类型，实际比较逻辑在断言执行时处理
             assertion_config = {
-                'name': name,
-                'type': assertion_type,
-                'config': config,
-                'description': self.desc_edit.toPlainText().strip()
+                'type': 'field_path_assertion',  # 新的断言类型，支持字段路径提取和变量替换
+                'config': {
+                    'name': name,
+                    'enabled': True,
+                    'assertions': assertions
+                }
             }
             
             # 发送保存信号
@@ -271,16 +385,32 @@ class AssertionDialog(QDialog):
             print(f"保存断言配置失败: {str(e)}")
             Toast.error(self, f"保存断言配置失败: {str(e)}")
     
-    def get_assertion_config(self):
-        """获取断言配置"""
-        return {
-            'name': self.name_edit.text().strip(),
-            'type': self.type_combo.currentText(),
-            'config': {
-                'expected': self.expected_edit.text().strip(),
-                'path': self.path_edit.text().strip(),
-                'regex': self.regex_edit.text().strip(),
-                'ignore_case': self.ignore_case_check.isChecked()
-            },
-            'description': self.desc_edit.toPlainText().strip()
-        }
+    def save_assertion_data(self):
+        """保存断言数据"""
+        try:
+            # 名称
+            self.assertion_data['name'] = self.name_edit.text().strip()
+            
+            # 断言配置
+            assertions = []
+            for row_data in self.assertion_rows:
+                field = row_data['field_edit'].text().strip()
+                symbol = row_data['symbol_combo'].currentData()
+                expected = row_data['expected_edit'].text().strip()
+                # 如果期望值为空字符串，设置为None
+                if expected == '':
+                    expected = None
+                
+                assertions.append({
+                    'field': field,
+                    'symbol': symbol,
+                    'expected': expected
+                })
+            
+            self.assertion_data['assertions'] = assertions
+            
+            return True
+            
+        except Exception as e:
+            print(f"保存断言数据失败: {str(e)}")
+            return False

@@ -204,6 +204,15 @@ class MainWindow(QMainWindow):
             QMessageBox QPushButton:pressed {
                 background-color: #3d8b40;
             }
+            /* 添加QToolTip样式，修复黑色背景问题 */
+            QToolTip {
+                background-color: #ffffff;
+                color: #333333;
+                border: 1px solid #cccccc;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 12px;
+            }
         """)
 
         # 创建Tab Widget

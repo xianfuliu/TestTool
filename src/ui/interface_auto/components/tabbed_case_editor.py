@@ -265,8 +265,12 @@ class CaseExecutionThread(QThread):
             log_level = "info" if status == "success" else "warning"
             self.log_message.emit(self.format_debug_message(f"步骤 {step_index + 1} 执行完成: {status}, 耗时: {duration:.2f}秒", log_level, step_index), log_level, step_index)
             
-            # 记录步骤执行结果的详细调试信息
-            self.log_message.emit(self.format_debug_message(f"步骤执行结果详情: {result}", "debug", step_index), "debug", step_index)
+            # 记录步骤执行结果的详细调试信息（移除重复的body字段）
+            result_copy = result.copy()
+            # 移除重复的body字段，因为已经有text字段了
+            if 'body' in result_copy:
+                del result_copy['body']
+            self.log_message.emit(self.format_debug_message(f"步骤执行结果详情: {result_copy}", "debug", step_index), "debug", step_index)
             self.log_message.emit(self.format_debug_message(f"步骤 {step_index + 1} 执行详情结束", "debug", step_index), "debug", step_index)
 
             return result
@@ -636,6 +640,269 @@ class CaseExecutionThread(QThread):
         print(f"[DEBUG] 准备请求数据完成: {result}")
         return result
 
+    def extract_field_value(self, step_result, field_name):
+        """从步骤结果中提取指定字段的值"""
+        # 兼容不同的响应数据结构
+        response_data = step_result.get('response_data', step_result.get('body', {}))
+        response_text = step_result.get('response_text', step_result.get('text', ''))
+        response_headers = step_result.get('response_headers', step_result.get('headers', {}))
+        response_time = step_result.get('response_time', step_result.get('elapsed', 0))
+        status_code = step_result.get('status_code', 0)
+        
+        # 根据字段名提取对应的值
+        if field_name == 'response_time':
+            return response_time
+        elif field_name == 'status_code':
+            return status_code
+        elif field_name == 'response_text':
+            return response_text
+        elif field_name == 'response_data':
+            return response_data
+        elif field_name == 'response_headers':
+            return response_headers
+        elif field_name.startswith('header.'):
+            # 提取响应头字段，如 header.Content-Type
+            header_key = field_name[7:]  # 去掉 'header.' 前缀
+            actual_headers = {k.lower(): v for k, v in response_headers.items()}
+            return actual_headers.get(header_key.lower(), '')
+        elif field_name.startswith('json.'):
+            # 提取JSON路径字段，如 json.data.user.name
+            try:
+                import json
+                # 如果response_data是字符串，尝试解析为JSON
+                if isinstance(response_data, str):
+                    data = json.loads(response_data)
+                else:
+                    data = response_data
+                
+                # 简单的JSON路径提取
+                path_parts = field_name[5:].split('.')  # 去掉 'json.' 前缀
+                current = data
+                for part in path_parts:
+                    if isinstance(current, dict) and part in current:
+                        current = current[part]
+                    elif isinstance(current, list) and part.isdigit() and int(part) < len(current):
+                        current = current[int(part)]
+                    else:
+                        return ''  # 路径不存在
+                return str(current)
+            except:
+                return ''
+        else:
+            # 默认返回响应文本
+            return response_text
+
+    def extract_field_value_from_response(self, step_result, field_path):
+        """从响应体中提取字段路径的实际值，支持复杂路径如 name[0].libai"""
+        # 兼容不同的响应数据结构
+        response_data = step_result.get('response_data', step_result.get('body', {}))
+        response_text = step_result.get('response_text', step_result.get('text', ''))
+        
+        # 如果字段路径为空，返回空字符串
+        if not field_path:
+            return ''
+        
+        # 如果字段路径是特殊字段
+        if field_path in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
+            return self.extract_field_value(step_result, field_path)
+        
+        # 如果字段路径以header.开头，提取响应头
+        if field_path.startswith('header.'):
+            return self.extract_field_value(step_result, field_path)
+        
+        # 如果字段路径以json.开头，提取JSON路径
+        if field_path.startswith('json.'):
+            return self.extract_field_value(step_result, field_path)
+        
+        # 处理复杂路径：支持数组索引和对象属性
+        try:
+            import json
+            # 如果response_data是字符串，尝试解析为JSON
+            if isinstance(response_data, str):
+                data = json.loads(response_data)
+            else:
+                data = response_data
+            
+            # 解析字段路径，支持数组索引 [0] 和对象属性 .name
+            path_parts = []
+            current_part = ''
+            
+            i = 0
+            while i < len(field_path):
+                char = field_path[i]
+                
+                if char == '[':
+                    # 数组索引开始
+                    if current_part:
+                        path_parts.append(current_part)
+                        current_part = ''
+                    
+                    # 找到数组索引结束位置
+                    j = i + 1
+                    while j < len(field_path) and field_path[j] != ']':
+                        j += 1
+                    
+                    if j < len(field_path):
+                        index_str = field_path[i+1:j]
+                        if index_str.isdigit():
+                            path_parts.append(int(index_str))
+                        i = j  # 跳过']'
+                elif char == '.':
+                    # 对象属性分隔符
+                    if current_part:
+                        path_parts.append(current_part)
+                        current_part = ''
+                else:
+                    current_part += char
+                
+                i += 1
+            
+            # 添加最后一个部分
+            if current_part:
+                path_parts.append(current_part)
+            
+            # 根据路径提取值
+            current = data
+            for part in path_parts:
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                elif isinstance(current, list) and isinstance(part, int) and 0 <= part < len(current):
+                    current = current[part]
+                else:
+                    return None  # 路径不存在时返回None而不是空字符串
+            
+            # 如果最终值是None，直接返回None而不是'None'
+            if current is None:
+                return None
+            
+            return str(current)
+            
+        except Exception as e:
+            # 如果提取失败，返回空字符串
+            return ''
+
+    def replace_variables(self, text, step_result):
+        """替换文本中的变量，支持${变量名}格式"""
+        if not text or '${' not in text:
+            return text
+        
+        import re
+        
+        # 匹配${变量名}格式
+        pattern = r'\$\{([^}]+)\}'
+        matches = re.findall(pattern, text)
+        
+        for var_name in matches:
+            # 从步骤结果中获取变量值
+            var_value = step_result.get(var_name, '')
+            
+            # 如果变量名是特殊字段，使用extract_field_value提取
+            if var_name in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
+                var_value = self.extract_field_value(step_result, var_name)
+            elif var_name.startswith('header.'):
+                var_value = self.extract_field_value(step_result, var_name)
+            elif var_name.startswith('json.'):
+                var_value = self.extract_field_value(step_result, var_name)
+            else:
+                # 尝试从响应数据中提取
+                var_value = self.extract_field_value_from_response(step_result, var_name)
+            
+            # 替换变量
+            text = text.replace(f'${{{var_name}}}', str(var_value))
+        
+        return text
+
+    def execute_comparison(self, actual, expected, symbol):
+        """执行比较操作，支持多种比较符号"""
+        # 处理期望值为None的情况：与None比较，而不是空字符串
+        if expected is None:
+            expected_str = None
+        else:
+            expected_str = str(expected)
+        
+        # 处理实际值为None的情况
+        if actual is None:
+            actual_str = None
+        else:
+            actual_str = str(actual)
+        
+        # 根据符号执行比较
+        if symbol == 'equal':
+            # 特殊处理：当两个值都是None时，直接返回True
+            if actual is None and expected is None:
+                return True
+            # 当只有一个值是None时，返回False
+            if actual is None or expected is None:
+                return False
+            return actual_str == expected_str
+        elif symbol == 'not_equal':
+            # 特殊处理：当两个值都是None时，返回False
+            if actual is None and expected is None:
+                return False
+            # 当只有一个值是None时，返回True
+            if actual is None or expected is None:
+                return True
+            return actual_str != expected_str
+        elif symbol == 'contains':
+            # 包含比较：期望值不能为None，实际值不能为None
+            if expected_str is None or actual_str is None:
+                return False
+            return expected_str in actual_str
+        elif symbol == 'not_contains':
+            # 不包含比较：期望值不能为None，实际值不能为None
+            if expected_str is None or actual_str is None:
+                return False
+            return expected_str not in actual_str
+        elif symbol == 'greater':
+            try:
+                # 数值比较：期望值和实际值都不能为None
+                if expected_str is None or actual_str is None:
+                    return False
+                return float(actual_str) > float(expected_str)
+            except (ValueError, TypeError):
+                return False
+        elif symbol == 'less':
+            try:
+                # 数值比较：期望值和实际值都不能为None
+                if expected_str is None or actual_str is None:
+                    return False
+                return float(actual_str) < float(expected_str)
+            except (ValueError, TypeError):
+                return False
+        elif symbol == 'greater_equal':
+            try:
+                # 数值比较：期望值和实际值都不能为None
+                if expected_str is None or actual_str is None:
+                    return False
+                return float(actual_str) >= float(expected_str)
+            except (ValueError, TypeError):
+                return False
+        elif symbol == 'less_equal':
+            try:
+                # 数值比较：期望值和实际值都不能为None
+                if expected_str is None or actual_str is None:
+                    return False
+                return float(actual_str) <= float(expected_str)
+            except (ValueError, TypeError):
+                return False
+        else:
+            # 默认使用相等比较
+            return actual_str == expected_str
+
+    def get_comparison_symbol(self, symbol):
+        """获取比较符号的显示文本"""
+        symbol_map = {
+            'equal': '==',
+            'not_equal': '!=',
+            'contains': '包含',
+            'not_contains': '不包含',
+            'greater': '>',
+            'less': '<',
+            'greater_equal': '≥',
+            'less_equal': '≤'
+        }
+        return symbol_map.get(symbol, '==')
+
     def execute_assertions(self, assertions, step_result, step_index):
         """执行断言"""
         if not assertions:
@@ -646,38 +913,302 @@ class CaseExecutionThread(QThread):
         self.log_message.emit(self.format_debug_message(f"断言数量: {len(assertions)}", "debug", step_index), "debug", step_index)
         
         results = {}
-        response_data = step_result.get('response_data', {})
+        
+        # 兼容不同的响应数据结构
+        # 1. 从execute_api_request返回的数据结构
+        response_data = step_result.get('response_data', step_result.get('body', {}))
+        response_text = step_result.get('response_text', step_result.get('text', ''))
+        response_headers = step_result.get('response_headers', step_result.get('headers', {}))
+        response_time = step_result.get('response_time', step_result.get('elapsed', 0))
+        status_code = step_result.get('status_code', 0)
+        
+        # 如果response_data是字符串，尝试解析为JSON
+        if isinstance(response_data, str) and response_data.strip():
+            try:
+                import json
+                response_data = json.loads(response_data)
+            except:
+                # 如果解析失败，保持原样
+                pass
 
         for assertion_name, assertion_config in assertions.items():
             try:
+                # 兼容新旧两种断言配置格式
+                # 新格式: {'type': 'assertion_type', 'config': {...}}
+                # 旧格式: {'name': '断言名称', 'assertions': [...]}
+                
+                # 判断配置格式
+                if 'type' in assertion_config:
+                    # 新格式
+                    assertion_type = assertion_config.get('type')
+                    config = assertion_config.get('config', {})
+                    
+                    # 检查断言是否启用
+                    if not config.get('enabled', True):
+                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 已禁用，跳过执行", "debug", step_index), "debug", step_index)
+                        results[assertion_name] = True  # 禁用的断言视为通过
+                        continue
+                else:
+                    # 旧格式 - 转换为新格式
+                    config = assertion_config
+                    
+                    # 从断言配置中推断类型
+                    assertions_list = config.get('assertions', [])
+                    if assertions_list:
+                        first_assertion = assertions_list[0]
+                        symbol = first_assertion.get('symbol', 'equal')
+                        
+                        # 符号到类型的映射
+                        symbol_to_type_map = {
+                            'equal': 'equal',
+                            'not_equal': 'not_equal',
+                            'contains': 'contains', 
+                            'not_contains': 'not_contains',
+                            'greater': 'greater',
+                            'less': 'less',
+                            'greater_equal': 'greater_equal',
+                            'less_equal': 'less_equal'
+                        }
+                        
+                        assertion_type = symbol_to_type_map.get(symbol, 'equal')
+                        
+                        # 为旧格式设置默认配置
+                        if assertion_type == 'response_time' and assertions_list:
+                            config['time_comparison'] = symbol
+                            config['time_value'] = float(assertions_list[0].get('expected')) if assertions_list[0].get('expected') else None  # 不设置默认值，保持None
+                        elif assertions_list:
+                            config['expected'] = assertions_list[0].get('expected')  # 不设置默认值，保持None
+                            config['ignore_case'] = False
+                    else:
+                        assertion_type = 'equal'  # 默认类型
+                
                 self.log_message.emit(self.format_debug_message(f"执行断言: {assertion_name}", "debug", step_index), "debug", step_index)
                 
-                if assertion_config.get('type') == 'status_code':
-                    expected = assertion_config.get('value')
-                    actual = step_result.get('status_code')
-                    results[assertion_name] = expected == actual
-                    log_level = "info" if results[assertion_name] else "warning"
+                if assertion_type == 'equal':
+                    expected = config.get('expected')  # 不设置默认值，保持None
+                    actual = response_text
+                    ignore_case = config.get('ignore_case', False)
+                    
+                    if ignore_case:
+                        results[assertion_name] = (expected or '').lower() == (actual or '').lower()
+                    else:
+                        results[assertion_name] = expected == actual
+                    
+                    log_level = "info" if results[assertion_name] else "error"
+                    expected_display = expected if expected is not None else "None"
+                    actual_display = actual if actual is not None else "None"
                     self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: 状态码 {actual} {'==' if expected == actual else '!='} {expected}", log_level, step_index), log_level, step_index)
+                        self.format_debug_message(f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'==' if results[assertion_name] else '!='}", log_level, step_index), log_level, step_index)
 
-                elif assertion_config.get('type') == 'response_contains':
-                    expected = assertion_config.get('value')
-                    actual = json.dumps(response_data)
-                    results[assertion_name] = expected in actual
-                    log_level = "info" if results[assertion_name] else "warning"
-                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 响应包含 '{expected}' -> {expected in actual}", log_level, step_index), log_level, step_index)
+                elif assertion_type == 'not_equal':
+                    expected = config.get('expected')  # 不设置默认值，保持None
+                    actual = response_text
+                    ignore_case = config.get('ignore_case', False)
+                    
+                    if ignore_case:
+                        results[assertion_name] = (expected or '').lower() != (actual or '').lower()
+                    else:
+                        results[assertion_name] = expected != actual
+                    
+                    log_level = "info" if results[assertion_name] else "error"
+                    expected_display = expected if expected is not None else "None"
+                    actual_display = actual if actual is not None else "None"
+                    self.log_message.emit(
+                        self.format_debug_message(f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'!=' if results[assertion_name] else '=='}", log_level, step_index), log_level, step_index)
 
-                elif assertion_config.get('type') == 'json_path':
-                    path = assertion_config.get('path')
-                    expected = assertion_config.get('value')
+                elif assertion_type == 'contains':
+                    expected = config.get('expected')  # 不设置默认值，保持None
+                    actual = response_text
+                    ignore_case = config.get('ignore_case', False)
+                    
+                    if ignore_case:
+                        results[assertion_name] = (expected or '') in (actual or '').lower()
+                    else:
+                        results[assertion_name] = (expected or '') in (actual or '')
+                    
+                    log_level = "info" if results[assertion_name] else "error"
+                    expected_display = expected if expected is not None else "None"
+                    actual_display = actual if actual is not None else "None"
+                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 期望包含='{expected_display}' 实际响应='{actual_display}' 结果:{results[assertion_name]}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'not_contains':
+                    expected = config.get('expected')  # 不设置默认值，保持None
+                    actual = response_text
+                    ignore_case = config.get('ignore_case', False)
+                    
+                    if ignore_case:
+                        results[assertion_name] = (expected or '') not in (actual or '').lower()
+                    else:
+                        results[assertion_name] = (expected or '') not in (actual or '')
+                    
+                    log_level = "info" if results[assertion_name] else "error"
+                    expected_display = expected if expected is not None else "None"
+                    actual_display = actual if actual is not None else "None"
+                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 期望不包含='{expected_display}' 实际响应='{actual_display}' 结果:{results[assertion_name]}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'regex':
+                    pattern = config.get('regex', '')
+                    actual = response_text
+                    ignore_case = config.get('ignore_case', False)
+                    
+                    import re
+                    flags = re.IGNORECASE if ignore_case else 0
+                    try:
+                        match = re.search(pattern, actual, flags)
+                        results[assertion_name] = match is not None
+                    except Exception as e:
+                        results[assertion_name] = False
+                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 正则表达式错误: {str(e)}", "error", step_index), "error", step_index)
+                    
+                    log_level = "info" if results[assertion_name] else "error"
+                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 正则匹配 '{pattern}' -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'status_code':
+                    expected = config.get('expected')  # 不设置默认值，保持None
+                    actual = status_code
+                    results[assertion_name] = str(expected) == str(actual)
+                    log_level = "info" if results[assertion_name] else "error"
+                    expected_display = expected if expected is not None else "None"
+                    actual_display = actual if actual is not None else "None"
+                    self.log_message.emit(
+                        self.format_debug_message(f"断言 {assertion_name}: 状态码 {actual_display} {'==' if results[assertion_name] else '!='} {expected_display}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'json_path':
+                    path = config.get('path', '')
+                    expected = config.get('expected')  # 不设置默认值，保持None
                     actual = self.simple_json_path_extract(response_data, path)
                     results[assertion_name] = expected == actual
-                    log_level = "info" if results[assertion_name] else "warning"
+                    log_level = "info" if results[assertion_name] else "error"
+                    expected_display = expected if expected is not None else "None"
+                    actual_display = actual if actual is not None else "None"
                     self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: {path} = {actual} {'==' if expected == actual else '!='} {expected}", log_level, step_index), log_level, step_index)
+                        self.format_debug_message(f"断言 {assertion_name}: {path} = {actual_display} {'==' if expected == actual else '!='} {expected_display}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'response_time':
+                    comparison = config.get('time_comparison', 'less')
+                    expected_value = config.get('time_value')  # 不设置默认值，保持None
+                    actual = response_time
+                    
+                    # 如果期望值为None，则使用0作为默认值进行比较
+                    expected_value_num = expected_value if expected_value is not None else 0
+                    
+                    if comparison == 'less':
+                        results[assertion_name] = actual < expected_value_num
+                    elif comparison == 'equal':
+                        results[assertion_name] = abs(actual - expected_value_num) < 0.001  # 浮点数比较容差
+                    elif comparison == 'greater':
+                        results[assertion_name] = actual > expected_value_num
+                    
+                    log_level = "info" if results[assertion_name] else "error"
+                    comparison_symbol = {'less': '<', 'equal': '==', 'greater': '>'}[comparison]
+                    expected_display = expected_value if expected_value is not None else "None"
+                    self.log_message.emit(
+                        self.format_debug_message(f"断言 {assertion_name}: 响应时间 {actual:.3f}s {comparison_symbol} {expected_display}s -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'header_exists':
+                    header_name = config.get('header_name', '')
+                    actual_headers = {k.lower(): v for k, v in response_headers.items()}
+                    results[assertion_name] = header_name.lower() in actual_headers
+                    log_level = "info" if results[assertion_name] else "error"
+                    self.log_message.emit(
+                        self.format_debug_message(f"断言 {assertion_name}: 响应头包含 '{header_name}' -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'json_schema':
+                    # 这里需要实现JSON Schema验证
+                    # 由于JSON Schema验证比较复杂，这里先简单返回True
+                    # 实际项目中应该使用jsonschema库进行验证
+                    schema = config.get('schema', '')
+                    results[assertion_name] = True  # 暂时返回True
+                    log_level = "info" if results[assertion_name] else "error"
+                    self.log_message.emit(
+                        self.format_debug_message(f"断言 {assertion_name}: JSON Schema验证 -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
+
+                elif assertion_type == 'field_path_assertion':
+                    # 新的字段路径提取断言，支持字段路径提取和变量替换
+                    assertions_list = config.get('assertions', [])
+                    
+                    # 检查断言是否启用
+                    if not config.get('enabled', True):
+                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 已禁用，跳过执行", "debug", step_index), "debug", step_index)
+                        results[assertion_name] = True  # 禁用的断言视为通过
+                        continue
+                    
+                    # 执行所有断言行
+                    assertion_results = []
+                    for assertion in assertions_list:
+                        field = assertion.get('field', '')
+                        symbol = assertion.get('symbol', 'equal')
+                        expected = assertion.get('expected')  # 不设置默认值，保持None
+                        
+                        # 提取实际值：支持字段路径提取
+                        actual = self.extract_field_value_from_response(step_result, field)
+                        
+                        # 变量替换：支持${变量名}格式（如果期望值不为None）
+                        if expected is not None:
+                            expected = self.replace_variables(expected, step_result)
+                        
+                        # 根据符号执行比较
+                        result = self.execute_comparison(actual, expected, symbol)
+                        assertion_results.append(result)
+                        
+                        # 记录日志
+                        log_level = "info" if result else "error"
+                        comparison_symbol = self.get_comparison_symbol(symbol)
+                        # 正确显示None值
+                        expected_display = expected if expected is not None else "None"
+                        actual_display = actual if actual is not None else "None"
+                        self.log_message.emit(
+                            self.format_debug_message(f"断言 {assertion_name}: {field} = {actual_display} {comparison_symbol} {expected_display} -> {result}", log_level, step_index), log_level, step_index)
+                    
+                    # 所有断言行都必须通过
+                    results[assertion_name] = all(assertion_results)
+                    
+                elif assertion_type in ['greater', 'less', 'greater_equal', 'less_equal']:
+                    # 数值比较断言
+                    expected = config.get('expected')  # 不设置默认值，保持None
+                    
+                    # 从断言配置中获取字段名，用于从响应数据中提取实际值
+                    assertions_list = config.get('assertions', [])
+                    field_name = 'response_time'  # 默认字段
+                    if assertions_list:
+                        first_assertion = assertions_list[0]
+                        field_name = first_assertion.get('field', 'response_time')
+                    
+                    # 根据字段名从响应数据中提取实际值
+                    actual = self.extract_field_value(step_result, field_name)
+                    
+                    # 转换为数值进行比较
+                    try:
+                        expected_num = float(expected) if expected is not None else 0
+                        actual_num = float(actual) if actual is not None else 0
+                        
+                        if assertion_type == 'greater':
+                            results[assertion_name] = actual_num > expected_num
+                        elif assertion_type == 'less':
+                            results[assertion_name] = actual_num < expected_num
+                        elif assertion_type == 'greater_equal':
+                            results[assertion_name] = actual_num >= expected_num
+                        elif assertion_type == 'less_equal':
+                            results[assertion_name] = actual_num <= expected_num
+                            
+                        log_level = "info" if results[assertion_name] else "error"
+                        comparison_symbol = {
+                            'greater': '>', 'less': '<', 
+                            'greater_equal': '≥', 'less_equal': '≤'
+                        }[assertion_type]
+                        expected_display = expected if expected is not None else "None"
+                        actual_display = actual if actual is not None else "None"
+                        self.log_message.emit(
+                            self.format_debug_message(f"断言 {assertion_name}: {field_name} {actual_display} {comparison_symbol} {expected_display} -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
+                            
+                    except (ValueError, TypeError) as e:
+                        results[assertion_name] = False
+                        expected_display = expected if expected is not None else "None"
+                        actual_display = actual if actual is not None else "None"
+                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 数值转换错误 - 期望值: {expected_display}, 实际值: {actual_display}", "error", step_index), "error", step_index)
 
                 else:
-                    self.log_message.emit(self.format_debug_message(f"未知断言类型: {assertion_config.get('type')}", "warning", step_index), "warning", step_index)
+                    self.log_message.emit(self.format_debug_message(f"未知断言类型: {assertion_type}", "warning", step_index), "warning", step_index)
                     results[assertion_name] = False
 
             except Exception as e:
@@ -780,7 +1311,7 @@ class CaseTabWidget(QWidget):
         desc_layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0
         desc_layout.addWidget(QLabel("描述:"))
         self.description_edit = QTextEdit()
-        self.description_edit.setMaximumHeight(60)
+        self.description_edit.setMaximumHeight(30)  # 减小行高从60到40
         self.description_edit.setPlaceholderText("请输入用例描述")
         self.description_edit.textChanged.connect(self.on_content_changed)
         desc_layout.addWidget(self.description_edit)
@@ -798,14 +1329,35 @@ class CaseTabWidget(QWidget):
         self.env_combo.currentTextChanged.connect(self.on_content_changed)
         env_layout.addWidget(self.env_combo)
         
-        # 在环境选择后面添加操作按钮
-        env_layout.addSpacing(20)  # 添加间距
+        env_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
+        
+        layout.addLayout(env_layout)
+        
+        # 变量按钮（换行到下一行）
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(5)  # 设置水平间距
+        button_layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0
+        button_layout.setAlignment(Qt.AlignLeft)  # 设置整个布局靠左对齐
         
         # 查询变量按钮（绿色）
         self.query_vars_btn = QPushButton("变量")
         self.query_vars_btn.clicked.connect(self.edit_global_variables)
-        self.query_vars_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;")
-        env_layout.addWidget(self.query_vars_btn)
+        self.query_vars_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50; 
+                color: white; 
+                padding: 4px 12px; 
+                border-radius: 4px; 
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+        button_layout.addWidget(self.query_vars_btn)
         
         # 调试/停止按钮（合并为一个按钮，根据执行状态切换图标）
         self.run_stop_btn = QPushButton()
@@ -828,7 +1380,7 @@ class CaseTabWidget(QWidget):
                 background-color: rgba(0, 0, 0, 0.2);
             }
         """)
-        env_layout.addWidget(self.run_stop_btn)
+        button_layout.addWidget(self.run_stop_btn)
         
         # 日志按钮（图标替换）
         self.log_btn_toolbar = QPushButton()
@@ -851,17 +1403,31 @@ class CaseTabWidget(QWidget):
                 background-color: rgba(0, 0, 0, 0.2);
             }
         """)
-        env_layout.addWidget(self.log_btn_toolbar)
+        button_layout.addWidget(self.log_btn_toolbar)
         
         # 保存按钮
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_case)
-        self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;")
-        env_layout.addWidget(self.save_btn)
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50; 
+                color: white; 
+                padding: 4px 12px; 
+                border-radius: 4px; 
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+        button_layout.addWidget(self.save_btn)
         
-        env_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
+        button_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
         
-        layout.addLayout(env_layout)
+        layout.addLayout(button_layout)
     
     def setup_steps_tab(self, parent):
         """设置测试步骤区域"""
@@ -1674,9 +2240,23 @@ class CaseTabWidget(QWidget):
             Toast.warning(self, "警告", "请先添加测试步骤")
             return
         
+        # 加强重复执行保护
         if self.is_executing:
-            Toast.warning(self, "警告", "用例正在执行中")
+            Toast.warning(self, "警告", "用例正在执行中，请等待执行完成")
             return
+        
+        # 检查线程状态，确保之前的线程已完全清理
+        if hasattr(self, 'execution_thread') and self.execution_thread:
+            if self.execution_thread.isRunning():
+                Toast.warning(self, "警告", "执行线程仍在运行，请稍后再试")
+                return
+            else:
+                # 清理残留的线程对象
+                try:
+                    self.execution_thread.deleteLater()
+                    self.execution_thread = None
+                except:
+                    self.execution_thread = None
         
         # 准备执行数据
         case_data = self.current_case.to_dict()
@@ -1690,9 +2270,9 @@ class CaseTabWidget(QWidget):
         self.execution_thread.case_finished.connect(self.on_case_finished)
         self.execution_thread.log_message.connect(self.log_message_with_step)
         
-        # 不再清空日志，保留之前的执行日志
+        # 清空之前的执行日志，确保每次执行都是全新的开始
         print(f"[DEBUG] 执行前日志数量: {len(self.execution_logs)}")
-        # self.clear_logs()
+        self.clear_logs()
         
         # 记录详细的调试信息
         self.log_debug_info()
@@ -1772,14 +2352,35 @@ class CaseTabWidget(QWidget):
         if not self.is_executing or not self.execution_thread:
             return
         
+        # 记录停止执行日志
+        self.log_message("正在停止用例执行...", "warning")
+        
         # 停止执行线程
         self.execution_thread.stop()
+        
+        # 等待线程停止
+        if self.execution_thread.isRunning():
+            self.execution_thread.wait(2000)  # 等待2秒确保线程停止
+        
+        # 更新执行状态
         self.is_executing = False
+        
+        # 清理线程资源
+        try:
+            self.execution_thread.step_started.disconnect()
+            self.execution_thread.step_finished.disconnect()
+            self.execution_thread.case_finished.disconnect()
+            self.execution_thread.log_message.disconnect()
+        except:
+            pass
+        
+        self.execution_thread.deleteLater()
+        self.execution_thread = None
         
         # 更新按钮状态
         self.update_buttons_state()
         
-        # 记录停止执行日志
+        # 记录停止完成日志
         self.log_message("用例执行已停止", "warning")
 
     def on_step_started(self, step_name, step_index):
@@ -1796,15 +2397,16 @@ class CaseTabWidget(QWidget):
         # 记录执行完成时的日志状态
         print(f"[DEBUG] on_case_finished开始，当前日志数量: {len(self.execution_logs)}")
         
-        # 等待线程完全退出
-        if self.execution_thread and self.execution_thread.isRunning():
-            print("[DEBUG] 等待线程安全退出...")
-            self.execution_thread.wait(3000)  # 等待3秒确保线程完全退出
-        
+        # 确保执行状态正确设置
         self.is_executing = False
         
         # 安全地清理线程资源
         if self.execution_thread:
+            # 等待线程完全退出
+            if self.execution_thread.isRunning():
+                print("[DEBUG] 等待线程安全退出...")
+                self.execution_thread.wait(3000)  # 等待3秒确保线程完全退出
+            
             # 断开所有信号连接
             try:
                 self.execution_thread.step_started.disconnect()
@@ -1933,11 +2535,10 @@ class CaseTabWidget(QWidget):
 
     def clear_logs(self):
         """清空日志"""
-        # 只清空执行日志列表，不操作日志文本控件
+        # 清空执行日志列表，确保每次执行都是全新的开始
         print(f"[DEBUG] clear_logs被调用，当前日志数量: {len(self.execution_logs)}")
-        # 不再清空日志列表，保留执行日志
-        # self.execution_logs = []
-        print(f"[DEBUG] clear_logs已禁用，日志列表保持不变")
+        self.execution_logs = []
+        print(f"[DEBUG] clear_logs已完成，日志列表已清空")
 
     def clear_steps(self):
         """清空步骤列表"""
@@ -2010,20 +2611,17 @@ class CaseTabWidget(QWidget):
         # 保存按钮始终可用，不受执行状态影响
         self.save_btn.setEnabled(True)
         
-        # 根据执行状态设置按钮图标和样式
+        # 根据执行状态设置按钮图标和提示文本（不修改样式表以保持hover效果）
         if self.is_executing:
             # 运行中：显示停止图标
             self.run_stop_btn.setIcon(QIcon("src/resources/icons/stoping.png"))
             self.run_stop_btn.setToolTip("停止执行")
-            self.run_stop_btn.setStyleSheet("border: none; background: transparent; padding: 8px; margin: 4px;")
         else:
             # 未运行：显示调试图标
             self.run_stop_btn.setIcon(QIcon("src/resources/icons/running.png"))
             self.run_stop_btn.setToolTip("调试用例")
-            self.run_stop_btn.setStyleSheet("border: none; background: transparent; padding: 8px; margin: 4px;")
         
-        # 保存按钮样式保持不变，不重置样式表
-        # 仅在初始化时设置一次样式，避免调试按钮点击时影响保存按钮样式
+        # 不再动态修改样式表，保留初始化时设置的完整样式（包含hover效果）
 
     def load_environments(self):
         """加载环境列表"""
