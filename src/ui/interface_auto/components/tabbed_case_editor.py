@@ -116,6 +116,10 @@ class CaseExecutionThread(QThread):
             
             self.log_message.emit(self.format_debug_message(f"启用步骤数: {len(enabled_steps)}", "debug", -1), "debug", -1)
 
+            # 统计步骤执行结果
+            total_steps = len(enabled_steps)
+            success_steps = 0
+
             for step_index, step in enumerate(enabled_steps):
                 if not self.is_running:
                     print("[DEBUG] 执行被中断")
@@ -149,6 +153,10 @@ class CaseExecutionThread(QThread):
                 self.log_message.emit(self.format_debug_message(f"响应状态码: {result.get('response_status_code', '无')}", "debug", step_index), "debug", step_index)
                 self.log_message.emit(self.format_debug_message(f"执行耗时: {result.get('duration', 0):.2f}秒", "debug", step_index), "debug", step_index)
                 
+                # 统计成功步骤数量
+                if result.get('success', False):
+                    success_steps += 1
+                
                 # 如果步骤执行失败，停止执行后续步骤
                 if not result.get('success', False):
                     print("[DEBUG] 步骤执行失败，停止执行后续步骤")
@@ -157,10 +165,13 @@ class CaseExecutionThread(QThread):
 
             # [DEBUG] 终端打印 - 用例执行完成
             print("[DEBUG] 用例执行完成")
+            print(f"[DEBUG] 步骤统计: 成功 {success_steps}/{total_steps}")
             
             self.case_finished.emit({
                 'success': True,
-                'message': '用例执行完成'
+                'message': '用例执行完成',
+                'success_count': success_steps,
+                'total_count': total_steps
             })
             
             self.log_message.emit(self.format_debug_message("用例执行调试信息结束", "debug", -1), "debug", -1)
@@ -172,7 +183,9 @@ class CaseExecutionThread(QThread):
             self.log_message.emit(self.format_debug_message(f"用例执行异常: {str(e)}", "error", -1), "error", -1)
             self.case_finished.emit({
                 'success': False,
-                'error': str(e)
+                'error': str(e),
+                'success_count': success_steps if 'success_steps' in locals() else 0,
+                'total_count': total_steps if 'total_steps' in locals() else 0
             })
 
     def execute_step(self, step, step_index):
@@ -1035,6 +1048,10 @@ class CaseTabWidget(QWidget):
     
     def show_execution_logs(self):
         """显示执行日志"""
+        # 直接调用TabbedCaseEditor的show_execution_logs方法
+        # 避免重复调用导致的多个弹窗问题
+        from src.ui.interface_auto.components.tabbed_case_editor import TabbedCaseEditor
+        
         # 获取父窗口（TabbedCaseEditor）
         parent = self.parent()
         while parent and not isinstance(parent, TabbedCaseEditor):
@@ -1864,12 +1881,25 @@ class CaseTabWidget(QWidget):
         # 格式化日志消息
         log_entry = f"<span style='color: gray;'>[{timestamp}]</span> <span style='color: {color};'>{prefix}</span> {message}"
         
+        # 获取步骤名称（如果步骤索引有效）
+        step_name = None
+        if step_index >= 0 and self.current_case and len(self.current_case.steps) > step_index:
+            step = self.current_case.steps[step_index]
+            # 处理TestCaseStep对象，使用getattr安全获取属性
+            if hasattr(step, 'name'):
+                step_name = step.name
+            elif hasattr(step, 'get'):
+                step_name = step.get('name', f'步骤 {step_index + 1}')
+            else:
+                step_name = f'步骤 {step_index + 1}'
+        
         # 保存到日志列表（不操作不存在的日志文本控件）
         self.execution_logs.append({
             'timestamp': timestamp,
             'level': level,
             'message': message,
-            'step_index': step_index
+            'step_index': step_index,
+            'step_name': step_name  # 保存步骤名称
         })
         
         # 调试信息：显示日志发射详情
@@ -1881,7 +1911,19 @@ class CaseTabWidget(QWidget):
         if hasattr(self, 'execution_logs_dialog') and self.execution_logs_dialog:
             print(f"[DEBUG] 弹窗存在，正在添加日志到弹窗")
             try:
-                self.execution_logs_dialog.add_log_with_step(message, level, step_index)
+                # 获取步骤名称（如果步骤索引有效）
+                step_name = None
+                if step_index >= 0 and self.current_case and len(self.current_case.steps) > step_index:
+                    step = self.current_case.steps[step_index]
+                    # 处理TestCaseStep对象，使用getattr安全获取属性
+                    if hasattr(step, 'name'):
+                        step_name = step.name
+                    elif hasattr(step, 'get'):
+                        step_name = step.get('name', f'步骤 {step_index + 1}')
+                    else:
+                        step_name = f'步骤 {step_index + 1}'
+                
+                self.execution_logs_dialog.add_log_with_step(message, level, step_index, step_name)
             except RuntimeError:
                 # 弹窗已被删除，忽略错误
                 print("[DEBUG] 弹窗已被删除，忽略错误")
@@ -2259,10 +2301,26 @@ class TabbedCaseEditor(QWidget):
                 step_index = log_entry.get('step_index', -1)
                 step_info = "通用信息" if step_index == -1 else f"步骤 {step_index + 1}"
                 print(f"[DEBUG] 加载日志 - {step_info}: {log_entry['message'][:50]}...")
+                
+                # 获取步骤名称（如果步骤索引有效）
+                step_name = log_entry.get('step_name')  # 尝试从日志条目获取步骤名称
+                if step_name is None and step_index >= 0:
+                    # 如果没有存储步骤名称，尝试从当前用例获取
+                    if hasattr(self, 'current_case') and self.current_case and len(self.current_case.steps) > step_index:
+                        step = self.current_case.steps[step_index]
+                        # 处理TestCaseStep对象，使用getattr安全获取属性
+                        if hasattr(step, 'name'):
+                            step_name = step.name
+                        elif hasattr(step, 'get'):
+                            step_name = step.get('name', f'步骤 {step_index + 1}')
+                        else:
+                            step_name = f'步骤 {step_index + 1}'
+                
                 self.execution_logs_dialog.add_log_with_step(
                     log_entry['message'], 
                     log_entry['level'], 
-                    step_index
+                    step_index,
+                    step_name
                 )
             print(f"[DEBUG] 所有日志已加载到弹窗")
         else:
@@ -2321,9 +2379,11 @@ class StepLogItem(QWidget):
         super().__init__(parent)
         self.step_name = step_name
         self.step_index = step_index
-        # 默认展开步骤日志项，让用户能看到日志内容
-        self.is_expanded = True
+        # 默认收起步骤日志项，使界面更简洁
+        self.is_expanded = False
         self.logs = []
+        # 步骤执行状态：None-未执行，True-执行成功，False-执行报错
+        self.step_status = None
         self.init_ui()
         # 确保初始化后组件可见
         self.ensure_visibility()
@@ -2339,12 +2399,12 @@ class StepLogItem(QWidget):
         """初始化界面"""
         layout = QVBoxLayout(self)
         layout.setSpacing(0)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setContentsMargins(4, 4, 4, 4)
         
         # 步骤标题栏
         self.header_widget = QWidget()
         header_layout = QHBoxLayout(self.header_widget)
-        header_layout.setContentsMargins(10, 5, 10, 5)
+        header_layout.setContentsMargins(12, 8, 12, 8)
         
         # 展开/收起按钮
         self.expand_btn = QPushButton("▶")
@@ -2353,7 +2413,7 @@ class StepLogItem(QWidget):
             QPushButton {
                 border: none;
                 background: transparent;
-                font-size: 12px;
+                font-size: 10px;
                 color: #666;
             }
             QPushButton:hover {
@@ -2370,7 +2430,7 @@ class StepLogItem(QWidget):
         else:
             # 具体步骤，显示步骤序号
             self.step_label = QLabel(f"步骤 {self.step_index + 1}: {self.step_name}")
-        self.step_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #24292f;")
         
         # 日志数量
         self.log_count_label = QLabel("0 条日志")
@@ -2383,22 +2443,24 @@ class StepLogItem(QWidget):
         
         # 步骤日志内容区域
         self.content_widget = QWidget()
-        # 默认展开状态应该与is_expanded一致
+        # 默认收起状态
         self.content_widget.setVisible(self.is_expanded)
         content_layout = QVBoxLayout(self.content_widget)
-        content_layout.setContentsMargins(30, 5, 10, 5)
+        content_layout.setContentsMargins(32, 8, 12, 8)
         
         # 日志文本框
         self.logs_text = QTextEdit()
         self.logs_text.setReadOnly(True)
-        self.logs_text.setFont(QFont("Consolas", 9))
-        # 移除最大高度限制，让日志文本框可以自动扩展
-        # self.logs_text.setMaximumHeight(200)
+        self.logs_text.setFont(QFont("Consolas", 10))
+        self.logs_text.setMinimumHeight(200)  # 设置最小高度
         self.logs_text.setStyleSheet("""
             QTextEdit {
-                border: 1px solid #ddd;
-                border-radius: 3px;
-                background: #fafafa;
+                border: 1px solid #e1e4e8;
+                border-radius: 4px;
+                background: #fafbfc;
+                padding: 12px;
+                font-size: 13px;
+                line-height: 1.5;
             }
         """)
         content_layout.addWidget(self.logs_text)
@@ -2409,13 +2471,14 @@ class StepLogItem(QWidget):
         # 设置样式
         self.setStyleSheet("""
             StepLogItem {
-                border: 1px solid #e0e0e0;
-                border-radius: 5px;
-                background: white;
+                border: 1px solid #e1e4e8;
+                border-radius: 6px;
+                background: #ffffff;
                 margin: 2px;
             }
             StepLogItem:hover {
-                border-color: #c0c0c0;
+                border-color: #d0d7de;
+                background: #f6f8fa;
             }
         """)
     
@@ -2432,7 +2495,7 @@ class StepLogItem(QWidget):
     
     def add_log(self, message, level="info"):
         """添加日志消息"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # 根据级别设置颜色
         if level == "error":
@@ -2466,8 +2529,47 @@ class StepLogItem(QWidget):
             'message': message
         })
         
+        # 更新步骤状态：如果有错误日志，标记为执行报错
+        if level == "error" and self.step_status is not False:
+            self.step_status = False
+            self.update_header_style()
+        elif self.step_status is None and level != "error":
+            # 如果没有错误且是第一次添加日志，标记为执行成功
+            self.step_status = True
+            self.update_header_style()
+        
         # 更新日志数量
         self.log_count_label.setText(f"{len(self.logs)} 条日志")
+    
+    def update_header_style(self):
+        """根据步骤状态更新标题栏样式"""
+        if self.step_status is None:
+            # 未执行状态：默认样式
+            self.header_widget.setStyleSheet("""
+                QWidget {
+                    background: #ffffff;
+                    border-radius: 4px;
+                }
+            """)
+            self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #24292f;")
+        elif self.step_status:
+            # 执行成功：浅绿色背景，黑色字体
+            self.header_widget.setStyleSheet("""
+                QWidget {
+                    background: #e8f5e8;
+                    border-radius: 4px;
+                }
+            """)
+            self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #000000;")
+        else:
+            # 执行报错：浅绿色背景，红色字体
+            self.header_widget.setStyleSheet("""
+                QWidget {
+                    background: #e8f5e8;
+                    border-radius: 4px;
+                }
+            """)
+            self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #ff0000;")
 
 
 class ExecutionLogsDialog(QDialog):
@@ -2478,26 +2580,56 @@ class ExecutionLogsDialog(QDialog):
         self.step_logs = {}  # 按步骤存储日志项
         self.step_order = []  # 步骤执行顺序
         self.setWindowTitle("执行日志")
-        self.setMinimumSize(900, 700)
+        self.setMinimumSize(1000, 800)
+        self.setMaximumSize(1600, 1200)
+        self.resize(1200, 900)  # 设置默认大小
         self.init_ui()
     
     def init_ui(self):
         """初始化界面"""
         layout = QVBoxLayout(self)
-        layout.setSpacing(5)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+        
+        # 标题栏
+        title_layout = QHBoxLayout()
+        title_label = QLabel("执行日志")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+        
+        # 操作按钮
+        button_layout = QHBoxLayout()
+        self.expand_all_btn = QPushButton("展开全部")
+        self.collapse_all_btn = QPushButton("收起全部")
+        
+        self.expand_all_btn.clicked.connect(self.expand_all)
+        self.collapse_all_btn.clicked.connect(self.collapse_all)
+        
+        button_layout.addWidget(self.expand_all_btn)
+        button_layout.addWidget(self.collapse_all_btn)
+        
+        title_layout.addLayout(button_layout)
+        layout.addLayout(title_layout)
         
         # 滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                background: #fafafa;
+            }
+        """)
         
         # 步骤日志容器
         self.steps_container = QWidget()
         self.steps_layout = QVBoxLayout(self.steps_container)
-        self.steps_layout.setSpacing(5)
-        self.steps_layout.setContentsMargins(5, 5, 5, 5)
+        self.steps_layout.setSpacing(4)
+        self.steps_layout.setContentsMargins(8, 8, 8, 8)
         self.steps_layout.addStretch()
         
         scroll_area.setWidget(self.steps_container)
@@ -2505,17 +2637,28 @@ class ExecutionLogsDialog(QDialog):
         
         # 设置样式
         self.setStyleSheet("""
+            ExecutionLogsDialog {
+                background: #f8f9fa;
+            }
             QPushButton {
                 padding: 6px 12px;
-                border: 1px solid #ccc;
+                border: 1px solid #d0d7de;
                 border-radius: 4px;
-                background: white;
+                background: #ffffff;
+                font-size: 12px;
+                color: #24292f;
             }
             QPushButton:hover {
-                background: #f0f0f0;
+                background: #f6f8fa;
+                border-color: #0969da;
             }
             QPushButton:pressed {
-                background: #e0e0e0;
+                background: #eaeef2;
+            }
+            QPushButton:disabled {
+                background: #f6f8fa;
+                color: #8c959f;
+                border-color: #d0d7de;
             }
         """)
     
@@ -2588,7 +2731,7 @@ class ExecutionLogsDialog(QDialog):
         # 添加通用日志到-1步骤
         self.add_log_with_step(message, level, -1)
 
-    def add_log_with_step(self, message, level="info", step_index=-1):
+    def add_log_with_step(self, message, level="info", step_index=-1, step_name=None):
         """添加带步骤信息的日志"""
         # 简化逻辑：直接根据step_index创建或获取步骤日志项
         if step_index == -1:
@@ -2596,7 +2739,11 @@ class ExecutionLogsDialog(QDialog):
             step_name = "通用信息"
         else:
             # 具体步骤日志
-            step_name = f"步骤 {step_index + 1}"
+            if step_name is None:
+                step_name = f"步骤 {step_index + 1}"
+            else:
+                # 只传递步骤名称，让StepLogItem类处理格式
+                step_name = step_name
         
         # 确保步骤日志项存在
         if step_index not in self.step_logs:
@@ -2657,7 +2804,7 @@ class ExecutionLogsTab(QWidget):
     
     def add_log(self, message, level="info"):
         """添加日志消息"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # 根据级别设置颜色
         if level == "error":
