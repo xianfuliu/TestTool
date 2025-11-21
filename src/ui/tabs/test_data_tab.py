@@ -6,6 +6,7 @@ import random
 import os
 from datetime import datetime
 from src.ui.widgets.copy_button import CopyButton
+from src.ui.widgets.refresh_button import RefreshButton
 from src.ui.widgets.download_button import DownloadButton
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
@@ -35,20 +36,24 @@ class TestDataTab(QWidget):
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(15)
         main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setAlignment(Qt.AlignLeft)  # 设置主布局左对齐
 
         # 第一栏：参数配置
         config_panel = self.create_config_panel()
+        config_panel.setFixedWidth(450)  # 固定配置栏宽度
 
         # 第二栏：数据信息
         data_panel = self.create_data_panel()
+        data_panel.setFixedWidth(500)  # 固定信息栏宽度
 
         # 第三栏：图片预览
         preview_panel = self.create_preview_panel()
+        preview_panel.setFixedWidth(650)  # 固定预览图片栏宽度
 
         # 添加到主布局
-        main_layout.addWidget(config_panel, 1)
-        main_layout.addWidget(data_panel, 1)
-        main_layout.addWidget(preview_panel, 2)
+        main_layout.addWidget(config_panel, alignment=Qt.AlignLeft)
+        main_layout.addWidget(data_panel, alignment=Qt.AlignLeft)
+        main_layout.addWidget(preview_panel, alignment=Qt.AlignLeft)
 
     def auto_generate_on_startup(self):
         """程序启动时自动生成数据"""
@@ -202,75 +207,7 @@ class TestDataTab(QWidget):
         layout.addWidget(card_type_widget, row, 1)
         row += 1
 
-        # 创建小按钮的布局
-        small_buttons_layout = QHBoxLayout()
-        small_buttons_layout.setSpacing(5)
-
-        # 更新姓名按钮
-        self.update_name_btn = QPushButton("更新姓名")
-        self.update_name_btn.setFixedHeight(28)
-        self.update_name_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                font-size: 12px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: #1976D2;
-            }
-        """)
-        self.update_name_btn.clicked.connect(self.update_name)
-        small_buttons_layout.addWidget(self.update_name_btn)
-
-        # 更新身份证按钮
-        self.update_id_btn = QPushButton("更新身份证")
-        self.update_id_btn.setFixedHeight(28)
-        self.update_id_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                font-size: 12px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-        self.update_id_btn.clicked.connect(self.update_id_number)
-        small_buttons_layout.addWidget(self.update_id_btn)
-
-        # 更新手机号按钮
-        self.update_phone_btn = QPushButton("更新手机号")
-        self.update_phone_btn.setFixedHeight(28)
-        self.update_phone_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                font-size: 12px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
-        """)
-        self.update_phone_btn.clicked.connect(self.update_phone)
-        small_buttons_layout.addWidget(self.update_phone_btn)
-
-        # 更新银行卡按钮
-        self.update_bank_btn = QPushButton("更新银行卡")
-        self.update_bank_btn.setFixedHeight(28)
-        self.update_bank_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9C27B0;
-                font-size: 12px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background-color: #7B1FA2;
-            }
-        """)
-        self.update_bank_btn.clicked.connect(self.update_bank_card)
-        small_buttons_layout.addWidget(self.update_bank_btn)
-
-        layout.addLayout(small_buttons_layout, row, 0, 1, 2)
+        # 去掉小按钮布局，直接添加生成按钮
         row += 1
 
         # 生成按钮
@@ -310,10 +247,14 @@ class TestDataTab(QWidget):
         name_layout.addWidget(name_label)
         self.name_label = QLabel("")
         self.name_label.setStyleSheet("font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
+        self.name_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
         name_layout.addWidget(self.name_label)
+        name_layout.addStretch()  # 添加弹性空间，让按钮右对齐
+        self.name_refresh_btn = RefreshButton(self)
+        self.name_refresh_btn.clicked.connect(self.update_name)
+        name_layout.addWidget(self.name_refresh_btn)
         self.name_copy_btn = CopyButton("", self)
         name_layout.addWidget(self.name_copy_btn)
-        name_layout.addStretch()
         name_widget = QWidget()
         name_widget.setLayout(name_layout)
         layout.addWidget(name_widget)
@@ -326,10 +267,14 @@ class TestDataTab(QWidget):
         id_layout.addWidget(id_label)
         self.id_label = QLabel("")
         self.id_label.setStyleSheet("font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
+        self.id_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
         id_layout.addWidget(self.id_label)
+        id_layout.addStretch()  # 添加弹性空间，让按钮右对齐
+        self.id_refresh_btn = RefreshButton(self)
+        self.id_refresh_btn.clicked.connect(self.update_id_number)
+        id_layout.addWidget(self.id_refresh_btn)
         self.id_copy_btn = CopyButton("", self)
         id_layout.addWidget(self.id_copy_btn)
-        id_layout.addStretch()
         id_widget = QWidget()
         id_widget.setLayout(id_layout)
         layout.addWidget(id_widget)
@@ -343,10 +288,14 @@ class TestDataTab(QWidget):
         self.phone_label = QLabel("")
         self.phone_label.setStyleSheet(
             "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
+        self.phone_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
         phone_layout.addWidget(self.phone_label)
+        phone_layout.addStretch()  # 添加弹性空间，让按钮右对齐
+        self.phone_refresh_btn = RefreshButton(self)
+        self.phone_refresh_btn.clicked.connect(self.update_phone)
+        phone_layout.addWidget(self.phone_refresh_btn)
         self.phone_copy_btn = CopyButton("", self)
         phone_layout.addWidget(self.phone_copy_btn)
-        phone_layout.addStretch()
         phone_widget = QWidget()
         phone_widget.setLayout(phone_layout)
         layout.addWidget(phone_widget)
@@ -360,13 +309,59 @@ class TestDataTab(QWidget):
         self.bank_card_label = QLabel("")
         self.bank_card_label.setStyleSheet(
             "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
+        self.bank_card_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
         bank_card_layout.addWidget(self.bank_card_label)
+        bank_card_layout.addStretch()  # 添加弹性空间，让按钮右对齐
+        self.bank_card_refresh_btn = RefreshButton(self)
+        self.bank_card_refresh_btn.clicked.connect(self.update_bank_card)
+        bank_card_layout.addWidget(self.bank_card_refresh_btn)
         self.bank_card_copy_btn = CopyButton("", self)
         bank_card_layout.addWidget(self.bank_card_copy_btn)
-        bank_card_layout.addStretch()
         bank_card_widget = QWidget()
         bank_card_widget.setLayout(bank_card_layout)
         layout.addWidget(bank_card_widget)
+
+        # 公司名称
+        company_name_layout = QHBoxLayout()
+        company_name_label = QLabel("公司名称:")
+        company_name_label.setFixedWidth(70)
+        company_name_label.setStyleSheet("font-weight: bold;")
+        company_name_layout.addWidget(company_name_label)
+        self.company_name_label = QLabel("")
+        self.company_name_label.setStyleSheet(
+            "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
+        self.company_name_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        company_name_layout.addWidget(self.company_name_label)
+        company_name_layout.addStretch()  # 添加弹性空间，让按钮右对齐
+        self.company_name_refresh_btn = RefreshButton(self)
+        self.company_name_refresh_btn.clicked.connect(self.update_company_name)
+        company_name_layout.addWidget(self.company_name_refresh_btn)
+        self.company_name_copy_btn = CopyButton("", self)
+        company_name_layout.addWidget(self.company_name_copy_btn)
+        company_name_widget = QWidget()
+        company_name_widget.setLayout(company_name_layout)
+        layout.addWidget(company_name_widget)
+
+        # 统一社会信用代码
+        credit_code_layout = QHBoxLayout()
+        credit_code_label = QLabel("信用代码:")
+        credit_code_label.setFixedWidth(70)
+        credit_code_label.setStyleSheet("font-weight: bold;")
+        credit_code_layout.addWidget(credit_code_label)
+        self.credit_code_label = QLabel("")
+        self.credit_code_label.setStyleSheet(
+            "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
+        self.credit_code_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        credit_code_layout.addWidget(self.credit_code_label)
+        credit_code_layout.addStretch()  # 添加弹性空间，让按钮右对齐
+        self.credit_code_refresh_btn = RefreshButton(self)
+        self.credit_code_refresh_btn.clicked.connect(self.update_unified_social_credit_code)
+        credit_code_layout.addWidget(self.credit_code_refresh_btn)
+        self.credit_code_copy_btn = CopyButton("", self)
+        credit_code_layout.addWidget(self.credit_code_copy_btn)
+        credit_code_widget = QWidget()
+        credit_code_widget.setLayout(credit_code_layout)
+        layout.addWidget(credit_code_widget)
 
         # 一键复制按钮
         copy_all_btn = QPushButton("一键复制")
@@ -487,6 +482,13 @@ class TestDataTab(QWidget):
 手机号码: {self.parent_app.id_data['phone']}
 银行卡号: {self.parent_app.id_data['bank_card_number']}
 """
+        
+        # 添加公司名称和统一社会信用代码（如果存在）
+        if "company_name" in self.parent_app.id_data:
+            data_text += f"公司名称: {self.parent_app.id_data['company_name']}\n"
+        if "unified_social_credit_code" in self.parent_app.id_data:
+            data_text += f"统一社会信用代码: {self.parent_app.id_data['unified_social_credit_code']}\n"
+        
         clipboard = QApplication.clipboard()
         clipboard.setText(data_text)
         Toast.information(self, '成功', '复制成功')
@@ -763,12 +765,24 @@ class TestDataTab(QWidget):
         self.id_label.setText(self.parent_app.id_data["id_number"])
         self.phone_label.setText(self.parent_app.id_data["phone"])
         self.bank_card_label.setText(self.parent_app.id_data["bank_card_number"])
+        
+        # 更新公司名称和统一社会信用代码
+        if "company_name" in self.parent_app.id_data:
+            self.company_name_label.setText(self.parent_app.id_data["company_name"])
+        if "unified_social_credit_code" in self.parent_app.id_data:
+            self.credit_code_label.setText(self.parent_app.id_data["unified_social_credit_code"])
 
         # 更新复制按钮的文本
         self.name_copy_btn.text_to_copy = self.parent_app.id_data["name"]
         self.id_copy_btn.text_to_copy = self.parent_app.id_data["id_number"]
         self.phone_copy_btn.text_to_copy = self.parent_app.id_data["phone"]
         self.bank_card_copy_btn.text_to_copy = self.parent_app.id_data["bank_card_number"]
+        
+        # 更新公司名称和统一社会信用代码的复制按钮文本
+        if "company_name" in self.parent_app.id_data:
+            self.company_name_copy_btn.text_to_copy = self.parent_app.id_data["company_name"]
+        if "unified_social_credit_code" in self.parent_app.id_data:
+            self.credit_code_copy_btn.text_to_copy = self.parent_app.id_data["unified_social_credit_code"]
 
     def download_id_card(self):
         """下载身份证图片"""
@@ -901,6 +915,32 @@ class TestDataTab(QWidget):
         # 生成新的银行卡号
         new_bank_card = self.parent_app.generator.generate_bank_card_number(bank_name, card_type)
         self.parent_app.id_data["bank_card_number"] = new_bank_card
+
+        # 更新数据面板
+        self.update_data_panel()
+
+    def update_company_name(self):
+        """更新公司名称"""
+        if not self.parent_app.id_data:
+            Toast.warning(self, "警告", "请先生成身份证数据")
+            return
+
+        # 生成新的公司名称
+        new_company_name = self.parent_app.generator.generate_company_name()
+        self.parent_app.id_data["company_name"] = new_company_name
+
+        # 更新数据面板
+        self.update_data_panel()
+
+    def update_unified_social_credit_code(self):
+        """更新统一社会信用代码"""
+        if not self.parent_app.id_data:
+            Toast.warning(self, "警告", "请先生成身份证数据")
+            return
+
+        # 生成新的统一社会信用代码
+        new_credit_code = self.parent_app.generator.generate_unified_social_credit_code()
+        self.parent_app.id_data["unified_social_credit_code"] = new_credit_code
 
         # 更新数据面板
         self.update_data_panel()

@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QToolButton, QMenu, QFrame, QTabWidget,
                              QSizePolicy)
@@ -33,7 +34,26 @@ class InterfaceStepCard(QFrame):
     def get_icon(self, icon_name):
         """获取图标"""
         try:
-            # 使用相对路径访问图标资源
+            # 打包后路径处理：尝试从 PyInstaller 临时解压目录加载
+            if getattr(sys, 'frozen', False):
+                # 打包后的可执行文件路径
+                base_path = sys._MEIPASS
+                # 尝试从打包后的 resources/icons 目录加载
+                icon_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试直接加载图标文件
+                icon_path = os.path.join(base_path, icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试从当前目录加载
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+            
+            # 开发环境：使用相对路径访问图标资源
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
             icon_path = os.path.join(base_dir, "resources", "icons", icon_name)
             if os.path.exists(icon_path):
@@ -41,6 +61,40 @@ class InterfaceStepCard(QFrame):
         except:
             pass
         return QIcon()
+    
+    def get_icon_pixmap(self, icon_name, width=16, height=16):
+        """获取图标QPixmap，支持PyInstaller打包路径处理"""
+        try:
+            # 尝试从开发环境路径加载
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            dev_path = os.path.join(base_dir, "resources", "icons", icon_name)
+            if os.path.exists(dev_path):
+                return QPixmap(dev_path).scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            
+            # 尝试从exe打包后路径加载
+            exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+            exe_path = os.path.join(exe_dir, "src", "resources", "icons", icon_name)
+            if os.path.exists(exe_path):
+                return QPixmap(exe_path).scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            
+            # 尝试相对路径
+            relative_path = os.path.join("src", "resources", "icons", icon_name)
+            if os.path.exists(relative_path):
+                return QPixmap(relative_path).scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            
+            # 尝试sys._MEIPASS临时解压路径（PyInstaller打包时）
+            if getattr(sys, 'frozen', False):
+                meipass_path = os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name)
+                if os.path.exists(meipass_path):
+                    return QPixmap(meipass_path).scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            
+            # 如果所有路径都失败，返回空QPixmap
+            print(f"图标加载失败: {icon_name}")
+            return QPixmap()
+            
+        except Exception as e:
+            print(f"图标加载异常 {icon_name}: {e}")
+            return QPixmap()
 
     def init_ui(self):
         """初始化界面"""
@@ -1259,9 +1313,8 @@ class InterfaceStepCard(QFrame):
         # 工具图标和名称
         icon_label = QLabel()
         # 使用HTTP图标文件
-        http_icon_path = os.path.join("src", "resources", "icons", "http.png")
-        if os.path.exists(http_icon_path):
-            icon_pixmap = QPixmap(http_icon_path).scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        icon_pixmap = self.get_icon_pixmap("http.png", 16, 16)
+        if not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
         else:
             # 如果图标文件不存在，使用默认emoji
@@ -1432,9 +1485,8 @@ class InterfaceStepCard(QFrame):
         # 工具图标和名称
         icon_label = QLabel()
         # 使用断言图标文件
-        assrt_icon_path = os.path.join("src", "resources", "icons", "assrt.png")
-        if os.path.exists(assrt_icon_path):
-            icon_pixmap = QPixmap(assrt_icon_path).scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        icon_pixmap = self.get_icon_pixmap("assrt.png", 16, 16)
+        if not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
         else:
             # 如果图标文件不存在，使用默认emoji
@@ -1608,7 +1660,14 @@ class InterfaceStepCard(QFrame):
         drag_handle.installEventFilter(self)
         
         # 工具图标和名称
-        icon_label = QLabel("🔧")
+        icon_label = QLabel()
+        # 使用后置处理图标文件
+        icon_pixmap = self.get_icon_pixmap("post.png", 16, 16)
+        if not icon_pixmap.isNull():
+            icon_label.setPixmap(icon_pixmap)
+        else:
+            # 如果图标文件不存在，使用默认emoji
+            icon_label.setText("🔧")
         # 设置图标样式 - 无悬浮效果，无边框
         icon_label.setStyleSheet("""
             QLabel {

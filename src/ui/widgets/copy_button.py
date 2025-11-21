@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QSize
 import os
 from src.utils.resource_utils import resource_path
 
@@ -11,18 +12,18 @@ class CopyButton(QPushButton):
     def __init__(self, text_to_copy, parent=None):
         super().__init__(parent)
         self.text_to_copy = text_to_copy
-        self.copy_icon_path = "src/resources/icons/copy_icon.png"
+        self.copy_icon_path = "src/resources/icons/copy.png"
 
         # 设置按钮样式
-        self.setFixedSize(28, 28)
-        self.setIconSize(self.size())
+        self.setFixedSize(24, 24)
+        self.setIconSize(QSize(16, 16))
 
-        # 设置样式
+        # 设置样式 - 去掉边框
         self.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
-                border: 1px solid #cccccc;
-                border-radius: 4px;
+                border: none;
+                border-radius: 3px;
             }
             QPushButton:hover {
                 background-color: #f0f0f0;
@@ -46,7 +47,7 @@ class CopyButton(QPushButton):
             print(f"使用复制图标: {copy_icon_path}")
         else:
             self.setText("📋")
-            self.setFont(QFont("Arial", 12))
+            self.setFont(QFont("Arial", 10))  # 减小字体大小
             print("警告: 无法找到复制图标，使用文本替代")
 
         self.setToolTip("复制")

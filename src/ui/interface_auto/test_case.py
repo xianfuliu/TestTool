@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTreeWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
@@ -654,7 +655,7 @@ class TestCaseManager(QWidget):
         
         # 新建文件夹图标 - 放在下拉框后面
         self.new_folder_icon = QLabel()
-        self.new_folder_icon.setPixmap(QIcon(os.path.join("src", "resources", "icons", "add_folder.png")).pixmap(24, 24))
+        self.new_folder_icon.setPixmap(self.get_icon("add_folder.png").pixmap(24, 24))
         self.new_folder_icon.setToolTip("新建文件夹")
         self.new_folder_icon.mousePressEvent = lambda event: self.create_new_folder()
         self.new_folder_icon.setCursor(Qt.PointingHandCursor)
@@ -662,7 +663,7 @@ class TestCaseManager(QWidget):
         
         # 删除文件夹图标
         self.del_folder_icon = QLabel()
-        self.del_folder_icon.setPixmap(QIcon(os.path.join("src", "resources", "icons", "del_folder.png")).pixmap(24, 24))
+        self.del_folder_icon.setPixmap(self.get_icon("del_folder.png").pixmap(24, 24))
         self.del_folder_icon.setToolTip("删除文件夹")
         self.del_folder_icon.mousePressEvent = lambda event: self.delete_selected_folder()
         self.del_folder_icon.setCursor(Qt.PointingHandCursor)
@@ -671,9 +672,11 @@ class TestCaseManager(QWidget):
         project_layout.addStretch()
 
         # 刷新项目列表按钮
-        self.refresh_btn = QPushButton("刷新")
+        self.refresh_btn = QPushButton()
         self.refresh_btn.setIcon(self.get_icon("refresh.png"))
+        self.refresh_btn.setToolTip("刷新项目列表")
         self.refresh_btn.clicked.connect(self.refresh_project_list)
+        self.refresh_btn.setStyleSheet("QPushButton { background-color: transparent; border: none; } QPushButton:hover { background-color: #f0f0f0; }")
         project_layout.addWidget(self.refresh_btn)
 
         left_layout.addLayout(project_layout)
@@ -681,7 +684,7 @@ class TestCaseManager(QWidget):
         # 测试用例搜索框
         case_search_layout = QHBoxLayout()
         case_search_icon_label = QLabel()
-        case_search_icon_label.setPixmap(QIcon(os.path.join("src", "resources", "icons", "search.png")).pixmap(16, 16))
+        case_search_icon_label.setPixmap(self.get_icon("search.png").pixmap(16, 16))
         case_search_layout.addWidget(case_search_icon_label)
         self.case_search_edit = QLineEdit()
         self.case_search_edit.setPlaceholderText("搜索测试用例名称...")
@@ -706,7 +709,7 @@ class TestCaseManager(QWidget):
         # 接口模板搜索
         search_layout = QHBoxLayout()
         search_icon_label = QLabel()
-        search_icon_label.setPixmap(QIcon(os.path.join("src", "resources", "icons", "search.png")).pixmap(16, 16))
+        search_icon_label.setPixmap(self.get_icon("search.png").pixmap(16, 16))
         search_layout.addWidget(search_icon_label)
         self.api_search_edit = QLineEdit()
         self.api_search_edit.setPlaceholderText("输入接口名称或描述...")
@@ -785,15 +788,27 @@ class TestCaseManager(QWidget):
             print(f"延迟加载数据失败: {str(e)}")
 
     def get_icon(self, icon_name):
-        """获取图标"""
-        try:
-            # 使用相对路径访问图标资源
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            icon_path = os.path.join(base_dir, "src", "resources", "icons", icon_name)
-            if os.path.exists(icon_path):
-                return QIcon(icon_path)
-        except:
-            pass
+        """获取图标，支持exe打包后的资源路径"""
+        import os
+        import sys
+        
+        # 尝试多种路径方式加载图标
+        icon_paths = [
+            # 开发环境路径
+            os.path.join("src", "resources", "icons", icon_name),
+            # exe打包后路径
+            os.path.join(os.path.dirname(sys.executable), "src", "resources", "icons", icon_name),
+            # 相对路径（如果exe在项目根目录）
+            os.path.join("src", "resources", "icons", icon_name),
+            # 临时解压路径（PyInstaller）
+            os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name) if hasattr(sys, '_MEIPASS') else None
+        ]
+        
+        for path in icon_paths:
+            if path and os.path.exists(path):
+                return QIcon(path)
+        
+        # 如果所有路径都找不到，返回空图标
         return QIcon()
 
     def get_api_icon_by_method(self, method):

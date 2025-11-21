@@ -189,6 +189,17 @@ class UserInfoGenerator:
         # 银行卡类型
         self.card_types = ["储蓄卡", "信用卡"]
 
+        # 公司名称相关数据
+        self.company_types = ["科技", "信息", "网络", "软件", "数据", "智能", "数字", "创新", "互联", "电子"]
+        self.company_suffixes = ["有限公司", "有限责任公司", "股份有限公司", "集团", "科技发展有限公司"]
+        self.company_industries = ["科技", "信息", "网络", "软件", "数据", "智能", "数字", "创新", "互联", "电子", 
+                                 "金融", "投资", "咨询", "管理", "服务", "工程", "设计", "传媒", "文化", "教育"]
+        self.company_regions = ["北京", "上海", "广州", "深圳", "杭州", "南京", "成都", "武汉", "西安", "重庆", 
+                               "天津", "苏州", "宁波", "青岛", "大连", "厦门", "长沙", "郑州", "沈阳", "长春"]
+
+        # 统一社会信用代码相关数据
+        self.organization_codes = ["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "T", "U", "W", "X", "Y"]
+
     def generate_name(self, name=None):
         """生成随机姓名，如果提供了姓名则使用提供的姓名"""
         if name:
@@ -528,6 +539,10 @@ class UserInfoGenerator:
 
         # 生成手机号
         phone_number = self.generate_phone_number(phone_prefix)
+        
+        # 生成公司名称和统一社会信用代码
+        company_name = self.generate_company_name()
+        unified_social_credit_code = self.generate_unified_social_credit_code()
 
         return {
             "name": name,  # 姓名
@@ -544,5 +559,72 @@ class UserInfoGenerator:
             "id_card_start_time": id_card_start_time,  # 有效期开始时间，格式20251022
             "id_card_end_time": id_card_end_time,    # 有效期结束时间，格式20251022
             "bank_card_number": bank_card_number,  # 银行卡号
-            "phone": phone_number  # 手机号
+            "phone": phone_number,  # 手机号
+            "company_name": company_name,  # 公司名称
+            "unified_social_credit_code": unified_social_credit_code  # 统一社会信用代码
         }
+
+    def generate_company_name(self):
+        """生成随机公司名称"""
+        region = random.choice(self.company_regions)
+        industry = random.choice(self.company_industries)
+        company_type = random.choice(self.company_types)
+        suffix = random.choice(self.company_suffixes)
+        
+        # 随机选择公司名称格式
+        formats = [
+            f"{region}{industry}{company_type}{suffix}",
+            f"{region}{company_type}{industry}{suffix}",
+            f"{industry}{company_type}{suffix}",
+            f"{company_type}{industry}{suffix}"
+        ]
+        
+        return random.choice(formats)
+
+    def generate_unified_social_credit_code(self):
+        """生成统一社会信用代码"""
+        # 第一部分：登记管理部门代码（1位）
+        department_code = random.choice(self.organization_codes)
+        
+        # 第二部分：机构类别代码（1位）
+        category_code = random.choice(["1", "2", "3", "9"])
+        
+        # 第三部分：登记管理机关行政区划码（6位）
+        area_code = random.choice(list(self.area_codes.keys()))
+        # 添加城市和区县代码
+        possible_cities = [code for code in self.city_codes.keys() if code.startswith(area_code)]
+        if possible_cities:
+            city_code = random.choice(possible_cities)
+            # 随机生成区县代码（01-99）
+            county_code = f"{random.randint(1, 99):02d}"
+            admin_code = city_code + county_code
+        else:
+            # 如果没有匹配的城市，使用默认区县代码
+            admin_code = area_code + "0101"
+        admin_code = admin_code[:6].ljust(6, '0')
+        
+        # 第四部分：主体标识码（9位）
+        entity_code = ''.join([str(random.randint(0, 9)) for _ in range(9)])
+        
+        # 前17位
+        first_17 = department_code + category_code + admin_code + entity_code
+        
+        # 第五部分：校验码（1位）
+        # 统一社会信用代码的校验算法
+        weights = [3, 7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
+        char_map = {
+            '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+            'A': 10, 'B': 11, 'C': 12, 'D': 13, 'E': 14, 'F': 15, 'G': 16, 'H': 17, 'J': 18, 
+            'K': 19, 'L': 20, 'M': 21, 'N': 22, 'P': 23, 'Q': 24, 'R': 25, 'T': 26, 'U': 27, 
+            'W': 28, 'X': 29, 'Y': 30
+        }
+        
+        total = 0
+        for i, char in enumerate(first_17):
+            total += char_map.get(char, 0) * weights[i]
+        
+        check_codes = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'T', 'U', 'W', 'X', 'Y']
+        check_index = (31 - (total % 31)) % 31
+        check_code = check_codes[check_index]
+        
+        return first_17 + check_code

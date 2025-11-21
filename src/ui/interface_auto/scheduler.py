@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QPushButton, QLabel, QLineEdit,
@@ -500,7 +501,32 @@ class SchedulerManager(QWidget):
     def get_icon(self, icon_name):
         """获取图标"""
         try:
+            # 打包后路径处理：尝试从 PyInstaller 临时解压目录加载
+            if getattr(sys, 'frozen', False):
+                # 打包后的可执行文件路径
+                base_path = sys._MEIPASS
+                # 尝试从打包后的 resources/icons 目录加载
+                icon_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试直接加载图标文件
+                icon_path = os.path.join(base_path, icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试从当前目录加载
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+            
+            # 开发环境：尝试从 ui/interface_auto/icons 目录加载
             icon_path = os.path.join("src", "ui", "interface_auto", "icons", icon_name)
+            if os.path.exists(icon_path):
+                return QIcon(icon_path)
+            
+            # 尝试从 resources/icons 目录加载
+            icon_path = os.path.join("src", "resources", "icons", icon_name)
             if os.path.exists(icon_path):
                 return QIcon(icon_path)
         except:

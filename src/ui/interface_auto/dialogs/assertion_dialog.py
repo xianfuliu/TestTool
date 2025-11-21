@@ -1,3 +1,5 @@
+import os
+import sys
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                              QComboBox, QPushButton, QDialogButtonBox,
                              QWidget, QScrollArea, QFrame)
@@ -36,11 +38,7 @@ class AssertionDialog(QDialog):
         self.setMinimumSize(800, 500)
         
         # 设置断言图标
-        try:
-            icon_path = "src/resources/icons/assrt.png"
-            self.setWindowIcon(QIcon(icon_path))
-        except Exception as e:
-            print(f"设置断言图标失败: {e}")
+        self.setWindowIcon(self.get_icon("assrt.png"))
         
         # 设置对话框样式
         self.setStyleSheet("""
@@ -161,6 +159,39 @@ class AssertionDialog(QDialog):
         # 确保第一行从顶部开始显示，不居中
         self.scroll_layout.addStretch()
     
+    def get_icon(self, icon_name):
+        """获取图标，支持PyInstaller打包路径处理"""
+        try:
+            # 尝试从开发环境路径加载
+            dev_path = os.path.join("src", "resources", "icons", icon_name)
+            if os.path.exists(dev_path):
+                return QIcon(dev_path)
+            
+            # 尝试从exe打包后路径加载
+            exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+            exe_path = os.path.join(exe_dir, "src", "resources", "icons", icon_name)
+            if os.path.exists(exe_path):
+                return QIcon(exe_path)
+            
+            # 尝试相对路径
+            relative_path = os.path.join("src", "resources", "icons", icon_name)
+            if os.path.exists(relative_path):
+                return QIcon(relative_path)
+            
+            # 尝试sys._MEIPASS临时解压路径（PyInstaller打包时）
+            if getattr(sys, 'frozen', False):
+                meipass_path = os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name)
+                if os.path.exists(meipass_path):
+                    return QIcon(meipass_path)
+            
+            # 如果所有路径都失败，返回空图标
+            print(f"图标加载失败: {icon_name}")
+            return QIcon()
+            
+        except Exception as e:
+            print(f"图标加载异常 {icon_name}: {e}")
+            return QIcon()
+    
     def add_assertion_row(self, insert_after_row=None):
         """添加一行断言配置"""
         row_widget = QWidget()
@@ -185,8 +216,7 @@ class AssertionDialog(QDialog):
         add_button = QPushButton()
         add_button.setFixedSize(22, 22)
         # 使用add.png图标
-        add_icon_path = "src/resources/icons/add.png"
-        add_button.setIcon(QIcon(add_icon_path))
+        add_button.setIcon(self.get_icon("add.png"))
         add_button.setIconSize(QSize(14, 14))
         add_button.setStyleSheet("""
             QPushButton {
@@ -219,8 +249,7 @@ class AssertionDialog(QDialog):
         delete_button = QPushButton()
         delete_button.setFixedSize(22, 22)
         # 使用sub.png图标
-        sub_icon_path = "src/resources/icons/sub.png"
-        delete_button.setIcon(QIcon(sub_icon_path))
+        delete_button.setIcon(self.get_icon("sub.png"))
         delete_button.setIconSize(QSize(14, 14))
         delete_button.setStyleSheet("""
             QPushButton {

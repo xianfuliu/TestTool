@@ -1364,6 +1364,30 @@ class CaseTabWidget(QWidget):
         if self.is_edit:
             self.load_case_data()
     
+    def get_icon(self, icon_name):
+        """获取图标，支持exe打包后的资源路径"""
+        import os
+        import sys
+        
+        # 尝试多种路径方式加载图标
+        icon_paths = [
+            # 开发环境路径
+            os.path.join("src", "resources", "icons", icon_name),
+            # exe打包后路径
+            os.path.join(os.path.dirname(sys.executable), "src", "resources", "icons", icon_name),
+            # 相对路径（如果exe在项目根目录）
+            os.path.join("src", "resources", "icons", icon_name),
+            # 临时解压路径（PyInstaller）
+            os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name) if hasattr(sys, '_MEIPASS') else None
+        ]
+        
+        for path in icon_paths:
+            if path and os.path.exists(path):
+                return QIcon(path)
+        
+        # 如果所有路径都找不到，返回空图标
+        return QIcon()
+    
     def init_ui(self):
         """初始化界面"""
         layout = QVBoxLayout(self)
@@ -1530,7 +1554,7 @@ class CaseTabWidget(QWidget):
         
         # 调试/停止按钮（合并为一个按钮，根据执行状态切换图标）
         self.run_stop_btn = QPushButton()
-        self.run_stop_btn.setIcon(QIcon("src/resources/icons/running.png"))
+        self.run_stop_btn.setIcon(self.get_icon("running.png"))
         self.run_stop_btn.setIconSize(QSize(26, 26))
         self.run_stop_btn.setToolTip("调试用例")
         self.run_stop_btn.clicked.connect(self.toggle_execution)
@@ -1553,7 +1577,7 @@ class CaseTabWidget(QWidget):
         
         # 日志按钮（图标替换）
         self.log_btn_toolbar = QPushButton()
-        self.log_btn_toolbar.setIcon(QIcon("src/resources/icons/log.png"))
+        self.log_btn_toolbar.setIcon(self.get_icon("log.png"))
         self.log_btn_toolbar.setIconSize(QSize(26, 26))
         self.log_btn_toolbar.setToolTip("查看执行日志")
         self.log_btn_toolbar.clicked.connect(self.show_execution_logs)
@@ -3003,11 +3027,11 @@ class CaseTabWidget(QWidget):
         # 根据执行状态设置按钮图标和提示文本（不修改样式表以保持hover效果）
         if self.is_executing:
             # 运行中：显示停止图标
-            self.run_stop_btn.setIcon(QIcon("src/resources/icons/stoping.png"))
+            self.run_stop_btn.setIcon(self.get_icon("stoping.png"))
             self.run_stop_btn.setToolTip("停止执行")
         else:
             # 未运行：显示调试图标
-            self.run_stop_btn.setIcon(QIcon("src/resources/icons/running.png"))
+            self.run_stop_btn.setIcon(self.get_icon("running.png"))
             self.run_stop_btn.setToolTip("调试用例")
         
         # 不再动态修改样式表，保留初始化时设置的完整样式（包含hover效果）

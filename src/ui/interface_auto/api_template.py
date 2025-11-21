@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import sys
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTreeWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
@@ -760,7 +761,7 @@ class ApiTemplateManager(QWidget):
         # 接口模板搜索栏
         search_layout = QHBoxLayout()
         search_icon_label = QLabel()
-        search_icon_label.setPixmap(QIcon(os.path.join("src", "resources", "icons", "search.png")).pixmap(16, 16))
+        search_icon_label.setPixmap(self.get_icon("search.png").pixmap(16, 16))
         search_layout.addWidget(search_icon_label)
         self.api_search_edit = QLineEdit()
         self.api_search_edit.setPlaceholderText("输入接口名称或描述...")
@@ -1020,7 +1021,7 @@ class ApiTemplateManager(QWidget):
     def get_icon(self, icon_name):
         """获取图标"""
         try:
-            # 首先尝试从 resources/icons 目录加载
+            # 首先尝试从 resources/icons 目录加载（开发环境）
             icon_path = os.path.join("src", "resources", "icons", icon_name)
             if os.path.exists(icon_path):
                 return QIcon(icon_path)
@@ -1029,6 +1030,25 @@ class ApiTemplateManager(QWidget):
             icon_path = os.path.join("src", "ui", "interface_auto", "icons", icon_name)
             if os.path.exists(icon_path):
                 return QIcon(icon_path)
+            
+            # 打包后路径处理：尝试从 PyInstaller 临时解压目录加载
+            if getattr(sys, 'frozen', False):
+                # 打包后的可执行文件路径
+                base_path = sys._MEIPASS
+                # 尝试从打包后的 resources/icons 目录加载
+                icon_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试直接加载图标文件
+                icon_path = os.path.join(base_path, icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试从当前目录加载
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
         except:
             pass
         return QIcon()
