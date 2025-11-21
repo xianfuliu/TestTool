@@ -1,9 +1,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
                              QTabWidget, QPushButton, QLabel, QFrame, QMenu,
-                             QAction, QMessageBox, QApplication, QSizePolicy)
+                             QAction, QMessageBox)
 from src.ui.widgets.toast_tips import Toast
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QPalette, QColor
+from PyQt5.QtCore import Qt
 import json
 import os
 
@@ -529,7 +528,7 @@ class ToolCardsTab(QWidget):
                         self.refresh_ui()
                         return
 
-        Toast.warning(self, "未找到要复制的卡片")
+        Toast.warn(self, "未找到要复制的卡片")
 
     def delete_card(self, card_data):
         """删除卡片"""
@@ -549,7 +548,7 @@ class ToolCardsTab(QWidget):
                             self.refresh_ui()
                             return
 
-            Toast.warning(self, "未找到要删除的卡片")
+            Toast.warn(self, "未找到要删除的卡片")
 
     def execute_card(self, card_data):
         """执行卡片"""

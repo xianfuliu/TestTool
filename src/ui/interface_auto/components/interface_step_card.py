@@ -2,11 +2,9 @@ import json
 import os
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QToolButton, QMenu, QFrame, QTabWidget,
-                             QScrollArea, QGridLayout, QLineEdit, QTextEdit,
-                             QComboBox, QCheckBox, QMessageBox, QSizePolicy)
-from PyQt5.QtCore import Qt, pyqtSignal, QMimeData, QByteArray, QDataStream, QIODevice, QSize, QPoint
+                             QSizePolicy)
+from PyQt5.QtCore import Qt, pyqtSignal, QMimeData, QSize, QPoint
 from PyQt5.QtGui import QIcon, QFont, QDrag, QPixmap
-from src.utils.resource_utils import resource_path
 
 
 class InterfaceStepCard(QFrame):
@@ -63,13 +61,13 @@ class InterfaceStepCard(QFrame):
         """)
         
         # 设置步骤容器高度适应流式布局
-        self.setMinimumHeight(475)  # 最小高度
-        self.setMaximumHeight(475)  # 最大高度
+        self.setMinimumHeight(458)  # 最小高度
+        self.setMaximumHeight(458)  # 最大高度
         
         # 设置自适应宽度，适应流式布局
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.setMinimumWidth(360)  # 最小宽度
-        self.setMaximumWidth(360)  # 最大宽度
+        self.setMinimumWidth(355)  # 最小宽度
+        self.setMaximumWidth(355)  # 最大宽度
 
         # 1. 顶部：启用/停用、删除
         self.create_header()
@@ -201,17 +199,46 @@ class InterfaceStepCard(QFrame):
         self.add_tool_btn.setToolTip("添加处理工具")
         self.add_tool_btn.clicked.connect(self.on_add_tool_clicked)
         
+        # 步骤标题容器内部布局：标题 + 操作按钮
+        self.header_layout.addWidget(self.step_label)
+        self.header_layout.addStretch()
+        
+        # 加解密按钮 - 使用图标
+        self.encryption_btn = QPushButton()
+        self.encryption_btn.setFixedSize(28, 28)  # 固定按钮大小，正方形
+        self.encryption_btn.setIcon(self.get_icon("lock.png"))
+        self.encryption_btn.setIconSize(QSize(16, 16))
+        self.encryption_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: rgba(156, 39, 176, 0.15);
+                border: 1px solid rgba(156, 39, 176, 0.3);
+            }
+            QPushButton:pressed {
+                background-color: rgba(156, 39, 176, 0.25);
+                border: 1px solid rgba(156, 39, 176, 0.4);
+            }
+        """)
+        self.encryption_btn.setCursor(Qt.PointingHandCursor)
+        self.encryption_btn.setToolTip("加解密配置")
+        
+        self.header_layout.addWidget(self.encryption_btn)
+        self.header_layout.addWidget(self.copy_btn)
+        self.header_layout.addWidget(self.status_btn)
+        self.header_layout.addWidget(self.delete_btn)
+        
         # 连接信号
+        self.encryption_btn.clicked.connect(self.on_encryption_clicked)
         self.copy_btn.clicked.connect(self.on_copy_clicked)
         self.status_btn.toggled.connect(self.on_status_changed)
         self.delete_btn.clicked.connect(self.on_delete_clicked)
         
-        # 步骤标题容器内部布局：标题 + 操作按钮
-        self.header_layout.addWidget(self.step_label)
-        self.header_layout.addStretch()
-        self.header_layout.addWidget(self.copy_btn)
-        self.header_layout.addWidget(self.status_btn)
-        self.header_layout.addWidget(self.delete_btn)
+        # 初始化加解密按钮状态
+        self.init_encryption_button_state()
 
     def create_interface_display(self):
         """创建接口展示框"""
@@ -492,6 +519,9 @@ class InterfaceStepCard(QFrame):
         # 设置内容到滚动区域
         scroll_area.setWidget(content_widget)
         
+        # 初始化时显示已添加的工具
+        self.refresh_post_tools_display_with_layout(layout)
+        
         return scroll_area
 
     def create_processing_area(self):
@@ -551,6 +581,139 @@ class InterfaceStepCard(QFrame):
                 background-color: #f5f5f5;
             }
         """)
+
+    def init_encryption_button_state(self):
+        """初始化加解密按钮状态"""
+        try:
+            # 获取当前加解密状态，如果为None则默认为False（关闭状态）
+            current_state = self.step_data.get('enable_encryption')
+            if current_state is None:
+                current_state = False
+                self.step_data['enable_encryption'] = current_state
+            
+            # 根据状态设置图标和提示
+            if current_state is True:
+                # 启用状态 - 锁定图标，数据库状态1
+                self.encryption_btn.setIcon(self.get_icon("lock.png"))
+                self.encryption_btn.setToolTip("加解密已启用（点击关闭）")
+            else:
+                # 关闭状态 - 解锁图标，数据库状态0
+                self.encryption_btn.setIcon(self.get_icon("unlock.png"))
+                self.encryption_btn.setToolTip("加解密已关闭（点击启用）")
+                
+        except Exception as e:
+            print(f"初始化加解密按钮状态失败: {str(e)}")
+            # 默认设置为关闭状态
+            self.encryption_btn.setIcon(self.get_icon("unlock.png"))
+            self.encryption_btn.setToolTip("加解密已关闭（点击启用）")
+    
+    def set_encryption_enabled(self, enabled):
+        """设置加解密启用状态（外部调用）"""
+        try:
+            # 如果用户尝试启用加解密，需要检查全局加解密配置是否启用
+            if enabled is True:
+                # 获取全局加解密配置状态
+                global_enable_encryption = self.get_global_encryption_status()
+                
+                # 如果全局加解密配置未启用，则不允许启用
+                if not global_enable_encryption:
+                    # 如果全局未启用，强制设置为False
+                    enabled = False
+            
+            # 更新步骤数据
+            self.step_data['enable_encryption'] = enabled
+            
+            # 根据状态设置图标和提示
+            if enabled is True:
+                # 启用状态 - 锁定图标
+                self.encryption_btn.setIcon(self.get_icon("lock.png"))
+                self.encryption_btn.setToolTip("加解密已启用（点击关闭）")
+            else:
+                # 关闭状态 - 解锁图标
+                self.encryption_btn.setIcon(self.get_icon("unlock.png"))
+                self.encryption_btn.setToolTip("加解密已关闭（点击启用）")
+            
+            # 发送步骤更新信号
+            self.step_updated.emit(self.step_data)
+                
+        except Exception as e:
+            print(f"设置加解密状态失败: {str(e)}")
+
+    def get_global_encryption_status(self):
+        """获取全局加解密配置状态"""
+        try:
+            # 通过父组件链查找包含case_data的组件（CaseTabWidget或TabbedCaseEditor）
+            parent = self.parent()
+            print(f"[DEBUG] 开始查找父组件，初始父组件: {parent}")
+            
+            while parent:
+                print(f"[DEBUG] 当前父组件: {parent}, 类型: {type(parent)}")
+                # 检查是否包含case_data属性
+                if hasattr(parent, 'case_data'):
+                    print(f"[DEBUG] 找到包含case_data的组件: {parent}")
+                    print(f"[DEBUG] case_data内容: {parent.case_data}")
+                    # 从case_data中获取全局加解密配置状态
+                    global_enable_encryption = parent.case_data.get('enable_encryption', False)
+                    print(f"[DEBUG] 获取到的全局加解密状态: {global_enable_encryption}")
+                    return global_enable_encryption
+                parent = parent.parent()
+            
+            # 如果找不到父组件，返回False
+            print("[DEBUG] 未找到包含case_data的父组件")
+            return False
+        except Exception as e:
+            print(f"获取全局加解密配置状态失败: {str(e)}")
+            return False
+
+    def on_encryption_clicked(self):
+        """加解密按钮点击事件 - 切换加解密开关状态"""
+        try:
+            # 获取当前加解密状态，如果为None则默认为False
+            current_state = self.step_data.get('enable_encryption')
+            if current_state is None:
+                current_state = False
+            
+            # 状态切换逻辑：True <-> False
+            new_state = not current_state
+            
+            # 如果用户尝试启用加解密，需要检查全局加解密配置是否启用
+            if new_state is True:
+                # 获取全局加解密配置状态
+                global_enable_encryption = self.get_global_encryption_status()
+                
+                # 如果全局加解密配置未启用，则提示用户并阻止启用
+                if not global_enable_encryption:
+                    from src.ui.widgets.toast_tips import Toast
+                    Toast.warn(self, "启用失败，全局加解密配置未启用")
+                    return
+            
+            # 更新图标和提示
+            if new_state is True:
+                # 启用状态 - 锁定图标，数据库状态1
+                self.encryption_btn.setIcon(self.get_icon("lock.png"))
+                self.encryption_btn.setToolTip("加解密已启用（点击关闭）")
+            else:
+                # 关闭状态 - 解锁图标，数据库状态0
+                self.encryption_btn.setIcon(self.get_icon("unlock.png"))
+                self.encryption_btn.setToolTip("加解密已关闭（点击启用）")
+            
+            # 更新步骤数据
+            self.step_data['enable_encryption'] = new_state
+            
+            # 发送步骤更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 显示状态变更提示
+            from src.ui.widgets.toast_tips import Toast
+            if new_state is True:
+                Toast.success(self, "加解密已启用")
+            else:
+                Toast.info(self, "加解密已关闭")
+                
+        except Exception as e:
+            print(f"切换加解密状态失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"切换加解密状态失败: {str(e)}")
 
     def on_status_changed(self, enabled):
         """状态改变事件"""
@@ -717,7 +880,20 @@ class InterfaceStepCard(QFrame):
     def on_post_tool_selected(self, tool_name):
         """后置处理工具选择"""
         print(f"选择后置处理工具: {tool_name}")
-        # 这里可以添加具体的工具添加逻辑
+        
+        # 映射工具名称到类型
+        tool_type_map = {
+            "参数提取": "parameter_extraction",
+            "数据存储": "data_storage", 
+            "变量设置": "variable_setting",
+            "数据库操作": "database_operation",
+            "文件操作": "file_operation"
+        }
+        
+        tool_type = tool_type_map.get(tool_name, "parameter_extraction")
+        
+        # 添加后置处理工具
+        self.add_post_tool(tool_type, tool_name)
     
     def on_pre_tool_selected(self, tool_name):
         """前置处理器工具选择事件"""
@@ -819,6 +995,61 @@ class InterfaceStepCard(QFrame):
             print(f"添加断言工具失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
             Toast.error(self, f"添加断言工具失败: {str(e)}")
+    
+    def add_post_tool(self, tool_type, tool_name):
+        """添加后置处理工具到后置处理器"""
+        try:
+            # 先创建默认配置，不打开对话框
+            if 'post_processing' not in self.step_data:
+                self.step_data['post_processing'] = {}
+            
+            # 生成唯一的工具ID
+            tool_id = f"post_tool_{len(self.step_data.get('post_processing', {})) + 1}"
+            
+            # 创建默认配置
+            default_config = {
+                'type': tool_type,
+                'config': {
+                    'name': tool_name,  # 使用工具名称
+                    'enabled': True,
+                    'description': f'{tool_name}配置'
+                },
+                'enabled': True,
+                'priority': len(self.step_data.get('post_processing', {}))  # 添加优先级字段，按添加顺序排序
+            }
+            
+            # 根据工具类型设置特定的默认值
+            if tool_type == 'parameter_extraction':
+                default_config['config']['extraction_type'] = 'json_path'
+                default_config['config']['json_path'] = '$.data'
+                default_config['config']['variable_name'] = 'extracted_data'
+            elif tool_type == 'data_storage':
+                default_config['config']['storage_type'] = 'database'
+                default_config['config']['table_name'] = 'test_data'
+            elif tool_type == 'variable_setting':
+                default_config['config']['variable_name'] = 'new_variable'
+                default_config['config']['variable_value'] = ''
+            elif tool_type == 'database_operation':
+                default_config['config']['operation_type'] = 'query'
+                default_config['config']['sql'] = ''
+            elif tool_type == 'file_operation':
+                default_config['config']['operation_type'] = 'write'
+                default_config['config']['file_path'] = ''
+            
+            # 保存默认配置
+            self.step_data['post_processing'][tool_id] = default_config
+            
+            # 发送更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 刷新显示
+            self.refresh_post_tools_display()
+            
+            print(f"后置处理工具添加成功: {tool_id}")
+        except Exception as e:
+            print(f"添加后置处理工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"添加后置处理工具失败: {str(e)}")
     
     def on_http_request_saved(self, config_data):
         """HTTP请求配置保存回调"""
@@ -936,37 +1167,40 @@ class InterfaceStepCard(QFrame):
         # 获取滚动区域内的内容容器的布局
         if hasattr(self.post_tab, 'widget') and self.post_tab.widget():
             layout = self.post_tab.widget().layout()
-            
-            # 清空现有显示（包括拉伸项）
-            for i in reversed(range(layout.count())):
-                item = layout.itemAt(i)
-                if item.widget():
-                    item.widget().deleteLater()
-                else:
-                    # 移除拉伸项等非widget项
-                    layout.removeItem(item)
-            
-            # 获取后置处理配置
-            post_processing = self.step_data.get('post_processing', {})
-            
-            if not post_processing:
-                # 如果没有工具，显示提示信息
-                no_tools_label = QLabel("暂无后置处理工具")
-                no_tools_label.setStyleSheet("color: #999; font-style: italic; padding: 10px; font-size: 12px;")
-                no_tools_label.setAlignment(Qt.AlignCenter)
-                # 添加拉伸项确保居中显示
-                layout.addStretch()
-                layout.addWidget(no_tools_label)
-                layout.addStretch()
-                return
-            
-            # 按照优先级字段对工具进行排序
-            sorted_tools = sorted(post_processing.items(), 
-                                 key=lambda x: x[1].get('priority', 0))
-            
-            # 显示已添加的工具（按优先级排序）
-            for tool_id, tool_config in sorted_tools:
-                self.add_post_tool_widget(tool_id, tool_config, layout)
+            self.refresh_post_tools_display_with_layout(layout)
+    
+    def refresh_post_tools_display_with_layout(self, layout):
+        """使用指定布局刷新后置处理工具显示"""
+        # 清空现有显示（包括拉伸项）
+        for i in reversed(range(layout.count())):
+            item = layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
+            else:
+                # 移除拉伸项等非widget项
+                layout.removeItem(item)
+        
+        # 获取后置处理配置
+        post_processing = self.step_data.get('post_processing', {})
+        
+        if not post_processing:
+            # 如果没有工具，显示提示信息
+            no_tools_label = QLabel("暂无后置处理工具")
+            no_tools_label.setStyleSheet("color: #999; font-style: italic; padding: 10px; font-size: 12px;")
+            no_tools_label.setAlignment(Qt.AlignCenter)
+            # 添加拉伸项确保居中显示
+            layout.addStretch()
+            layout.addWidget(no_tools_label)
+            layout.addStretch()
+            return
+        
+        # 按照优先级字段对工具进行排序
+        sorted_tools = sorted(post_processing.items(), 
+                             key=lambda x: x[1].get('priority', 0))
+        
+        # 显示已添加的工具（按优先级排序）
+        for tool_id, tool_config in sorted_tools:
+            self.add_post_tool_widget(tool_id, tool_config, layout)
     
     def add_http_request_tool_widget(self, tool_id, tool_config, parent_layout):
         """添加HTTP请求工具显示组件"""

@@ -538,7 +538,7 @@ class ToolCardsConfigDialog(QDialog):
             # 检查名称是否已存在
             business_lines = self.config_data.get('business_lines', [])
             if any(business.get('name') == name for business in business_lines):
-                Toast.warning(self, "业务线名称已存在")
+                Toast.warn(self, "业务线名称已存在")
                 return
 
             new_business = {
@@ -568,7 +568,7 @@ class ToolCardsConfigDialog(QDialog):
             # 检查名称是否已存在
             business_lines = self.config_data.get('business_lines', [])
             if any(business.get('name') == new_name for business in business_lines):
-                Toast.warning(self, "业务线名称已存在")
+                Toast.warn(self, "业务线名称已存在")
                 return
 
             # 更新业务线名称
@@ -588,7 +588,7 @@ class ToolCardsConfigDialog(QDialog):
         """删除业务线"""
         current_item = self.business_list.currentItem()
         if not current_item:
-            Toast.warning(self, "请选择要删除的业务线")
+            Toast.warn(self, "请选择要删除的业务线")
             return
 
         business_name = current_item.text()
@@ -617,7 +617,7 @@ class ToolCardsConfigDialog(QDialog):
         """新增子业务模块"""
         current_item = self.business_list.currentItem()
         if not current_item:
-            Toast.warning(self, "请先选择业务线")
+            Toast.warn(self, "请先选择业务线")
             return
 
         business_data = current_item.data(Qt.UserRole)
@@ -628,7 +628,7 @@ class ToolCardsConfigDialog(QDialog):
 
             # 检查名称是否已存在
             if any(sub.get('name') == name for sub in sub_businesses):
-                Toast.warning(self, "子模块名称已存在")
+                Toast.warn(self, "子模块名称已存在")
                 return
 
             new_sub_business = {
@@ -643,7 +643,7 @@ class ToolCardsConfigDialog(QDialog):
         """编辑子业务模块"""
         current_item = self.sub_business_list.currentItem()
         if not current_item:
-            Toast.warning(self, "请选择要编辑的子模块")
+            Toast.warn(self, "请选择要编辑的子模块")
             return
 
         business_item = self.business_list.currentItem()
@@ -660,7 +660,7 @@ class ToolCardsConfigDialog(QDialog):
 
             # 检查名称是否已存在
             if any(sub.get('name') == new_name for sub in sub_businesses):
-                Toast.warning(self, "子模块名称已存在")
+                Toast.warn(self, "子模块名称已存在")
                 return
 
             # 更新子模块名称
@@ -675,7 +675,7 @@ class ToolCardsConfigDialog(QDialog):
         """删除子业务模块"""
         current_item = self.sub_business_list.currentItem()
         if not current_item:
-            Toast.warning(self, "请选择要删除的子模块")
+            Toast.warn(self, "请选择要删除的子模块")
             return
 
         business_item = self.business_list.currentItem()
@@ -701,7 +701,7 @@ class ToolCardsConfigDialog(QDialog):
     def add_card(self):
         """新增卡片"""
         if not self.business_combo.currentText() or not self.sub_business_combo.currentText():
-            Toast.warning(self, "请先选择业务线和子模块")
+            Toast.warn(self, "请先选择业务线和子模块")
             return
 
         # 创建新卡片数据
@@ -727,7 +727,7 @@ class ToolCardsConfigDialog(QDialog):
         """编辑卡片"""
         current_item = self.cards_list.currentItem()
         if not current_item:
-            Toast.warning(self, "请选择要编辑的卡片")
+            Toast.warn(self, "请选择要编辑的卡片")
             return
 
         self.current_card_data = current_item.data(Qt.UserRole)
@@ -737,7 +737,7 @@ class ToolCardsConfigDialog(QDialog):
         """复制卡片"""
         current_item = self.cards_list.currentItem()
         if not current_item:
-            Toast.warning(self, "请选择要复制的卡片")
+            Toast.warn(self, "请选择要复制的卡片")
             return
 
         original_card = current_item.data(Qt.UserRole)
@@ -790,7 +790,7 @@ class ToolCardsConfigDialog(QDialog):
         """删除卡片"""
         current_item = self.cards_list.currentItem()
         if not current_item:
-            Toast.warning(self, "请选择要删除的卡片")
+            Toast.warn(self, "请选择要删除的卡片")
             return
 
         card_data = current_item.data(Qt.UserRole)
@@ -826,7 +826,7 @@ class ToolCardsConfigDialog(QDialog):
         # 验证必填字段
         title = self.card_title_edit.text().strip()
         if not title:
-            Toast.warning(self, "请输入卡片名称")
+            Toast.warn(self, "请输入卡片名称")
             return
 
         # 更新卡片数据

@@ -1,11 +1,7 @@
-import json
-import re
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-                             QComboBox, QPushButton, QGroupBox, QFormLayout,
-                             QDialogButtonBox, QMessageBox, QTextEdit, QCheckBox,
-                             QSpinBox, QDoubleSpinBox, QRadioButton, QButtonGroup, 
+                             QComboBox, QPushButton, QDialogButtonBox,
                              QWidget, QScrollArea, QFrame)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 from src.ui.widgets.toast_tips import Toast
 

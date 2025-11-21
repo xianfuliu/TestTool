@@ -306,7 +306,7 @@ class InterfaceConfigDialog(QDialog):
                 else:
                     self.interface_config["headers"] = {"Content-Type": "application/json"}
             except json.JSONDecodeError:
-                Toast.warning(self, "请求头格式错误，必须是有效的JSON")
+                Toast.warn(self, "请求头格式错误，必须是有效的JSON")
                 return
 
             # 根据请求类型保存请求体配置
@@ -323,7 +323,7 @@ class InterfaceConfigDialog(QDialog):
                     else:
                         self.interface_config["body_template"] = {}
                 except json.JSONDecodeError:
-                    Toast.warning(self, "请求体格式错误，必须是有效的JSON")
+                    Toast.warn(self, "请求体格式错误，必须是有效的JSON")
                     return
             else:
                 # 条件请求模板
@@ -333,7 +333,7 @@ class InterfaceConfigDialog(QDialog):
 
                 # 验证条件字段是否为空
                 if not field_value:
-                    Toast.warning(self, "请选择条件字段")
+                    Toast.warn(self, "请选择条件字段")
                     return
 
                 # 验证条件字段是否为下拉框字段
@@ -348,7 +348,7 @@ class InterfaceConfigDialog(QDialog):
                             break
 
                     if not is_combo_field:
-                        Toast.warning(self, "条件字段必须是下拉框字段")
+                        Toast.warn(self, "条件字段必须是下拉框字段")
                         return
 
                 conditional_body = {
@@ -366,7 +366,7 @@ class InterfaceConfigDialog(QDialog):
                     if "body_template" in self.interface_config:
                         del self.interface_config["body_template"]
                 except json.JSONDecodeError:
-                    Toast.warning(self, "条件Cases格式错误，必须是有效的JSON")
+                    Toast.warn(self, "条件Cases格式错误，必须是有效的JSON")
                     return
 
             # 响应映射
@@ -377,7 +377,7 @@ class InterfaceConfigDialog(QDialog):
                 else:
                     self.interface_config["response_mapping"] = {}
             except json.JSONDecodeError:
-                Toast.warning(self, "响应映射格式错误，必须是有效的JSON")
+                Toast.warn(self, "响应映射格式错误，必须是有效的JSON")
                 return
 
             # 字段类型
@@ -388,7 +388,7 @@ class InterfaceConfigDialog(QDialog):
                 else:
                     self.interface_config["field_types"] = {}
             except json.JSONDecodeError:
-                Toast.warning(self, "字段类型格式错误，必须是有效的JSON")
+                Toast.warn(self, "字段类型格式错误，必须是有效的JSON")
                 return
 
             self.accept()

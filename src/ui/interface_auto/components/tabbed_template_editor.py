@@ -5,15 +5,13 @@
 
 import json
 import os
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QTextEdit, QTableWidget,
-                             QTableWidgetItem, QPushButton, QGroupBox,
-                             QLabel, QCheckBox, QScrollArea,
-                             QMessageBox, QDialog, QDialogButtonBox,
+                             QTableWidgetItem, QPushButton,
+                             QLabel, QCheckBox, QScrollArea,QMessageBox,
                              QShortcut, QMenu, QToolButton)
-from PyQt5.QtCore import pyqtSignal, Qt, QEvent
+from PyQt5.QtCore import pyqtSignal, Qt, QSize
 from PyQt5.QtGui import QFont, QKeySequence, QIcon
-from PyQt5.QtCore import QSize
 from .no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from src.ui.widgets.toast_tips import Toast
 
@@ -344,6 +342,9 @@ class TemplateTabWidget(QWidget):
         
         if self.is_edit:
             self.load_template_data()
+        
+        # 自动切换到请求体tab
+        self.switch_to_body_tab()
     
     def setup_shortcuts(self):
         """设置快捷键"""
@@ -439,21 +440,21 @@ class TemplateTabWidget(QWidget):
         # 响应信息展示区域 - 紧凑布局，支持可扩展
         response_widget = QWidget()
         response_layout = QVBoxLayout(response_widget)
-        response_layout.setSpacing(1)  # 进一步减少内部间距
+        response_layout.setSpacing(0)  # 完全移除内部间距，使标签和编辑框紧密对齐
         response_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
         
-        # 响应信息标签放在左上角 - 固定高度，无上下间隙
+        # 响应信息标签放在左上角 - 自适应高度，无上下间隙
         response_label = QLabel("响应")
         response_label.setStyleSheet("font-weight: bold; font-size: 14px; margin: 0px; padding: 0px;")
-        response_label.setFixedHeight(25)  # 固定高度
+        # 移除固定高度限制，使其自适应内容高度
         response_layout.addWidget(response_label)
         
-        # 响应体展示区域 - 可扩展高度
+        # 响应体展示区域 - 可扩展高度，向上靠齐
         self.response_body_edit = QTextEdit()
         self.response_body_edit.setReadOnly(True)
         self.response_body_edit.setFont(QFont("Consolas", 10))  # 调大字体
-        self.response_body_edit.setMinimumHeight(80)  # 最小高度
-        self.response_body_edit.setMaximumHeight(300)  # 最大高度，可扩展
+        self.response_body_edit.setMinimumHeight(400)  # 增加最小高度，确保有足够的显示空间
+        self.response_body_edit.setMaximumHeight(700)  # 增加最大高度，提供更多扩展空间
         self.response_body_edit.setPlaceholderText("调试响应将显示在这里...")
         
         # 添加滚动条支持
@@ -461,8 +462,7 @@ class TemplateTabWidget(QWidget):
         
         response_layout.addWidget(self.response_body_edit)
         
-        layout.addWidget(response_widget)
-        layout.addSpacing(2)  # 进一步减少外部间距
+        layout.addWidget(response_widget, 0)  # 设置拉伸因子为0，防止拉伸
         
         # 底部按钮布局
         button_layout = QHBoxLayout()
@@ -491,7 +491,7 @@ class TemplateTabWidget(QWidget):
         """设置功能子标签页"""
         # 创建子标签页控件
         self.function_tabs = NoWheelTabWidget()
-        self.function_tabs.setMinimumHeight(400)  # 增加标签页的最小高度
+        self.function_tabs.setMinimumHeight(300)  # 减小标签页的最小高度，减少与响应区域的间隙
         
         # 设置标签页字体大小
         font = self.function_tabs.font()
@@ -529,7 +529,7 @@ class TemplateTabWidget(QWidget):
         self.setup_config_tab(config_tab)
         self.function_tabs.addTab(config_tab, "配置")
         
-        layout.addWidget(self.function_tabs)
+        layout.addWidget(self.function_tabs, 1)  # 设置拉伸因子为1，占据剩余空间
     
     def setup_headers_tab(self, parent):
         """设置请求头标签页 - 内部滚动条"""
@@ -1039,11 +1039,11 @@ class TemplateTabWidget(QWidget):
         """保存模板"""
         # 验证必填字段
         if not self.name_edit.text().strip():
-            Toast.warning(self, "请输入接口名称")
+            Toast.warn(self, "请输入接口名称")
             return
         
         if not self.url_edit.text().strip():
-            Toast.warning(self, "请输入URL路径")
+            Toast.warn(self, "请输入URL路径")
             return
         
         data = self.get_data()
@@ -1060,11 +1060,11 @@ class TemplateTabWidget(QWidget):
         """调试模板"""
         # 验证必填字段
         if not self.name_edit.text().strip():
-            Toast.warning(self, "请输入接口名称")
+            Toast.warn(self, "请输入接口名称")
             return
         
         if not self.url_edit.text().strip():
-            Toast.warning(self, "请输入URL路径")
+            Toast.warn(self, "请输入URL路径")
             return
         
         # 获取表单数据
@@ -1163,3 +1163,11 @@ class TemplateTabWidget(QWidget):
                 
         except json.JSONDecodeError as e:
             Toast.error(self, f"JSON格式不正确：{str(e)}")
+    
+    def switch_to_body_tab(self):
+        """自动切换到请求体tab"""
+        # 查找请求体tab的索引
+        for i in range(self.function_tabs.count()):
+            if self.function_tabs.tabText(i) == "请求体":
+                self.function_tabs.setCurrentIndex(i)
+                break

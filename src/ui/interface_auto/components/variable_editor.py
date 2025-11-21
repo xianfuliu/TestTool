@@ -478,13 +478,13 @@ class VariableManagerDialog(QDialog):
                 except Exception as e:
                     Toast.error(self, f"保存全局变量失败: {str(e)}")
             else:
-                Toast.warning(self, error_msg)
+                Toast.warn(self, error_msg)
 
     def edit_global_variable(self):
         """编辑全局变量"""
         selected_items = self.global_table.selectedItems()
         if not selected_items:
-            Toast.warning(self, "请先选择一个全局变量")
+            Toast.warn(self, "请先选择一个全局变量")
             return
 
         row = selected_items[0].row()
@@ -523,13 +523,13 @@ class VariableManagerDialog(QDialog):
                 except Exception as e:
                     Toast.error(self, f"更新全局变量失败: {str(e)}")
             else:
-                Toast.warning(self, error_msg)
+                Toast.warn(self, error_msg)
 
     def delete_global_variable(self):
         """删除全局变量"""
         selected_items = self.global_table.selectedItems()
         if not selected_items:
-            Toast.warning(self, "请先选择一个全局变量")
+            Toast.warn(self, "请先选择一个全局变量")
             return
 
         row = selected_items[0].row()
@@ -588,13 +588,13 @@ class VariableManagerDialog(QDialog):
                 self.variable_manager.set_local_variables({data['name']: data['value']})
                 self.load_local_variables()
             else:
-                Toast.warning(self, error_msg)
+                Toast.warn(self, error_msg)
 
     def edit_local_variable(self):
         """编辑局部变量"""
         selected_items = self.local_table.selectedItems()
         if not selected_items:
-            Toast.warning(self, "请先选择一个局部变量")
+            Toast.warn(self, "请先选择一个局部变量")
             return
 
         row = selected_items[0].row()
@@ -618,13 +618,13 @@ class VariableManagerDialog(QDialog):
                 self.variable_manager.set_local_variables({data['name']: data['value']})
                 self.load_local_variables()
             else:
-                Toast.warning(self, error_msg)
+                Toast.warn(self, error_msg)
 
     def delete_local_variable(self):
         """删除局部变量"""
         selected_items = self.local_table.selectedItems()
         if not selected_items:
-            Toast.warning(self, "请先选择一个局部变量")
+            Toast.warn(self, "请先选择一个局部变量")
             return
 
         row = selected_items[0].row()

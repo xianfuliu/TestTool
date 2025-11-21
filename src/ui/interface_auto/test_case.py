@@ -3,25 +3,19 @@ import json
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTreeWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,
-                             QHeaderView, QInputDialog, QCheckBox, QSpinBox,
-                             QListWidget, QListWidgetItem, QSplitter, QToolBar,
-                             QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
-                             QProgressBar, QFrame, QScrollArea, QGridLayout,
-                             QTableWidget, QTableWidgetItem, QListWidget, QAbstractItemView,
+                             QGroupBox, QFormLayout,QCheckBox, 
+                             QListWidget, QListWidgetItem, QSplitter,QFrame, 
+                             QListWidget, QAbstractItemView,
                              QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QMimeData, QPoint
-from PyQt5.QtGui import QIcon, QFont, QColor, QDrag, QPixmap, QCursor
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QMimeData
+from PyQt5.QtGui import QIcon, QColor, QDrag, QPixmap
 from src.core.services.case_folder_service import CaseFolderService
 from src.core.services.api_template_service import ApiTemplateService
 from src.core.services.api_folder_service import ApiFolderService
 from src.core.services.project_service import ProjectService
 from src.core.services.test_case_service import TestCaseService
-from src.core.models.interface_models import TestCase, TestCaseStep
-from src.ui.interface_auto.components.api_card import ApiCard
 from src.ui.interface_auto.components.tabbed_case_editor import TabbedCaseEditor
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
-from src.utils.interface_utils.variable_manager import get_global_variable_manager
 from src.ui.widgets.toast_tips import Toast
 
 
@@ -158,8 +152,35 @@ class TestCaseDialog(QDialog):
 
         env_layout.addRow("测试环境:", self.env_combo)
 
+        # 加解密配置
+        self.encryption_checkbox = QCheckBox("加解密")
+        self.encryption_checkbox.toggled.connect(self.toggle_encryption_fields)
+        env_layout.addRow("", self.encryption_checkbox)
+
+        # 加密接口URL
+        self.encrypt_url_edit = QLineEdit()
+        self.encrypt_url_edit.setPlaceholderText("请输入加密接口URL")
+        self.encrypt_url_edit.setVisible(False)
+        env_layout.addRow("加密接口:", self.encrypt_url_edit)
+
+        # 解密接口URL
+        self.decrypt_url_edit = QLineEdit()
+        self.decrypt_url_edit.setPlaceholderText("请输入解密接口URL")
+        self.decrypt_url_edit.setVisible(False)
+        env_layout.addRow("解密接口:", self.decrypt_url_edit)
+
         layout.addLayout(env_layout)
         layout.addStretch()
+
+    def toggle_encryption_fields(self, checked):
+        """切换加解密字段的显示状态"""
+        self.encrypt_url_edit.setVisible(checked)
+        self.decrypt_url_edit.setVisible(checked)
+        
+        # 更新表单布局
+        parent_widget = self.encryption_checkbox.parent()
+        if parent_widget:
+            parent_widget.adjustSize()
 
     def setup_vars_tab(self, parent):
         layout = QVBoxLayout(parent)
@@ -204,6 +225,13 @@ class TestCaseDialog(QDialog):
             if index >= 0:
                 self.env_combo.setCurrentIndex(index)
 
+        # 加解密配置
+        enable_encryption = self.case_data.get('enable_encryption', False)
+        self.encryption_checkbox.setChecked(enable_encryption)
+        self.encrypt_url_edit.setText(self.case_data.get('encrypt_url', ''))
+        self.decrypt_url_edit.setText(self.case_data.get('decrypt_url', ''))
+        self.toggle_encryption_fields(enable_encryption)
+
         # 全局变量
         global_vars = self.case_data.get('global_vars', {})
         if global_vars:
@@ -217,7 +245,10 @@ class TestCaseDialog(QDialog):
             'description': self.desc_edit.toPlainText().strip(),
             'project_id': self.project_id or self.case_data.get('project_id'),
             'folder_id': self.folder_id or self.case_data.get('folder_id'),
-            'environment_id': self.env_combo.currentData()
+            'environment_id': self.env_combo.currentData(),
+            'enable_encryption': self.encryption_checkbox.isChecked(),
+            'encrypt_url': self.encrypt_url_edit.text().strip(),
+            'decrypt_url': self.decrypt_url_edit.text().strip()
         }
 
         # 全局变量
@@ -856,14 +887,14 @@ class TestCaseManager(QWidget):
     def create_new_folder(self):
         """新建文件夹"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         dialog = CaseFolderDialog(self, project_id=self.current_project, parent_folder_id=None)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "文件夹名称不能为空")
+                Toast.warn(self, "文件夹名称不能为空")
                 return
 
             try:
@@ -1057,7 +1088,7 @@ class TestCaseManager(QWidget):
             self.api_tree.expandAll()
 
         except Exception as e:
-            Toast.warning(self, f"搜索接口模板失败: {str(e)}")
+            Toast.warn(self, f"搜索接口模板失败: {str(e)}")
 
     def filter_test_cases(self):
         """过滤测试用例树形结构（仅对测试用例名称做搜索）"""
@@ -1122,7 +1153,7 @@ class TestCaseManager(QWidget):
             self.case_tree.expandAll()
 
         except Exception as e:
-            Toast.warning(self, f"搜索测试用例失败: {str(e)}")
+            Toast.warn(self, f"搜索测试用例失败: {str(e)}")
 
     def on_tree_item_clicked(self, item):
         """树形项目点击事件"""
@@ -1287,7 +1318,7 @@ class TestCaseManager(QWidget):
     def create_test_case(self):
         """创建测试用例（打开新的标签页）"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         folder_id = None
@@ -1327,7 +1358,7 @@ class TestCaseManager(QWidget):
     def add_case_folder(self):
         """新增用例文件夹"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         parent_folder_id = None
@@ -1339,14 +1370,14 @@ class TestCaseManager(QWidget):
                 # 获取当前文件夹的层级
                 current_level = self.get_folder_level(parent_folder_id)
                 if current_level >= 3:
-                    Toast.warning(self, "文件夹层级最多为3级，无法在当前文件夹下创建子文件夹")
+                    Toast.warn(self, "文件夹层级最多为3级，无法在当前文件夹下创建子文件夹")
                     return
 
         dialog = CaseFolderDialog(self, project_id=self.current_project, parent_folder_id=parent_folder_id)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "文件夹名称不能为空")
+                Toast.warn(self, "文件夹名称不能为空")
                 return
 
             try:
@@ -1360,7 +1391,7 @@ class TestCaseManager(QWidget):
     def add_test_case(self):
         """新增测试用例"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         folder_id = None
@@ -1371,7 +1402,7 @@ class TestCaseManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "用例名称不能为空")
+                Toast.warn(self, "用例名称不能为空")
                 return
 
             try:
@@ -1393,7 +1424,7 @@ class TestCaseManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "用例名称不能为空")
+                Toast.warn(self, "用例名称不能为空")
                 return
 
             try:
@@ -1432,7 +1463,7 @@ class TestCaseManager(QWidget):
     def import_cases(self):
         """导入测试用例"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         from PyQt5.QtWidgets import QFileDialog
@@ -1466,7 +1497,7 @@ class TestCaseManager(QWidget):
     def export_cases(self):
         """导出测试用例"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         from PyQt5.QtWidgets import QFileDialog
@@ -1610,7 +1641,7 @@ class TestCaseManager(QWidget):
     def add_api_folder(self):
         """新增接口文件夹"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         # 导入ApiFolderDialog
@@ -1620,7 +1651,7 @@ class TestCaseManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "文件夹名称不能为空")
+                Toast.warn(self, "文件夹名称不能为空")
                 return
 
             try:
@@ -1639,7 +1670,7 @@ class TestCaseManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "文件夹名称不能为空")
+                Toast.warn(self, "文件夹名称不能为空")
                 return
 
             try:
@@ -1669,7 +1700,7 @@ class TestCaseManager(QWidget):
     def add_api_template(self):
         """新增接口模板"""
         if not self.current_project:
-            Toast.warning(self, "请先选择项目")
+            Toast.warn(self, "请先选择项目")
             return
 
         # 导入ApiTemplateDialog
@@ -1679,7 +1710,7 @@ class TestCaseManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "接口模板名称不能为空")
+                Toast.warn(self, "接口模板名称不能为空")
                 return
 
             try:
@@ -1698,7 +1729,7 @@ class TestCaseManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "接口模板名称不能为空")
+                Toast.warn(self, "接口模板名称不能为空")
                 return
 
             try:
@@ -1751,7 +1782,7 @@ class TestCaseManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "文件夹名称不能为空")
+                Toast.warn(self, "文件夹名称不能为空")
                 return
 
             try:
@@ -1784,7 +1815,7 @@ class TestCaseManager(QWidget):
     def delete_selected_folder(self):
         """删除选中的文件夹"""
         if not self.current_folder:
-            Toast.warning(self, "请先选择一个文件夹")
+            Toast.warn(self, "请先选择一个文件夹")
             return
             
         self.delete_case_folder(self.current_folder)

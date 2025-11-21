@@ -1215,6 +1215,9 @@ class TestCase:
     description: str = ""
     environment_id: Optional[int] = None
     global_vars: Dict[str, Any] = field(default_factory=dict)
+    enable_encryption: bool = False
+    encrypt_url: str = ""
+    decrypt_url: str = ""
     created_by: str = "admin"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -1273,6 +1276,9 @@ class TestCase:
             description=data.get('description', ''),
             environment_id=data.get('environment_id'),
             global_vars=global_vars,
+            enable_encryption=bool(data.get('enable_encryption', False)),
+            encrypt_url=data.get('encrypt_url', ''),
+            decrypt_url=data.get('decrypt_url', ''),
             created_by=data.get('created_by', 'admin'),
             created_at=created_at,
             updated_at=updated_at,
@@ -1296,6 +1302,9 @@ class TestCase:
             'description': self.description,
             'environment_id': self.environment_id,
             'global_vars': self.global_vars,
+            'enable_encryption': self.enable_encryption,
+            'encrypt_url': self.encrypt_url,
+            'decrypt_url': self.decrypt_url,
             'created_by': self.created_by,
             'created_at': self.created_at,
             'updated_at': self.updated_at
@@ -1399,6 +1408,7 @@ class TestCaseStep:
     step_order: int = 0
     name: str = ""
     enabled: bool = True
+    enable_encryption: Optional[bool] = None
     pre_processing: Dict[str, Any] = field(default_factory=dict)
     post_processing: Dict[str, Any] = field(default_factory=dict)
     assertions: Dict[str, Any] = field(default_factory=dict)
@@ -1465,6 +1475,7 @@ class TestCaseStep:
             step_order=data.get('step_order', 0),
             name=data.get('name', ''),
             enabled=bool(data.get('enabled', True)),
+            enable_encryption=bool(data.get('enable_encryption')) if data.get('enable_encryption') is not None else None,
             pre_processing=pre_processing,
             post_processing=post_processing,
             assertions=assertions,
@@ -1489,6 +1500,7 @@ class TestCaseStep:
             'step_order': self.step_order,
             'name': self.name,
             'enabled': self.enabled,
+            'enable_encryption': self.enable_encryption,
             'pre_processing': self.pre_processing,
             'post_processing': self.post_processing,
             'assertions': self.assertions,
@@ -1560,6 +1572,8 @@ class TestCaseStep:
             self.name = data['name']
         if 'enabled' in data:
             self.enabled = bool(data['enabled'])
+        if 'enable_encryption' in data:
+            self.enable_encryption = bool(data['enable_encryption']) if data['enable_encryption'] is not None else None
         if 'pre_processing' in data:
             pre_processing = data['pre_processing']
             if isinstance(pre_processing, str):
@@ -1607,6 +1621,7 @@ class TestCaseStep:
             step_order=self.step_order,
             name=self.name,
             enabled=self.enabled,
+            enable_encryption=self.enable_encryption,
             pre_processing=self.pre_processing.copy(),
             post_processing=self.post_processing.copy(),
             assertions=self.assertions.copy(),

@@ -4,25 +4,18 @@ import time
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTreeWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,
-                             QHeaderView, QInputDialog, QTableWidget, QTableWidgetItem,
-                             QSplitter, QToolBar, QAction, QToolButton, QMenu,
-                             QFileDialog, QApplication, QScrollArea, QCheckBox,
+                             QGroupBox, QFormLayout, QTableWidget, QTableWidgetItem,
+                             QSplitter, QCheckBox,
                              QStyledItemDelegate, QStyle, QShortcut)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QMimeData, QTimer
-from PyQt5.QtGui import QIcon, QFont, QDrag, QPixmap, QColor, QPainter, QPen
+from PyQt5.QtGui import QIcon, QDrag, QPixmap, QColor
 from src.core.services.api_folder_service import ApiFolderService
 from src.core.services.api_template_service import ApiTemplateService
 from src.core.services.project_service import ProjectService
-from src.core.models.interface_models import ApiTemplate, ApiFolder
 from src.ui.interface_auto.components.tabbed_template_editor import TabbedTemplateEditor
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from src.ui.interface_auto.components.collapse_button import CollapseButton
 from src.ui.widgets.toast_tips import Toast
-
-# 导入请求引擎和变量管理器
-from src.utils.interface_utils.request_engine import RequestEngine
-from src.utils.interface_utils.variable_manager import VariableManager
 
 
 class TreeWidgetDelegate(QStyledItemDelegate):
@@ -729,7 +722,7 @@ class ApiTemplateManager(QWidget):
         
         # 左侧菜单栏内容
         self.left_widget = QWidget()
-        self.left_widget.setMaximumWidth(400)
+        # 移除固定宽度限制，允许用户调整
         left_layout = QVBoxLayout(self.left_widget)
         left_layout.setContentsMargins(5, 0, 5, 5)
 
@@ -852,7 +845,8 @@ class ApiTemplateManager(QWidget):
 
         self.splitter.addWidget(left_container)
         self.splitter.addWidget(self.detail_widget)
-        self.splitter.setSizes([300, 700])
+        # 设置更灵活的初始大小，允许用户调整
+        self.splitter.setSizes([180, 1200])
 
         main_container_layout.addWidget(self.splitter)
         main_layout.addWidget(main_container)

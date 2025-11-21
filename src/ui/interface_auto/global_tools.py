@@ -647,7 +647,7 @@ class GlobalToolDialog(QDialog):
 
         # 验证基本数据
         if not tool_data['name']:
-            Toast.warning(self, "工具名称不能为空")
+            Toast.warn(self, "工具名称不能为空")
             return
 
         # 禁用测试按钮，防止重复测试
@@ -866,7 +866,7 @@ class GlobalToolsManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "工具名称不能为空")
+                Toast.warn(self, "工具名称不能为空")
                 return
 
             try:
@@ -881,14 +881,14 @@ class GlobalToolsManager(QWidget):
         """编辑选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            Toast.warning(self, "请先选择一个工具")
+            Toast.warn(self, "请先选择一个工具")
             return
 
         dialog = GlobalToolDialog(self, tool_data)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warning(self, "工具名称不能为空")
+                Toast.warn(self, "工具名称不能为空")
                 return
 
             try:
@@ -903,7 +903,7 @@ class GlobalToolsManager(QWidget):
         """删除选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            Toast.warning(self, "请先选择一个工具")
+            Toast.warn(self, "请先选择一个工具")
             return
 
         # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
@@ -926,7 +926,7 @@ class GlobalToolsManager(QWidget):
         """测试选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            Toast.warning(self, "请先选择一个工具")
+            Toast.warn(self, "请先选择一个工具")
             return
 
         # 打开测试对话框
@@ -939,7 +939,7 @@ class GlobalToolsManager(QWidget):
         """启用/禁用选中的工具"""
         tool_data = self.get_selected_tool_data()
         if not tool_data:
-            Toast.warning(self, "请先选择一个工具")
+            Toast.warn(self, "请先选择一个工具")
             return
 
         new_status = not tool_data['enabled']

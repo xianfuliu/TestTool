@@ -16,7 +16,8 @@ class TestCaseService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT id, project_id, folder_id, name, description, 
-                               environment_id, global_vars, created_by, created_at, updated_at
+                               environment_id, global_vars, created_by, created_at, updated_at,
+                               enable_encryption, encrypt_url, decrypt_url
                         FROM test_cases 
                         WHERE project_id = %s
                         ORDER BY created_at DESC
@@ -43,7 +44,8 @@ class TestCaseService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT id, project_id, folder_id, name, description, 
-                               environment_id, global_vars, created_by, created_at, updated_at
+                               environment_id, global_vars, created_by, created_at, updated_at,
+                               enable_encryption, encrypt_url, decrypt_url
                         FROM test_cases 
                         WHERE id = %s
                     """, (case_id,))
@@ -82,7 +84,10 @@ class TestCaseService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT cs.*, at.name as api_name, at.method, at.url_path
+                        SELECT cs.id, cs.case_id, cs.api_template_id, cs.step_order, cs.name, cs.enabled,
+                               cs.pre_processing, cs.post_processing, cs.assertions, cs.variables,
+                               cs.enable_encryption, cs.created_at, cs.updated_at,
+                               at.name as api_name, at.method, at.url_path
                         FROM test_case_steps cs
                         LEFT JOIN api_templates at ON cs.api_template_id = at.id
                         WHERE cs.case_id = %s
@@ -114,6 +119,13 @@ class TestCaseService:
     def create_case(self, data: Dict[str, Any]) -> int:
         """创建测试用例"""
         print(f"[DEBUG] create_case开始执行: name={data.get('name')}, steps数量={len(data.get('steps', []))}")
+        
+        # 打印加解密配置信息
+        enable_encryption = data.get('enable_encryption', False)
+        encrypt_url = data.get('encrypt_url', '')
+        decrypt_url = data.get('decrypt_url', '')
+        print(f"[DEBUG] 加解密配置 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
+        
         try:
             # 检查环境ID是否存在
             environment_id = data.get('environment_id')
@@ -128,8 +140,9 @@ class TestCaseService:
 
                     cursor.execute("""
                         INSERT INTO test_cases (project_id, folder_id, name, description, 
-                                              environment_id, global_vars, created_by)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                              environment_id, global_vars, created_by,
+                                              enable_encryption, encrypt_url, decrypt_url)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         data['project_id'],
                         data.get('folder_id'),
@@ -137,10 +150,14 @@ class TestCaseService:
                         data.get('description', ''),
                         environment_id,  # 可能是None
                         global_vars_json,
-                        'admin'  # 实际应该从登录用户获取
+                        'admin',  # 实际应该从登录用户获取
+                        enable_encryption,
+                        encrypt_url,
+                        decrypt_url
                     ))
                     case_id = cursor.lastrowid
                     print(f"[DEBUG] 用例基本信息插入成功，ID: {case_id}")
+                    print(f"[DEBUG] 已插入加解密字段 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
                     
                     # 保存步骤数据
                     steps = data.get('steps', [])
@@ -176,6 +193,12 @@ class TestCaseService:
         steps_count = len(data.get('steps', []))
         print(f"[DEBUG] 需要处理的步骤数量: {steps_count}")
         
+        # 打印加解密配置信息
+        enable_encryption = data.get('enable_encryption', False)
+        encrypt_url = data.get('encrypt_url', '')
+        decrypt_url = data.get('decrypt_url', '')
+        print(f"[DEBUG] 加解密配置 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
+        
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -183,7 +206,8 @@ class TestCaseService:
                     cursor.execute("""
                         UPDATE test_cases 
                         SET name = %s, description = %s, environment_id = %s, 
-                            global_vars = %s, folder_id = %s, updated_at = CURRENT_TIMESTAMP
+                            global_vars = %s, folder_id = %s, updated_at = CURRENT_TIMESTAMP,
+                            enable_encryption = %s, encrypt_url = %s, decrypt_url = %s
                         WHERE id = %s
                     """, (
                         data.get('name', ''),
@@ -191,12 +215,16 @@ class TestCaseService:
                         data.get('environment_id'),
                         json.dumps(data.get('global_vars', {}), ensure_ascii=False),
                         data.get('folder_id'),
+                        enable_encryption,
+                        encrypt_url,
+                        decrypt_url,
                         case_id
                     ))
                     
                     # 立即提交基本信息更新
                     conn.commit()
                     print("[DEBUG] 用例基本信息更新完成")
+                    print(f"[DEBUG] 已更新加解密字段 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
 
                     # 处理步骤数据（分批处理，避免超时）
                     if steps_count > 0:
@@ -239,8 +267,9 @@ class TestCaseService:
                                         # 直接插入步骤，避免递归调用
                                         batch_cursor.execute("""
                                             INSERT INTO test_case_steps (case_id, api_template_id, step_order, name, 
-                                                                       enabled, pre_processing, post_processing, assertions, variables)
-                                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                                                       enabled, pre_processing, post_processing, assertions, variables,
+                                                                       enable_encryption)
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                         """, (
                                             step_data['case_id'],
                                             step_data.get('api_template_id'),
@@ -250,7 +279,8 @@ class TestCaseService:
                                             step_data.get('pre_processing', '{}'),
                                             step_data.get('post_processing', '{}'),
                                             step_data.get('assertions', '{}'),
-                                            step_data.get('variables', '{}')
+                                            step_data.get('variables', '{}'),
+                                            step_data.get('enable_encryption', None)
                                         ))
                                     
                                     # 提交当前批次
@@ -332,8 +362,9 @@ class TestCaseService:
                     
                     cursor.execute("""
                         INSERT INTO test_case_steps (case_id, api_template_id, step_order, name, 
-                                                   enabled, pre_processing, post_processing, assertions, variables)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                                   enabled, pre_processing, post_processing, assertions, variables,
+                                                   enable_encryption)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         processed_data['case_id'],
                         processed_data.get('api_template_id'),
@@ -343,7 +374,8 @@ class TestCaseService:
                         processed_data.get('pre_processing', '{}'),
                         processed_data.get('post_processing', '{}'),
                         processed_data.get('assertions', '{}'),
-                        processed_data.get('variables', '{}')
+                        processed_data.get('variables', '{}'),
+                        processed_data.get('enable_encryption', None)
                     ))
                     
                     step_id = cursor.lastrowid
@@ -381,7 +413,8 @@ class TestCaseService:
                     cursor.execute("""
                         UPDATE test_case_steps 
                         SET api_template_id = %s, step_order = %s, name = %s, enabled = %s,
-                            pre_processing = %s, post_processing = %s, assertions = %s, variables = %s
+                            pre_processing = %s, post_processing = %s, assertions = %s, variables = %s,
+                            enable_encryption = %s
                         WHERE id = %s
                     """, (
                         processed_data.get('api_template_id'),
@@ -392,6 +425,7 @@ class TestCaseService:
                         processed_data.get('post_processing', '{}'),
                         processed_data.get('assertions', '{}'),
                         processed_data.get('variables', '{}'),
+                        processed_data.get('enable_encryption', None),
                         step_id
                     ))
                     conn.commit()
