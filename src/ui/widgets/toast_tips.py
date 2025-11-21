@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtWidgets import QLabel, QHBoxLayout, QWidget
+from PyQt5.QtWidgets import QLabel, QHBoxLayout, QWidget, QApplication
 from PyQt5.QtGui import QPixmap
 import os
 
@@ -86,11 +86,29 @@ class Toast:
         style = Toast.STYLES[message_type]
 
         # 创建Toast容器
+        # 如果parent为None，使用主窗口作为parent
+        if parent is None:
+            # 先获取主窗口
+            main_window_temp = None
+            for widget in QApplication.topLevelWidgets():
+                if widget.isWindow() and widget.windowType() == Qt.Window:
+                    main_window_temp = widget
+                    break
+            parent = main_window_temp if main_window_temp else QApplication.desktop()
+        
         toast = QWidget(parent)
         toast.setObjectName("toast")
+        
+        # 设置窗口标志 - 确保Toast位于最上层且不会被覆盖
+        toast.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        toast.setAttribute(Qt.WA_ShowWithoutActivating)
 
+        # 创建背景容器，用于实现圆角效果
+        background_widget = QWidget(toast)
+        background_widget.setObjectName("background_widget")
+        
         # 设置布局
-        layout = QHBoxLayout(toast)
+        layout = QHBoxLayout(background_widget)
         layout.setContentsMargins(15, 10, 15, 10)
         layout.setSpacing(10)
 
@@ -128,22 +146,62 @@ class Toast:
         text_label.setStyleSheet("color: white; font-size: 18px; font-weight: bold; background: transparent;")
         layout.addWidget(text_label)
 
-        # 设置Toast样式 - 统一黑底白字
-        toast.setStyleSheet(f"""
-            QWidget#toast {{
+        # 设置背景容器的样式 - 实现黑色圆角背景
+        background_widget.setStyleSheet(f"""
+            QWidget#background_widget {{
                 background-color: {style['background']};
                 border-radius: 10px;
                 border: {style['border']};
             }}
+            QLabel {{
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }}
         """)
+        
+        # 设置背景容器的大小和位置
+        background_widget.adjustSize()
+        toast.resize(background_widget.size())
+        
+        # 设置Toast为透明，让背景容器显示圆角效果
+        toast.setAttribute(Qt.WA_TranslucentBackground)
+        toast.setStyleSheet("background: transparent;")
 
         # 调整大小并居中
         toast.adjustSize()
 
-        toast.move(
-            parent.width() // 2 - toast.width() // 2,
-            parent.height() // 2 - toast.height() // 2  # 稍微靠上显示，避免遮挡主要内容
-        )
+        # 获取应用程序的主窗口，而不是使用传递的parent
+        main_window = None
+        
+        # 方法1: 使用activeWindow获取当前活动窗口
+        main_window = QApplication.activeWindow()
+        
+        # 方法2: 如果activeWindow为None，遍历所有顶层窗口
+        if main_window is None:
+            for widget in QApplication.topLevelWidgets():
+                if widget.isWindow() and widget.windowType() == Qt.Window and widget.isVisible():
+                    main_window = widget
+                    break
+        
+        # 计算Toast位置
+        if main_window is not None and hasattr(main_window, 'geometry'):
+            # 使用主窗口的几何信息计算位置
+            main_rect = main_window.geometry()
+            toast_x = main_rect.x() + (main_rect.width() // 2) - (toast.width() // 2)
+            toast_y = main_rect.y() + (main_rect.height() // 2) - (toast.height() // 2)
+            
+        else:
+            # 如果找不到主窗口，使用桌面中央位置
+            desktop = QApplication.desktop()
+            screen_rect = desktop.availableGeometry()
+            toast_x = screen_rect.x() + (screen_rect.width() // 2) - (toast.width() // 2)
+            toast_y = screen_rect.y() + (screen_rect.height() // 2) - (toast.height() // 2)
+        
+        # 在主窗口中央显示Toast
+        toast.move(toast_x, toast_y)
 
         # 显示Toast
         toast.show()

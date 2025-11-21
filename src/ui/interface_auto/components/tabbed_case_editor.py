@@ -2292,120 +2292,14 @@ class CaseTabWidget(QWidget):
             self.modified_signal.emit(True)
     
     def show_steps_context_menu(self, pos):
-        """显示步骤区域右键菜单 - 支持在任意位置插入空白步骤"""
+        """显示步骤区域右键菜单"""
         # 创建右键菜单
         menu = QMenu(self)
         
-        # 添加菜单项
-        insert_blank_step_action = menu.addAction("插入空白步骤")
-        
         # 执行菜单
-        action = menu.exec_(self.steps_widget.mapToGlobal(pos))
-        
-        if action == insert_blank_step_action:
-            # 获取点击位置对应的插入位置
-            self.insert_blank_step_at_position(pos)
+        menu.exec_(self.steps_widget.mapToGlobal(pos))
     
-    def insert_blank_step_at_position(self, pos):
-        """在指定位置插入空白步骤 - 支持动态ID重排"""
-        if not self.current_case:
-            # 创建新的测试用例对象
-            self.current_case = TestCase()
-            self.current_case.name = self.name_edit.text().strip() or "未命名用例"
-            self.current_case.description = self.description_edit.toPlainText().strip()
-            self.current_case.environment_id = self.env_combo.currentData()
-        
-        # 计算插入位置
-        insert_index = len(self.current_case.steps) if self.current_case.steps else 0
-        
-        # 如果有点击位置，计算插入位置
-        if hasattr(self, 'steps_layout') and self.steps_layout:
-            # 将局部坐标转换为步骤容器的局部坐标
-            local_pos = pos
-            
-            # 查找最近的步骤卡片位置
-            for i in range(self.steps_layout.count()):
-                item = self.steps_layout.itemAt(i)
-                if item and item.widget() and hasattr(item.widget(), 'step_id'):
-                    widget = item.widget()
-                    widget_rect = widget.geometry()
-                    
-                    # 检查点击位置是否在该步骤卡片的上半部分
-                    if local_pos.y() < widget_rect.center().y():
-                        insert_index = i
-                        break
-                    else:
-                        insert_index = i + 1
-        
-        # 计算新步骤的序号（基于插入位置）
-        if self.current_case and self.current_case.steps:
-            # 如果插入到中间，需要重新计算所有后续步骤的序号
-            if insert_index < len(self.current_case.steps):
-                # 插入到中间，新步骤的序号为插入位置的序号
-                new_order = insert_index + 1
-                
-                # 更新后续步骤的序号
-                for i in range(insert_index, len(self.current_case.steps)):
-                    self.current_case.steps[i].step_order = i + 2
-            else:
-                # 插入到末尾，新步骤的序号为最大序号+1
-                new_order = max(step.step_order for step in self.current_case.steps) + 1
-        else:
-            new_order = 1
-        
-        # 创建空白步骤数据
-        step_data_for_model = {
-            'id': None,  # 新步骤的id为None，将在保存时由数据库生成
-            'case_id': self.current_case.id if self.current_case else 0,
-            'step_order': new_order,
-            'name': f"步骤 {new_order}",
-            'enabled': True,
-            'pre_processing': {},
-            'post_processing': {},
-            'assertions': {},
-            'variables': {},
-            'api_template_id': None,
-            'api_name': '',
-            'api_method': '',
-            'api_url_path': '',
-            # 默认不启用加解密，由用户手动设置
-            'enable_encryption': False
-        }
 
-        # 创建步骤卡片数据
-        step_data_for_card = step_data_for_model.copy()
-        step_data_for_card['api_template'] = None
-
-        # 创建步骤对象并插入到指定位置
-        step = TestCaseStep.from_dict(step_data_for_model)
-        if self.current_case:
-            if insert_index < len(self.current_case.steps):
-                self.current_case.steps.insert(insert_index, step)
-            else:
-                self.current_case.steps.append(step)
-        
-        # 重新生成所有步骤的前端ID（基于新的顺序）
-        self.regenerate_step_ids()
-        
-        # 重新加载步骤列表以更新UI
-        self.load_steps()
-
-        # 隐藏占位符（如果存在且有效）
-        if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
-            try:
-                # 检查占位符是否仍然有效
-                if hasattr(self.steps_placeholder, 'isVisible'):
-                    self.steps_placeholder.hide()
-            except RuntimeError:
-                # 如果占位符已被删除，忽略错误
-                pass
-        
-        self.on_case_changed()
-        
-        # 标记为已修改
-        if not self.modified:
-            self.modified = True
-            self.modified_signal.emit(True)
     
     def add_test_step(self):
         """添加测试步骤"""
