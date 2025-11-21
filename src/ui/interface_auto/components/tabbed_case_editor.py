@@ -107,7 +107,9 @@ class CaseExecutionThread(QThread):
             # 调试：检查线程接收到的步骤数据
             print(f"[DEBUG] CaseExecutionThread接收到的步骤总数: {len(steps)}")
             for i, step in enumerate(steps):
-                print(f"[DEBUG] 步骤{i+1}: {step.get('name', '未命名')}, enabled={step.get('enabled', True)}")
+                # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
+                step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名')
+                print(f"[DEBUG] 步骤{i+1}: {step_name}, enabled={step.get('enabled', True)}")
             
             enabled_steps = [step for step in steps if step.get('enabled', True)]
             
@@ -131,9 +133,13 @@ class CaseExecutionThread(QThread):
                 
                 # 记录步骤开始执行的信息（使用原始步骤序号）
                 step_order = step.get('step_order', original_step_order + 1)
-                self.log_message.emit(self.format_debug_message(f"开始执行步骤 {step_order}: {step.get('name', '未命名步骤')}", "info", step_order - 1), "info", step_order - 1)
                 
-                self.step_started.emit(step.get('name', f"步骤 {step_order}"), step_order - 1)
+                # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
+                step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名步骤')
+                
+                self.log_message.emit(self.format_debug_message(f"开始执行步骤 {step_order}: {step_name}", "info", step_order - 1), "info", step_order - 1)
+                
+                self.step_started.emit(step_name, step_order - 1)
                 result = self.execute_step(step, step_order - 1)
                 self.step_finished.emit(result)
                 
@@ -174,7 +180,11 @@ class CaseExecutionThread(QThread):
 
             # 记录步骤开始执行的信息（使用原始步骤序号）
             step_order = step_index + 1  # step_index是从0开始的，需要+1得到实际步骤序号
-            self.log_message.emit(self.format_debug_message(f"执行步骤 {step_order}: {step.get('name', '未命名步骤')}", "info", step_index), "info", step_index)
+            
+            # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
+            step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名步骤')
+            
+            self.log_message.emit(self.format_debug_message(f"执行步骤 {step_order}: {step_name}", "info", step_index), "info", step_index)
 
             # 执行前置处理
             pre_processing = step.get('pre_processing', {})
@@ -2729,7 +2739,9 @@ class CaseTabWidget(QWidget):
         # 调试：检查获取的用例数据中的步骤信息
         print(f"[DEBUG] 用例数据步骤数量: {len(case_data.get('steps', []))}")
         for i, step in enumerate(case_data.get('steps', [])):
-            print(f"[DEBUG] 步骤{i+1}: {step.get('name', '未命名')}, enabled={step.get('enabled', True)}")
+            # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
+            step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名')
+            print(f"[DEBUG] 步骤{i+1}: {step_name}, enabled={step.get('enabled', True)}")
         
         # 创建执行线程，使用临时用例数据避免触发修改状态
         self.execution_thread = CaseExecutionThread(case_data)
@@ -2777,7 +2789,9 @@ class CaseTabWidget(QWidget):
         # 记录每个步骤的详细信息
         for i, step in enumerate(steps):
             step_dict = step.to_dict()
-            print(f"[INFO] 步骤 {i+1}: {step_dict.get('name', '未命名步骤')}")
+            # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
+            step_name = step_dict.get('api_name') or step_dict.get('api_template', {}).get('name') or step_dict.get('name', '未命名步骤')
+            print(f"[INFO] 步骤 {i+1}: {step_name}")
             print(f"[INFO]   - 接口模板ID: {step_dict.get('api_template_id', '无')}")
             print(f"[INFO]   - 是否启用: {step_dict.get('enabled', True)}")
             print(f"[INFO]   - 步骤顺序: {step_dict.get('step_order', i+1)}")
@@ -2959,10 +2973,15 @@ class CaseTabWidget(QWidget):
         if step_index >= 0 and self.current_case and len(self.current_case.steps) > step_index:
             step = self.current_case.steps[step_index]
             # 处理TestCaseStep对象，使用getattr安全获取属性
-            if hasattr(step, 'name'):
+            if hasattr(step, 'api_name'):
+                step_name = step.api_name
+            elif hasattr(step, 'api_template') and hasattr(step.api_template, 'name'):
+                step_name = step.api_template.name
+            elif hasattr(step, 'name'):
                 step_name = step.name
             elif hasattr(step, 'get'):
-                step_name = step.get('name', f'步骤 {step_index + 1}')
+                # 优先使用api_name，其次api_template.name，最后name字段
+                step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', f'步骤 {step_index + 1}')
             else:
                 step_name = f'步骤 {step_index + 1}'
         
@@ -2989,10 +3008,15 @@ class CaseTabWidget(QWidget):
                 if step_index >= 0 and self.current_case and len(self.current_case.steps) > step_index:
                     step = self.current_case.steps[step_index]
                     # 处理TestCaseStep对象，使用getattr安全获取属性
-                    if hasattr(step, 'name'):
+                    if hasattr(step, 'api_name'):
+                        step_name = step.api_name
+                    elif hasattr(step, 'api_template') and hasattr(step.api_template, 'name'):
+                        step_name = step.api_template.name
+                    elif hasattr(step, 'name'):
                         step_name = step.name
                     elif hasattr(step, 'get'):
-                        step_name = step.get('name', f'步骤 {step_index + 1}')
+                        # 优先使用api_name，其次api_template.name，最后name字段
+                        step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', f'步骤 {step_index + 1}')
                     else:
                         step_name = f'步骤 {step_index + 1}'
                 
