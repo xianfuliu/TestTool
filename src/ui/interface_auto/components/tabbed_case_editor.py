@@ -28,16 +28,17 @@ class CaseExecutionThread(QThread):
     case_finished = pyqtSignal(dict)  # 用例执行结果
     log_message = pyqtSignal(str, str, int)  # 日志消息, 级别, 步骤索引
 
-    def __init__(self, case_data, environment_config=None):
+    def __init__(self, case_data, environment_config=None, project_id=0):
         super().__init__()
         self.case_data = case_data
         self.environment_config = environment_config or {}
+        self.project_id = project_id
         self.variable_manager = get_global_variable_manager()
         self.request_engine = RequestEngine()
         self.is_running = True
     
     def stop(self):
-        """停止线程执行 - 修复版本"""
+        """停止线程执行"""
         if not self.isRunning():
             return
             
@@ -45,14 +46,27 @@ class CaseExecutionThread(QThread):
         self.is_running = False
         
         # 等待线程安全结束，增加等待时间到5秒
-        if not self.wait(5000):  # 最多等待5秒
-            print("[WARNING] 线程未在5秒内正常退出，尝试强制终止")
-            # 如果线程没有正常结束，强制终止
-            self.terminate()
-            # 等待终止完成
-            self.wait(2000)
+        try:
+            if not self.wait(5000):  # 最多等待5秒
+                print("[WARNING] 线程未在5秒内正常退出，尝试强制终止")
+                # 如果线程没有正常结束，强制终止
+                self.terminate()
+                # 等待终止完成
+                self.wait(2000)
+        except Exception as e:
+            print(f"[ERROR] 等待线程停止时发生错误: {str(e)}")
+            # 如果等待失败，直接终止
+            try:
+                self.terminate()
+                self.wait(1000)
+            except:
+                pass
         
-        self.log_message.emit(self.format_debug_message("线程已安全停止", "debug", -1), "debug", -1)
+        # 安全地发送日志消息
+        try:
+            self.log_message.emit(self.format_debug_message("线程已安全停止", "debug", -1), "debug", -1)
+        except:
+            pass  # 忽略发送消息时的错误
 
     def format_debug_message(self, message, level="info", step_index=None):
         """格式化调试信息，使日志更易读"""
@@ -92,6 +106,16 @@ class CaseExecutionThread(QThread):
 
             # 初始化变量管理器
             self.variable_manager.clear_local_variables()
+            
+            # 加载指定项目的全局变量
+            try:
+                from src.core.services.global_variable_service import get_global_variable_service
+                service = get_global_variable_service()
+                service.sync_to_variable_manager(self.variable_manager, self.project_id)
+                self.log_message.emit(self.format_debug_message(f"已加载项目 {self.project_id} 的全局变量", "info", -1), "info", -1)
+            except Exception as e:
+                self.log_message.emit(self.format_debug_message(f"加载项目 {self.project_id} 的全局变量失败: {str(e)}", "error", -1), "error", -1)
+            
             # 获取变量管理器中的全局变量
             global_vars = self.variable_manager.global_variables
             
@@ -287,7 +311,6 @@ class CaseExecutionThread(QThread):
             
             # 记录前置处理工具情况
             self.log_message.emit(self.format_debug_message(f"执行前置处理工具: {tool_type}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"工具配置: {config}", "debug", step_index), "debug", step_index)
             
             if tool_type == 'http_request':
                 self.log_message.emit(self.format_debug_message("执行HTTP请求工具", "debug", step_index), "debug", step_index)
@@ -317,7 +340,8 @@ class CaseExecutionThread(QThread):
             headers = config.get('headers', {})
             body = config.get('body', {})
             timeout = config.get('timeout', 30)
-            extractors = config.get('extractors', {})
+            # 优先从variables字段读取变量提取器，如果没有则从extractors字段读取
+            extractors = config.get('variables', config.get('extractors', {}))
             
             self.log_message.emit(self.format_debug_message(f"HTTP请求配置 - 方法: {method}, URL: {url}, 超时: {timeout}", "debug", step_index), "debug", step_index)
             self.log_message.emit(self.format_debug_message(f"HTTP请求配置 - 请求体: {body}", "debug", step_index), "debug", step_index)
@@ -362,10 +386,11 @@ class CaseExecutionThread(QThread):
             
             if response.get('success'):
                 # 请求成功，处理响应
-                response_data = response.get('response_data', {})
+                response_data = response.get('response_data', response.get('body', {}))
                 status_code = response.get('status_code', 0)
                 
                 self.log_message.emit(self.format_debug_message(f"前置处理器HTTP请求成功: 状态码 {status_code}", "info", step_index), "info", step_index)
+                self.log_message.emit(self.format_debug_message(f"响应数据: {response_data}", "debug", step_index), "debug", step_index)
                 
                 # 提取变量
                 if extractors:
@@ -373,14 +398,23 @@ class CaseExecutionThread(QThread):
                     for var_name, json_path in extractors.items():
                         try:
                             self.log_message.emit(self.format_debug_message(f"提取变量 {var_name}，JSON路径: {json_path}", "debug", step_index), "debug", step_index)
-                            # 从响应中提取数据
-                            value = self.extract_value(response_data, json_path)
+                            # 从响应中提取数据 - 直接使用simple_json_path_extract支持点分隔路径
+                            value = self.simple_json_path_extract(response_data, json_path)
                             if value is not None:
                                 # 将提取的变量保存到变量管理器
                                 self.variable_manager.set_local_variables({var_name: value})
                                 self.log_message.emit(self.format_debug_message(f"提取变量成功: {var_name} = {value}", "info", step_index), "info", step_index)
+                                
+                                # 调试模式下打印详细的变量管理器状态
+                                if hasattr(self, 'debug_mode') and self.debug_mode:
+                                    self.log_message.emit(self.format_debug_message(f"变量管理器状态 - 局部变量: {self.variable_manager.local_variables}", "debug", step_index), "debug", step_index)
+                                    self.log_message.emit(self.format_debug_message(f"变量管理器状态 - 全局变量: {self.variable_manager.global_variables}", "debug", step_index), "debug", step_index)
+                                    self.log_message.emit(self.format_debug_message(f"变量 {var_name} 已保存到变量管理器，可在后续步骤中使用", "debug", step_index), "debug", step_index)
                             else:
                                 self.log_message.emit(self.format_debug_message(f"提取变量失败: {var_name}，JSON路径 {json_path} 未找到数据", "warning", step_index), "warning", step_index)
+                                # 调试：检查响应数据结构
+                                self.log_message.emit(self.format_debug_message(f"响应数据结构: {response_data}", "debug", step_index), "debug", step_index)
+                                self.log_message.emit(self.format_debug_message(f"尝试提取路径 {json_path} 失败，检查响应数据格式", "debug", step_index), "debug", step_index)
                         except Exception as e:
                             self.log_message.emit(self.format_debug_message(f"提取变量异常: {var_name}，错误: {str(e)}", "error", step_index), "error", step_index)
                 else:
@@ -400,17 +434,48 @@ class CaseExecutionThread(QThread):
         if not post_processing:
             return
             
-        # 计算后置处理工具数量（提取器数量）
-        extractors = post_processing.get('extractors', {})
-        tool_count = len(extractors)
+        # 计算后置处理工具数量
+        tool_count = 0
+        total_extractors = 0
+        
+        # 遍历所有后置处理工具
+        for tool_id, tool_config in post_processing.items():
+            if isinstance(tool_config, dict):
+                tool_type = tool_config.get('type')
+                enabled = tool_config.get('enabled', True)
+                
+                # 只统计启用的工具
+                if enabled:
+                    tool_count += 1
+                    
+                    # 如果是参数提取工具，统计其中的提取器数量
+                    if tool_type == 'parameter_extraction':
+                        config = tool_config.get('config', {})
+                        extractions = config.get('extractions', [])
+                        total_extractors += len(extractions)
         
         self.log_message.emit(self.format_debug_message("开始执行后置处理", "debug", step_index), "debug", step_index)
         self.log_message.emit(self.format_debug_message(f"后置处理工具数量: {tool_count}", "debug", step_index), "debug", step_index)
+        self.log_message.emit(self.format_debug_message(f"参数提取器总数: {total_extractors}", "debug", step_index), "debug", step_index)
         
-        # 这里可以执行变量提取、数据转换等后置操作
+        # 执行后置处理工具
         extracted_count = 0
-        for var_name, extractor in extractors.items():
-            try:
+        for tool_id, tool_config in post_processing.items():
+            if not isinstance(tool_config, dict):
+                continue
+                
+            tool_type = tool_config.get('type')
+            enabled = tool_config.get('enabled', True)
+            
+            # 只执行启用的工具
+            if not enabled:
+                continue
+                
+            # 执行参数提取工具
+            if tool_type == 'parameter_extraction':
+                config = tool_config.get('config', {})
+                extractions = config.get('extractions', [])
+                
                 # 优先使用解密后的响应体（对于加解密请求）
                 decrypted_body = step_result.get('decrypted_body', '')
                 if decrypted_body:
@@ -425,13 +490,22 @@ class CaseExecutionThread(QThread):
                     # 如果没有解密后的响应体，使用原始响应数据
                     response_data = step_result.get('response_data', {})
                 
-                # 从响应中提取数据
-                value = self.extract_value(response_data, extractor)
-                self.variable_manager.set_local_variables({var_name: value})
-                self.log_message.emit(self.format_debug_message(f"提取变量 {var_name} = {value}", "info", step_index), "info", step_index)
-                extracted_count += 1
-            except Exception as e:
-                self.log_message.emit(self.format_debug_message(f"提取变量 {var_name} 失败: {str(e)}", "error", step_index), "error", step_index)
+                # 执行所有的参数提取
+                for extraction in extractions:
+                    try:
+                        variable_name = extraction.get('variable_name')
+                        json_path = extraction.get('json_path')
+                        
+                        if not variable_name or not json_path:
+                            continue
+                            
+                        # 从响应中提取数据
+                        value = self.simple_json_path_extract(response_data, json_path)
+                        self.variable_manager.set_local_variables({variable_name: value})
+                        self.log_message.emit(self.format_debug_message(f"提取变量 {variable_name} = {value}", "info", step_index), "info", step_index)
+                        extracted_count += 1
+                    except Exception as e:
+                        self.log_message.emit(self.format_debug_message(f"提取变量失败: {str(e)}", "error", step_index), "error", step_index)
         
         if extracted_count > 0:
             self.log_message.emit(self.format_debug_message(f"后置处理完成，共提取 {extracted_count} 个变量", "info", step_index), "info", step_index)
@@ -761,6 +835,32 @@ class CaseExecutionThread(QThread):
 
     def extract_field_value_from_response(self, step_result, field_path):
         """从响应体中提取字段路径的实际值，支持复杂路径如 name[0].libai"""
+        # 如果字段路径为空，返回空字符串
+        if not field_path:
+            return ''
+        
+        # 检查字段路径是否为变量格式（如${msg}），如果是则从变量管理器中获取
+        if field_path.startswith('${') and field_path.endswith('}'):
+            var_name = field_path[2:-1]  # 提取变量名
+            
+            # 首先尝试从变量管理器中获取变量
+            if hasattr(self, 'variable_manager'):
+                # 尝试从局部变量中获取
+                if var_name in self.variable_manager.local_variables:
+                    var_value = self.variable_manager.local_variables[var_name]
+                    return str(var_value) if var_value is not None else None
+                # 尝试从全局变量中获取
+                elif var_name in self.variable_manager.global_variables:
+                    var_value = self.variable_manager.global_variables[var_name]
+                    return str(var_value) if var_value is not None else None
+            
+            # 如果变量管理器中没找到，再从步骤结果中获取
+            if step_result:
+                var_value = step_result.get(var_name, None)
+                return str(var_value) if var_value is not None else None
+            
+            return None  # 变量不存在
+        
         # 优先使用解密后的响应体（对于加解密请求）
         decrypted_body = step_result.get('decrypted_body', '')
         
@@ -778,10 +878,6 @@ class CaseExecutionThread(QThread):
             # 如果没有解密后的响应体，使用原始响应数据
             response_data = step_result.get('response_data', step_result.get('body', {}))
             response_text = step_result.get('response_text', step_result.get('text', ''))
-        
-        # 如果字段路径为空，返回空字符串
-        if not field_path:
-            return ''
         
         # 如果字段路径是特殊字段
         if field_path in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
@@ -870,27 +966,62 @@ class CaseExecutionThread(QThread):
         
         import re
         
+        # 调试：记录替换前的文本
+        if hasattr(self, 'log_message'):
+            self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 替换前文本 = {text}", "debug", -1), "debug", -1)
+        
         # 匹配${变量名}格式
         pattern = r'\$\{([^}]+)\}'
         matches = re.findall(pattern, text)
         
+        # 调试：记录匹配到的变量
+        if hasattr(self, 'log_message'):
+            self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 匹配到的变量 = {matches}", "debug", -1), "debug", -1)
+        
         for var_name in matches:
-            # 从步骤结果中获取变量值
-            var_value = step_result.get(var_name, '')
+            var_value = ''
             
-            # 如果变量名是特殊字段，使用extract_field_value提取
-            if var_name in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
-                var_value = self.extract_field_value(step_result, var_name)
-            elif var_name.startswith('header.'):
-                var_value = self.extract_field_value(step_result, var_name)
-            elif var_name.startswith('json.'):
-                var_value = self.extract_field_value(step_result, var_name)
-            else:
-                # 尝试从响应数据中提取
-                var_value = self.extract_field_value_from_response(step_result, var_name)
+            # 首先尝试从变量管理器中获取变量（前置处理器提取的变量）
+            if hasattr(self, 'variable_manager'):
+                # 调试：检查变量管理器状态
+                self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 变量管理器状态 - 局部变量: {self.variable_manager.local_variables}", "debug", -1), "debug", -1)
+                self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 变量管理器状态 - 全局变量: {self.variable_manager.global_variables}", "debug", -1), "debug", -1)
+                
+                # 尝试从局部变量中获取
+                if var_name in self.variable_manager.local_variables:
+                    var_value = self.variable_manager.local_variables[var_name]
+                    self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 从局部变量获取 {var_name} = {var_value}", "debug", -1), "debug", -1)
+                # 尝试从全局变量中获取
+                elif var_name in self.variable_manager.global_variables:
+                    var_value = self.variable_manager.global_variables[var_name]
+                    self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 从全局变量获取 {var_name} = {var_value}", "debug", -1), "debug", -1)
+            
+            # 如果变量管理器中没找到，再从步骤结果中获取
+            if not var_value and step_result:
+                var_value = step_result.get(var_name, '')
+                self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 从步骤结果获取 {var_name} = {var_value}", "debug", -1), "debug", -1)
+                
+                # 如果变量名是特殊字段，使用extract_field_value提取
+                if var_name in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
+                    var_value = self.extract_field_value(step_result, var_name)
+                elif var_name.startswith('header.'):
+                    var_value = self.extract_field_value(step_result, var_name)
+                elif var_name.startswith('json.'):
+                    var_value = self.extract_field_value(step_result, var_name)
+                else:
+                    # 尝试从响应数据中提取
+                    var_value = self.extract_field_value_from_response(step_result, var_name)
+            
+            # 记录变量替换的调试信息
+            if hasattr(self, 'log_message'):
+                self.log_message.emit(self.format_debug_message(f"变量替换: ${{{var_name}}} -> {var_value}", "debug", -1), "debug", -1)
             
             # 替换变量
             text = text.replace(f'${{{var_name}}}', str(var_value))
+        
+        # 调试：记录替换后的文本
+        if hasattr(self, 'log_message'):
+            self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 替换后文本 = {text}", "debug", -1), "debug", -1)
         
         return text
 
@@ -1077,6 +1208,11 @@ class CaseExecutionThread(QThread):
                         assertion_type = 'equal'  # 默认类型                
                 if assertion_type == 'equal':
                     expected = config.get('expected')  # 不设置默认值，保持None
+                    
+                    # 变量替换：支持${变量名}格式（如果期望值不为None）
+                    if expected is not None:
+                        expected = self.replace_variables(expected, step_result)
+                    
                     actual = response_text
                     ignore_case = config.get('ignore_case', False)
                     
@@ -1093,6 +1229,11 @@ class CaseExecutionThread(QThread):
 
                 elif assertion_type == 'not_equal':
                     expected = config.get('expected')  # 不设置默认值，保持None
+                    
+                    # 变量替换：支持${变量名}格式（如果期望值不为None）
+                    if expected is not None:
+                        expected = self.replace_variables(expected, step_result)
+                    
                     actual = response_text
                     ignore_case = config.get('ignore_case', False)
                     
@@ -1109,6 +1250,11 @@ class CaseExecutionThread(QThread):
 
                 elif assertion_type == 'contains':
                     expected = config.get('expected')  # 不设置默认值，保持None
+                    
+                    # 变量替换：支持${变量名}格式（如果期望值不为None）
+                    if expected is not None:
+                        expected = self.replace_variables(expected, step_result)
+                    
                     actual = response_text
                     ignore_case = config.get('ignore_case', False)
                     
@@ -1124,6 +1270,11 @@ class CaseExecutionThread(QThread):
 
                 elif assertion_type == 'not_contains':
                     expected = config.get('expected')  # 不设置默认值，保持None
+                    
+                    # 变量替换：支持${变量名}格式（如果期望值不为None）
+                    if expected is not None:
+                        expected = self.replace_variables(expected, step_result)
+                    
                     actual = response_text
                     ignore_case = config.get('ignore_case', False)
                     
@@ -1156,6 +1307,11 @@ class CaseExecutionThread(QThread):
 
                 elif assertion_type == 'status_code':
                     expected = config.get('expected')  # 不设置默认值，保持None
+                    
+                    # 变量替换：支持${变量名}格式（如果期望值不为None）
+                    if expected is not None:
+                        expected = self.replace_variables(expected, step_result)
+                    
                     actual = status_code
                     results[assertion_name] = str(expected) == str(actual)
                     log_level = "info" if results[assertion_name] else "error"
@@ -1167,6 +1323,11 @@ class CaseExecutionThread(QThread):
                 elif assertion_type == 'json_path':
                     path = config.get('path', '')
                     expected = config.get('expected')  # 不设置默认值，保持None
+                    
+                    # 变量替换：支持${变量名}格式（如果期望值不为None）
+                    if expected is not None:
+                        expected = self.replace_variables(expected, step_result)
+                    
                     actual = self.simple_json_path_extract(response_data, path)
                     results[assertion_name] = expected == actual
                     log_level = "info" if results[assertion_name] else "error"
@@ -1233,18 +1394,12 @@ class CaseExecutionThread(QThread):
                         
                         # 提取实际值：支持字段路径提取
                         actual = self.extract_field_value_from_response(step_result, field)
-                        
-                        # 调试信息：打印步骤结果和解密后的响应体
-                        print(f"[DEBUG] 断言 {assertion_name}: 步骤结果 keys = {list(step_result.keys())}")
-                        print(f"[DEBUG] 断言 {assertion_name}: decrypted_body = {step_result.get('decrypted_body', 'NOT_FOUND')}")
-                        print(f"[DEBUG] 断言 {assertion_name}: 字段路径 = {field}")
-                        print(f"[DEBUG] 断言 {assertion_name}: 提取的实际值 = {actual}")
-                        print(f"[DEBUG] 断言 {assertion_name}: 期望值 = {expected}")
-                        
+                                                
                         # 变量替换：支持${变量名}格式（如果期望值不为None）
                         if expected is not None:
+                            # 执行变量替换
                             expected = self.replace_variables(expected, step_result)
-                        
+
                         # 根据符号执行比较
                         result = self.execute_comparison(actual, expected, symbol)
                         assertion_results.append(result)
@@ -2662,7 +2817,10 @@ class CaseTabWidget(QWidget):
             print(f"[DEBUG] 步骤{i+1}: {step_name}, enabled={step.get('enabled', True)}")
         
         # 创建执行线程，使用临时用例数据避免触发修改状态
-        self.execution_thread = CaseExecutionThread(case_data)
+        self.execution_thread = CaseExecutionThread(
+            case_data=case_data,
+            project_id=self.current_case.project_id
+        )
         
         # 连接信号
         self.execution_thread.step_started.connect(self.on_step_started)
@@ -2750,39 +2908,56 @@ class CaseTabWidget(QWidget):
             self.execute_case()
 
     def stop_execution(self):
-        """停止执行"""
+        """停止执行 - 修复线程安全版本"""
         if not self.is_executing or not self.execution_thread:
             return
         
-        # 记录停止执行日志 - 使用print语句替代log_message
+        # 记录停止执行日志
         print("[WARNING] 正在停止用例执行...")
         
-        # 停止执行线程
-        self.execution_thread.stop()
-        
-        # 等待线程停止
-        if self.execution_thread.isRunning():
-            self.execution_thread.wait(2000)  # 等待2秒确保线程停止
-        
-        # 更新执行状态
+        # 更新执行状态，防止重复调用
         self.is_executing = False
         
-        # 清理线程资源
+        # 安全地停止线程
         try:
-            self.execution_thread.step_started.disconnect()
-            self.execution_thread.step_finished.disconnect()
-            self.execution_thread.case_finished.disconnect()
-            self.execution_thread.log_message.disconnect()
-        except:
-            pass
-        
-        self.execution_thread.deleteLater()
-        self.execution_thread = None
+            # 先停止线程
+            self.execution_thread.stop()
+            
+            # 等待线程安全停止，增加等待时间
+            if self.execution_thread.isRunning():
+                print("[DEBUG] 等待线程安全停止...")
+                if not self.execution_thread.wait(5000):  # 等待5秒
+                    print("[WARNING] 线程未在5秒内正常停止，尝试强制终止")
+                    self.execution_thread.terminate()
+                    self.execution_thread.wait(2000)
+            
+            # 断开所有信号连接
+            try:
+                self.execution_thread.step_started.disconnect()
+                self.execution_thread.step_finished.disconnect()
+                self.execution_thread.case_finished.disconnect()
+                self.execution_thread.log_message.disconnect()
+            except:
+                pass  # 忽略断开连接时的错误
+            
+            # 安全删除线程对象
+            self.execution_thread.deleteLater()
+            self.execution_thread = None
+            
+        except Exception as e:
+            print(f"[ERROR] 停止线程时发生错误: {str(e)}")
+            # 确保线程对象被清理
+            if self.execution_thread:
+                try:
+                    self.execution_thread.deleteLater()
+                except:
+                    pass
+                self.execution_thread = None
         
         # 更新按钮状态
         self.update_buttons_state()
         
-        # 记录停止完成日志 - 使用print语句替代log_message
+        # 记录停止完成日志
         print("[WARNING] 用例执行已停止")
 
     def on_step_started(self, step_name, step_index):
@@ -2796,19 +2971,20 @@ class CaseTabWidget(QWidget):
         print(f"[INFO] 步骤执行完成: {step_result.get('step_name')} - {status}")
 
     def on_case_finished(self, case_result):
-        """用例执行完成 - 修复版本"""
+        """用例执行完成 - 修复版本（避免重复清理线程）"""
         # 记录执行完成时的日志状态
         print(f"[DEBUG] on_case_finished开始，当前日志数量: {len(self.execution_logs)}")
         
         # 确保执行状态正确设置
         self.is_executing = False
         
-        # 安全地清理线程资源
-        if self.execution_thread:
+        # 安全地清理线程资源（仅在stop_execution未调用时清理）
+        if self.execution_thread and self.execution_thread.isRunning():
+            print("[DEBUG] 线程仍在运行，等待安全退出...")
+            
             # 等待线程完全退出
-            if self.execution_thread.isRunning():
-                print("[DEBUG] 等待线程安全退出...")
-                self.execution_thread.wait(3000)  # 等待3秒确保线程完全退出
+            if not self.execution_thread.wait(3000):  # 等待3秒
+                print("[WARNING] 线程未在3秒内正常退出")
             
             # 断开所有信号连接
             try:
@@ -2819,14 +2995,22 @@ class CaseTabWidget(QWidget):
             except:
                 pass  # 忽略断开连接时的错误
             
-            # 删除线程对象
+            # 安全删除线程对象
             self.execution_thread.deleteLater()
+            self.execution_thread = None
+        elif self.execution_thread:
+            # 线程已停止但对象未清理，确保清理
+            print("[DEBUG] 线程已停止，清理残留对象")
+            try:
+                self.execution_thread.deleteLater()
+            except:
+                pass
             self.execution_thread = None
         
         # 更新按钮状态
         self.update_buttons_state()
         
-        # 记录执行结果 - 使用print语句替代log_message
+        # 记录执行结果
         success_count = case_result.get('success_count', 0)
         total_count = case_result.get('total_count', 0)
         status = "成功" if success_count == total_count else "失败"

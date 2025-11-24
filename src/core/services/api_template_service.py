@@ -169,22 +169,48 @@ class ApiTemplateService:
                                 print(f"  {key}: {value}")
                             
                             # 比较数据差异
-                            print("\\n数据比较:")
+                            print("\n数据比较:")
                             fields_to_compare = ['name', 'method', 'url_path', 'headers', 'params', 'body', 'description', 'folder_id', 'sort_order']
                             has_changes = False
                             for field in fields_to_compare:
                                 db_value = current_record.get(field)
                                 new_value = processed_data.get(field)
-                                if db_value != new_value:
-                                    print(f"  {field}: 数据库值='{db_value}', 新值='{new_value}' (有变化)")
-                                    has_changes = True
+                                
+                                # 特殊处理JSON字段：如果都是JSON，比较解析后的内容
+                                if field in ['headers', 'params', 'body'] and db_value and new_value:
+                                    try:
+                                        db_json = json.loads(db_value)
+                                        new_json = json.loads(new_value)
+                                        # 比较JSON内容，忽略键顺序差异
+                                        if db_json != new_json:
+                                            print(f"  {field}: JSON内容不同 (有变化)")
+                                            has_changes = True
+                                        else:
+                                            print(f"  {field}: JSON内容相同（忽略键顺序差异）")
+                                    except Exception as json_error:
+                                        print(f"  {field}: JSON解析失败，使用原始比较: {json_error}")
+                                        if db_value != new_value:
+                                            print(f"  {field}: 数据库值='{db_value}', 新值='{new_value}' (有变化)")
+                                            has_changes = True
+                                        else:
+                                            print(f"  {field}: 值相同")
                                 else:
-                                    print(f"  {field}: 值相同")
+                                    if db_value != new_value:
+                                        print(f"  {field}: 数据库值='{db_value}', 新值='{new_value}' (有变化)")
+                                        has_changes = True
+                                    else:
+                                        print(f"  {field}: 值相同")
                             
                             # 如果没有实际变化，仍然返回True表示保存成功
                             if not has_changes:
                                 print("数据没有实际变化，返回保存成功")
                                 return True
+                            else:
+                                print("数据有实际变化，但数据库更新失败，返回False")
+                                return False
+                        else:
+                            print("未找到对应的数据库记录，返回False")
+                            return False
                     
                     return row_count > 0
         except Exception as e:

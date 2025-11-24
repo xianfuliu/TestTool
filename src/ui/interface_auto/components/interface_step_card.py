@@ -906,7 +906,7 @@ class InterfaceStepCard(QFrame):
             }
         """)
         
-        post_tools = ["参数提取", "数据存储", "变量设置", "数据库操作", "文件操作"]
+        post_tools = ["参数提取"]
         for tool in post_tools:
             action = menu.addAction(tool)
             action.triggered.connect(lambda checked, tool_name=tool: self.on_post_tool_selected(tool_name))
@@ -958,12 +958,8 @@ class InterfaceStepCard(QFrame):
             print(f"选择了工具: {tool_name}")
     
     def add_http_request_tool(self):
-        """添加HTTP请求工具到前置处理器"""
+        """添加HTTP请求工具到前置处理器 - 直接打开编辑弹窗"""
         try:
-            # 先创建默认配置，不打开对话框
-            if 'pre_processing' not in self.step_data:
-                self.step_data['pre_processing'] = {}
-            
             # 生成唯一的工具ID
             tool_id = f"http_request_{len(self.step_data.get('pre_processing', {})) + 1}"
             
@@ -983,8 +979,42 @@ class InterfaceStepCard(QFrame):
                 'priority': len(self.step_data.get('pre_processing', {}))  # 添加优先级字段，按添加顺序排序
             }
             
-            # 保存默认配置
-            self.step_data['pre_processing'][tool_id] = default_config
+            # 直接打开编辑对话框
+            from src.ui.interface_auto.dialogs.http_request_dialog import HttpRequestDialog
+            dialog = HttpRequestDialog(self, default_config['config'])
+            
+            # 连接保存信号
+            dialog.request_saved.connect(lambda config_data: self.on_http_request_added(tool_id, config_data))
+            
+            if dialog.exec_() == HttpRequestDialog.Accepted:
+                # 配置数据通过信号传递，这里不需要额外处理
+                pass
+            else:
+                # 用户取消了对话框，不添加工具
+                print("用户取消了HTTP请求工具添加")
+                
+        except Exception as e:
+            print(f"添加HTTP请求工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"添加HTTP请求工具失败: {str(e)}")
+    
+    def on_http_request_added(self, tool_id, config_data):
+        """HTTP请求工具添加回调"""
+        try:
+            # 确保前置处理器配置存在
+            if 'pre_processing' not in self.step_data:
+                self.step_data['pre_processing'] = {}
+            
+            # 创建完整配置
+            full_config = {
+                'type': 'http_request',
+                'config': config_data,
+                'enabled': True,
+                'priority': len(self.step_data.get('pre_processing', {}))
+            }
+            
+            # 保存配置
+            self.step_data['pre_processing'][tool_id] = full_config
             
             # 发送更新信号
             self.step_updated.emit(self.step_data)
@@ -994,17 +1024,13 @@ class InterfaceStepCard(QFrame):
             
             print(f"HTTP请求工具添加成功: {tool_id}")
         except Exception as e:
-            print(f"添加HTTP请求工具失败: {str(e)}")
+            print(f"保存HTTP请求工具配置失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
-            Toast.error(self, f"添加HTTP请求工具失败: {str(e)}")
+            Toast.error(self, f"保存HTTP请求工具配置失败: {str(e)}")
     
     def add_assertion_tool(self, assertion_type, assertion_name):
-        """添加断言工具到断言配置"""
+        """添加断言工具到断言配置 - 直接打开编辑弹窗"""
         try:
-            # 先创建默认配置，不打开对话框
-            if 'assertions' not in self.step_data:
-                self.step_data['assertions'] = {}
-            
             # 生成唯一的工具ID
             tool_id = f"assertion_{len(self.step_data.get('assertions', {})) + 1}"
             
@@ -1035,8 +1061,34 @@ class InterfaceStepCard(QFrame):
             elif assertion_type == 'xpath':
                 default_config['config']['xpath'] = '//data'
             
-            # 保存默认配置
-            self.step_data['assertions'][tool_id] = default_config
+            # 直接打开编辑对话框
+            from src.ui.interface_auto.dialogs.assertion_dialog import AssertionDialog
+            dialog = AssertionDialog(self, default_config)
+            
+            # 连接保存信号
+            dialog.assertion_saved.connect(lambda config_data: self.on_assertion_added(tool_id, config_data))
+            
+            if dialog.exec_() == AssertionDialog.Accepted:
+                # 配置数据通过信号传递，这里不需要额外处理
+                pass
+            else:
+                # 用户取消了对话框，不添加工具
+                print("用户取消了断言工具添加")
+                
+        except Exception as e:
+            print(f"添加断言工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"添加断言工具失败: {str(e)}")
+    
+    def on_assertion_added(self, tool_id, new_config):
+        """断言工具添加回调"""
+        try:
+            # 确保断言配置存在
+            if 'assertions' not in self.step_data:
+                self.step_data['assertions'] = {}
+            
+            # 保存配置
+            self.step_data['assertions'][tool_id] = new_config
             
             # 发送更新信号
             self.step_updated.emit(self.step_data)
@@ -1046,17 +1098,13 @@ class InterfaceStepCard(QFrame):
             
             print(f"断言工具添加成功: {tool_id}")
         except Exception as e:
-            print(f"添加断言工具失败: {str(e)}")
+            print(f"保存断言工具配置失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
-            Toast.error(self, f"添加断言工具失败: {str(e)}")
+            Toast.error(self, f"保存断言工具配置失败: {str(e)}")
     
     def add_post_tool(self, tool_type, tool_name):
-        """添加后置处理工具到后置处理器"""
+        """添加后置处理工具到后置处理器 - 直接打开编辑弹窗"""
         try:
-            # 先创建默认配置，不打开对话框
-            if 'post_processing' not in self.step_data:
-                self.step_data['post_processing'] = {}
-            
             # 生成唯一的工具ID
             tool_id = f"post_tool_{len(self.step_data.get('post_processing', {})) + 1}"
             
@@ -1064,7 +1112,7 @@ class InterfaceStepCard(QFrame):
             default_config = {
                 'type': tool_type,
                 'config': {
-                    'name': tool_name,  # 使用工具名称
+                    'name': '参数提取',  # 默认名称为'参数提取'
                     'enabled': True,
                     'description': f'{tool_name}配置'
                 },
@@ -1090,16 +1138,20 @@ class InterfaceStepCard(QFrame):
                 default_config['config']['operation_type'] = 'write'
                 default_config['config']['file_path'] = ''
             
-            # 保存默认配置
-            self.step_data['post_processing'][tool_id] = default_config
+            # 直接打开编辑对话框
+            from src.ui.interface_auto.dialogs.parameter_extraction_dialog import ParameterExtractionDialog
+            dialog = ParameterExtractionDialog(self, default_config)
             
-            # 发送更新信号
-            self.step_updated.emit(self.step_data)
+            # 连接保存信号
+            dialog.extraction_saved.connect(lambda config_data: self.on_post_tool_added(tool_id, config_data))
             
-            # 刷新显示
-            self.refresh_post_tools_display()
-            
-            print(f"后置处理工具添加成功: {tool_id}")
+            if dialog.exec_() == ParameterExtractionDialog.Accepted:
+                # 配置数据通过信号传递，这里不需要额外处理
+                pass
+            else:
+                # 用户取消了对话框，不添加工具
+                print("用户取消了后置处理工具添加")
+                
         except Exception as e:
             print(f"添加后置处理工具失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
@@ -1413,6 +1465,7 @@ class InterfaceStepCard(QFrame):
         delete_btn.clicked.connect(lambda checked, tid=tool_id: self.delete_pre_tool(tid))
         
         layout.addWidget(drag_handle)
+        layout.addWidget(drag_handle)
         layout.addWidget(icon_label)
         layout.addWidget(name_label)
         layout.addStretch()
@@ -1661,13 +1714,23 @@ class InterfaceStepCard(QFrame):
         
         # 工具图标和名称
         icon_label = QLabel()
-        # 使用后置处理图标文件
-        icon_pixmap = self.get_icon_pixmap("post.png", 16, 16)
+        # 根据工具类型使用不同的图标
+        tool_type = tool_config.get('type', '')
+        if tool_type == 'parameter_extraction':
+            # 参数提取功能使用专用图标
+            icon_pixmap = self.get_icon_pixmap("extraction.png", 16, 16)
+        else:
+            # 其他后置处理工具使用通用图标
+            icon_pixmap = self.get_icon_pixmap("post.png", 16, 16)
+        
         if not icon_pixmap.isNull():
             icon_label.setPixmap(icon_pixmap)
         else:
             # 如果图标文件不存在，使用默认emoji
-            icon_label.setText("🔧")
+            if tool_type == 'parameter_extraction':
+                icon_label.setText("📊")  # 参数提取使用数据图标
+            else:
+                icon_label.setText("🔧")  # 其他后置处理使用工具图标
         # 设置图标样式 - 无悬浮效果，无边框
         icon_label.setStyleSheet("""
             QLabel {
@@ -1678,7 +1741,9 @@ class InterfaceStepCard(QFrame):
         """)
         icon_label.setCursor(Qt.ArrowCursor)
         
-        name = tool_config.get('name', '后置处理')  # 只显示名称
+        # 正确获取工具名称 - 从config字段中获取
+        config = tool_config.get('config', {})
+        name = config.get('name', '后置处理')  # 只显示名称
         
         name_label = QLabel(name)
         name_label.setStyleSheet("""
@@ -1756,6 +1821,7 @@ class InterfaceStepCard(QFrame):
         delete_btn.setToolTip("删除")
         delete_btn.clicked.connect(lambda checked, tid=tool_id: self.delete_post_tool(tid))
         
+        layout.addWidget(drag_handle)
         layout.addWidget(icon_label)
         layout.addWidget(name_label)
         layout.addStretch()
@@ -1859,19 +1925,41 @@ class InterfaceStepCard(QFrame):
             tool_config = self.step_data['post_processing'][tool_id]
             
             # 打开编辑对话框
-            from src.ui.interface_auto.dialogs.post_processing_dialog import PostProcessingDialog
-            dialog = PostProcessingDialog(self, tool_config)
+            from src.ui.interface_auto.dialogs.parameter_extraction_dialog import ParameterExtractionDialog
+            dialog = ParameterExtractionDialog(self, tool_config)
             
             # 连接保存信号
-            dialog.processing_saved.connect(lambda config_data: self.on_post_processing_edited(tool_id, config_data))
+            dialog.extraction_saved.connect(lambda config_data: self.on_post_processing_edited(tool_id, config_data))
             
-            if dialog.exec_() == PostProcessingDialog.Accepted:
+            if dialog.exec_() == ParameterExtractionDialog.Accepted:
                 # 配置数据通过信号传递，这里不需要额外处理
                 pass
         except Exception as e:
             print(f"编辑后置处理工具失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
             Toast.error(self, f"编辑后置处理工具失败: {str(e)}")
+    
+    def on_post_tool_added(self, tool_id, config_data):
+        """后置处理工具添加回调"""
+        try:
+            # 确保后置处理器配置存在
+            if 'post_processing' not in self.step_data:
+                self.step_data['post_processing'] = {}
+            
+            # 保存配置
+            self.step_data['post_processing'][tool_id] = config_data
+            
+            # 发送更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 刷新显示
+            self.refresh_post_tools_display()
+            
+            print(f"后置处理工具添加成功: {tool_id}")
+        except Exception as e:
+            print(f"保存后置处理工具配置失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"保存后置处理工具配置失败: {str(e)}")
     
     def on_post_processing_edited(self, tool_id, new_config):
         """后置处理工具编辑完成回调"""
@@ -1946,8 +2034,9 @@ class InterfaceStepCard(QFrame):
             new_tool_id = f"assertion_{int(time.time() * 1000)}"
             
             # 修改工具名称，添加"(副本)"后缀
-            if 'name' in new_config:
-                new_config['name'] = f"{new_config['name']}(副本)"
+            # 正确地从config字段中获取和设置名称
+            if 'config' in new_config and 'name' in new_config['config']:
+                new_config['config']['name'] = f"{new_config['config']['name']}(副本)"
             
             # 更新优先级字段，放在最后
             new_config['priority'] = len(self.step_data.get('assertions', {}))
