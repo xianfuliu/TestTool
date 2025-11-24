@@ -1841,7 +1841,7 @@ class InterfaceStepCard(QFrame):
         """编辑HTTP请求工具"""
         try:
             # 导入HTTP请求对话框
-            from src.ui.interface_auto.components.http_request_dialog import HttpRequestDialog
+            from src.ui.interface_auto.dialogs.http_request_dialog import HttpRequestDialog
             
             # 获取当前配置
             tool_config = self.step_data['pre_processing'][tool_id]
