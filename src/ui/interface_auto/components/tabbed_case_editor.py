@@ -284,29 +284,51 @@ class CaseExecutionThread(QThread):
         if not pre_processing:
             return
             
-        # 计算前置处理工具数量
+        # 计算前置处理工具数量 - 基于实际工具配置统计
         tool_count = 0
+        executed_tool_count = 0
+        
+        # 遍历所有配置项，但只处理有效的工具配置
         for tool_id, tool_config in pre_processing.items():
-            if isinstance(tool_config, dict):
-                enabled = tool_config.get('enabled', True)
-                if enabled:
-                    tool_count += 1
+            # 跳过空配置或无效配置
+            if tool_config is None:
+                continue
+                
+            if not isinstance(tool_config, dict):
+                continue
+                
+            # 检查是否为工具配置：必须有type字段
+            tool_type = tool_config.get('type')
+            if not tool_type:
+                continue
+                
+            enabled = tool_config.get('enabled', True)
+            
+            # 统计工具数量
+            if enabled:
+                tool_count += 1
         
         self.log_message.emit(self.format_debug_message("开始执行前置处理", "debug", step_index), "debug", step_index)
         self.log_message.emit(self.format_debug_message(f"前置处理工具数量: {tool_count}", "debug", step_index), "debug", step_index)
         
         # 执行前置处理器中的工具
-        executed_tool_count = 0
-        
         for tool_id, tool_config in pre_processing.items():
+            # 跳过空配置或无效配置
+            if tool_config is None:
+                continue
+                
             if not isinstance(tool_config, dict):
+                continue
+                
+            # 检查是否为工具配置：必须有type字段
+            tool_type = tool_config.get('type')
+            if not tool_type:
                 continue
                 
             enabled = tool_config.get('enabled', True)
             if not enabled:
                 continue
                 
-            tool_type = tool_config.get('type')
             config = tool_config.get('config', {})
             
             # 记录前置处理工具情况
@@ -315,6 +337,9 @@ class CaseExecutionThread(QThread):
             if tool_type == 'http_request':
                 self.log_message.emit(self.format_debug_message("执行HTTP请求工具", "debug", step_index), "debug", step_index)
                 self.execute_http_request_tool(config, step_index)
+            elif tool_type == 'sql_tool':
+                self.log_message.emit(self.format_debug_message("执行SQL工具", "debug", step_index), "debug", step_index)
+                self.execute_sql_tool(config, step_index)
             else:
                 self.log_message.emit(self.format_debug_message(f"未知的前置处理工具类型: {tool_type}", "warning", step_index), "warning", step_index)
             
@@ -428,6 +453,115 @@ class CaseExecutionThread(QThread):
             self.log_message.emit(self.format_debug_message(f"执行HTTP请求工具失败: {str(e)}", "error", step_index), "error", step_index)
         
         self.log_message.emit(self.format_debug_message("HTTP请求工具执行结束", "debug", step_index), "debug", step_index)
+
+    def execute_sql_tool(self, config, step_index=-1):
+        """执行SQL工具"""
+        self.log_message.emit(self.format_debug_message(f"开始执行SQL工具，配置: {config}", "debug", step_index), "debug", step_index)
+        
+        try:
+            # 获取SQL工具配置
+            name = config.get('name', 'SQL工具')
+            database_config = config.get('database', {})
+            sql = config.get('sql', '')
+            output_fields = config.get('output_fields', [])
+            
+            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - 名称: {name}", "debug", step_index), "debug", step_index)
+            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - 数据库: {database_config}", "debug", step_index), "debug", step_index)
+            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - SQL语句: {sql}", "debug", step_index), "debug", step_index)
+            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - 输出字段: {output_fields}", "debug", step_index), "debug", step_index)
+            
+            if not sql:
+                self.log_message.emit(self.format_debug_message("SQL工具配置错误: SQL语句不能为空", "error", step_index), "error", step_index)
+                return
+            
+            if not database_config:
+                self.log_message.emit(self.format_debug_message("SQL工具配置错误: 数据库配置不能为空", "error", step_index), "error", step_index)
+                return
+            
+            # 获取变量池
+            all_variables = {}
+            all_variables.update(self.variable_manager.global_variables)
+            all_variables.update(self.variable_manager.local_variables)
+            
+            self.log_message.emit(self.format_debug_message(f"变量替换前 - SQL: {sql}", "debug", step_index), "debug", step_index)
+            self.log_message.emit(self.format_debug_message(f"可用变量: {all_variables}", "debug", step_index), "debug", step_index)
+            
+            # 预处理SQL：移除变量周围的引号，并将${variable}格式转换为{variable}格式
+            import re
+            def convert_and_remove_quotes(match):
+                var_name = match.group(1)  # 变量名
+                return f"{{{var_name}}}"  # 返回{variable}格式的变量占位符
+            
+            # 移除变量周围的单引号并转换格式
+            processed_sql = re.sub(r"'\$\{(\w+)\}'", convert_and_remove_quotes, sql)
+            self.log_message.emit(self.format_debug_message(f"预处理后 - SQL: {processed_sql}", "debug", step_index), "debug", step_index)
+            
+            # 记录SQL执行日志
+            self.log_message.emit(self.format_debug_message(f"前置处理器SQL执行: {processed_sql}", "info", step_index), "info", step_index)
+            
+            # 执行SQL查询
+            from src.utils.sql_worker import SQLWorker
+            from PyQt5.QtCore import QEventLoop
+            
+            # 创建事件循环等待SQL执行完成
+            loop = QEventLoop()
+            result = {'success': False, 'error': '未执行'}
+            
+            def on_finished(query_name, message, result_data):
+                nonlocal result
+                result = {'success': True, 'message': message, 'data': result_data}
+                loop.quit()
+            
+            def on_error(query_name, error_message):
+                nonlocal result
+                result = {'success': False, 'error': error_message}
+                loop.quit()
+            
+            # 创建SQLWorker并执行
+            sql_worker = SQLWorker("pre_processing_sql", database_config, processed_sql, all_variables)
+            sql_worker.finished.connect(on_finished)
+            sql_worker.error.connect(on_error)
+            sql_worker.start()
+            
+            # 等待信号完成
+            loop.exec_()
+            
+            # 断开信号连接
+            sql_worker.finished.disconnect(on_finished)
+            sql_worker.error.disconnect(on_error)
+            
+            if result['success']:
+                # SQL执行成功
+                data = result.get('data', [])
+                self.log_message.emit(self.format_debug_message(f"前置处理器SQL执行成功: 返回 {len(data)} 行数据", "info", step_index), "info", step_index)
+                
+                # 提取变量到变量管理器
+                if output_fields and data:
+                    self.log_message.emit(self.format_debug_message(f"开始提取变量，输出字段数量: {len(output_fields)}", "debug", step_index), "debug", step_index)
+                    
+                    # 获取第一行数据（假设只取第一行结果）
+                    first_row = data[0] if data else {}
+                    
+                    for field_config in output_fields:
+                        field_name = field_config.get('field', '')
+                        if field_name and field_name in first_row:
+                            value = first_row[field_name]
+                            # 将提取的变量保存到变量管理器
+                            self.variable_manager.set_local_variables({field_name: value})
+                            self.log_message.emit(self.format_debug_message(f"提取变量成功: {field_name} = {value}", "info", step_index), "info", step_index)
+                        else:
+                            self.log_message.emit(self.format_debug_message(f"提取变量失败: 字段 {field_name} 不存在或为空", "warning", step_index), "warning", step_index)
+                else:
+                    self.log_message.emit(self.format_debug_message("无输出字段或查询结果为空，跳过变量提取", "debug", step_index), "debug", step_index)
+            else:
+                # SQL执行失败
+                error_msg = result.get('error', '未知错误')
+                self.log_message.emit(self.format_debug_message(f"前置处理器SQL执行失败: {error_msg}", "error", step_index), "error", step_index)
+                
+        except Exception as e:
+            self.log_message.emit(self.format_debug_message(f"执行SQL工具失败: {str(e)}", "error", step_index), "error", step_index)
+        
+        self.log_message.emit(self.format_debug_message("SQL工具执行结束", "debug", step_index), "debug", step_index)
 
     def execute_post_processing(self, post_processing, step_result, step_index):
         """执行后置处理"""

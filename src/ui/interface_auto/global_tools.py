@@ -234,7 +234,7 @@ class GlobalToolDialog(QDialog):
 
         self.type_combo = NoWheelComboBox()
         self.type_combo.addItems([
-            "SQL查询工具", "随机数生成器", "Python脚本执行器",
+            "SQL工具", "随机数生成器", "Python脚本执行器",
             "等待定时器", "HTTP请求工具", "自定义工具"
         ])
         self.type_combo.currentIndexChanged.connect(self.on_tool_type_changed)

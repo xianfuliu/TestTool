@@ -60,7 +60,7 @@ class AssertionDialog(QDialog):
                 padding: 0 5px 0 5px;
             }
             QPushButton {
-                background-color: #1976d2;
+                background-color: #4CAF50;
                 color: white;
                 border: none;
                 padding: 6px 12px;
@@ -68,10 +68,10 @@ class AssertionDialog(QDialog):
                 font-size: 12px;
             }
             QPushButton:hover {
-                background-color: #1565c0;
+                background-color: #45a049;
             }
             QPushButton:pressed {
-                background-color: #0d47a1;
+                background-color: #3d8b40;
             }
             QPushButton:disabled {
                 background-color: #cccccc;

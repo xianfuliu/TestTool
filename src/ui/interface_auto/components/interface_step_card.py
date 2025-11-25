@@ -868,7 +868,7 @@ class InterfaceStepCard(QFrame):
             }
         """)
         
-        tools = ["全局工具", "参数提取", "数据准备", "SQL查询", "Python脚本", "HTTP请求"]
+        tools = ["全局工具", "参数提取", "数据准备", "SQL工具", "Python脚本", "HTTP请求"]
         for tool in tools:
             action = menu.addAction(tool)
             action.triggered.connect(lambda checked, tool_name=tool: self.on_pre_tool_selected(tool_name))
@@ -953,6 +953,8 @@ class InterfaceStepCard(QFrame):
         """前置处理器工具选择事件"""
         if tool_name == "HTTP请求":
             self.add_http_request_tool()
+        elif tool_name == "SQL工具":
+            self.add_sql_tool()
         else:
             # 其他工具的处理逻辑
             print(f"选择了工具: {tool_name}")
@@ -998,6 +1000,46 @@ class InterfaceStepCard(QFrame):
             from src.ui.widgets.toast_tips import Toast
             Toast.error(self, f"添加HTTP请求工具失败: {str(e)}")
     
+    def add_sql_tool(self):
+        """添加SQL工具到前置处理器 - 直接打开编辑弹窗"""
+        try:
+            # 生成唯一的工具ID
+            tool_id = f"sql_tool_{len(self.step_data.get('pre_processing', {})) + 1}"
+            
+            # 创建默认配置
+            default_config = {
+                'name': 'sql工具',
+                'database': {
+                    'host': 'localhost',
+                    'port': 3306,
+                    'user': 'root',
+                    'password': 'password',
+                    'database': 'test_db',
+                    'charset': 'utf8mb4'
+                },
+                'sql': '',
+                'output_fields': []
+            }
+            
+            # 直接打开编辑对话框
+            from src.ui.interface_auto.dialogs.sql_tool_dialog import SQLToolDialog
+            dialog = SQLToolDialog(self, default_config)
+            
+            # 连接保存信号
+            dialog.sql_tool_saved.connect(lambda config_data: self.on_sql_tool_added(tool_id, config_data))
+            
+            if dialog.exec_() == SQLToolDialog.Accepted:
+                # 配置数据通过信号传递，这里不需要额外处理
+                pass
+            else:
+                # 用户取消了对话框，不添加工具
+                print("用户取消了SQL工具添加")
+                
+        except Exception as e:
+            print(f"添加SQL工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"添加SQL工具失败: {str(e)}")
+    
     def on_http_request_added(self, tool_id, config_data):
         """HTTP请求工具添加回调"""
         try:
@@ -1027,6 +1069,36 @@ class InterfaceStepCard(QFrame):
             print(f"保存HTTP请求工具配置失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
             Toast.error(self, f"保存HTTP请求工具配置失败: {str(e)}")
+    
+    def on_sql_tool_added(self, tool_id, config_data):
+        """SQL工具添加回调"""
+        try:
+            # 确保前置处理器配置存在
+            if 'pre_processing' not in self.step_data:
+                self.step_data['pre_processing'] = {}
+            
+            # 创建完整配置
+            full_config = {
+                'type': 'sql_tool',
+                'config': config_data,
+                'enabled': True,
+                'priority': len(self.step_data.get('pre_processing', {}))
+            }
+            
+            # 保存配置
+            self.step_data['pre_processing'][tool_id] = full_config
+            
+            # 发送更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 刷新显示
+            self.refresh_pre_tools_display()
+            
+            print(f"SQL工具添加成功: {tool_id}")
+        except Exception as e:
+            print(f"保存SQL工具配置失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"保存SQL工具配置失败: {str(e)}")
     
     def add_assertion_tool(self, assertion_type, assertion_name):
         """添加断言工具到断言配置 - 直接打开编辑弹窗"""
@@ -1227,6 +1299,8 @@ class InterfaceStepCard(QFrame):
         for tool_id, tool_config in sorted_tools:
             if tool_config.get('type') == 'http_request':
                 self.add_http_request_tool_widget(tool_id, tool_config, layout)
+            elif tool_config.get('type') == 'sql_tool':
+                self.add_sql_tool_widget(tool_id, tool_config, layout)
     
     def refresh_assertion_tools_display(self):
         """刷新断言工具显示"""
@@ -1657,6 +1731,179 @@ class InterfaceStepCard(QFrame):
         if not hasattr(self, 'assertion_tool_widgets'):
             self.assertion_tool_widgets = {}
         self.assertion_tool_widgets[tool_id] = tool_card
+    
+    def add_sql_tool_widget(self, tool_id, tool_config, parent_layout):
+        """添加SQL工具显示组件"""
+        # 创建工具卡片
+        tool_card = QFrame()
+        tool_card.setFrameStyle(QFrame.StyledPanel)
+        tool_card.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 2px 4px;
+                max-height: 32px;
+            }
+            QFrame:hover {
+                background-color: #e9ecef;
+                border-color: #adb5bd;
+            }
+        """)
+        
+        # 设置工具卡片为可拖动
+        tool_card.setProperty("tool_id", tool_id)
+        tool_card.setProperty("tool_type", "pre")  # 标记工具类型（SQL工具属于前置处理）
+        tool_card.setProperty("is_tool_card", True)  # 标记为工具卡片
+        tool_card.setAcceptDrops(True)
+        tool_card.installEventFilter(self)
+        tool_card.setCursor(Qt.PointingHandCursor)
+        
+        layout = QHBoxLayout(tool_card)
+        layout.setContentsMargins(4, 2, 4, 2)  # 减小边距
+        layout.setSpacing(6)  # 减小间距
+        
+        # 拖拽手柄 - 使用图标
+        drag_handle = QLabel()
+        drag_handle.setFixedSize(16, 16)
+        drag_handle.setText("⋮⋮")
+        drag_handle.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-size: 12px;
+                font-weight: bold;
+                qproperty-alignment: 'AlignCenter';
+            }
+            QLabel:hover {
+                color: #495057;
+                background-color: rgba(108, 117, 125, 0.1);
+                border-radius: 2px;
+            }
+        """)
+        drag_handle.setCursor(Qt.SizeAllCursor)
+        drag_handle.setProperty("is_drag_handle", True)
+        drag_handle.setProperty("tool_id", tool_id)
+        drag_handle.setProperty("tool_type", "pre")  # 标记工具类型（SQL工具属于前置处理）
+        drag_handle.installEventFilter(self)
+        
+        # 工具图标和名称
+        icon_label = QLabel()
+        # 使用SQL图标文件
+        icon_pixmap = self.get_icon_pixmap("sql.png", 16, 16)
+        if not icon_pixmap.isNull():
+            icon_label.setPixmap(icon_pixmap)
+        else:
+            # 如果图标文件不存在，使用默认emoji
+            icon_label.setText("🗃️")
+        
+        # 设置图标样式 - 无悬浮效果，无边框
+        icon_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        icon_label.setCursor(Qt.ArrowCursor)
+        
+        # 正确获取SQL工具名称 - 从config字段中获取
+        config = tool_config.get('config', {})
+        name = config.get('name', 'SQL工具')  # 只显示名称
+        
+        name_label = QLabel(name)
+        name_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold; 
+                color: #1976d2;
+                font-size: 11px;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        name_label.setWordWrap(False)
+        name_label.setCursor(Qt.ArrowCursor)
+        # 设置固定宽度和省略号显示
+        name_label.setFixedWidth(150)  # 固定宽度
+        name_label.setToolTip(name)  # hover时显示完整标题
+        
+        # 复制按钮 - 使用图标
+        copy_btn = QPushButton()
+        copy_btn.setFixedSize(20, 20)  # 固定按钮大小，正方形
+        copy_btn.setIcon(self.get_icon("copy.png"))
+        copy_btn.setIconSize(QSize(12, 12))
+        copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(76, 175, 80, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(76, 175, 80, 0.2);
+            }
+        """)
+        copy_btn.setToolTip("复制")
+        copy_btn.clicked.connect(lambda checked, tid=tool_id: self.copy_sql_tool(tid))
+        
+        # 编辑按钮 - 使用图标
+        edit_btn = QPushButton()
+        edit_btn.setFixedSize(20, 20)  # 固定按钮大小，正方形
+        edit_btn.setIcon(self.get_icon("edit.png"))
+        edit_btn.setIconSize(QSize(12, 12))
+        edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(25, 118, 210, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(25, 118, 210, 0.2);
+            }
+        """)
+        edit_btn.setToolTip("编辑")
+        edit_btn.clicked.connect(lambda checked, tid=tool_id: self.edit_sql_tool(tid))
+        
+        # 删除按钮 - 使用图标
+        delete_btn = QPushButton()
+        delete_btn.setFixedSize(20, 20)  # 固定按钮大小，正方形
+        delete_btn.setIcon(self.get_icon("delete.png"))
+        delete_btn.setIconSize(QSize(12, 12))
+        delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(244, 67, 54, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(244, 67, 54, 0.2);
+            }
+        """)
+        delete_btn.setToolTip("删除")
+        delete_btn.clicked.connect(lambda checked, tid=tool_id: self.delete_sql_tool(tid))
+        
+        layout.addWidget(drag_handle)
+        layout.addWidget(icon_label)
+        layout.addWidget(name_label)
+        layout.addStretch()
+        layout.addWidget(copy_btn)
+        layout.addWidget(edit_btn)
+        layout.addWidget(delete_btn)
+        
+        # 将工具卡片直接添加到Tab布局中
+        parent_layout.addWidget(tool_card)
+        
+        # 保存工具卡片引用
+        if not hasattr(self, 'sql_tool_widgets'):
+            self.sql_tool_widgets = {}
+        self.sql_tool_widgets[tool_id] = tool_card
     
     def add_post_tool_widget(self, tool_id, tool_config, parent_layout):
         """添加后置处理工具显示组件"""
@@ -2099,6 +2346,120 @@ class InterfaceStepCard(QFrame):
             print(f"复制后置处理工具失败: {str(e)}")
             from src.ui.widgets.toast_tips import Toast
             Toast.error(self, f"复制后置处理工具失败: {str(e)}")
+    
+    def copy_sql_tool(self, tool_id):
+        """复制SQL工具"""
+        try:
+            # 获取原始工具配置
+            original_config = self.step_data['pre_processing'][tool_id]
+            
+            # 深拷贝配置
+            import copy
+            new_config = copy.deepcopy(original_config)
+            
+            # 生成新的工具ID
+            import time
+            new_tool_id = f"sql_tool_{int(time.time() * 1000)}"
+            
+            # 修改工具名称，添加"(副本)"后缀
+            if 'name' in new_config:
+                new_config['name'] = f"{new_config['name']}(副本)"
+            
+            # 更新优先级字段，放在最后
+            new_config['priority'] = len(self.step_data.get('pre_processing', {}))
+            
+            # 添加到前置处理器配置中
+            self.step_data['pre_processing'][new_tool_id] = new_config
+            
+            # 发送更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 刷新显示
+            self.refresh_pre_tools_display()
+            
+            # 显示成功提示
+            from src.ui.widgets.toast_tips import Toast
+            Toast.success(self, "SQL工具复制成功")
+            
+            print(f"SQL工具复制成功: {tool_id} -> {new_tool_id}")
+        except Exception as e:
+            print(f"复制SQL工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"复制SQL工具失败: {str(e)}")
+    
+    def edit_sql_tool(self, tool_id):
+        """编辑SQL工具"""
+        try:
+            # 获取当前配置
+            tool_config = self.step_data['pre_processing'][tool_id]
+            
+            # 提取SQL工具的具体配置（config字段）
+            sql_config = tool_config.get('config', {})
+            
+            # 打开SQL工具编辑对话框
+            from src.ui.interface_auto.dialogs.sql_tool_dialog import SQLToolDialog
+            dialog = SQLToolDialog(self, sql_config)
+            
+            # 连接保存信号
+            dialog.sql_tool_saved.connect(lambda config_data: self.on_sql_tool_edited(tool_id, config_data))
+            
+            if dialog.exec_() == SQLToolDialog.Accepted:
+                # 配置数据通过信号传递，这里不需要额外处理
+                pass
+        except Exception as e:
+            print(f"编辑SQL工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"编辑SQL工具失败: {str(e)}")
+    
+    def on_sql_tool_edited(self, tool_id, new_config):
+        """SQL工具编辑完成回调"""
+        try:
+            # 获取原始工具配置结构
+            original_config = self.step_data['pre_processing'][tool_id]
+            
+            # 更新工具配置，保持原有的结构，只更新config字段
+            self.step_data['pre_processing'][tool_id] = {
+                'type': 'sql_tool',
+                'config': new_config,
+                'enabled': original_config.get('enabled', True),
+                'priority': original_config.get('priority', 0)
+            }
+            
+            # 发送更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 刷新显示
+            self.refresh_pre_tools_display()
+            
+            print(f"SQL工具编辑成功: {tool_id}")
+        except Exception as e:
+            print(f"编辑SQL工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"编辑SQL工具失败: {str(e)}")
+    
+    def delete_sql_tool(self, tool_id):
+        """删除SQL工具"""
+        try:
+            # 直接删除，无需二次确认
+            # 从配置中删除
+            if tool_id in self.step_data['pre_processing']:
+                del self.step_data['pre_processing'][tool_id]
+            
+            # 发送更新信号
+            self.step_updated.emit(self.step_data)
+            
+            # 刷新显示
+            self.refresh_pre_tools_display()
+            
+            # 显示成功提示
+            from src.ui.widgets.toast_tips import Toast
+            Toast.success(self, "SQL工具删除成功")
+            
+            print(f"SQL工具删除成功: {tool_id}")
+        except Exception as e:
+            print(f"删除SQL工具失败: {str(e)}")
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"删除SQL工具失败: {str(e)}")
     
     def eventFilter(self, obj, event):
         """事件过滤器，处理工具卡片的拖动事件"""

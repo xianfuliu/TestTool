@@ -140,7 +140,7 @@ class ToolCardWidget(QFrame):
     def get_type_display(self):
         card_type = self.card_data.get('type', 'sql')
         type_map = {
-            'sql': 'SQL查询',
+            'sql': 'SQL工具',
             'sql_update': 'SQL更新',
             'sql_delete': 'SQL删除',
             'http': 'HTTP接口',
