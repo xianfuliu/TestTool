@@ -205,8 +205,8 @@ class HTMLReportGenerator:
                     <div class="info-card">
                         <h3>基本信息</h3>
                         <p><strong>测试用例:</strong> {case_name}</p>
-                        <p><strong>开始时间:</strong> {start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else 'N/A'}</p>
-                        <p><strong>结束时间:</strong> {end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else 'N/A'}</p>
+                        <p><strong>开始时间:</strong> {self._format_datetime(start_time)}</p>
+                        <p><strong>结束时间:</strong> {self._format_datetime(end_time)}</p>
                         <p><strong>执行时长:</strong> {duration:.2f} 秒</p>
                     </div>
                     <div class="info-card">
@@ -248,6 +248,45 @@ class HTMLReportGenerator:
 
         return output_path
 
+    def _format_datetime(self, dt_value):
+        """格式化日期时间，支持字符串和datetime对象"""
+        if not dt_value:
+            return 'N/A'
+        
+        try:
+            from datetime import datetime
+            
+            # 如果是字符串，尝试解析
+            if isinstance(dt_value, str):
+                # 尝试常见的时间格式
+                formats = [
+                    '%Y-%m-%d %H:%M:%S',
+                    '%Y-%m-%d %H:%M',
+                    '%Y-%m-%d',
+                    '%H:%M:%S'
+                ]
+                
+                for fmt in formats:
+                    try:
+                        dt_obj = datetime.strptime(dt_value, fmt)
+                        return dt_obj.strftime('%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        continue
+                
+                # 如果无法解析，返回原字符串
+                return dt_value
+            
+            # 如果是datetime对象，直接格式化
+            elif hasattr(dt_value, 'strftime'):
+                return dt_value.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # 其他类型返回字符串表示
+            else:
+                return str(dt_value)
+                
+        except Exception:
+            return str(dt_value)
+
     def _generate_steps_table(self, report_data: Dict[str, Any]) -> str:
         """生成步骤表格内容"""
         try:
@@ -270,10 +309,10 @@ class HTMLReportGenerator:
                 }.get(status, status)
 
                 start_time = step.get('start_time')
-                start_text = start_time.strftime('%H:%M:%S') if start_time else 'N/A'
+                start_text = self._format_datetime(start_time) if start_time else 'N/A'
 
                 end_time = step.get('end_time')
-                end_text = end_time.strftime('%H:%M:%S') if end_time else 'N/A'
+                end_text = self._format_datetime(end_time) if end_time else 'N/A'
 
                 duration = step.get('duration', 0)
                 duration_text = f"{duration:.3f}" if duration > 0 else 'N/A'

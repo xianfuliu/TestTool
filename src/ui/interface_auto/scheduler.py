@@ -1,22 +1,30 @@
 import os
 import json
 import sys
+import logging
 from datetime import datetime, timedelta
+
+# 配置日志
+logger = logging.getLogger('SchedulerManager')
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,
-                             QHeaderView, QInputDialog, QCheckBox, QSpinBox,
-                             QListWidget, QListWidgetItem, QSplitter, QToolBar,
-                             QAction, QToolButton, QMenu, QApplication, QDateTimeEdit)
+                             QFormLayout, QHeaderView, QCheckBox, QSpinBox,
+                             QListWidget, QListWidgetItem, QToolBar, QAction,
+                             QSizePolicy, QTabWidget, QRadioButton)
+from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QFont, QColor
 from src.core.services.scheduler_service import SchedulerService
 from src.core.services.test_case_service import TestCaseService
+from src.core.services.project_service import ProjectService
+from src.core.services.case_folder_service import CaseFolderService
+from src.core.services.scheduler_background_service import SchedulerBackgroundService
 from src.core.models.interface_models import TestScheduler
 from src.utils.interface_utils.cron_parser import CronParser
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelTabWidget
+from src.ui.interface_auto.components.tabbed_case_editor import CaseExecutionThread
 
 
 class SchedulerDialog(QDialog):
@@ -27,13 +35,16 @@ class SchedulerDialog(QDialog):
         self.scheduler_data = scheduler_data or {}
         self.is_edit = bool(scheduler_data)
         self.test_case_service = None  # 延迟初始化
+        self.project_service = ProjectService()
+        self.folder_service = CaseFolderService()
+        self.scheduler_background_service = SchedulerBackgroundService()
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
         self.setWindowTitle("编辑调度" if self.is_edit else "新增调度")
-        self.setMinimumSize(700, 600)
+        self.setMinimumSize(900, 800)
 
         layout = QVBoxLayout(self)
 
@@ -60,6 +71,10 @@ class SchedulerDialog(QDialog):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        
+        # 修改按钮文本为中文
+        button_box.button(QDialogButtonBox.Ok).setText("确定")
+        button_box.button(QDialogButtonBox.Cancel).setText("取消")
 
         layout.addWidget(tab_widget)
         layout.addWidget(button_box)
@@ -70,161 +85,992 @@ class SchedulerDialog(QDialog):
 
     def setup_basic_tab(self, parent):
         layout = QVBoxLayout(parent)
+        layout.setSpacing(15)  # 增加间距
+        layout.setContentsMargins(20, 20, 20, 20)  # 设置边距
 
-        # 基本信息表单
-        form_layout = QFormLayout()
-
+        # 基本信息表单 - 去除标题和边框
+        basic_info_widget = QWidget()
+        basic_layout = QVBoxLayout(basic_info_widget)
+        basic_layout.setSpacing(12)
+        
+        # 调度名称
+        name_layout = QHBoxLayout()
+        name_label = QLabel("调度名称")
+        name_label.setFixedWidth(80)
+        name_label.setStyleSheet("font-weight: bold; color: #333;")
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("请输入调度名称")
-
+        self.name_edit.setStyleSheet("""
+            QLineEdit {
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: white;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border-color: #0078d4;
+                outline: none;
+            }
+        """)
+        name_layout.addWidget(name_label)
+        name_layout.addWidget(self.name_edit)
+        
+        # 调度描述 - 与标题放在同一行
+        desc_layout = QHBoxLayout()
+        desc_label = QLabel("调度描述")
+        desc_label.setFixedWidth(80)
+        desc_label.setStyleSheet("font-weight: bold; color: #333;")
         self.desc_edit = QTextEdit()
-        self.desc_edit.setMaximumHeight(80)
-        self.desc_edit.setPlaceholderText("请输入调度描述")
-
-        self.enabled_check = QCheckBox("启用调度")
-        self.enabled_check.setChecked(True)
-
-        form_layout.addRow("调度名称:", self.name_edit)
-        form_layout.addRow("调度描述:", self.desc_edit)
-        form_layout.addRow("", self.enabled_check)
-
-        # 测试用例选择
-        case_group = QGroupBox("选择测试用例")
-        case_layout = QVBoxLayout(case_group)
-
-        # 用例列表
+        self.desc_edit.setMaximumHeight(60)
+        self.desc_edit.setPlaceholderText("请输入调度描述（可选）")
+        self.desc_edit.setStyleSheet("""
+            QTextEdit {
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: white;
+                font-size: 14px;
+            }
+            QTextEdit:focus {
+                border-color: #0078d4;
+                outline: none;
+            }
+        """)
+        desc_layout.addWidget(desc_label)
+        desc_layout.addWidget(self.desc_edit)
+        
+        basic_layout.addLayout(name_layout)
+        basic_layout.addLayout(desc_layout)
+        
+        # 测试用例选择区域 - 去除标题和边框
+        case_selection_widget = QWidget()
+        case_selection_layout = QHBoxLayout(case_selection_widget)
+        case_selection_layout.setSpacing(0)  # 移除间距，使四个竖栏紧挨在一起
+        
+        # 第一栏：项目列表
+        project_panel = QWidget()
+        project_layout = QVBoxLayout(project_panel)
+        project_layout.setSpacing(0)  # 移除内部间距
+        project_layout.setContentsMargins(0, 0, 0, 0)  # 移除内容边距
+        
+        project_label = QLabel("项目")
+        project_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 5px;")
+        self.project_list = QListWidget()
+        self.project_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background-color: white;
+                outline: none;
+                min-height: 150px;
+                margin: 0px;
+                padding: 0px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            QListWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #0078d4;
+            }
+        """)
+        self.project_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        project_layout.addWidget(project_label)
+        project_layout.addWidget(self.project_list)
+        
+        # 第二栏：文件夹列表
+        folder_panel = QWidget()
+        folder_layout = QVBoxLayout(folder_panel)
+        folder_layout.setSpacing(0)  # 移除内部间距
+        folder_layout.setContentsMargins(0, 0, 0, 0)  # 移除内容边距
+        
+        folder_label = QLabel("文件夹")
+        folder_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 5px;")
+        self.folder_list = QListWidget()
+        self.folder_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background-color: white;
+                outline: none;
+                min-height: 150px;
+                margin: 0px;
+                padding: 0px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            QListWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #0078d4;
+            }
+        """)
+        self.folder_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        folder_layout.addWidget(folder_label)
+        folder_layout.addWidget(self.folder_list)
+        
+        # 第三栏：测试用例列表
+        case_panel = QWidget()
+        case_layout = QVBoxLayout(case_panel)
+        case_layout.setSpacing(0)  # 移除内部间距
+        case_layout.setContentsMargins(0, 0, 0, 0)  # 移除内容边距
+        
+        case_label = QLabel("选择用例")
+        case_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 5px;")
         self.case_list = QListWidget()
         self.case_list.setSelectionMode(QListWidget.MultiSelection)
-
-        # 加载测试用例
-        self.load_test_cases()
-
-        case_layout.addWidget(QLabel("可多选测试用例:"))
+        self.case_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background-color: white;
+                outline: none;
+                min-height: 250px;
+                margin: 0px;
+                padding: 0px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            QListWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #0078d4;
+            }
+        """)
+        self.case_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # 导入按钮
+        import_btn = QPushButton("导入")
+        import_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+                margin-top: 5px;
+            }
+            QPushButton:hover {
+                background-color: #106ebe;
+            }
+            QPushButton:pressed {
+                background-color: #005a9e;
+            }
+        """)
+        import_btn.clicked.connect(self.import_selected_cases)
+        
+        case_layout.addWidget(case_label)
         case_layout.addWidget(self.case_list)
-
-        layout.addLayout(form_layout)
-        layout.addWidget(case_group)
+        case_layout.addWidget(import_btn)
+        
+        # 第四栏：已选用例区域
+        selected_panel = QWidget()
+        selected_layout = QVBoxLayout(selected_panel)
+        selected_layout.setSpacing(0)  # 移除内部间距
+        selected_layout.setContentsMargins(0, 0, 0, 0)  # 移除内容边距
+        
+        selected_label = QLabel("已选用例")
+        selected_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 5px;")
+        self.selected_case_list = QListWidget()
+        self.selected_case_list.setSelectionMode(QListWidget.MultiSelection)  # 支持多选
+        self.selected_case_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background-color: #f8f9fa;
+                outline: none;
+                min-height: 250px;
+                margin: 0px;
+                padding: 0px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-bottom: 1px solid #e9ecef;
+                background-color: #e8f5e8;
+            }
+            QListWidget::item:selected {
+                background-color: #d4edda;
+                color: #155724;
+            }
+        """)
+        self.selected_case_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # 移除按钮
+        remove_btn = QPushButton("移除")
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+                margin-top: 5px;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+            QPushButton:pressed {
+                background-color: #bd2130;
+            }
+        """)
+        remove_btn.clicked.connect(self.remove_selected_cases)
+        
+        selected_layout.addWidget(selected_label)
+        selected_layout.addWidget(self.selected_case_list)
+        selected_layout.addWidget(remove_btn)
+        
+        # 设置面板大小策略，四个竖栏可以拉伸
+        project_panel.setMinimumWidth(180)
+        project_panel.setMaximumWidth(300)
+        folder_panel.setMinimumWidth(180)
+        folder_panel.setMaximumWidth(300)
+        case_panel.setMinimumWidth(220)
+        case_panel.setMaximumWidth(400)
+        selected_panel.setMinimumWidth(220)
+        selected_panel.setMaximumWidth(400)
+        
+        # 设置拉伸因子，让四个竖栏可以按比例拉伸
+        case_selection_layout.addWidget(project_panel, 1)
+        case_selection_layout.addWidget(folder_panel, 1)
+        case_selection_layout.addWidget(case_panel, 2)
+        case_selection_layout.addWidget(selected_panel, 2)
+        
+        # 添加到主布局，设置拉伸因子让测试用例选择区域可以拉伸
+        layout.addWidget(basic_info_widget, 0)  # 基本信息区域不拉伸
+        layout.addWidget(case_selection_widget, 1)  # 测试用例选择区域可以拉伸
+        
+        # 连接信号
+        self.project_list.itemSelectionChanged.connect(self.on_project_selected)
+        self.folder_list.itemSelectionChanged.connect(self.on_folder_selected)
+        
+        # 加载项目列表
+        self.load_projects()
 
     def setup_schedule_tab(self, parent):
         layout = QVBoxLayout(parent)
+        layout.setSpacing(20)  # 增加区域间距
+        layout.setContentsMargins(20, 20, 20, 20)  # 设置边距
 
-        # Cron表达式配置
-        cron_group = QGroupBox("Cron表达式配置")
-        cron_layout = QVBoxLayout(cron_group)
+        # Cron表达式配置区域 - 重构为Tab栏形式
+        cron_widget = QWidget()
+        cron_layout = QVBoxLayout(cron_widget)
+        cron_layout.setSpacing(12)
+        
+        # Cron表达式标题
+        cron_title = QLabel("Cron表达式配置")
+        cron_title.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                color: #333;
+                margin-bottom: 10px;
+            }
+        """)
+        cron_layout.addWidget(cron_title)
 
-        # Cron表达式输入
+        # Cron表达式输入行
         cron_input_layout = QHBoxLayout()
+        cron_input_layout.setSpacing(10)
+        
+        cron_label = QLabel("Cron表达式")
+        cron_label.setStyleSheet("font-weight: bold; color: #555; min-width: 80px;")
+        
         self.cron_edit = QLineEdit()
         self.cron_edit.setPlaceholderText("例如: 0 0 12 * * ? (每天12点执行)")
-        cron_input_layout.addWidget(QLabel("Cron表达式:"))
-        cron_input_layout.addWidget(self.cron_edit)
+        self.cron_edit.setStyleSheet("""
+            QLineEdit {
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background-color: white;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border-color: #0078d4;
+                outline: none;
+            }
+        """)
+        
+        cron_input_layout.addWidget(cron_label)
+        cron_input_layout.addWidget(self.cron_edit, 1)  # 设置拉伸因子
 
-        # Cron表达式帮助
-        help_btn = QPushButton("Cron帮助")
-        help_btn.clicked.connect(self.show_cron_help)
-        cron_input_layout.addWidget(help_btn)
+        # 校验状态标签
+        self.cron_validation_label = QLabel()
+        self.cron_validation_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                padding: 4px 8px;
+                border-radius: 4px;
+                margin-top: 5px;
+            }
+        """)
+        cron_input_layout.addWidget(self.cron_validation_label)
 
-        # 常用Cron表达式
-        common_cron_layout = QHBoxLayout()
-        common_cron_layout.addWidget(QLabel("常用表达式:"))
-
-        common_crons = {
-            "每分钟": "* * * * *",
-            "每小时": "0 * * * *",
-            "每天12点": "0 0 12 * * ?",
-            "每周一9点": "0 0 9 ? * MON",
-            "每月1号": "0 0 0 1 * ?"
-        }
-
-        self.common_cron_combo = NoWheelComboBox()
-        for name, expr in common_crons.items():
-            self.common_cron_combo.addItem(name, expr)
-        self.common_cron_combo.currentIndexChanged.connect(self.on_common_cron_selected)
-        common_cron_layout.addWidget(self.common_cron_combo)
-        common_cron_layout.addStretch()
-
-        # 下次执行时间预览
-        self.next_run_label = QLabel("下次执行时间: 未计算")
-        self.next_run_label.setStyleSheet("color: #666; font-style: italic;")
-
-        # 计算下次执行时间按钮
-        calc_btn = QPushButton("计算下次执行时间")
-        calc_btn.clicked.connect(self.calculate_next_run)
+        # Cron表达式详细配置Tab栏
+        self.setup_cron_tabs(cron_layout)
 
         cron_layout.addLayout(cron_input_layout)
-        cron_layout.addLayout(common_cron_layout)
-        cron_layout.addWidget(self.next_run_label)
-        cron_layout.addWidget(calc_btn)
+        
+        # 连接所有Tab选项的变化信号
+        self.connect_tab_signals()
+        
+        # 连接cron表达式输入框的实时校验信号
+        self.cron_edit.textChanged.connect(self.validate_cron_input)
 
-        # 简单调度配置
-        simple_group = QGroupBox("简单调度配置")
-        simple_layout = QFormLayout(simple_group)
+        layout.addWidget(cron_widget)
+        layout.addStretch()  # 添加弹性空间
 
-        self.simple_type_combo = NoWheelComboBox()
-        self.simple_type_combo.addItems(["每天", "每周", "每月"])
-        self.simple_type_combo.currentIndexChanged.connect(self.on_simple_type_changed)
+    def setup_cron_tabs(self, parent_layout):
+        """设置Cron表达式详细配置Tab栏"""
+        # Tab容器
+        tab_widget = QTabWidget()
+        tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background-color: white;
+                margin-top: 5px;
+            }
+            QTabBar::tab {
+                background-color: #f8f9fa;
+                border: 1px solid #ddd;
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 8px 16px;
+                margin-right: 2px;
+                font-weight: bold;
+                color: #555;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom: 2px solid #0078d4;
+                color: #0078d4;
+            }
+            QTabBar::tab:hover {
+                background-color: #e9ecef;
+            }
+        """)
 
-        self.simple_time_edit = QDateTimeEdit()
-        self.simple_time_edit.setDisplayFormat("HH:mm:ss")
-        self.simple_time_edit.setTime(QDateTime.currentDateTime().time())
+        # 秒Tab
+        second_tab = self.create_second_tab()
+        tab_widget.addTab(second_tab, "秒")
 
-        self.simple_day_combo = NoWheelComboBox()
-        self.simple_day_combo.addItems(["周一", "周二", "周三", "周四", "周五", "周六", "周日"])
-        self.simple_day_combo.setVisible(False)
-         
-        self.simple_date_spin = QSpinBox()
-        self.simple_date_spin.setRange(1, 31)
-        self.simple_date_spin.setValue(1)
+        # 分钟Tab
+        minute_tab = self.create_minute_tab()
+        tab_widget.addTab(minute_tab, "分钟")
 
-        simple_layout.addRow("执行类型:", self.simple_type_combo)
-        simple_layout.addRow("执行时间:", self.simple_time_edit)
-        simple_layout.addRow("执行日期:", self.simple_day_combo)
+        # 小时Tab
+        hour_tab = self.create_hour_tab()
+        tab_widget.addTab(hour_tab, "小时")
 
-        # 应用简单配置按钮
-        apply_simple_btn = QPushButton("应用简单配置")
-        apply_simple_btn.clicked.connect(self.apply_simple_config)
+        # 日Tab
+        day_tab = self.create_day_tab()
+        tab_widget.addTab(day_tab, "日")
 
-        simple_layout.addRow("", apply_simple_btn)
+        # 月Tab
+        month_tab = self.create_month_tab()
+        tab_widget.addTab(month_tab, "月")
 
-        layout.addWidget(cron_group)
-        layout.addWidget(simple_group)
+        # 周Tab
+        week_tab = self.create_week_tab()
+        tab_widget.addTab(week_tab, "周")
+
+        # 年Tab
+        year_tab = self.create_year_tab()
+        tab_widget.addTab(year_tab, "年")
+
+        parent_layout.addWidget(tab_widget)
+
+    def create_second_tab(self):
+        """创建秒Tab配置"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 选项组
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(8)
+
+        # 选项1: 每秒
+        option1_layout = QHBoxLayout()
+        self.second_option1 = QRadioButton("每秒")
+        self.second_option1.setChecked(True)
+        option1_layout.addWidget(self.second_option1)
+        option1_layout.addWidget(QLabel("允许的通配符[, - * /]"))
+        option1_layout.addStretch()
+        group_layout.addLayout(option1_layout)
+
+        # 选项2: 周期
+        option2_layout = QHBoxLayout()
+        self.second_option2 = QRadioButton("周期从")
+        option2_layout.addWidget(self.second_option2)
+        
+        self.second_start = QSpinBox()
+        self.second_start.setRange(0, 59)
+        self.second_start.setValue(0)
+        option2_layout.addWidget(self.second_start)
+        option2_layout.addWidget(QLabel("-"))
+        
+        self.second_end = QSpinBox()
+        self.second_end.setRange(0, 59)
+        self.second_end.setValue(59)
+        option2_layout.addWidget(self.second_end)
+        option2_layout.addWidget(QLabel("秒"))
+        option2_layout.addStretch()
+        group_layout.addLayout(option2_layout)
+
+        # 选项3: 间隔
+        option3_layout = QHBoxLayout()
+        self.second_option3 = QRadioButton("从")
+        option3_layout.addWidget(self.second_option3)
+        
+        self.second_from = QSpinBox()
+        self.second_from.setRange(0, 59)
+        self.second_from.setValue(0)
+        option3_layout.addWidget(self.second_from)
+        option3_layout.addWidget(QLabel("秒开始，每"))
+        
+        self.second_interval = QSpinBox()
+        self.second_interval.setRange(1, 59)
+        self.second_interval.setValue(1)
+        option3_layout.addWidget(self.second_interval)
+        option3_layout.addWidget(QLabel("秒执行一次"))
+        option3_layout.addStretch()
+        group_layout.addLayout(option3_layout)
+
+        # 选项4: 指定秒数
+        option4_layout = QHBoxLayout()
+        self.second_option4 = QRadioButton("指定")
+        option4_layout.addWidget(self.second_option4)
+        
+        self.second_specific = NoWheelComboBox()
+        self.second_specific.setEditable(True)
+        self.second_specific.addItems([str(i).zfill(2) for i in range(60)])
+        self.second_specific.setCurrentText("00")
+        option4_layout.addWidget(self.second_specific)
+        option4_layout.addWidget(QLabel("秒"))
+        option4_layout.addStretch()
+        group_layout.addLayout(option4_layout)
+
+        layout.addLayout(group_layout)
+        layout.addStretch()
+        
+        return widget
+
+    def create_minute_tab(self):
+        """创建分钟Tab配置"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 选项组
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(8)
+
+        # 选项1: 每分钟
+        option1_layout = QHBoxLayout()
+        self.minute_option1 = QRadioButton("每分钟")
+        self.minute_option1.setChecked(True)
+        option1_layout.addWidget(self.minute_option1)
+        option1_layout.addWidget(QLabel("允许的通配符[, - * /]"))
+        option1_layout.addStretch()
+        group_layout.addLayout(option1_layout)
+
+        # 选项2: 周期
+        option2_layout = QHBoxLayout()
+        self.minute_option2 = QRadioButton("周期从")
+        option2_layout.addWidget(self.minute_option2)
+        
+        self.minute_start = QSpinBox()
+        self.minute_start.setRange(0, 59)
+        self.minute_start.setValue(0)
+        option2_layout.addWidget(self.minute_start)
+        option2_layout.addWidget(QLabel("-"))
+        
+        self.minute_end = QSpinBox()
+        self.minute_end.setRange(0, 59)
+        self.minute_end.setValue(59)
+        option2_layout.addWidget(self.minute_end)
+        option2_layout.addWidget(QLabel("分钟"))
+        option2_layout.addStretch()
+        group_layout.addLayout(option2_layout)
+
+        # 选项3: 间隔
+        option3_layout = QHBoxLayout()
+        self.minute_option3 = QRadioButton("从")
+        option3_layout.addWidget(self.minute_option3)
+        
+        self.minute_from = QSpinBox()
+        self.minute_from.setRange(0, 59)
+        self.minute_from.setValue(0)
+        option3_layout.addWidget(self.minute_from)
+        option3_layout.addWidget(QLabel("分钟开始，每"))
+        
+        self.minute_interval = QSpinBox()
+        self.minute_interval.setRange(1, 59)
+        self.minute_interval.setValue(1)
+        option3_layout.addWidget(self.minute_interval)
+        option3_layout.addWidget(QLabel("分钟执行一次"))
+        option3_layout.addStretch()
+        group_layout.addLayout(option3_layout)
+
+        # 选项4: 指定分钟数
+        option4_layout = QHBoxLayout()
+        self.minute_option4 = QRadioButton("指定")
+        option4_layout.addWidget(self.minute_option4)
+        
+        self.minute_specific = NoWheelComboBox()
+        self.minute_specific.setEditable(True)
+        self.minute_specific.addItems([str(i).zfill(2) for i in range(60)])
+        self.minute_specific.setCurrentText("00")
+        option4_layout.addWidget(self.minute_specific)
+        option4_layout.addWidget(QLabel("分钟"))
+        option4_layout.addStretch()
+        group_layout.addLayout(option4_layout)
+
+        layout.addLayout(group_layout)
+        layout.addStretch()
+        
+        return widget
+
+    def create_hour_tab(self):
+        """创建小时Tab配置"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 选项组
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(8)
+
+        # 选项1: 每小时
+        option1_layout = QHBoxLayout()
+        self.hour_option1 = QRadioButton("每小时")
+        self.hour_option1.setChecked(True)
+        option1_layout.addWidget(self.hour_option1)
+        option1_layout.addWidget(QLabel("允许的通配符[, - * /]"))
+        option1_layout.addStretch()
+        group_layout.addLayout(option1_layout)
+
+        # 选项2: 周期
+        option2_layout = QHBoxLayout()
+        self.hour_option2 = QRadioButton("周期从")
+        option2_layout.addWidget(self.hour_option2)
+        
+        self.hour_start = QSpinBox()
+        self.hour_start.setRange(0, 23)
+        self.hour_start.setValue(0)
+        option2_layout.addWidget(self.hour_start)
+        option2_layout.addWidget(QLabel("-"))
+        
+        self.hour_end = QSpinBox()
+        self.hour_end.setRange(0, 23)
+        self.hour_end.setValue(23)
+        option2_layout.addWidget(self.hour_end)
+        option2_layout.addWidget(QLabel("小时"))
+        option2_layout.addStretch()
+        group_layout.addLayout(option2_layout)
+
+        # 选项3: 间隔
+        option3_layout = QHBoxLayout()
+        self.hour_option3 = QRadioButton("从")
+        option3_layout.addWidget(self.hour_option3)
+        
+        self.hour_from = QSpinBox()
+        self.hour_from.setRange(0, 23)
+        self.hour_from.setValue(0)
+        option3_layout.addWidget(self.hour_from)
+        option3_layout.addWidget(QLabel("小时开始，每"))
+        
+        self.hour_interval = QSpinBox()
+        self.hour_interval.setRange(1, 23)
+        self.hour_interval.setValue(1)
+        option3_layout.addWidget(self.hour_interval)
+        option3_layout.addWidget(QLabel("小时执行一次"))
+        option3_layout.addStretch()
+        group_layout.addLayout(option3_layout)
+
+        # 选项4: 指定小时数
+        option4_layout = QHBoxLayout()
+        self.hour_option4 = QRadioButton("指定")
+        option4_layout.addWidget(self.hour_option4)
+        
+        self.hour_specific = NoWheelComboBox()
+        self.hour_specific.setEditable(True)
+        self.hour_specific.addItems([str(i).zfill(2) for i in range(24)])
+        self.hour_specific.setCurrentText("00")
+        option4_layout.addWidget(self.hour_specific)
+        option4_layout.addWidget(QLabel("小时"))
+        option4_layout.addStretch()
+        group_layout.addLayout(option4_layout)
+
+        layout.addLayout(group_layout)
+        layout.addStretch()
+        
+        return widget
+
+    def create_day_tab(self):
+        """创建日Tab配置"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 选项组
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(8)
+
+        # 选项1: 每日
+        option1_layout = QHBoxLayout()
+        self.day_option1 = QRadioButton("每日")
+        self.day_option1.setChecked(True)
+        option1_layout.addWidget(self.day_option1)
+        option1_layout.addWidget(QLabel("允许的通配符[, - * / L W]"))
+        option1_layout.addStretch()
+        group_layout.addLayout(option1_layout)
+
+        # 选项2: 不指定
+        option2_layout = QHBoxLayout()
+        self.day_option2 = QRadioButton("不指定")
+        option2_layout.addWidget(self.day_option2)
+        option2_layout.addWidget(QLabel("忽略日字段"))
+        option2_layout.addStretch()
+        group_layout.addLayout(option2_layout)
+
+        # 选项3: 周期
+        option3_layout = QHBoxLayout()
+        self.day_option3 = QRadioButton("周期从")
+        option3_layout.addWidget(self.day_option3)
+        
+        self.day_start = QSpinBox()
+        self.day_start.setRange(1, 31)
+        self.day_start.setValue(1)
+        option3_layout.addWidget(self.day_start)
+        option3_layout.addWidget(QLabel("-"))
+        
+        self.day_end = QSpinBox()
+        self.day_end.setRange(1, 31)
+        self.day_end.setValue(31)
+        option3_layout.addWidget(self.day_end)
+        option3_layout.addWidget(QLabel("日"))
+        option3_layout.addStretch()
+        group_layout.addLayout(option3_layout)
+
+        # 选项4: 从...日开始,每...天执行一次
+        option4_layout = QHBoxLayout()
+        self.day_option4 = QRadioButton("从")
+        option4_layout.addWidget(self.day_option4)
+        
+        self.day_from = QSpinBox()
+        self.day_from.setRange(1, 31)
+        self.day_from.setValue(1)
+        option4_layout.addWidget(self.day_from)
+        option4_layout.addWidget(QLabel("日开始,每"))
+        
+        self.day_interval = QSpinBox()
+        self.day_interval.setRange(1, 31)
+        self.day_interval.setValue(1)
+        option4_layout.addWidget(self.day_interval)
+        option4_layout.addWidget(QLabel("天执行一次"))
+        option4_layout.addStretch()
+        group_layout.addLayout(option4_layout)
+
+        # 选项5: 每月最后一天
+        option5_layout = QHBoxLayout()
+        self.day_option5 = QRadioButton("每月最后一天")
+        option5_layout.addWidget(self.day_option5)
+        option5_layout.addWidget(QLabel("使用W通配符"))
+        option5_layout.addStretch()
+        group_layout.addLayout(option5_layout)
+
+        # 选项6: 指定日期
+        option6_layout = QHBoxLayout()
+        self.day_option6 = QRadioButton("指定")
+        option6_layout.addWidget(self.day_option6)
+        
+        self.day_specific = NoWheelComboBox()
+        self.day_specific.setEditable(True)
+        self.day_specific.addItems([str(i) for i in range(1, 32)])
+        self.day_specific.setCurrentText("1")
+        option6_layout.addWidget(self.day_specific)
+        option6_layout.addWidget(QLabel("日"))
+        option6_layout.addStretch()
+        group_layout.addLayout(option6_layout)
+
+        layout.addLayout(group_layout)
+        layout.addStretch()
+        
+        return widget
+
+    def create_month_tab(self):
+        """创建月Tab配置"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 选项组
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(8)
+
+        # 选项1: 每月
+        option1_layout = QHBoxLayout()
+        self.month_option1 = QRadioButton("每月")
+        self.month_option1.setChecked(True)
+        option1_layout.addWidget(self.month_option1)
+        option1_layout.addWidget(QLabel("允许的通配符[, - * /]"))
+        option1_layout.addStretch()
+        group_layout.addLayout(option1_layout)
+
+        # 选项2: 不指定
+        option2_layout = QHBoxLayout()
+        self.month_option2 = QRadioButton("不指定")
+        option2_layout.addWidget(self.month_option2)
+        option2_layout.addWidget(QLabel("忽略月字段"))
+        option2_layout.addStretch()
+        group_layout.addLayout(option2_layout)
+
+        # 选项3: 周期
+        option3_layout = QHBoxLayout()
+        self.month_option3 = QRadioButton("周期从")
+        option3_layout.addWidget(self.month_option3)
+        
+        self.month_start = QSpinBox()
+        self.month_start.setRange(1, 12)
+        self.month_start.setValue(1)
+        option3_layout.addWidget(self.month_start)
+        option3_layout.addWidget(QLabel("-"))
+        
+        self.month_end = QSpinBox()
+        self.month_end.setRange(1, 12)
+        self.month_end.setValue(12)
+        option3_layout.addWidget(self.month_end)
+        option3_layout.addWidget(QLabel("月"))
+        option3_layout.addStretch()
+        group_layout.addLayout(option3_layout)
+
+        # 选项4: 从...日开始,每...月执行一次
+        option4_layout = QHBoxLayout()
+        self.month_option4 = QRadioButton("从")
+        option4_layout.addWidget(self.month_option4)
+        
+        self.month_from = QSpinBox()
+        self.month_from.setRange(1, 12)
+        self.month_from.setValue(1)
+        option4_layout.addWidget(self.month_from)
+        option4_layout.addWidget(QLabel("月开始,每"))
+        
+        self.month_interval = QSpinBox()
+        self.month_interval.setRange(1, 12)
+        self.month_interval.setValue(1)
+        option4_layout.addWidget(self.month_interval)
+        option4_layout.addWidget(QLabel("月执行一次"))
+        option4_layout.addStretch()
+        group_layout.addLayout(option4_layout)
+
+        # 选项5: 指定月份
+        option5_layout = QHBoxLayout()
+        self.month_option5 = QRadioButton("指定")
+        option5_layout.addWidget(self.month_option5)
+        
+        self.month_specific = NoWheelComboBox()
+        self.month_specific.setEditable(True)
+        self.month_specific.addItems([str(i) for i in range(1, 13)])
+        self.month_specific.setCurrentText("1")
+        option5_layout.addWidget(self.month_specific)
+        option5_layout.addWidget(QLabel("月"))
+        option5_layout.addStretch()
+        group_layout.addLayout(option5_layout)
+
+        layout.addLayout(group_layout)
+        layout.addStretch()
+        
+        return widget
+
+    def create_week_tab(self):
+        """创建周Tab配置"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 选项组
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(8)
+
+        # 选项1: 每周
+        option1_layout = QHBoxLayout()
+        self.week_option1 = QRadioButton("每周")
+        self.week_option1.setChecked(True)
+        option1_layout.addWidget(self.week_option1)
+        option1_layout.addWidget(QLabel("允许的通配符[, - * / L #]"))
+        option1_layout.addStretch()
+        group_layout.addLayout(option1_layout)
+
+        # 选项2: 不指定
+        option2_layout = QHBoxLayout()
+        self.week_option2 = QRadioButton("不指定")
+        option2_layout.addWidget(self.week_option2)
+        option2_layout.addWidget(QLabel("忽略周字段"))
+        option2_layout.addStretch()
+        group_layout.addLayout(option2_layout)
+
+        # 选项3: 周期
+        option3_layout = QHBoxLayout()
+        self.week_option3 = QRadioButton("周期从")
+        option3_layout.addWidget(self.week_option3)
+        
+        self.week_start = NoWheelComboBox()
+        week_days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        self.week_start.addItems(week_days)
+        option3_layout.addWidget(self.week_start)
+        option3_layout.addWidget(QLabel("-"))
+        
+        self.week_end = NoWheelComboBox()
+        self.week_end.addItems(week_days)
+        self.week_end.setCurrentText("周一")
+        option3_layout.addWidget(self.week_end)
+        option3_layout.addStretch()
+        group_layout.addLayout(option3_layout)
+
+        # 选项4: 第X周的周X
+        option4_layout = QHBoxLayout()
+        self.week_option4 = QRadioButton("第")
+        option4_layout.addWidget(self.week_option4)
+        
+        self.week_which = QSpinBox()
+        self.week_which.setRange(1, 5)
+        self.week_which.setValue(1)
+        option4_layout.addWidget(self.week_which)
+        option4_layout.addWidget(QLabel("周的"))
+        
+        self.week_day = NoWheelComboBox()
+        self.week_day.addItems(week_days)
+        self.week_day.setCurrentText("周一")
+        option4_layout.addWidget(self.week_day)
+        option4_layout.addStretch()
+        group_layout.addLayout(option4_layout)
+
+        # 选项5: 本月最后一个周X
+        option5_layout = QHBoxLayout()
+        self.week_option5 = QRadioButton("本月最后一个")
+        option5_layout.addWidget(self.week_option5)
+        
+        self.week_last_day = NoWheelComboBox()
+        self.week_last_day.addItems(week_days)
+        self.week_last_day.setCurrentText("周一")
+        option5_layout.addWidget(self.week_last_day)
+        option5_layout.addStretch()
+        group_layout.addLayout(option5_layout)
+
+        # 选项6: 指定星期
+        option6_layout = QHBoxLayout()
+        self.week_option6 = QRadioButton("指定")
+        option6_layout.addWidget(self.week_option6)
+        
+        self.week_specific = NoWheelComboBox()
+        self.week_specific.setEditable(True)
+        self.week_specific.addItems(week_days)
+        self.week_specific.setCurrentText("周一")
+        option6_layout.addWidget(self.week_specific)
+        option6_layout.addStretch()
+        group_layout.addLayout(option6_layout)
+
+        layout.addLayout(group_layout)
+        layout.addStretch()
+        
+        return widget
+
+    def create_year_tab(self):
+        """创建年Tab配置"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 15, 15, 15)
+
+        # 选项组
+        group_layout = QVBoxLayout()
+        group_layout.setSpacing(8)
+
+        # 选项1: 每年
+        option1_layout = QHBoxLayout()
+        self.year_option1 = QRadioButton("每年")
+        self.year_option1.setChecked(True)
+        option1_layout.addWidget(self.year_option1)
+        option1_layout.addWidget(QLabel("允许的通配符[, - * /]"))
+        option1_layout.addStretch()
+        group_layout.addLayout(option1_layout)
+
+        # 选项2: 不指定
+        option2_layout = QHBoxLayout()
+        self.year_option2 = QRadioButton("不指定")
+        option2_layout.addWidget(self.year_option2)
+        option2_layout.addWidget(QLabel("忽略年字段"))
+        option2_layout.addStretch()
+        group_layout.addLayout(option2_layout)
+
+        # 选项3: 周期
+        option3_layout = QHBoxLayout()
+        self.year_option3 = QRadioButton("周期从")
+        option3_layout.addWidget(self.year_option3)
+        
+        self.year_start = QSpinBox()
+        self.year_start.setRange(2023, 2030)
+        self.year_start.setValue(2024)
+        option3_layout.addWidget(self.year_start)
+        option3_layout.addWidget(QLabel("-"))
+        
+        self.year_end = QSpinBox()
+        self.year_end.setRange(2023, 2030)
+        self.year_end.setValue(2030)
+        option3_layout.addWidget(self.year_end)
+        option3_layout.addWidget(QLabel("年"))
+        option3_layout.addStretch()
+        group_layout.addLayout(option3_layout)
+
+        layout.addLayout(group_layout)
+        layout.addStretch()
+        
+        return widget
 
     def setup_notify_tab(self, parent):
         layout = QVBoxLayout(parent)
 
         # 邮件通知配置
-        email_group = QGroupBox("邮件通知")
-        email_layout = QVBoxLayout(email_group)
-
+        email_layout = QFormLayout()
+        
         self.email_enabled_check = QCheckBox("启用邮件通知")
-        email_layout.addWidget(self.email_enabled_check)
+        email_layout.addRow("邮件通知:", self.email_enabled_check)
 
-        # 收件人列表
-        email_recipient_layout = QHBoxLayout()
-        email_recipient_layout.addWidget(QLabel("收件人:"))
         self.email_recipient_edit = QLineEdit()
         self.email_recipient_edit.setPlaceholderText("多个邮箱用逗号分隔")
-        email_recipient_layout.addWidget(self.email_recipient_edit)
+        email_layout.addRow("收件人:", self.email_recipient_edit)
 
-        email_layout.addLayout(email_recipient_layout)
-
-        # 微信通知配置
-        wechat_group = QGroupBox("企业微信通知")
-        wechat_layout = QVBoxLayout(wechat_group)
-
+        # 企业微信通知配置
+        wechat_layout = QFormLayout()
+        
         self.wechat_enabled_check = QCheckBox("启用企业微信通知")
-        wechat_layout.addWidget(self.wechat_enabled_check)
+        wechat_layout.addRow("企业微信:", self.wechat_enabled_check)
 
-        # Webhook配置
-        wechat_webhook_layout = QFormLayout()
         self.wechat_webhook_edit = QLineEdit()
         self.wechat_webhook_edit.setPlaceholderText("输入企业微信机器人Webhook URL")
-        wechat_webhook_layout.addRow("Webhook URL:", self.wechat_webhook_edit)
+        wechat_layout.addRow("Webhook URL:", self.wechat_webhook_edit)
 
-        wechat_layout.addLayout(wechat_webhook_layout)
-
-        layout.addWidget(email_group)
-        layout.addWidget(wechat_group)
+        # 添加布局到主布局
+        layout.addLayout(email_layout)
+        layout.addLayout(wechat_layout)
         layout.addStretch()
 
     def delayed_load_data(self):
@@ -232,14 +1078,121 @@ class SchedulerDialog(QDialog):
         try:
             # 初始化服务对象
             self.test_case_service = TestCaseService()
-            # 重新加载测试用例
-            self.load_test_cases()
+            # 只加载项目列表，测试用例列表保持为空
+            self.load_projects()
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"延迟加载数据失败: {str(e)}")
 
+    def load_projects(self):
+        """加载项目列表"""
+        try:
+            # 从数据库动态获取所有项目
+            projects = self.project_service.get_all_projects()
+            
+            self.project_list.clear()
+            for project in projects:
+                item = QListWidgetItem(project['name'])
+                item.setData(Qt.UserRole, project['id'])
+                self.project_list.addItem(item)
+        except Exception as e:
+            print(f"加载项目列表失败: {e}")
+
+    def on_project_selected(self):
+        """项目选择变化时加载文件夹"""
+        selected_items = self.project_list.selectedItems()
+        if not selected_items:
+            return
+            
+        project_id = selected_items[0].data(Qt.UserRole)
+        self.load_folders(project_id)
+        
+        # 切换项目时自动清空测试用例列表
+        self.case_list.clear()
+
+    def load_folders(self, project_id):
+        """根据项目ID加载文件夹列表"""
+        try:
+            # 从数据库动态获取指定项目的文件夹
+            folders = self.folder_service.get_folders_by_project(project_id)
+            
+            self.folder_list.clear()
+            for folder in folders:
+                item = QListWidgetItem(folder['name'])
+                item.setData(Qt.UserRole, folder['id'])
+                self.folder_list.addItem(item)
+        except Exception as e:
+            print(f"加载文件夹列表失败: {e}")
+
+    def on_folder_selected(self):
+        """文件夹选择变化时加载测试用例"""
+        selected_items = self.folder_list.selectedItems()
+        if not selected_items:
+            return
+            
+        folder_id = selected_items[0].data(Qt.UserRole)
+        self.load_test_cases_by_folder(folder_id)
+
+    def load_test_cases_by_folder(self, folder_id):
+        """根据文件夹ID加载测试用例列表"""
+        try:
+            # 延迟初始化测试用例服务
+            if self.test_case_service is None:
+                self.test_case_service = TestCaseService()
+            
+            # 获取当前选中的项目ID
+            selected_project_items = self.project_list.selectedItems()
+            if not selected_project_items:
+                return
+                
+            project_id = selected_project_items[0].data(Qt.UserRole)
+            
+            # 从数据库动态获取指定文件夹的测试用例
+            cases = self.test_case_service.get_cases_by_folder(project_id, folder_id)
+            
+            self.case_list.clear()
+            for case in cases:
+                item = QListWidgetItem(case['name'])
+                item.setData(Qt.UserRole, case['id'])
+                self.case_list.addItem(item)
+        except Exception as e:
+            print(f"加载测试用例失败: {e}")
+
+    def import_selected_cases(self):
+        """导入选中的测试用例到已选用例区域"""
+        selected_items = self.case_list.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "提示", "请先选择要导入的测试用例")
+            return
+            
+        for item in selected_items:
+            # 检查是否已存在
+            exists = False
+            for i in range(self.selected_case_list.count()):
+                existing_item = self.selected_case_list.item(i)
+                if existing_item.data(Qt.UserRole) == item.data(Qt.UserRole):
+                    exists = True
+                    break
+                    
+            if not exists:
+                new_item = QListWidgetItem(item.text())
+                new_item.setData(Qt.UserRole, item.data(Qt.UserRole))
+                self.selected_case_list.addItem(new_item)
+
+    def remove_selected_cases(self):
+        """从已选用例区域移除选中的用例（支持多选）"""
+        selected_items = self.selected_case_list.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "提示", "请先选择要移除的测试用例")
+            return
+            
+        # 批量移除选中的用例（按行号从大到小排序，避免索引变化问题）
+        rows = sorted([self.selected_case_list.row(item) for item in selected_items], reverse=True)
+        for row in rows:
+            self.selected_case_list.takeItem(row)
+
     def load_test_cases(self):
-        """加载测试用例列表"""
+        """加载测试用例列表（兼容旧方法）"""
         # 检查服务对象是否已初始化
         if self.test_case_service is None:
             print("测试用例服务未初始化，跳过加载测试用例")
@@ -262,23 +1215,48 @@ class SchedulerDialog(QDialog):
         # 基本信息
         self.name_edit.setText(self.scheduler_data.get('name', ''))
         self.desc_edit.setText(self.scheduler_data.get('description', ''))
-        self.enabled_check.setChecked(self.scheduler_data.get('enabled', True))
 
         # 测试用例选择
         case_ids = self.scheduler_data.get('case_ids', [])
-        for i in range(self.case_list.count()):
-            item = self.case_list.item(i)
-            if item.data(Qt.UserRole) in case_ids:
-                item.setSelected(True)
+        # 清空已选用例列表
+        self.selected_case_list.clear()
+        
+        # 延迟初始化测试用例服务
+        if self.test_case_service is None:
+            self.test_case_service = TestCaseService()
+        
+        # 加载所有测试用例到已选用例区域
+        try:
+            all_cases = self.test_case_service.get_all_cases()
+            for case in all_cases:
+                if case['id'] in case_ids:
+                    item = QListWidgetItem(case['name'])
+                    item.setData(Qt.UserRole, case['id'])
+                    self.selected_case_list.addItem(item)
+        except Exception as e:
+            print(f"加载已选用例失败: {e}")
 
         # Cron表达式
-        self.cron_edit.setText(self.scheduler_data.get('cron_expression', ''))
+        cron_expression = self.scheduler_data.get('cron_expression', '')
+        self.cron_edit.setText(cron_expression)
+        
+        # 解析Cron表达式并更新Tab页选项
+        if cron_expression:
+            self.parse_cron_to_tabs(cron_expression)
 
         # 通知配置
         notify_emails = self.scheduler_data.get('notify_emails', [])
         self.email_recipient_edit.setText(','.join(notify_emails))
 
         notify_wechat = self.scheduler_data.get('notify_wechat', {})
+        # 处理notify_wechat可能是列表的情况
+        if isinstance(notify_wechat, list):
+            # 如果是列表，取第一个元素（如果有）
+            if notify_wechat:
+                notify_wechat = notify_wechat[0] if isinstance(notify_wechat[0], dict) else {}
+            else:
+                notify_wechat = {}
+        
         self.wechat_webhook_edit.setText(notify_wechat.get('webhook', ''))
 
     def get_data(self):
@@ -287,13 +1265,13 @@ class SchedulerDialog(QDialog):
         data = {
             'name': self.name_edit.text().strip(),
             'description': self.desc_edit.toPlainText().strip(),
-            'enabled': self.enabled_check.isChecked(),
             'cron_expression': self.cron_edit.text().strip()
         }
 
-        # 测试用例ID列表
+        # 测试用例ID列表（从已选用例区域获取）
         case_ids = []
-        for item in self.case_list.selectedItems():
+        for i in range(self.selected_case_list.count()):
+            item = self.selected_case_list.item(i)
             case_ids.append(item.data(Qt.UserRole))
         data['case_ids'] = case_ids
 
@@ -315,86 +1293,996 @@ class SchedulerDialog(QDialog):
 
         return data
 
-    def on_common_cron_selected(self, index):
-        """常用Cron表达式选择"""
-        if index > 0:
-            cron_expr = self.common_cron_combo.currentData()
-            self.cron_edit.setText(cron_expr)
-            self.calculate_next_run()
 
-    def on_simple_type_changed(self, index):
-        """简单调度类型变化"""
-        # 显示/隐藏相关控件
-        pass
 
-    def apply_simple_config(self):
-        """应用简单配置"""
-        schedule_type = self.simple_type_combo.currentText()
-        time_str = self.simple_time_edit.time().toString("HH:mm:ss")
 
-        if schedule_type == "每天":
-            cron_expr = f"0 {time_str.split(':')[1]} {time_str.split(':')[0]} * * ?"
-        elif schedule_type == "每周":
-            day_map = {"周一": "MON", "周二": "TUE", "周三": "WED", "周四": "THU",
-                       "周五": "FRI", "周六": "SAT", "周日": "SUN"}
-            day = day_map.get(self.simple_day_combo.currentText(), "MON")
-            cron_expr = f"0 {time_str.split(':')[1]} {time_str.split(':')[0]} ? * {day}"
-        else:  # 每月
-            day = self.simple_date_spin.value()
-            cron_expr = f"0 {time_str.split(':')[1]} {time_str.split(':')[0]} {day} * ?"
 
-        self.cron_edit.setText(cron_expr)
-        self.calculate_next_run()
+    def connect_tab_signals(self):
+        """连接所有Tab选项的变化信号"""
+        # 秒Tab
+        self.second_option1.toggled.connect(self.update_cron_expression)
+        self.second_option2.toggled.connect(self.update_cron_expression)
+        self.second_option3.toggled.connect(self.update_cron_expression)
+        self.second_option4.toggled.connect(self.update_cron_expression)
+        self.second_start.valueChanged.connect(self.update_cron_expression)
+        self.second_end.valueChanged.connect(self.update_cron_expression)
+        self.second_from.valueChanged.connect(self.update_cron_expression)
+        self.second_interval.valueChanged.connect(self.update_cron_expression)
+        self.second_specific.currentTextChanged.connect(self.update_cron_expression)
+        
+        # 分钟Tab
+        self.minute_option1.toggled.connect(self.update_cron_expression)
+        self.minute_option2.toggled.connect(self.update_cron_expression)
+        self.minute_option3.toggled.connect(self.update_cron_expression)
+        self.minute_option4.toggled.connect(self.update_cron_expression)
+        self.minute_start.valueChanged.connect(self.update_cron_expression)
+        self.minute_end.valueChanged.connect(self.update_cron_expression)
+        self.minute_from.valueChanged.connect(self.update_cron_expression)
+        self.minute_interval.valueChanged.connect(self.update_cron_expression)
+        self.minute_specific.currentTextChanged.connect(self.update_cron_expression)
+        
+        # 小时Tab
+        self.hour_option1.toggled.connect(self.update_cron_expression)
+        self.hour_option2.toggled.connect(self.update_cron_expression)
+        self.hour_option3.toggled.connect(self.update_cron_expression)
+        self.hour_option4.toggled.connect(self.update_cron_expression)
+        self.hour_start.valueChanged.connect(self.update_cron_expression)
+        self.hour_end.valueChanged.connect(self.update_cron_expression)
+        self.hour_from.valueChanged.connect(self.update_cron_expression)
+        self.hour_interval.valueChanged.connect(self.update_cron_expression)
+        self.hour_specific.currentTextChanged.connect(self.update_cron_expression)
+        
+        # 日Tab
+        self.day_option1.toggled.connect(self.update_cron_expression)
+        self.day_option2.toggled.connect(self.update_cron_expression)
+        self.day_option3.toggled.connect(self.update_cron_expression)
+        self.day_option4.toggled.connect(self.update_cron_expression)
+        self.day_option5.toggled.connect(self.update_cron_expression)
+        self.day_option6.toggled.connect(self.update_cron_expression)
+        self.day_start.valueChanged.connect(self.update_cron_expression)
+        self.day_end.valueChanged.connect(self.update_cron_expression)
+        self.day_from.valueChanged.connect(self.update_cron_expression)
+        self.day_interval.valueChanged.connect(self.update_cron_expression)
+        self.day_specific.currentTextChanged.connect(self.update_cron_expression)
+        
+        # 月Tab
+        self.month_option1.toggled.connect(self.update_cron_expression)
+        self.month_option2.toggled.connect(self.update_cron_expression)
+        self.month_option3.toggled.connect(self.update_cron_expression)
+        self.month_option4.toggled.connect(self.update_cron_expression)
+        self.month_option5.toggled.connect(self.update_cron_expression)
+        self.month_start.valueChanged.connect(self.update_cron_expression)
+        self.month_end.valueChanged.connect(self.update_cron_expression)
+        self.month_from.valueChanged.connect(self.update_cron_expression)
+        self.month_interval.valueChanged.connect(self.update_cron_expression)
+        self.month_specific.currentTextChanged.connect(self.update_cron_expression)
+        
+        # 周Tab
+        self.week_option1.toggled.connect(self.update_cron_expression)
+        self.week_option2.toggled.connect(self.update_cron_expression)
+        self.week_option3.toggled.connect(self.update_cron_expression)
+        self.week_option4.toggled.connect(self.update_cron_expression)
+        self.week_option5.toggled.connect(self.update_cron_expression)
+        self.week_option6.toggled.connect(self.update_cron_expression)
+        self.week_start.currentTextChanged.connect(self.update_cron_expression)
+        self.week_end.currentTextChanged.connect(self.update_cron_expression)
+        self.week_which.valueChanged.connect(self.update_cron_expression)
+        self.week_day.currentTextChanged.connect(self.update_cron_expression)
+        self.week_last_day.currentTextChanged.connect(self.update_cron_expression)
+        self.week_specific.currentTextChanged.connect(self.update_cron_expression)
+        
+        # 年Tab
+        self.year_option1.toggled.connect(self.update_cron_expression)
+        self.year_option2.toggled.connect(self.update_cron_expression)
+        self.year_option3.toggled.connect(self.update_cron_expression)
+        self.year_start.valueChanged.connect(self.update_cron_expression)
+        self.year_end.valueChanged.connect(self.update_cron_expression)
 
-    def calculate_next_run(self):
-        """计算下次执行时间"""
-        cron_expr = self.cron_edit.text().strip()
-        if not cron_expr:
-            return
-
+    def update_cron_expression(self):
+        """根据Tab选项实时生成Cron表达式并进行校验"""
         try:
-            parser = CronParser()
-            next_run = parser.get_next_run(cron_expr)
-            if next_run:
-                self.next_run_label.setText(f"下次执行时间: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+            print("[DEBUG] ===== 开始生成Cron表达式 =====")
+            
+            # 获取各字段的Cron表达式部分
+            second_part = self.get_second_cron()
+            minute_part = self.get_minute_cron()
+            hour_part = self.get_hour_cron()
+            day_part = self.get_day_cron()
+            month_part = self.get_month_cron()
+            week_part = self.get_week_cron()
+            year_part = self.get_year_cron()
+            
+            print(f"[DEBUG] 各字段值：")
+            print(f"[DEBUG]   秒字段: {second_part}")
+            print(f"[DEBUG]   分钟字段: {minute_part}")
+            print(f"[DEBUG]   小时字段: {hour_part}")
+            print(f"[DEBUG]   日字段: {day_part}")
+            print(f"[DEBUG]   月字段: {month_part}")
+            print(f"[DEBUG]   周字段: {week_part}")
+            print(f"[DEBUG]   年字段: {year_part}")
+            
+            # 构建完整的Cron表达式
+            cron_expr = f"{second_part} {minute_part} {hour_part} {day_part} {month_part} {week_part}"
+            if year_part:
+                cron_expr += f" {year_part}"
+            
+            print(f"[DEBUG] 生成的完整Cron表达式: {cron_expr}")
+            
+            # 校验Cron表达式
+            is_valid, error_msg = self.validate_cron_expression(cron_expr)
+            print(f"[DEBUG] Cron表达式校验结果: 有效={is_valid}, 错误信息={error_msg}")
+            
+            # 更新到输入框，如果无效则显示错误样式
+            self.cron_edit.setText(cron_expr)
+            if not is_valid:
+                self.cron_edit.setStyleSheet("QLineEdit { border: 2px solid red; background-color: #fff0f0; }")
+                # 可以添加错误提示，但避免频繁弹窗
+                # QMessageBox.warning(self, "Cron表达式错误", error_msg)
             else:
-                self.next_run_label.setText("下次执行时间: 表达式无效")
+                self.cron_edit.setStyleSheet("QLineEdit { border: 2px solid green; background-color: #f0fff0; }")
+            
+            print("[DEBUG] ===== Cron表达式生成完成 =====")
+            
         except Exception as e:
-            self.next_run_label.setText(f"下次执行时间: 计算错误 - {str(e)}")
-
-    def show_cron_help(self):
-        """显示Cron表达式帮助"""
-        help_text = """
-Cron表达式格式: 
-   秒 分 时 日 月 周 [年]
-
-各字段含义:
-   秒 (0-59)
-   分 (0-59) 
-   时 (0-23)
-   日 (1-31)
-   月 (1-12 或 JAN-DEC)
-   周 (0-7 或 SUN-SAT, 0和7都代表周日)
-   年 (可选, 1970-2099)
-
-特殊字符:
-   * : 所有值
-   ? : 不指定值 (用于日和周字段)
-   - : 范围 (如: 1-5)
-   , : 多个值 (如: 1,3,5)
-   / : 步长 (如: 0/15 表示从0开始每15分钟)
-   L : 最后 (如: 月最后一天)
-   W : 工作日
-   # : 第几个 (如: 6#3 表示第3个周五)
-
-示例:
-   0 0 12 * * ?       每天12点
-   0 0 9 ? * MON      每周一9点
-   0 0 0 1 * ?        每月1号
-   0 0/30 * * * ?     每30分钟
-   0 0 9-17 * * MON-FRI 工作日的9点到17点每小时
+            print(f"[ERROR] 生成Cron表达式错误: {str(e)}")
+            self.cron_edit.setStyleSheet("QLineEdit { border: 2px solid red; background-color: #fff0f0; }")
+    
+    def parse_cron_to_tabs(self, cron_expr):
+        """将cron表达式解析并回显到各个tab选项
+        
+        Args:
+            cron_expr: cron表达式字符串
         """
-        QMessageBox.information(self, "Cron表达式帮助", help_text)
+        try:
+            print(f"[DEBUG] ===== 开始解析Cron表达式: {cron_expr} =====")
+            
+            # 分割cron表达式为各个字段
+            parts = cron_expr.strip().split()
+            print(f"[DEBUG] 分割后的字段: {parts}, 字段数量: {len(parts)}")
+            
+            # 标准cron表达式有5-7个字段
+            if len(parts) < 5 or len(parts) > 7:
+                print(f"[DEBUG] 字段数量异常，跳过解析")
+                return
+            
+            # 解析各个字段（秒、分钟、小时、日、月、周、年）
+            if len(parts) == 6:
+                # 6字段格式：秒 分钟 小时 日 月 周
+                second_field = parts[0]
+                minute_field = parts[1]
+                hour_field = parts[2]
+                day_field = parts[3]
+                month_field = parts[4]
+                week_field = parts[5]
+                year_field = "*"
+                print(f"[DEBUG] 识别为6字段格式:")
+                print(f"[DEBUG]   秒字段: {second_field}")
+                print(f"[DEBUG]   分钟字段: {minute_field}")
+                print(f"[DEBUG]   小时字段: {hour_field}")
+                print(f"[DEBUG]   日字段: {day_field}")
+                print(f"[DEBUG]   月字段: {month_field}")
+                print(f"[DEBUG]   周字段: {week_field}")
+            elif len(parts) == 7:
+                # 7字段格式：秒 分钟 小时 日 月 周 年
+                second_field = parts[0]
+                minute_field = parts[1]
+                hour_field = parts[2]
+                day_field = parts[3]
+                month_field = parts[4]
+                week_field = parts[5]
+                year_field = parts[6]
+                print(f"[DEBUG] 识别为7字段格式:")
+                print(f"[DEBUG]   秒字段: {second_field}")
+                print(f"[DEBUG]   分钟字段: {minute_field}")
+                print(f"[DEBUG]   小时字段: {hour_field}")
+                print(f"[DEBUG]   日字段: {day_field}")
+                print(f"[DEBUG]   月字段: {month_field}")
+                print(f"[DEBUG]   周字段: {week_field}")
+                print(f"[DEBUG]   年字段: {year_field}")
+            else:
+                # 5字段格式：分钟 小时 日 月 周
+                second_field = "*"
+                minute_field = parts[0]
+                hour_field = parts[1]
+                day_field = parts[2]
+                month_field = parts[3]
+                week_field = parts[4]
+                year_field = "*"
+                print(f"[DEBUG] 识别为5字段格式:")
+                print(f"[DEBUG]   秒字段: {second_field}")
+                print(f"[DEBUG]   分钟字段: {minute_field}")
+                print(f"[DEBUG]   小时字段: {hour_field}")
+                print(f"[DEBUG]   日字段: {day_field}")
+                print(f"[DEBUG]   月字段: {month_field}")
+                print(f"[DEBUG]   周字段: {week_field}")
+            
+            print(f"[DEBUG] 开始回显到各个Tab...")
+            
+            # 回显到秒tab
+            self._update_second_tab(second_field)
+            
+            # 回显到分钟tab
+            self._update_minute_tab(minute_field)
+            
+            # 回显到小时tab
+            self._update_hour_tab(hour_field)
+            
+            # 回显到日tab
+            self._update_day_tab(day_field)
+            
+            # 回显到月tab
+            self._update_month_tab(month_field)
+            
+            # 回显到周tab
+            self._update_week_tab(week_field)
+            
+            # 回显到年tab
+            self._update_year_tab(year_field)
+            
+            print(f"[DEBUG] ===== Cron表达式解析完成 =====")
+            
+        except Exception as e:
+            print(f"[ERROR] 解析cron表达式失败: {e}")
+
+    def _update_second_tab(self, second_field):
+        """更新秒tab选项"""
+        # 临时断开信号连接，避免递归调用
+        try:
+            self.second_start.valueChanged.disconnect(self.update_cron_expression)
+            self.second_end.valueChanged.disconnect(self.update_cron_expression)
+            self.second_from.valueChanged.disconnect(self.update_cron_expression)
+            self.second_interval.valueChanged.disconnect(self.update_cron_expression)
+            self.second_specific.currentTextChanged.disconnect(self.update_cron_expression)
+        except:
+            pass
+        
+        try:
+            if second_field == "*":
+                # 每秒执行
+                self.second_option1.setChecked(True)
+            elif "/" in second_field:
+                # 间隔执行（从X秒开始，每Y秒执行一次）
+                self.second_option3.setChecked(True)
+                try:
+                    start, step = second_field.split("/")
+                    self.second_from.setValue(int(start))
+                    self.second_interval.setValue(int(step))
+                except:
+                    pass
+            elif "-" in second_field:
+                # 周期执行（从X秒到Y秒）
+                self.second_option2.setChecked(True)
+                try:
+                    start, end = second_field.split("-")
+                    self.second_start.setValue(int(start))
+                    self.second_end.setValue(int(end))
+                except:
+                    pass
+            elif second_field.isdigit():
+                # 指定秒数
+                self.second_option4.setChecked(True)
+                self.second_specific.setCurrentText(second_field)
+            else:
+                # 其他情况，保持当前选择
+                pass
+        finally:
+            # 重新连接信号
+            try:
+                self.second_start.valueChanged.connect(self.update_cron_expression)
+                self.second_end.valueChanged.connect(self.update_cron_expression)
+                self.second_from.valueChanged.connect(self.update_cron_expression)
+                self.second_interval.valueChanged.connect(self.update_cron_expression)
+                self.second_specific.currentTextChanged.connect(self.update_cron_expression)
+            except:
+                pass
+
+    def _update_minute_tab(self, minute_field):
+        """更新分钟tab选项"""
+        # 临时断开信号连接，避免递归调用
+        try:
+            self.minute_start.valueChanged.disconnect(self.update_cron_expression)
+            self.minute_end.valueChanged.disconnect(self.update_cron_expression)
+            self.minute_from.valueChanged.disconnect(self.update_cron_expression)
+            self.minute_interval.valueChanged.disconnect(self.update_cron_expression)
+            self.minute_specific.currentTextChanged.disconnect(self.update_cron_expression)
+        except:
+            pass
+        
+        try:
+            if minute_field == "*":
+                # 每分钟执行
+                self.minute_option1.setChecked(True)
+            elif "/" in minute_field:
+                # 间隔执行（从X分钟开始，每Y分钟执行一次）
+                self.minute_option3.setChecked(True)
+                try:
+                    start, step = minute_field.split("/")
+                    self.minute_from.setValue(int(start))
+                    self.minute_interval.setValue(int(step))
+                except:
+                    pass
+            elif "-" in minute_field:
+                # 周期执行（从X分钟到Y分钟）
+                self.minute_option2.setChecked(True)
+                try:
+                    start, end = minute_field.split("-")
+                    self.minute_start.setValue(int(start))
+                    self.minute_end.setValue(int(end))
+                except:
+                    pass
+            elif minute_field.isdigit():
+                # 指定分钟数
+                self.minute_option4.setChecked(True)
+                self.minute_specific.setCurrentText(minute_field)
+            else:
+                # 其他情况，保持当前选择
+                pass
+        finally:
+            # 重新连接信号
+            try:
+                self.minute_start.valueChanged.connect(self.update_cron_expression)
+                self.minute_end.valueChanged.connect(self.update_cron_expression)
+                self.minute_from.valueChanged.connect(self.update_cron_expression)
+                self.minute_interval.valueChanged.connect(self.update_cron_expression)
+                self.minute_specific.currentTextChanged.connect(self.update_cron_expression)
+            except:
+                pass
+
+    def _update_hour_tab(self, hour_field):
+        """更新小时tab选项"""
+        # 临时断开信号连接，避免递归调用
+        try:
+            self.hour_start.valueChanged.disconnect(self.update_cron_expression)
+            self.hour_end.valueChanged.disconnect(self.update_cron_expression)
+            self.hour_from.valueChanged.disconnect(self.update_cron_expression)
+            self.hour_interval.valueChanged.disconnect(self.update_cron_expression)
+            self.hour_specific.currentTextChanged.disconnect(self.update_cron_expression)
+        except:
+            pass
+        
+        try:
+            if hour_field == "*":
+                # 每小时执行
+                self.hour_option1.setChecked(True)
+            elif "/" in hour_field:
+                # 间隔执行（从X小时开始，每Y小时执行一次）
+                self.hour_option3.setChecked(True)
+                try:
+                    start, step = hour_field.split("/")
+                    self.hour_from.setValue(int(start))
+                    self.hour_interval.setValue(int(step))
+                except:
+                    pass
+            elif "-" in hour_field:
+                # 周期执行（从X小时到Y小时）
+                self.hour_option2.setChecked(True)
+                try:
+                    start, end = hour_field.split("-")
+                    self.hour_start.setValue(int(start))
+                    self.hour_end.setValue(int(end))
+                except:
+                    pass
+            elif hour_field.isdigit():
+                # 指定小时数
+                self.hour_option4.setChecked(True)
+                self.hour_specific.setCurrentText(hour_field)
+            else:
+                # 其他情况，保持当前选择
+                pass
+        finally:
+            # 重新连接信号
+            try:
+                self.hour_start.valueChanged.connect(self.update_cron_expression)
+                self.hour_end.valueChanged.connect(self.update_cron_expression)
+                self.hour_from.valueChanged.connect(self.update_cron_expression)
+                self.hour_interval.valueChanged.connect(self.update_cron_expression)
+                self.hour_specific.currentTextChanged.connect(self.update_cron_expression)
+            except:
+                pass
+
+    def _update_day_tab(self, day_field):
+        """更新日tab选项"""
+        # 临时断开信号连接，避免递归调用
+        try:
+            self.day_start.valueChanged.disconnect(self.update_cron_expression)
+            self.day_end.valueChanged.disconnect(self.update_cron_expression)
+            self.day_from.valueChanged.disconnect(self.update_cron_expression)
+            self.day_interval.valueChanged.disconnect(self.update_cron_expression)
+            self.day_specific.currentTextChanged.disconnect(self.update_cron_expression)
+        except:
+            pass
+        
+        try:
+            if day_field == "*":
+                # 每日执行
+                self.day_option1.setChecked(True)
+            elif "/" in day_field:
+                # 间隔执行（从X日开始，每Y日执行一次）
+                self.day_option4.setChecked(True)
+                try:
+                    start, step = day_field.split("/")
+                    self.day_from.setValue(int(start))
+                    self.day_interval.setValue(int(step))
+                except:
+                    pass
+            elif "-" in day_field:
+                # 周期执行（从X日到Y日）
+                self.day_option3.setChecked(True)
+                try:
+                    start, end = day_field.split("-")
+                    self.day_start.setValue(int(start))
+                    self.day_end.setValue(int(end))
+                except:
+                    pass
+            elif day_field.isdigit():
+                # 指定日期
+                self.day_option6.setChecked(True)
+                self.day_specific.setCurrentText(day_field)
+            else:
+                # 其他情况，保持当前选择
+                pass
+        finally:
+            # 重新连接信号
+            try:
+                self.day_start.valueChanged.connect(self.update_cron_expression)
+                self.day_end.valueChanged.connect(self.update_cron_expression)
+                self.day_from.valueChanged.connect(self.update_cron_expression)
+                self.day_interval.valueChanged.connect(self.update_cron_expression)
+                self.day_specific.currentTextChanged.connect(self.update_cron_expression)
+            except:
+                pass
+
+    def _update_month_tab(self, month_field):
+        """更新月tab选项"""
+        # 临时断开信号连接，避免递归调用
+        try:
+            self.month_start.valueChanged.disconnect(self.update_cron_expression)
+            self.month_end.valueChanged.disconnect(self.update_cron_expression)
+            self.month_from.valueChanged.disconnect(self.update_cron_expression)
+            self.month_interval.valueChanged.disconnect(self.update_cron_expression)
+            self.month_specific.currentTextChanged.disconnect(self.update_cron_expression)
+        except:
+            pass
+        
+        try:
+            if month_field == "*":
+                # 每月执行
+                self.month_option1.setChecked(True)
+            elif "/" in month_field:
+                # 间隔执行（从X月开始，每Y月执行一次）
+                self.month_option4.setChecked(True)
+                try:
+                    start, step = month_field.split("/")
+                    self.month_from.setValue(int(start))
+                    self.month_interval.setValue(int(step))
+                except:
+                    pass
+            elif "-" in month_field:
+                # 周期执行（从X月到Y月）
+                self.month_option3.setChecked(True)
+                try:
+                    start, end = month_field.split("-")
+                    self.month_start.setValue(int(start))
+                    self.month_end.setValue(int(end))
+                except:
+                    pass
+            elif month_field.isdigit():
+                # 指定月份
+                self.month_option5.setChecked(True)
+                self.month_specific.setCurrentText(month_field)
+            else:
+                # 其他情况，保持当前选择
+                pass
+        finally:
+            # 重新连接信号
+            try:
+                self.month_start.valueChanged.connect(self.update_cron_expression)
+                self.month_end.valueChanged.connect(self.update_cron_expression)
+                self.month_from.valueChanged.connect(self.update_cron_expression)
+                self.month_interval.valueChanged.connect(self.update_cron_expression)
+                self.month_specific.currentTextChanged.connect(self.update_cron_expression)
+            except:
+                pass
+
+    def _update_week_tab(self, week_field):
+        """更新周tab选项"""
+        # 临时断开信号连接，避免递归调用
+        try:
+            self.week_start.currentTextChanged.disconnect(self.update_cron_expression)
+            self.week_end.currentTextChanged.disconnect(self.update_cron_expression)
+            self.week_from.valueChanged.disconnect(self.update_cron_expression)
+            self.week_specific.currentTextChanged.disconnect(self.update_cron_expression)
+        except:
+            pass
+        
+        try:
+            print(f"[DEBUG] 更新周字段Tab，传入的周字段值: {week_field}")
+            
+            if week_field == "*":
+                # 每周执行
+                print(f"[DEBUG] 周字段为'*'，设置选项1")
+                self.week_option1.setChecked(True)
+            elif week_field == "?":
+                # 不指定周（当日字段被指定时）
+                print(f"[DEBUG] 周字段为'?'，设置选项2")
+                self.week_option2.setChecked(True)
+            elif "/" in week_field:
+                # 周期执行
+                print(f"[DEBUG] 周字段包含'/'，设置选项3")
+                self.week_option3.setChecked(True)
+                try:
+                    _, step = week_field.split("/")
+                    self.week_start.setCurrentText("周一")
+                    self.week_end.setCurrentText("周日")
+                    self.week_step.setValue(int(step))
+                except:
+                    pass
+            elif "-" in week_field:
+                # 间隔执行
+                print(f"[DEBUG] 周字段包含'-'，设置选项4")
+                self.week_option4.setChecked(True)
+                try:
+                    start, end = week_field.split("-")
+                    self.week_from.setValue(int(start))
+                    self.week_to.setValue(int(end))
+                except:
+                    pass
+            elif week_field.isdigit():
+                # 指定星期
+                print(f"[DEBUG] 周字段为数字，设置选项6")
+                self.week_option6.setChecked(True)
+                # 将数字转换为星期名称
+                day_mapping = {"0": "周一", "1": "周二", "2": "周三", "3": "周四", 
+                              "4": "周五", "5": "周六", "6": "周日"}
+                if week_field in day_mapping:
+                    self.week_specific.setCurrentText(day_mapping[week_field])
+            else:
+                # 其他情况，保持当前选择
+                print(f"[DEBUG] 周字段为其他值: {week_field}，保持当前选择")
+                pass
+        finally:
+            # 重新连接信号
+            try:
+                self.week_start.currentTextChanged.connect(self.update_cron_expression)
+                self.week_end.currentTextChanged.connect(self.update_cron_expression)
+                self.week_from.valueChanged.connect(self.update_cron_expression)
+                self.week_specific.currentTextChanged.connect(self.update_cron_expression)
+            except:
+                pass
+
+    def _update_year_tab(self, year_field):
+        """更新年tab选项"""
+        # 临时断开信号连接，避免递归调用
+        try:
+            self.year_start.valueChanged.disconnect(self.update_cron_expression)
+            self.year_end.valueChanged.disconnect(self.update_cron_expression)
+            self.year_from.valueChanged.disconnect(self.update_cron_expression)
+            self.year_specific.currentTextChanged.disconnect(self.update_cron_expression)
+        except:
+            pass
+        
+        try:
+            if year_field == "*":
+                # 每年执行
+                self.year_option1.setChecked(True)
+            elif "/" in year_field:
+                # 周期执行
+                self.year_option3.setChecked(True)
+                try:
+                    _, step = year_field.split("/")
+                    self.year_start.setText("2024")
+                    self.year_end.setText("2030")
+                    self.year_step.setText(step)
+                except:
+                    pass
+            elif "-" in year_field:
+                # 间隔执行
+                self.year_option4.setChecked(True)
+                try:
+                    start, end = year_field.split("-")
+                    self.year_from.setText(start)
+                    self.year_to.setText(end)
+                except:
+                    pass
+            elif year_field.isdigit():
+                # 指定年份
+                self.year_option5.setChecked(True)
+                self.year_specific.setCurrentText(year_field)
+            else:
+                # 其他情况，保持当前选择
+                pass
+        finally:
+            # 重新连接信号
+            try:
+                self.year_start.valueChanged.connect(self.update_cron_expression)
+                self.year_end.valueChanged.connect(self.update_cron_expression)
+                self.year_from.valueChanged.connect(self.update_cron_expression)
+                self.year_specific.currentTextChanged.connect(self.update_cron_expression)
+            except:
+                pass
+
+    def validate_cron_expression(self, cron_expression):
+        """校验Cron表达式是否符合标准格式"""
+        try:
+            # 分割表达式
+            parts = cron_expression.strip().split()
+            
+            # 检查字段数量（6或7个字段）
+            if len(parts) not in [6, 7]:
+                return False, f"Cron表达式应包含6或7个字段，当前有{len(parts)}个"
+            
+            # 校验每个字段
+            field_names = ["秒", "分钟", "小时", "日", "月", "周"]
+            if len(parts) == 7:
+                field_names.append("年")
+            
+            for i, (field_name, part) in enumerate(zip(field_names, parts)):
+                if not self.validate_cron_field(part, i):
+                    return False, f"{field_name}字段格式错误: {part}"
+            
+            # 检查日和周的冲突（不能同时指定日和周）
+            if len(parts) >= 6:
+                day_field = parts[3]  # 第4个字段是日
+                week_field = parts[5]  # 第6个字段是周
+                
+                # 如果日字段不是?，周字段应该是?，反之亦然
+                if day_field != "?" and week_field != "?":
+                    return False, "日和周字段不能同时指定，其中一个必须为?"
+                if day_field == "?" and week_field == "?":
+                    return False, "日和周字段不能同时为?，必须指定其中一个"
+            
+            return True, "表达式格式正确"
+            
+        except Exception as e:
+            return False, f"校验过程中出错: {str(e)}"
+    
+    def validate_cron_input(self, text):
+        """实时校验cron表达式输入"""
+        # 检查是否正在解析cron表达式，避免递归调用
+        if hasattr(self, '_parsing_cron') and self._parsing_cron:
+            return
+            
+        if not text.strip():
+            # 空输入时重置样式和提示
+            self.cron_edit.setStyleSheet("""
+                QLineEdit {
+                    padding: 8px 12px;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    background-color: white;
+                    font-size: 14px;
+                }
+                QLineEdit:focus {
+                    border-color: #0078d4;
+                    outline: none;
+                }
+            """)
+            self.cron_validation_label.setText("")
+            self.cron_validation_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    margin-top: 5px;
+                }
+            """)
+            return
+        
+        # 校验cron表达式
+        is_valid, error_msg = self.validate_cron_expression(text)
+        
+        if is_valid:
+            # 校验通过，显示绿色提示
+            self.cron_edit.setStyleSheet("""
+                QLineEdit {
+                    padding: 8px 12px;
+                    border: 2px solid #28a745;
+                    border-radius: 6px;
+                    background-color: #f8fff9;
+                    font-size: 14px;
+                }
+                QLineEdit:focus {
+                    border-color: #28a745;
+                    outline: none;
+                }
+            """)
+            self.cron_validation_label.setText("✓ 表达式格式正确")
+            self.cron_validation_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    margin-top: 5px;
+                    color: #155724;
+                    background-color: #d4edda;
+                    border: 1px solid #c3e6cb;
+                }
+            """)
+            # 校验通过后，将表达式回显到各个tab选项
+            self._parsing_cron = True
+            try:
+                self.parse_cron_to_tabs(text)
+            finally:
+                self._parsing_cron = False
+        else:
+            # 校验失败，显示红色错误提示
+            self.cron_edit.setStyleSheet("""
+                QLineEdit {
+                    padding: 8px 12px;
+                    border: 2px solid #dc3545;
+                    border-radius: 6px;
+                    background-color: #fff0f0;
+                    font-size: 14px;
+                }
+                QLineEdit:focus {
+                    border-color: #dc3545;
+                    outline: none;
+                }
+            """)
+            self.cron_validation_label.setText(f"✗ {error_msg}")
+            self.cron_validation_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    margin-top: 5px;
+                    color: #721c24;
+                    background-color: #f8d7da;
+                    border: 1px solid #f5c6cb;
+                }
+            """)
+    
+    def validate_cron_field(self, field, field_index):
+        """校验单个Cron字段"""
+        # 空字段
+        if not field:
+            return False
+        
+        # 通配符
+        if field == "*" or field == "?":
+            return True
+        
+        # 检查数字范围
+        if field.isdigit():
+            value = int(field)
+            return self.check_field_range(value, field_index)
+        
+        # 检查范围表达式 (如 1-5)
+        if "-" in field:
+            parts = field.split("-")
+            if len(parts) != 2:
+                return False
+            if not parts[0].isdigit() or not parts[1].isdigit():
+                return False
+            start, end = int(parts[0]), int(parts[1])
+            if not (self.check_field_range(start, field_index) and self.check_field_range(end, field_index)):
+                return False
+            if start > end:
+                return False
+            return True
+        
+        # 检查步长表达式 (如 */5 或 1/2)
+        if "/" in field:
+            if field.startswith("*/"):
+                step_part = field[2:]
+                if not step_part.isdigit():
+                    return False
+                step = int(step_part)
+                return step > 0 and self.check_field_range(step, field_index)
+            else:
+                parts = field.split("/")
+                if len(parts) != 2:
+                    return False
+                if not parts[0].isdigit() or not parts[1].isdigit():
+                    return False
+                base, step = int(parts[0]), int(parts[1])
+                if not (self.check_field_range(base, field_index) and self.check_field_range(step, field_index)):
+                    return False
+                return step > 0
+        
+        # 检查列表表达式 (如 1,3,5)
+        if "," in field:
+            parts = field.split(",")
+            for part in parts:
+                if not part.isdigit():
+                    return False
+                value = int(part)
+                if not self.check_field_range(value, field_index):
+                    return False
+            return True
+        
+        # 检查特殊字符（周字段的特殊格式）
+        if field_index == 5:  # 周字段
+            if "#" in field:
+                parts = field.split("#")
+                if len(parts) != 2:
+                    return False
+                if not parts[0].isdigit() or not parts[1].isdigit():
+                    return False
+                day, week_num = int(parts[0]), int(parts[1])
+                if not (0 <= day <= 6 and 1 <= week_num <= 5):
+                    return False
+                return True
+            if field.endswith("L"):
+                day_part = field[:-1]
+                if not day_part.isdigit():
+                    return False
+                day = int(day_part)
+                return 0 <= day <= 6
+        
+        # 检查日字段的特殊字符
+        if field_index == 3:  # 日字段
+            if field == "L":
+                return True
+            if field.endswith("W"):
+                day_part = field[:-1]
+                if not day_part.isdigit():
+                    return False
+                day = int(day_part)
+                return 1 <= day <= 31
+        
+        return False
+    
+    def check_field_range(self, value, field_index):
+        """检查字段值是否在有效范围内"""
+        ranges = [
+            (0, 59),   # 秒
+            (0, 59),   # 分钟
+            (0, 23),   # 小时
+            (1, 31),   # 日
+            (1, 12),   # 月
+            (0, 6),    # 周（0=周日，6=周六）
+            (1970, 2099)  # 年
+        ]
+        
+        if field_index < len(ranges):
+            min_val, max_val = ranges[field_index]
+            return min_val <= value <= max_val
+        
+        return False
+
+    def get_second_cron(self):
+        """获取秒字段的Cron表达式"""
+        if self.second_option1.isChecked():
+            return "*"
+        elif self.second_option2.isChecked():
+            return f"{self.second_start.value()}-{self.second_end.value()}"
+        elif self.second_option3.isChecked():
+            return f"{self.second_from.value()}/{self.second_interval.value()}"
+        elif self.second_option4.isChecked():
+            return self.second_specific.currentText()
+        return "*"
+
+    def get_minute_cron(self):
+        """获取分钟字段的Cron表达式"""
+        if self.minute_option1.isChecked():
+            return "*"
+        elif self.minute_option2.isChecked():
+            return f"{self.minute_start.value()}-{self.minute_end.value()}"
+        elif self.minute_option3.isChecked():
+            return f"{self.minute_from.value()}/{self.minute_interval.value()}"
+        elif self.minute_option4.isChecked():
+            return self.minute_specific.currentText()
+        return "*"
+
+    def get_hour_cron(self):
+        """获取小时字段的Cron表达式"""
+        if self.hour_option1.isChecked():
+            return "*"
+        elif self.hour_option2.isChecked():
+            return f"{self.hour_start.value()}-{self.hour_end.value()}"
+        elif self.hour_option3.isChecked():
+            return f"{self.hour_from.value()}/{self.hour_interval.value()}"
+        elif self.hour_option4.isChecked():
+            return self.hour_specific.currentText()
+        return "*"
+
+    def get_day_cron(self):
+        """获取日字段的Cron表达式"""
+        # 如果周字段被指定了具体值（不是"*"或"?"），日字段应该为?
+        if not self.week_option1.isChecked() and not self.week_option2.isChecked():
+            print(f"[DEBUG] 日字段：周字段被指定了具体值，日字段返回'?'")
+            print(f"[DEBUG] 周字段选项状态：week_option1={self.week_option1.isChecked()}, week_option2={self.week_option2.isChecked()}")
+            return "?"
+        
+        if self.day_option1.isChecked():
+            print(f"[DEBUG] 日字段：选项1被选中，返回'*'")
+            return "*"
+        elif self.day_option2.isChecked():
+            print(f"[DEBUG] 日字段：选项2被选中，返回'?'")
+            return "?"
+        elif self.day_option3.isChecked():
+            result = f"{self.day_start.value()}-{self.day_end.value()}"
+            print(f"[DEBUG] 日字段：选项3被选中，返回'{result}'")
+            return result
+        elif self.day_option4.isChecked():
+            result = f"{self.day_from.value()}/{self.day_interval.value()}"
+            print(f"[DEBUG] 日字段：选项4被选中，返回'{result}'")
+            return result
+        elif self.day_option5.isChecked():
+            print(f"[DEBUG] 日字段：选项5被选中，返回'L'")
+            return "L"
+        elif self.day_option6.isChecked():
+            result = self.day_specific.currentText()
+            print(f"[DEBUG] 日字段：选项6被选中，返回'{result}'")
+            return result
+        print(f"[DEBUG] 日字段：没有选项被选中，默认返回'?'")
+        return "?"
+
+    def get_month_cron(self):
+        """获取月字段的Cron表达式"""
+        if self.month_option1.isChecked():
+            return "*"
+        elif self.month_option2.isChecked():
+            return "?"
+        elif self.month_option3.isChecked():
+            return f"{self.month_start.value()}-{self.month_end.value()}"
+        elif self.month_option4.isChecked():
+            return f"{self.month_from.value()}/{self.month_interval.value()}"
+        elif self.month_option5.isChecked():
+            return self.month_specific.currentText()
+        return "*"
+
+    def get_week_cron(self):
+        """获取周字段的Cron表达式"""
+        # 如果日字段被指定了具体值（不是"*"或"?"），周字段应该为?
+        if not self.day_option1.isChecked() and not self.day_option2.isChecked():
+            print(f"[DEBUG] 周字段：日字段被指定了具体值，周字段返回'?'")
+            print(f"[DEBUG] 日字段选项状态：day_option1={self.day_option1.isChecked()}, day_option2={self.day_option2.isChecked()}")
+            return "?"
+        
+        if self.week_option1.isChecked():
+            print(f"[DEBUG] 周字段：选项1被选中，返回'*'")
+            return "*"
+        elif self.week_option2.isChecked():
+            print(f"[DEBUG] 周字段：选项2被选中，返回'?'")
+            return "?"
+        elif self.week_option3.isChecked():
+            # 周期从周X到周Y，转换为数字格式（0=周日，6=周六）
+            week_days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            # 正确的Cron映射：周日=0, 周一=1, 周二=2, 周三=3, 周四=4, 周五=5, 周六=6
+            day_mapping = {"周日": 0, "周一": 1, "周二": 2, "周三": 3, "周四": 4, "周五": 5, "周六": 6}
+            start_idx = day_mapping[self.week_start.currentText()]
+            end_idx = day_mapping[self.week_end.currentText()]
+            result = f"{start_idx}-{end_idx}"
+            print(f"[DEBUG] 周字段：选项3被选中，返回'{result}'")
+            return result
+        elif self.week_option4.isChecked():
+            # 第X周的周X，转换为数字格式
+            week_days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            day_mapping = {"周日": 0, "周一": 1, "周二": 2, "周三": 3, "周四": 4, "周五": 5, "周六": 6}
+            day_idx = day_mapping[self.week_day.currentText()]
+            result = f"{day_idx}#{self.week_which.value()}"
+            print(f"[DEBUG] 周字段：选项4被选中，返回'{result}'")
+            return result
+        elif self.week_option5.isChecked():
+            # 本月最后一个周X，转换为数字格式
+            week_days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            day_mapping = {"周日": 0, "周一": 1, "周二": 2, "周三": 3, "周四": 4, "周五": 5, "周六": 6}
+            day_idx = day_mapping[self.week_last_day.currentText()]
+            result = f"{day_idx}L"
+            print(f"[DEBUG] 周字段：选项5被选中，返回'{result}'")
+            return result
+        elif self.week_option6.isChecked():
+            # 指定星期，转换为数字格式
+            week_days = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            day_mapping = {"周日": 0, "周一": 1, "周二": 2, "周三": 3, "周四": 4, "周五": 5, "周六": 6}
+            day_idx = day_mapping[self.week_specific.currentText()]
+            result = str(day_idx)
+            print(f"[DEBUG] 周字段：选项6被选中，返回'{result}'")
+            return result
+        print(f"[DEBUG] 周字段：没有选项被选中，默认返回'?'")
+        return "?"
+
+    def get_year_cron(self):
+        """获取年字段的Cron表达式"""
+        if self.year_option1.isChecked():
+            return ""
+        elif self.year_option2.isChecked():
+            return "?"
+        elif self.year_option3.isChecked():
+            return f"{self.year_start.value()}-{self.year_end.value()}"
+        return ""
 
 
 class SchedulerManager(QWidget):
@@ -405,12 +2293,18 @@ class SchedulerManager(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.scheduler_service = None
+        self.scheduler_background_service = SchedulerBackgroundService()
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_next_run_times)
         self.timer.start(60000)  # 每分钟更新一次
+        self.execution_status = {}  # 执行状态监控
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
+        # 启动后台调度服务
+        self.start_background_service()
+        # 连接后台服务信号
+        self.connect_background_service_signals()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -423,32 +2317,11 @@ class SchedulerManager(QWidget):
         self.add_action.triggered.connect(self.add_scheduler)
         self.add_action.setIcon(self.get_icon("add.png"))
 
-        self.edit_action = QAction("编辑", self)
-        self.edit_action.triggered.connect(self.edit_selected_scheduler)
-        self.edit_action.setIcon(self.get_icon("edit.png"))
-
-        self.delete_action = QAction("删除", self)
-        self.delete_action.triggered.connect(self.delete_selected_scheduler)
-        self.delete_action.setIcon(self.get_icon("delete.png"))
-
-        self.run_action = QAction("立即执行", self)
-        self.run_action.triggered.connect(self.run_selected_scheduler)
-        self.run_action.setIcon(self.get_icon("play.png"))
-
-        self.enable_action = QAction("启用/禁用", self)
-        self.enable_action.triggered.connect(self.toggle_selected_scheduler)
-        self.enable_action.setIcon(self.get_icon("toggle.png"))
-
         self.refresh_action = QAction("刷新", self)
         self.refresh_action.triggered.connect(self.load_schedulers)
         self.refresh_action.setIcon(self.get_icon("refresh.png"))
 
         toolbar.addAction(self.add_action)
-        toolbar.addAction(self.edit_action)
-        toolbar.addAction(self.delete_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self.run_action)
-        toolbar.addAction(self.enable_action)
         toolbar.addSeparator()
         toolbar.addAction(self.refresh_action)
 
@@ -456,36 +2329,95 @@ class SchedulerManager(QWidget):
 
         # 调度列表表格
         self.table_widget = QTableWidget()
-        self.table_widget.setColumnCount(7)
+        self.table_widget.setColumnCount(9)  # 增加序号列，调整为9列
         self.table_widget.setHorizontalHeaderLabels([
-            "调度名称", "状态", "Cron表达式", "用例数量", "上次执行", "下次执行", "创建时间"
+            "序号", "调度名称", "状态", "Cron表达式", "用例数量", "上次执行", "下次执行", "创建时间", "操作"
         ])
-        self.table_widget.horizontalHeader().setStretchLastSection(True)
+        
+        # 设置固定列宽 - 增加关键列的宽度
+        self.table_widget.setColumnWidth(0, 80)     # 序号（自定义序号列）
+        self.table_widget.setColumnWidth(1, 370)    # 调度名称（增加宽度）
+        self.table_widget.setColumnWidth(2, 100)     # 状态
+        self.table_widget.setColumnWidth(3, 270)    # Cron表达式（增加宽度）
+        self.table_widget.setColumnWidth(4, 100)     # 用例数量
+        self.table_widget.setColumnWidth(5, 270)     # 上次执行
+        self.table_widget.setColumnWidth(6, 270)    # 下次执行
+        self.table_widget.setColumnWidth(7, 270)    # 创建时间
+        self.table_widget.setColumnWidth(8, 250)    # 操作栏（调整为图标按钮宽度）
+        
+        # 设置列宽调整模式为固定
+        header = self.table_widget.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
+        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        
+        # 设置表格不可编辑
+        self.table_widget.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.table_widget.customContextMenuRequested.connect(self.show_table_context_menu)
-        self.table_widget.doubleClicked.connect(self.edit_selected_scheduler)
+        
+        # 参考变量管理的表格样式美化
+        self.table_widget.setAlternatingRowColors(True)
+        self.table_widget.verticalHeader().setVisible(False)  # 隐藏垂直序号列
+        self.table_widget.setStyleSheet("""
+            QTableWidget {
+                background-color: #fafafa;
+                alternate-background-color: #f0f0f0;
+                gridline-color: #e0e0e0;
+                border: 1px solid #d0d0d0;
+                border-radius: 4px;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #e8e8e8;
+                text-align: center;
+            }
+            QTableWidget::item:selected {
+                background-color: #f0f0f0;
+                color: #333333;
+            }
+            QTableWidget::item:selected:!active {
+                background-color: #f0f0f0;
+                color: #333333;
+            }
+            QTableWidget::item:hover {
+                background-color: #f5f5f5;
+            }
+            QHeaderView::section {
+                background-color: #d0d0d0;
+                color: #333333;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 6px;
+                border: none;
+                border-right: 1px solid #b0b0b0;
+                min-height: 25px;
+            }
+        """)
+        self.table_widget.setMinimumHeight(400)  # 增加表格高度
+        self.table_widget.verticalHeader().setDefaultSectionSize(45)  # 设置行高
+
+        # 移除重复的表格设置代码
+        # 移除双击编辑功能
+        # self.table_widget.doubleClicked.connect(self.edit_selected_scheduler)
 
         main_layout.addWidget(self.table_widget)
 
         # 状态栏
         status_layout = QHBoxLayout()
         self.status_label = QLabel("就绪")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                color: #333333;
+                padding: 4px 8px;
+                border: 1px solid #d0d0d0;
+                border-radius: 3px;
+                font-size: 12px;
+            }
+        """)
         status_layout.addWidget(self.status_label)
         status_layout.addStretch()
 
         main_layout.addLayout(status_layout)
-
-        self.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #ddd;
-                border-radius: 4px;
-            }
-            QPushButton {
-                padding: 6px 12px;
-                border-radius: 4px;
-            }
-        """)
 
     def delayed_load_data(self):
         """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
@@ -497,6 +2429,119 @@ class SchedulerManager(QWidget):
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"延迟加载数据失败: {str(e)}")
+
+    def start_background_service(self):
+        """启动后台调度服务"""
+        try:
+            if self.scheduler_background_service:
+                self.scheduler_background_service.start_service()
+                logger.info("后台调度服务已启动")
+        except Exception as e:
+            logger.error(f"启动后台调度服务失败: {str(e)}")
+
+    def stop_background_service(self):
+        """停止后台调度服务"""
+        try:
+            if self.scheduler_background_service:
+                self.scheduler_background_service.stop_service()
+                logger.info("后台调度服务已停止")
+        except Exception as e:
+            logger.error(f"停止后台调度服务失败: {str(e)}")
+
+    def connect_background_service_signals(self):
+        """连接后台服务信号"""
+        if self.scheduler_background_service:
+            # 连接调度执行信号
+            self.scheduler_background_service.scheduler_executed.connect(self.on_scheduler_executed)
+            self.scheduler_background_service.scheduler_error.connect(self.on_scheduler_error)
+    
+    def on_scheduler_executed(self, scheduler_data, success, message):
+        """调度执行完成回调"""
+        scheduler_id = scheduler_data['id']
+        scheduler_name = scheduler_data['name']
+        
+        # 更新执行状态
+        self.execution_status[scheduler_id] = {
+            'status': 'completed',
+            'success': success,
+            'message': message,
+            'timestamp': datetime.now()
+        }
+        
+        # 更新状态栏显示
+        status_text = f"调度 '{scheduler_name}' 执行{'成功' if success else '失败'}: {message}"
+        self.status_label.setText(status_text)
+        
+        # 刷新表格显示
+        self.update_scheduler_status(scheduler_id)
+        
+        # 显示Toast提示
+        if success:
+            Toast.success(self, status_text)
+        else:
+            Toast.warn(self, status_text)
+    
+    def on_scheduler_error(self, scheduler_data, error_msg):
+        """调度执行错误回调"""
+        scheduler_id = scheduler_data['id']
+        scheduler_name = scheduler_data['name']
+        
+        # 更新执行状态
+        self.execution_status[scheduler_id] = {
+            'status': 'error',
+            'success': False,
+            'message': error_msg,
+            'timestamp': datetime.now()
+        }
+        
+        # 更新状态栏显示
+        status_text = f"调度 '{scheduler_name}' 执行错误: {error_msg}"
+        self.status_label.setText(status_text)
+        
+        # 刷新表格显示
+        self.update_scheduler_status(scheduler_id)
+        
+        # 显示Toast提示
+        Toast.error(self, status_text)
+    
+    def update_scheduler_status(self, scheduler_id):
+        """更新调度状态显示"""
+        for row in range(self.table_widget.rowCount()):
+            item = self.table_widget.item(row, 1)  # 调度名称列
+            if item and item.data(Qt.UserRole) == scheduler_id:
+                # 更新状态列
+                status_item = self.table_widget.item(row, 2)
+                if status_item:
+                    if scheduler_id in self.execution_status:
+                        status_info = self.execution_status[scheduler_id]
+                        if status_info['status'] == 'executing':
+                            status_item.setText('执行中')
+                            status_item.setBackground(QColor('#fff3cd'))  # 黄色背景
+                        elif status_info['status'] == 'completed':
+                            if status_info['success']:
+                                status_item.setText('执行成功')
+                                status_item.setBackground(QColor('#d4edda'))  # 绿色背景
+                            else:
+                                status_item.setText('执行失败')
+                                status_item.setBackground(QColor('#f8d7da'))  # 红色背景
+                        elif status_info['status'] == 'error':
+                            status_item.setText('执行错误')
+                            status_item.setBackground(QColor('#f8d7da'))  # 红色背景
+                    else:
+                        # 检查调度是否启用
+                        scheduler_data = self.get_scheduler_data_by_id(scheduler_id)
+                        if scheduler_data and scheduler_data.get('enabled', False):
+                            status_item.setText('已启用')
+                            status_item.setBackground(QColor('#d4edda'))  # 绿色背景
+                        else:
+                            status_item.setText('已禁用')
+                            status_item.setBackground(QColor('#f8d7da'))  # 红色背景
+                break
+
+    def closeEvent(self, event):
+        """窗口关闭事件，停止后台服务"""
+        self.stop_background_service()
+        event.accept()
 
     def get_icon(self, icon_name):
         """获取图标"""
@@ -546,45 +2591,131 @@ class SchedulerManager(QWidget):
             self.table_widget.setRowCount(len(schedulers))
 
             for row, scheduler in enumerate(schedulers):
-                # 调度名称
+                # 序号列（第0列）- 自定义序号
+                index_item = QTableWidgetItem(str(row + 1))
+                index_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 0, index_item)
+
+                # 调度名称（原第0列，现在第1列）
                 name_item = QTableWidgetItem(scheduler['name'])
                 name_item.setData(Qt.UserRole, scheduler['id'])
-                self.table_widget.setItem(row, 0, name_item)
+                name_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 1, name_item)
 
-                # 状态
+                # 状态（原第1列，现在第2列）
                 status_item = QTableWidgetItem("启用" if scheduler['enabled'] else "禁用")
                 status_item.setForeground(QColor("green") if scheduler['enabled'] else QColor("red"))
-                self.table_widget.setItem(row, 1, status_item)
+                status_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 2, status_item)
 
-                # Cron表达式
-                self.table_widget.setItem(row, 2, QTableWidgetItem(scheduler['cron_expression']))
+                # Cron表达式（原第2列，现在第3列）
+                cron_item = QTableWidgetItem(scheduler['cron_expression'])
+                cron_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 3, cron_item)
 
-                # 用例数量
+                # 用例数量（原第3列，现在第4列）
                 case_ids = scheduler.get('case_ids', [])
                 case_count = len(case_ids) if isinstance(case_ids, list) else 0
-                self.table_widget.setItem(row, 3, QTableWidgetItem(str(case_count)))
+                case_item = QTableWidgetItem(str(case_count))
+                case_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 4, case_item)
 
-                # 上次执行时间
+                # 上次执行时间（原第4列，现在第5列）
                 last_run = scheduler.get('last_run_at')
                 last_run_text = last_run.strftime('%Y-%m-%d %H:%M:%S') if last_run else "从未执行"
-                self.table_widget.setItem(row, 4, QTableWidgetItem(last_run_text))
+                last_run_item = QTableWidgetItem(last_run_text)
+                last_run_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 5, last_run_item)
 
-                # 下次执行时间
+                # 下次执行时间（原第5列，现在第6列）
                 next_run = scheduler.get('next_run_at')
                 next_run_text = next_run.strftime('%Y-%m-%d %H:%M:%S') if next_run else "未计算"
                 next_run_item = QTableWidgetItem(next_run_text)
+                next_run_item.setTextAlignment(Qt.AlignCenter)
                 if next_run and next_run < datetime.now():
                     next_run_item.setForeground(QColor("orange"))
-                self.table_widget.setItem(row, 5, next_run_item)
+                self.table_widget.setItem(row, 6, next_run_item)
 
-                # 创建时间
+                # 创建时间（原第6列，现在第7列）
                 created_at = scheduler.get('created_at')
                 created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
-                self.table_widget.setItem(row, 6, QTableWidgetItem(created_text))
+                created_item = QTableWidgetItem(created_text)
+                created_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 7, created_item)
 
-            # 调整列宽
-            self.table_widget.resizeColumnsToContents()
+                # 操作栏（原第7列，现在第8列）
+                operation_widget = QWidget()
+                operation_layout = QHBoxLayout(operation_widget)
+                operation_layout.setContentsMargins(5, 2, 5, 2)
+                operation_layout.setSpacing(3)
+                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
+                
+                # 执行按钮
+                run_btn = QPushButton()
+                run_btn.setFixedSize(25, 25)
+                run_btn.setIcon(self.get_icon("running.png"))
+                run_btn.setToolTip("执行")
+                run_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                run_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.run_scheduler_by_id(sched_id))
+                
+                # 编辑按钮
+                edit_btn = QPushButton()
+                edit_btn.setFixedSize(25, 25)
+                edit_btn.setIcon(self.get_icon("edit.png"))
+                edit_btn.setToolTip("编辑")
+                edit_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                edit_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.edit_scheduler_by_id(sched_id))
+                
+                # 启用/禁用按钮
+                toggle_btn = QPushButton()
+                toggle_btn.setFixedSize(25, 25)
+                # 根据调度状态设置不同图标
+                if scheduler['enabled']:
+                    toggle_btn.setIcon(self.get_icon("stop.png"))
+                    toggle_btn.setToolTip("禁用")
+                else:
+                    toggle_btn.setIcon(self.get_icon("start.png"))
+                    toggle_btn.setToolTip("启用")
+                toggle_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                toggle_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.toggle_scheduler_by_id(sched_id))
+                
+                # 复制按钮
+                copy_btn = QPushButton()
+                copy_btn.setFixedSize(25, 25)
+                copy_btn.setIcon(self.get_icon("copy.png"))
+                copy_btn.setToolTip("复制")
+                copy_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                copy_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.copy_scheduler_by_id(sched_id))
+                
+                # 删除按钮
+                delete_btn = QPushButton()
+                delete_btn.setFixedSize(25, 25)
+                delete_btn.setIcon(self.get_icon("delete.png"))
+                delete_btn.setToolTip("删除")
+                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                delete_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.delete_scheduler_by_id(sched_id))
+                
+                # 详情按钮 - 查看执行记录日志
+                detail_btn = QPushButton()
+                detail_btn.setFixedSize(25, 25)
+                detail_btn.setIcon(self.get_icon("detail.png"))
+                detail_btn.setToolTip("查看执行记录")
+                detail_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                detail_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.show_execution_logs(sched_id))
+                
+                operation_layout.addWidget(run_btn)
+                operation_layout.addWidget(edit_btn)
+                operation_layout.addWidget(toggle_btn)
+                operation_layout.addWidget(copy_btn)
+                operation_layout.addWidget(delete_btn)
+                operation_layout.addWidget(detail_btn)
+                
+                self.table_widget.setCellWidget(row, 8, operation_widget)
+
             self.status_label.setText(f"共 {len(schedulers)} 个调度任务")
+            
+            # 加载完成后重新计算下次执行时间
+            self.update_next_run_times()
 
         except Exception as e:
             # 静默处理，不显示弹窗
@@ -593,13 +2724,32 @@ class SchedulerManager(QWidget):
 
     def update_next_run_times(self):
         """更新下次执行时间显示"""
+        from src.utils.interface_utils.cron_parser import CronParser
+        parser = CronParser()
+        
         for row in range(self.table_widget.rowCount()):
-            next_run_item = self.table_widget.item(row, 5)
-            if next_run_item:
-                next_run_text = next_run_item.text()
-                # 这里可以重新计算下次执行时间
-                # 简化处理：只是更新颜色
-                pass
+            # 获取调度名称和Cron表达式
+            name_item = self.table_widget.item(row, 1)
+            cron_item = self.table_widget.item(row, 3)
+            next_run_item = self.table_widget.item(row, 6)
+            
+            if name_item and cron_item and next_run_item:
+                cron_expr = cron_item.text()
+                
+                # 重新计算下次执行时间
+                next_run = parser.get_next_run(cron_expr)
+                if next_run:
+                    next_run_text = next_run.strftime('%Y-%m-%d %H:%M:%S')
+                    next_run_item.setText(next_run_text)
+                    
+                    # 更新颜色：如果下次执行时间已过，显示橙色
+                    if next_run < datetime.now():
+                        next_run_item.setForeground(QColor("orange"))
+                    else:
+                        next_run_item.setForeground(QColor("black"))
+                else:
+                    next_run_item.setText("未计算")
+                    next_run_item.setForeground(QColor("black"))
 
     def get_selected_scheduler_id(self):
         """获取选中的调度ID"""
@@ -615,117 +2765,260 @@ class SchedulerManager(QWidget):
             return self.scheduler_service.get_scheduler_by_id(scheduler_id)
         return None
 
+    def get_scheduler_data_by_id(self, scheduler_id):
+        """根据ID获取调度数据"""
+        try:
+            if self.scheduler_service:
+                return self.scheduler_service.get_scheduler_by_id(scheduler_id)
+            else:
+                logger.error("调度服务未初始化")
+                return None
+        except Exception as e:
+            logger.error(f"获取调度数据失败: {str(e)}")
+            return None
+
     def add_scheduler(self):
         """新增调度"""
         dialog = SchedulerDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                QMessageBox.warning(self, "输入错误", "调度名称不能为空")
+                Toast.warn(self, "调度名称不能为空")
                 return
             if not data['cron_expression']:
-                QMessageBox.warning(self, "输入错误", "Cron表达式不能为空")
+                Toast.warn(self, "Cron表达式不能为空")
                 return
             if not data['case_ids']:
-                QMessageBox.warning(self, "输入错误", "请选择至少一个测试用例")
+                Toast.warn(self, "请选择至少一个测试用例")
                 return
 
             try:
                 # 验证Cron表达式
                 parser = CronParser()
                 if not parser.validate_cron(data['cron_expression']):
-                    QMessageBox.warning(self, "输入错误", "Cron表达式格式不正确")
+                    Toast.warn(self, "Cron表达式格式不正确")
                     return
 
                 self.scheduler_service.create_scheduler(data)
                 self.load_schedulers()
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "调度创建成功")
+                Toast.info(self, "调度创建成功")
+                
+                # 保存成功后立即更新下次执行时间显示
+                self.update_next_run_times()
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"创建调度失败: {str(e)}")
+                Toast.error(self, f"创建调度失败: {str(e)}")
 
-    def edit_selected_scheduler(self):
-        """编辑选中的调度"""
-        scheduler_data = self.get_selected_scheduler_data()
-        if not scheduler_data:
-            QMessageBox.warning(self, "提示", "请先选择一个调度")
-            return
 
+
+
+
+    def edit_scheduler_by_id(self, scheduler_id):
+        """根据ID编辑调度"""
+        scheduler_data = self.scheduler_service.get_scheduler_by_id(scheduler_id)
+        if scheduler_data:
+            self.edit_scheduler(scheduler_data)
+
+    def delete_scheduler_by_id(self, scheduler_id):
+        """根据ID删除调度"""
+        scheduler_data = self.scheduler_service.get_scheduler_by_id(scheduler_id)
+        if scheduler_data:
+            self.delete_scheduler(scheduler_data)
+
+    def delete_scheduler(self, scheduler_data):
+        """删除调度"""
+        # 创建确认对话框，手动设置按钮文本
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                             f"确定要删除调度 '{scheduler_data['name']}' 吗？")
+        
+        # 添加确认和取消按钮
+        confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_btn)
+        
+        msg_box.exec_()
+        
+        if msg_box.clickedButton() == confirm_btn:
+            try:
+                self.scheduler_service.delete_scheduler(scheduler_data['id'])
+                self.load_schedulers()
+                self.data_changed.emit()
+                Toast.info(self, "调度删除成功")
+            except Exception as e:
+                Toast.error(self, f"删除调度失败: {str(e)}")
+
+
+
+
+
+
+
+    def run_scheduler_by_id(self, scheduler_id):
+        """根据ID执行调度"""
+        scheduler_data = self.scheduler_service.get_scheduler_by_id(scheduler_id)
+        if scheduler_data:
+            # 检查调度是否被禁用
+            if not scheduler_data['enabled']:
+                Toast.warn(self, "该调度已被禁用，无法执行")
+                return
+            self.run_scheduler(scheduler_data)
+
+    def edit_scheduler(self, scheduler_data):
+        """编辑调度"""
         dialog = SchedulerDialog(self, scheduler_data)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                QMessageBox.warning(self, "输入错误", "调度名称不能为空")
+                Toast.warn(self, "调度名称不能为空")
                 return
             if not data['cron_expression']:
-                QMessageBox.warning(self, "输入错误", "Cron表达式不能为空")
+                Toast.warn(self, "Cron表达式不能为空")
                 return
             if not data['case_ids']:
-                QMessageBox.warning(self, "输入错误", "请选择至少一个测试用例")
+                Toast.warn(self, "请选择至少一个测试用例")
                 return
 
             try:
                 # 验证Cron表达式
                 parser = CronParser()
                 if not parser.validate_cron(data['cron_expression']):
-                    QMessageBox.warning(self, "输入错误", "Cron表达式格式不正确")
+                    Toast.warn(self, "Cron表达式格式不正确")
                     return
 
                 self.scheduler_service.update_scheduler(scheduler_data['id'], data)
                 self.load_schedulers()
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "调度更新成功")
+                Toast.info(self, "调度更新成功")
+                
+                # 更新成功后立即更新下次执行时间显示
+                self.update_next_run_times()
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"更新调度失败: {str(e)}")
+                Toast.error(self, f"更新调度失败: {str(e)}")
 
-    def delete_selected_scheduler(self):
-        """删除选中的调度"""
-        scheduler_data = self.get_selected_scheduler_data()
-        if not scheduler_data:
-            QMessageBox.warning(self, "提示", "请先选择一个调度")
-            return
-
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除调度 '{scheduler_data['name']}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
-            try:
-                self.scheduler_service.delete_scheduler(scheduler_data['id'])
-                self.load_schedulers()
-                self.data_changed.emit()
-                QMessageBox.information(self, "成功", "调度删除成功")
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除调度失败: {str(e)}")
-
-    def run_selected_scheduler(self):
-        """立即执行选中的调度"""
-        scheduler_data = self.get_selected_scheduler_data()
-        if not scheduler_data:
-            QMessageBox.warning(self, "提示", "请先选择一个调度")
-            return
-
+    def run_scheduler(self, scheduler_data):
+        """执行调度"""
         try:
-            # 这里调用调度执行服务
-            # 简化实现，只是显示提示
-            QMessageBox.information(self, "提示", f"开始执行调度: {scheduler_data['name']}")
+            # 获取调度中配置的测试用例ID列表
+            case_ids = scheduler_data.get('case_ids', [])
+            if not case_ids:
+                Toast.warn(self, f"调度 '{scheduler_data['name']}' 中没有配置测试用例")
+                return
+
+            # 显示开始执行提示
+            Toast.info(self, f"开始执行调度: {scheduler_data['name']} (包含 {len(case_ids)} 个测试用例)")
+
+            # 使用后台调度服务执行调度
+            if self.scheduler_background_service:
+                # 通过后台服务执行调度
+                self.scheduler_background_service.execute_scheduler(scheduler_data['id'])
+                
+                # 显示异步执行提示
+                Toast.info(self, f"调度 '{scheduler_data['name']}' 已提交到后台执行")
+                
+                # 刷新调度列表以更新状态
+                self.load_schedulers()
+            else:
+                # 如果没有后台服务，使用原来的同步执行方式
+                self._run_scheduler_sync(scheduler_data)
+
+        except Exception as e:
+            Toast.error(self, f"执行调度失败: {str(e)}")
+
+    def _run_scheduler_sync(self, scheduler_data):
+        """同步执行调度（备用方案）"""
+        try:
+            # 获取调度中配置的测试用例ID列表
+            case_ids = scheduler_data.get('case_ids', [])
+            if not case_ids:
+                return
+
+            # 获取测试用例服务
+            test_case_service = TestCaseService()
+            
+            # 执行每个测试用例
+            success_count = 0
+            total_count = len(case_ids)
+            
+            for i, case_id in enumerate(case_ids):
+                try:
+                    # 获取测试用例数据
+                    case_data = test_case_service.get_case_with_steps(case_id)
+                    if not case_data:
+                        Toast.warn(self, f"测试用例ID {case_id} 不存在，跳过执行")
+                        continue
+
+                    # 创建执行线程
+                    execution_thread = CaseExecutionThread(
+                        case_data=case_data,
+                        environment_config={},  # 使用默认环境配置
+                        project_id=case_data.get('project_id', 0)
+                    )
+
+                    # 连接信号
+                    execution_thread.case_finished.connect(self._on_case_execution_finished)
+                    execution_thread.log_message.connect(self._on_execution_log_message)
+
+                    # 启动执行线程
+                    execution_thread.start()
+                    
+                    # 等待执行完成
+                    execution_thread.wait()
+                    
+                    # 检查执行结果 - 线程正常结束表示执行成功
+                    if not execution_thread.isRunning():
+                        success_count += 1
+                    
+                except Exception as e:
+                    Toast.error(self, f"执行测试用例ID {case_id} 失败: {str(e)}")
 
             # 更新上次执行时间
             self.scheduler_service.update_last_run(scheduler_data['id'])
+            
+            # 显示执行结果
+            if success_count == total_count:
+                Toast.success(self, f"调度执行完成: 成功 {success_count}/{total_count} 个测试用例")
+            else:
+                Toast.warn(self, f"调度执行完成: 成功 {success_count}/{total_count} 个测试用例")
+            
+            # 刷新调度列表
             self.load_schedulers()
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"执行调度失败: {str(e)}")
+            Toast.error(self, f"同步执行调度失败: {str(e)}")
 
-    def toggle_selected_scheduler(self):
-        """启用/禁用选中的调度"""
-        scheduler_data = self.get_selected_scheduler_data()
-        if not scheduler_data:
-            QMessageBox.warning(self, "提示", "请先选择一个调度")
-            return
+    def _on_case_execution_finished(self, result):
+        """测试用例执行完成回调"""
+        try:
+            success = result.get('success', False)
+            success_count = result.get('success_count', 0)
+            total_count = result.get('total_count', 0)
+            
+            if success:
+                print(f"测试用例执行成功: {success_count}/{total_count} 步骤")
+            else:
+                error_msg = result.get('error', '未知错误')
+                print(f"测试用例执行失败: {error_msg}")
+                
+        except Exception as e:
+            print(f"处理测试用例执行完成回调时出错: {str(e)}")
 
+    def _on_execution_log_message(self, message, level, step_index):
+        """执行日志消息回调"""
+        try:
+            # 这里可以记录执行日志到文件或数据库
+            print(f"[{level}] {message}")
+            
+        except Exception as e:
+            print(f"处理执行日志消息时出错: {str(e)}")
+
+    def toggle_scheduler_by_id(self, scheduler_id):
+        """根据ID启用/禁用调度"""
+        scheduler_data = self.scheduler_service.get_scheduler_by_id(scheduler_id)
+        if scheduler_data:
+            self.toggle_scheduler(scheduler_data)
+
+    def toggle_scheduler(self, scheduler_data):
+        """启用/禁用调度"""
         new_status = not scheduler_data['enabled']
         status_text = "启用" if new_status else "禁用"
 
@@ -733,36 +3026,170 @@ class SchedulerManager(QWidget):
             self.scheduler_service.update_scheduler_status(scheduler_data['id'], new_status)
             self.load_schedulers()
             self.data_changed.emit()
-            QMessageBox.information(self, "成功", f"调度已{status_text}")
+            Toast.info(self, f"调度已{status_text}")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"{status_text}调度失败: {str(e)}")
+            Toast.error(self, f"{status_text}调度失败: {str(e)}")
 
-    def show_table_context_menu(self, position):
-        """显示表格右键菜单"""
-        item = self.table_widget.itemAt(position)
-        if not item:
-            return
+    def copy_scheduler_by_id(self, scheduler_id):
+        """根据ID复制调度"""
+        scheduler_data = self.scheduler_service.get_scheduler_by_id(scheduler_id)
+        if scheduler_data:
+            self.copy_scheduler(scheduler_data)
 
-        from PyQt5.QtWidgets import QMenu, QAction
+    def copy_scheduler(self, scheduler_data):
+        """复制调度"""
+        try:
+            # 创建副本数据
+            copy_data = {
+                'name': f"{scheduler_data['name']}_副本",
+                'cron_expression': scheduler_data['cron_expression'],
+                'case_ids': scheduler_data.get('case_ids', []),
+                'enabled': False,  # 默认禁用副本
+                'description': scheduler_data.get('description', '')
+            }
 
-        menu = QMenu(self)
+            # 验证名称是否重复
+            existing_names = [s['name'] for s in self.scheduler_service.get_all_schedulers()]
+            base_name = copy_data['name']
+            counter = 1
+            while copy_data['name'] in existing_names:
+                copy_data['name'] = f"{base_name}_{counter}"
+                counter += 1
 
-        edit_action = QAction("编辑", self)
-        edit_action.triggered.connect(self.edit_selected_scheduler)
-        menu.addAction(edit_action)
+            # 创建副本
+            self.scheduler_service.create_scheduler(copy_data)
+            self.load_schedulers()
+            self.data_changed.emit()
+            Toast.info(self, f"调度复制成功: {copy_data['name']}")
 
-        run_action = QAction("立即执行", self)
-        run_action.triggered.connect(self.run_selected_scheduler)
-        menu.addAction(run_action)
+        except Exception as e:
+            Toast.error(self, f"复制调度失败: {str(e)}")
 
-        toggle_action = QAction("启用/禁用", self)
-        toggle_action.triggered.connect(self.toggle_selected_scheduler)
-        menu.addAction(toggle_action)
+    def show_execution_logs(self, scheduler_id):
+        """显示调度执行记录日志"""
+        try:
+            # 获取调度数据
+            scheduler_data = self.get_scheduler_data_by_id(scheduler_id)
+            if not scheduler_data:
+                Toast.warn(self, "调度数据不存在")
+                return
 
-        menu.addSeparator()
+            # 获取执行记录
+            from src.core.services.test_report_service import TestReportService
+            report_service = TestReportService()
+            reports = report_service.get_reports_by_scheduler_id(scheduler_id)
 
-        delete_action = QAction("删除", self)
-        delete_action.triggered.connect(self.delete_selected_scheduler)
-        menu.addAction(delete_action)
+            if not reports:
+                Toast.info(self, f"调度 '{scheduler_data['name']}' 暂无执行记录")
+                return
 
-        menu.exec_(self.table_widget.mapToGlobal(position))
+            # 创建执行记录对话框
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"执行记录 - {scheduler_data['name']}")
+            dialog.setMinimumSize(800, 600)
+
+            layout = QVBoxLayout(dialog)
+
+            # 创建表格显示执行记录
+            table_widget = QTableWidget()
+            table_widget.setColumnCount(6)
+            table_widget.setHorizontalHeaderLabels([
+                "报告名称", "测试用例", "执行状态", "开始时间", "结束时间", "执行时长"
+            ])
+            table_widget.horizontalHeader().setStretchLastSection(True)
+            table_widget.setSelectionBehavior(QTableWidget.SelectRows)
+
+            # 填充数据
+            table_widget.setRowCount(len(reports))
+            for row, report in enumerate(reports):
+                # 报告名称
+                table_widget.setItem(row, 0, QTableWidgetItem(report.get('report_name', '未命名')))
+                
+                # 测试用例
+                table_widget.setItem(row, 1, QTableWidgetItem(report.get('case_name', '未知')))
+                
+                # 执行状态
+                status_item = QTableWidgetItem(report.get('status', 'unknown'))
+                status = report.get('status', '')
+                if status == 'success':
+                    status_item.setText('成功')
+                    status_item.setBackground(QColor('#d4edda'))
+                elif status == 'failure':
+                    status_item.setText('失败')
+                    status_item.setBackground(QColor('#f8d7da'))
+                elif status == 'error':
+                    status_item.setText('错误')
+                    status_item.setBackground(QColor('#fff3cd'))
+                else:
+                    status_item.setText('未知')
+                table_widget.setItem(row, 2, status_item)
+                
+                # 开始时间
+                start_time = report.get('start_time')
+                start_text = start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else 'N/A'
+                table_widget.setItem(row, 3, QTableWidgetItem(start_text))
+                
+                # 结束时间
+                end_time = report.get('end_time')
+                end_text = end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else 'N/A'
+                table_widget.setItem(row, 4, QTableWidgetItem(end_text))
+                
+                # 执行时长
+                duration = report.get('duration', 0)
+                duration_text = f"{duration:.2f}s" if duration > 0 else 'N/A'
+                table_widget.setItem(row, 5, QTableWidgetItem(duration_text))
+
+            # 调整列宽
+            table_widget.resizeColumnsToContents()
+
+            # 添加查看详情按钮
+            button_box = QDialogButtonBox(QDialogButtonBox.Close)
+            button_box.rejected.connect(dialog.reject)
+
+            # 添加查看报告详情按钮
+            view_detail_btn = QPushButton("查看报告详情")
+            view_detail_btn.clicked.connect(lambda: self._view_report_detail(table_widget, dialog))
+            button_box.addButton(view_detail_btn, QDialogButtonBox.ActionRole)
+
+            layout.addWidget(QLabel(f"调度 '{scheduler_data['name']}' 的执行记录 (共 {len(reports)} 条):"))
+            layout.addWidget(table_widget)
+            layout.addWidget(button_box)
+
+            dialog.exec_()
+
+        except Exception as e:
+            Toast.error(self, f"显示执行记录失败: {str(e)}")
+
+    def _view_report_detail(self, table_widget, parent_dialog):
+        """查看报告详情"""
+        try:
+            selected_items = table_widget.selectedItems()
+            if not selected_items:
+                Toast.warn(parent_dialog, "请先选择一条执行记录")
+                return
+
+            # 获取选中的报告数据
+            row = selected_items[0].row()
+            report_name = table_widget.item(row, 0).text()
+            
+            # 获取报告ID（这里需要从数据中获取，暂时显示基本信息）
+            from src.core.services.test_report_service import TestReportService
+            report_service = TestReportService()
+            
+            # 显示报告详情对话框
+            from src.ui.interface_auto.test_report import ReportDetailDialog
+            
+            # 创建报告数据（这里需要根据实际情况获取完整报告数据）
+            report_data = {
+                'report_name': report_name,
+                'status': table_widget.item(row, 2).text(),
+                'start_time': table_widget.item(row, 3).text(),
+                'end_time': table_widget.item(row, 4).text(),
+                'duration': table_widget.item(row, 5).text()
+            }
+            
+            detail_dialog = ReportDetailDialog(parent_dialog, report_data)
+            detail_dialog.exec_()
+
+        except Exception as e:
+            Toast.error(parent_dialog, f"查看报告详情失败: {str(e)}")

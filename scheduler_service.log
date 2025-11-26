@@ -1,0 +1,106 @@
+2025-11-25 18:24:16,116 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:24:16,116 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:24:16,118 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:24:16,118 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:24:52,530 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:24:52,531 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:24:52,733 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:24:52,734 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:25:18,808 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:25:18,809 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:25:19,009 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:25:19,010 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:26:40,503 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:26:40,503 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:26:40,704 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:26:40,704 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:28:21,951 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:28:21,951 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:28:22,155 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:28:22,155 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:29:35,620 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:29:35,621 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:29:35,824 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:29:35,825 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:31:01,654 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:31:01,654 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:31:02,859 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:31:02,859 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:31:33,803 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:31:33,803 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:34:05,139 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:34:05,139 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:34:06,345 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:34:06,346 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:34:15,813 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:34:15,814 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:34:18,852 - SchedulerBackgroundService - INFO - 开始执行调度: 提到度2 (ID: 2)
+2025-11-25 18:34:18,855 - SchedulerBackgroundService - INFO - 开始执行调度线程，共 1 个测试用例
+2025-11-25 18:34:18,905 - SchedulerBackgroundService - INFO - 执行测试用例: 测试加解密1 (ID: 7)
+2025-11-25 18:35:18,682 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:35:18,682 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:35:19,885 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-25 18:35:19,885 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-25 18:35:24,780 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-25 18:35:24,780 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-25 18:35:29,226 - SchedulerBackgroundService - INFO - 开始执行调度: 提到度2 (ID: 2)
+2025-11-25 18:35:29,226 - SchedulerBackgroundService - INFO - 开始执行调度线程，共 1 个测试用例
+2025-11-25 18:35:29,439 - SchedulerBackgroundService - INFO - 执行测试用例: 测试加解密1 (ID: 7)
+2025-11-25 18:35:30,034 - SchedulerBackgroundService - INFO - 测试用例 7 执行成功
+2025-11-25 18:35:30,034 - SchedulerBackgroundService - INFO - 调度线程执行完成 - 成功: 1/1
+2025-11-25 18:35:30,124 - SchedulerBackgroundService - INFO - 调度 提到度2 (ID: 2) 执行完成 - 成功: 1, 失败: 0, 总用例数: 1
+2025-11-26 09:01:24,488 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-26 09:01:24,488 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-26 09:01:25,695 - SchedulerBackgroundService - INFO - 后台调度服务已停止
+2025-11-26 09:01:25,696 - SchedulerManager - INFO - 后台调度服务已停止
+2025-11-26 09:01:51,869 - SchedulerBackgroundService - INFO - 开始执行调度: 提到度2 (ID: 2)
+2025-11-26 09:01:51,870 - SchedulerBackgroundService - INFO - 开始执行调度线程，共 1 个测试用例
+2025-11-26 09:01:51,924 - SchedulerBackgroundService - INFO - 执行测试用例: 测试加解密1 (ID: 7)
+2025-11-26 09:01:52,600 - SchedulerBackgroundService - INFO - 测试用例 7 执行成功
+2025-11-26 09:01:52,600 - SchedulerBackgroundService - INFO - 调度线程执行完成 - 成功: 1/1
+2025-11-26 09:01:52,701 - SchedulerBackgroundService - INFO - 调度 提到度2 (ID: 2) 执行完成 - 成功: 1, 失败: 0, 总用例数: 1
+2025-11-26 09:02:08,159 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-26 09:02:08,159 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-26 09:02:21,339 - SchedulerBackgroundService - INFO - 开始执行调度: 提到度2 (ID: 2)
+2025-11-26 09:02:21,340 - SchedulerBackgroundService - INFO - 开始执行调度线程，共 1 个测试用例
+2025-11-26 09:02:21,383 - SchedulerBackgroundService - INFO - 执行测试用例: 测试加解密1 (ID: 7)
+2025-11-26 09:02:22,047 - SchedulerBackgroundService - INFO - 测试用例 7 执行成功
+2025-11-26 09:02:22,062 - SchedulerBackgroundService - INFO - 调度线程执行完成 - 成功: 1/1, 耗时: 0.72秒
+2025-11-26 09:02:22,071 - SchedulerBackgroundService - ERROR - 保存测试报告到数据库失败: near "%": syntax error
+2025-11-26 09:02:22,071 - SchedulerBackgroundService - ERROR - 测试报告保存失败
+2025-11-26 09:02:22,134 - SchedulerBackgroundService - INFO - 调度 提到度2 (ID: 2) 执行完成 - 成功: 1, 失败: 0, 总用例数: 1
+2025-11-26 09:11:08,185 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-26 09:11:08,186 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-26 09:11:13,692 - SchedulerBackgroundService - INFO - 开始执行调度: 提到度2 (ID: 2)
+2025-11-26 09:11:13,692 - SchedulerBackgroundService - INFO - 开始执行调度线程，共 1 个测试用例
+2025-11-26 09:11:13,848 - SchedulerBackgroundService - INFO - 执行测试用例: 测试加解密1 (ID: 7)
+2025-11-26 09:11:14,464 - SchedulerBackgroundService - INFO - 测试用例 7 执行成功
+2025-11-26 09:11:14,464 - SchedulerBackgroundService - INFO - 调度线程执行完成 - 成功: 1/1, 耗时: 0.77秒
+2025-11-26 09:11:14,474 - SchedulerBackgroundService - ERROR - 保存测试报告到数据库失败: near "%": syntax error
+2025-11-26 09:11:14,474 - SchedulerBackgroundService - ERROR - 测试报告保存失败
+2025-11-26 09:11:14,546 - SchedulerBackgroundService - INFO - 调度 提到度2 (ID: 2) 执行完成 - 成功: 1, 失败: 0, 总用例数: 1
+2025-11-26 09:16:24,350 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-26 09:16:24,350 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-26 09:16:30,395 - SchedulerBackgroundService - INFO - 开始执行调度: 提到度2 (ID: 2)
+2025-11-26 09:16:30,395 - SchedulerBackgroundService - INFO - 开始执行调度线程，共 1 个测试用例
+2025-11-26 09:16:30,456 - SchedulerBackgroundService - INFO - 执行测试用例: 测试加解密1 (ID: 7)
+2025-11-26 09:16:31,256 - SchedulerBackgroundService - INFO - 测试用例 7 执行成功
+2025-11-26 09:16:31,256 - SchedulerBackgroundService - INFO - 调度线程执行完成 - 成功: 1/1, 耗时: 0.86秒
+2025-11-26 09:16:31,291 - SchedulerBackgroundService - ERROR - 保存测试报告到数据库失败: (1364, "Field 'case_id' doesn't have a default value")
+2025-11-26 09:16:31,293 - SchedulerBackgroundService - ERROR - 测试报告保存失败
+2025-11-26 09:16:31,387 - SchedulerBackgroundService - INFO - 调度 提到度2 (ID: 2) 执行完成 - 成功: 1, 失败: 0, 总用例数: 1
+2025-11-26 09:19:08,367 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-26 09:19:08,367 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-26 09:19:12,756 - SchedulerBackgroundService - INFO - 开始执行调度: 提到度2 (ID: 2)
+2025-11-26 09:19:12,756 - SchedulerBackgroundService - INFO - 开始执行调度线程，共 1 个测试用例
+2025-11-26 09:19:12,872 - SchedulerBackgroundService - INFO - 执行测试用例: 测试加解密1 (ID: 7)
+2025-11-26 09:19:13,557 - SchedulerBackgroundService - INFO - 测试用例 7 执行成功
+2025-11-26 09:19:13,557 - SchedulerBackgroundService - INFO - 调度线程执行完成 - 成功: 1/1, 耗时: 0.80秒
+2025-11-26 09:19:13,606 - SchedulerBackgroundService - INFO - 测试用例 测试加解密1 报告保存成功，报告ID: 1
+2025-11-26 09:19:13,686 - SchedulerBackgroundService - INFO - HTML测试报告生成成功: D:\workspace\TestTool\src\core\services\..\..\..\reports\report_1_20251126091912.html
+2025-11-26 09:19:13,686 - SchedulerBackgroundService - INFO - 测试报告生成完成，共生成 1 个报告
+2025-11-26 09:19:13,774 - SchedulerBackgroundService - INFO - 调度 提到度2 (ID: 2) 执行完成 - 成功: 1, 失败: 0, 总用例数: 1
+2025-11-26 09:25:00,491 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-26 09:25:00,491 - SchedulerManager - INFO - 后台调度服务已启动
+2025-11-26 09:27:15,408 - SchedulerBackgroundService - INFO - 后台调度服务已启动，检查间隔: 60秒
+2025-11-26 09:27:15,408 - SchedulerManager - INFO - 后台调度服务已启动

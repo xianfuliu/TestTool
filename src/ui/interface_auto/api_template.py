@@ -2275,9 +2275,13 @@ class ApiTemplateManager(QWidget):
                 if self.api_service.check_template_name_exists(self.current_project, folder_data['id'], original_name):
                     # 存在同名接口，提示用户
                     from PyQt5.QtWidgets import QMessageBox
-                    reply = QMessageBox.question(self, "同名接口", 
-                                               f"文件夹 '{folder_data['name']}' 下已存在名为 '{original_name}' 的接口。\n是否继续粘贴？",
-                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                    msg_box = QMessageBox(QMessageBox.Question, "同名接口", 
+                                        f"文件夹 '{folder_data['name']}' 下已存在名为 '{original_name}' 的接口。\n是否继续粘贴？")
+                    confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+                    cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+                    msg_box.setDefaultButton(cancel_button)
+                    msg_box.exec_()
+                    reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
                     if reply == QMessageBox.No:
                         return
             except Exception as e:
@@ -2314,9 +2318,13 @@ class ApiTemplateManager(QWidget):
                 if self.api_service.check_template_name_exists(self.current_project, None, original_name):
                     # 存在同名接口，提示用户
                     from PyQt5.QtWidgets import QMessageBox
-                    reply = QMessageBox.question(self, "同名接口", 
-                                               f"根目录下已存在名为 '{original_name}' 的接口。\n是否继续粘贴？",
-                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                    msg_box = QMessageBox(QMessageBox.Question, "同名接口", 
+                                        f"根目录下已存在名为 '{original_name}' 的接口。\n是否继续粘贴？")
+                    confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+                    cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+                    msg_box.setDefaultButton(cancel_button)
+                    msg_box.exec_()
+                    reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
                     if reply == QMessageBox.No:
                         return
             except Exception as e:

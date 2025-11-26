@@ -198,3 +198,35 @@ class SchedulerService:
         except Exception as e:
             print(f"更新上次执行时间失败: {e}")
             raise e
+
+    def update_next_run(self, scheduler_id: int) -> bool:
+        """更新下次执行时间"""
+        try:
+            # 获取调度信息
+            scheduler = self.get_scheduler_by_id(scheduler_id)
+            if not scheduler:
+                return False
+                
+            # 计算下次执行时间
+            next_run_at = None
+            try:
+                from src.utils.interface_utils.cron_parser import CronParser
+                parser = CronParser()
+                next_run = parser.get_next_run(scheduler['cron_expression'])
+                if next_run:
+                    next_run_at = next_run
+            except Exception as e:
+                print(f"计算下次执行时间失败: {e}")
+
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE test_schedulers 
+                        SET next_run_at = %s 
+                        WHERE id = %s
+                    """, (next_run_at, scheduler_id))
+                    conn.commit()
+                    return cursor.rowcount > 0
+        except Exception as e:
+            print(f"更新下次执行时间失败: {e}")
+            raise e

@@ -172,3 +172,32 @@ class TestReportService:
         except Exception as e:
             print(f"删除旧报告失败: {e}")
             raise e
+
+    def get_reports_by_scheduler_id(self, scheduler_id: int) -> List[Dict[str, Any]]:
+        """根据调度ID获取执行记录"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT r.*, c.name as case_name, s.name as scheduler_name
+                        FROM test_reports r
+                        LEFT JOIN test_cases c ON r.case_id = c.id
+                        LEFT JOIN test_schedulers s ON r.scheduler_id = s.id
+                        WHERE r.scheduler_id = %s
+                        ORDER BY r.created_at DESC
+                    """, (scheduler_id,))
+                    reports = cursor.fetchall()
+
+                    # 处理时间字段
+                    for report in reports:
+                        for field in ['start_time', 'end_time', 'created_at']:
+                            if report.get(field) and isinstance(report[field], str):
+                                try:
+                                    report[field] = datetime.fromisoformat(report[field].replace('Z', '+00:00'))
+                                except (ValueError, AttributeError):
+                                    report[field] = None
+
+                    return reports
+        except Exception as e:
+            print(f"根据调度ID获取执行记录失败: {e}")
+            return []

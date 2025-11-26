@@ -2343,13 +2343,18 @@ class CaseTabWidget(QWidget):
     def cancel(self):
         """取消编辑"""
         if self.modified:
-            # 对于确认对话框，暂时保留QMessageBox.question，因为Toast不支持确认对话框
-            reply = QMessageBox.question(
-                self, "确认取消",
-                "有未保存的修改，确定要取消吗？",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply == QMessageBox.No:
+            # 创建确认对话框，手动设置按钮文本
+            msg_box = QMessageBox(QMessageBox.Question, "确认取消",
+                                 "有未保存的修改，确定要取消吗？")
+            
+            # 添加确认和取消按钮
+            confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+            msg_box.setDefaultButton(cancel_btn)
+            
+            msg_box.exec_()
+            
+            if msg_box.clickedButton() == cancel_btn:
                 return
         
         # 关闭标签页

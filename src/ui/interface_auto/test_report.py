@@ -223,15 +223,37 @@ class ReportDetailDialog(QDialog):
 
         # 时间信息
         start_time = self.report_data.get('start_time')
-        start_text = start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else 'N/A'
+        if start_time:
+            if isinstance(start_time, str):
+                # 如果是字符串，直接显示或尝试解析
+                start_text = start_time
+            else:
+                # 如果是datetime对象，格式化显示
+                start_text = start_time.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            start_text = 'N/A'
         self.report_start_time_label.setText(start_text)
 
         end_time = self.report_data.get('end_time')
-        end_text = end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else 'N/A'
+        if end_time:
+            if isinstance(end_time, str):
+                # 如果是字符串，直接显示或尝试解析
+                end_text = end_time
+            else:
+                # 如果是datetime对象，格式化显示
+                end_text = end_time.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            end_text = 'N/A'
         self.report_end_time_label.setText(end_text)
 
         duration = self.report_data.get('duration', 0)
-        self.report_duration_label.setText(f"{duration:.2f} 秒")
+        # 确保duration是数字类型
+        try:
+            duration_value = float(duration)
+            self.report_duration_label.setText(f"{duration_value:.2f} 秒")
+        except (ValueError, TypeError):
+            # 如果转换失败，直接显示原始值
+            self.report_duration_label.setText(f"{duration} 秒")
 
         # 统计信息
         total_steps = self.report_data.get('total_steps', 0)
@@ -294,17 +316,39 @@ class ReportDetailDialog(QDialog):
 
                 # 开始时间
                 start_time = step.get('start_time')
-                start_text = start_time.strftime('%H:%M:%S') if start_time else 'N/A'
+                if start_time:
+                    if isinstance(start_time, str):
+                        # 如果是字符串，直接显示或尝试解析
+                        start_text = start_time
+                    else:
+                        # 如果是datetime对象，格式化显示
+                        start_text = start_time.strftime('%H:%M:%S')
+                else:
+                    start_text = 'N/A'
                 self.steps_table.setItem(row, 3, QTableWidgetItem(start_text))
 
                 # 结束时间
                 end_time = step.get('end_time')
-                end_text = end_time.strftime('%H:%M:%S') if end_time else 'N/A'
+                if end_time:
+                    if isinstance(end_time, str):
+                        # 如果是字符串，直接显示或尝试解析
+                        end_text = end_time
+                    else:
+                        # 如果是datetime对象，格式化显示
+                        end_text = end_time.strftime('%H:%M:%S')
+                else:
+                    end_text = 'N/A'
                 self.steps_table.setItem(row, 4, QTableWidgetItem(end_text))
 
                 # 执行时长
                 duration = step.get('duration', 0)
-                self.steps_table.setItem(row, 5, QTableWidgetItem(f"{duration:.3f}"))
+                # 确保duration是数字类型
+                try:
+                    duration_value = float(duration)
+                    self.steps_table.setItem(row, 5, QTableWidgetItem(f"{duration_value:.3f}"))
+                except (ValueError, TypeError):
+                    # 如果转换失败，直接显示原始值
+                    self.steps_table.setItem(row, 5, QTableWidgetItem(f"{duration}"))
 
                 # 错误信息
                 error_msg = step.get('error_message', '')
@@ -358,11 +402,13 @@ class ReportDetailDialog(QDialog):
                 generator.generate_report(self.report_data, file_path)
 
                 # 询问是否打开
-                reply = QMessageBox.question(
-                    self, "导出成功",
-                    "测试报告导出成功，是否立即打开？",
-                    QMessageBox.Yes | QMessageBox.No
-                )
+                msg_box = QMessageBox(QMessageBox.Question, "导出成功", 
+                                    "测试报告导出成功，是否立即打开？")
+                confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+                cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+                msg_box.setDefaultButton(cancel_button)
+                msg_box.exec_()
+                reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
                 if reply == QMessageBox.Yes:
                     webbrowser.open(f"file://{os.path.abspath(file_path)}")
@@ -618,12 +664,28 @@ class TestReportManager(QWidget):
 
                 # 开始时间
                 start_time = report.get('start_time')
-                start_text = start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "N/A"
+                if start_time:
+                    if isinstance(start_time, str):
+                        # 如果是字符串，直接显示或尝试解析
+                        start_text = start_time
+                    else:
+                        # 如果是datetime对象，格式化显示
+                        start_text = start_time.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    start_text = "N/A"
                 self.table_widget.setItem(row, 5, QTableWidgetItem(start_text))
 
                 # 结束时间
                 end_time = report.get('end_time')
-                end_text = end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "N/A"
+                if end_time:
+                    if isinstance(end_time, str):
+                        # 如果是字符串，直接显示或尝试解析
+                        end_text = end_time
+                    else:
+                        # 如果是datetime对象，格式化显示
+                        end_text = end_time.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    end_text = "N/A"
                 self.table_widget.setItem(row, 6, QTableWidgetItem(end_text))
 
                 # 执行时长
@@ -735,13 +797,18 @@ class TestReportManager(QWidget):
                 generator.generate_report(report_data, file_path)
 
                 # 询问是否打开
-                reply = QMessageBox.question(
-                    self, "导出成功",
-                    "测试报告导出成功，是否立即打开？",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-
-                if reply == QMessageBox.Yes:
+                msg_box = QMessageBox(QMessageBox.Question, "导出成功",
+                                    "测试报告导出成功，是否立即打开？")
+                
+                # 添加是、否按钮
+                yes_btn = msg_box.addButton("是", QMessageBox.YesRole)
+                no_btn = msg_box.addButton("否", QMessageBox.NoRole)
+                msg_box.setDefaultButton(yes_btn)
+                
+                msg_box.exec_()
+                
+                clicked_btn = msg_box.clickedButton()
+                if clicked_btn == yes_btn:
                     webbrowser.open(f"file://{os.path.abspath(file_path)}")
 
                 QMessageBox.information(self, "成功", "测试报告导出成功")
@@ -756,11 +823,13 @@ class TestReportManager(QWidget):
             QMessageBox.warning(self, "提示", "请先选择一个测试报告")
             return
 
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除报告 '{report_data['report_name']}' 吗？\n此操作将同时删除相关的步骤执行记录！",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除", 
+                            f"确定要删除报告 '{report_data['report_name']}' 吗？\n此操作将同时删除相关的步骤执行记录！")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             try:
@@ -783,11 +852,13 @@ class TestReportManager(QWidget):
 
             if ok:
                 # 确认清理
-                reply = QMessageBox.question(
-                    self, "确认清理",
-                    f"确定要清理 {days} 天前的测试报告吗？此操作不可恢复！",
-                    QMessageBox.Yes | QMessageBox.No
-                )
+                msg_box = QMessageBox(QMessageBox.Question, "确认清理", 
+                                    f"确定要清理 {days} 天前的测试报告吗？此操作不可恢复！")
+                confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+                cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+                msg_box.setDefaultButton(cancel_button)
+                msg_box.exec_()
+                reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
                 if reply == QMessageBox.Yes:
                     deleted_count = self.report_service.delete_old_reports(days)

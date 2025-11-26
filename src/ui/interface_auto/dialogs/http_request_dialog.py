@@ -855,20 +855,24 @@ class HttpRequestDialog(QDialog):
     def closeEvent(self, event):
         """处理对话框关闭事件"""
         if self._has_unsaved_changes():
-            # 询问用户是否保存修改
-            reply = QMessageBox.question(
-                self,
-                "未保存的修改",
-                "您有未保存的修改，是否保存？",
-                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-                QMessageBox.Save
-            )
+            # 创建确认对话框，手动设置按钮文本
+            msg_box = QMessageBox(QMessageBox.Question, "未保存的修改",
+                                 "您有未保存的修改，是否保存？")
             
-            if reply == QMessageBox.Save:
+            # 添加保存、放弃和取消按钮
+            save_btn = msg_box.addButton("保存", QMessageBox.YesRole)
+            discard_btn = msg_box.addButton("放弃", QMessageBox.NoRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
+            msg_box.setDefaultButton(save_btn)
+            
+            msg_box.exec_()
+            
+            clicked_btn = msg_box.clickedButton()
+            if clicked_btn == save_btn:
                 # 保存修改
                 self.on_save()
                 event.accept()
-            elif reply == QMessageBox.Discard:
+            elif clicked_btn == discard_btn:
                 # 放弃修改
                 event.accept()
             else:

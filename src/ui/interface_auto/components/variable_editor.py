@@ -535,11 +535,13 @@ class VariableManagerDialog(QDialog):
         row = selected_items[0].row()
         var_name = self.global_table.item(row, 0).text()
 
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除全局变量 '{var_name}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除", 
+                            f"确定要删除全局变量 '{var_name}' 吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             # 同时从数据库和内存中删除
@@ -555,11 +557,13 @@ class VariableManagerDialog(QDialog):
 
     def clear_global_variables(self):
         """清空全局变量"""
-        reply = QMessageBox.question(
-            self, "确认清空",
-            "确定要清空所有全局变量吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认清空", 
+                            "确定要清空所有全局变量吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             # 同时清空数据库和内存中的全局变量
@@ -630,11 +634,13 @@ class VariableManagerDialog(QDialog):
         row = selected_items[0].row()
         var_name = self.local_table.item(row, 0).text()
 
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除局部变量 '{var_name}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除", 
+                            f"确定要删除局部变量 '{var_name}' 吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             del self.variable_manager.local_variables[var_name]
@@ -642,11 +648,13 @@ class VariableManagerDialog(QDialog):
 
     def clear_local_variables(self):
         """清空局部变量"""
-        reply = QMessageBox.question(
-            self, "确认清空",
-            "确定要清空所有局部变量吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认清空", 
+                            "确定要清空所有局部变量吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             self.variable_manager.clear_local_variables()

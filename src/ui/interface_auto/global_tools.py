@@ -932,14 +932,18 @@ class GlobalToolsManager(QWidget):
             Toast.warn(self, "请先选择一个工具")
             return
 
-        # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除工具 '{tool_data['name']}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+        # 创建确认对话框，手动设置按钮文本
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                             f"确定要删除工具 '{tool_data['name']}' 吗？")
+        
+        # 添加确认和取消按钮
+        confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_btn)
+        
+        msg_box.exec_()
+        
+        if msg_box.clickedButton() == confirm_btn:
             try:
                 self.tool_service.delete_tool(tool_data['id'])
                 self.load_tools()

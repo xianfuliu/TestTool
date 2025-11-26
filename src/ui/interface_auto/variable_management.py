@@ -575,13 +575,18 @@ class VariableManagement(QWidget):
         row = selected_items[0].row()
         var_name = self.global_table.item(row, 0).text()
 
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除变量 '{var_name}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+        # 创建确认对话框，手动设置按钮文本
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                             f"确定要删除变量 '{var_name}' 吗？")
+        
+        # 添加确认和取消按钮
+        confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_btn)
+        
+        msg_box.exec_()
+        
+        if msg_box.clickedButton() == confirm_btn:
             try:
                 # 使用支持项目维度的删除方法
                 self.variable_service.delete_global_variable_by_name(var_name, self.current_project['id'])

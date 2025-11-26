@@ -1458,14 +1458,18 @@ class TestCaseManager(QWidget):
 
     def delete_test_case(self, case_data):
         """删除测试用例"""
-        # 对于确认对话框，暂时保留QMessageBox.question，因为Toast不支持确认对话框
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除测试用例 '{case_data['name']}' 吗？\n此操作将同时删除用例的所有步骤！",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+        # 创建确认对话框，手动设置按钮文本
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                             f"确定要删除测试用例 '{case_data['name']}' 吗？\n此操作将同时删除用例的所有步骤！")
+        
+        # 添加确认和取消按钮
+        confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_btn)
+        
+        msg_box.exec_()
+        
+        if msg_box.clickedButton() == confirm_btn:
             try:
                 self.case_service.delete_case(case_data['id'])
                 self.load_case_tree()
@@ -1697,14 +1701,18 @@ class TestCaseManager(QWidget):
 
     def delete_api_folder(self, folder_data):
         """删除接口文件夹"""
-        # 对于确认对话框，暂时保留QMessageBox.question，因为Toast不支持确认对话框
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除文件夹 '{folder_data['name']}' 吗？\n此操作将同时删除文件夹下的所有接口模板！",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
+        # 创建确认对话框，手动设置按钮文本
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                             f"确定要删除文件夹 '{folder_data['name']}' 吗？\n此操作将同时删除文件夹下的所有接口模板！")
+        
+        # 添加确认和取消按钮
+        confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_btn)
+        
+        msg_box.exec_()
+        
+        if msg_box.clickedButton() == confirm_btn:
             try:
                 self.api_folder_service.delete_folder(folder_data['id'])
                 self.load_api_templates()
@@ -1756,11 +1764,13 @@ class TestCaseManager(QWidget):
 
     def delete_api_template(self, template_data):
         """删除接口模板"""
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除接口模板 '{template_data['name']}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                             f"确定要删除接口模板 '{template_data['name']}' 吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             try:
@@ -1811,11 +1821,13 @@ class TestCaseManager(QWidget):
     def delete_case_folder(self, folder_data):
         """删除用例文件夹"""
         # 对于确认对话框，暂时保留QMessageBox.question，因为Toast不支持确认对话框
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除文件夹 '{folder_data['name']}' 吗？\n此操作将同时删除文件夹下的所有测试用例！",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                             f"确定要删除文件夹 '{folder_data['name']}' 吗？\n此操作将同时删除文件夹下的所有测试用例！")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             try:

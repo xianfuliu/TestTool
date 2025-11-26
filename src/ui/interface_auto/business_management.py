@@ -472,11 +472,13 @@ class BusinessManagement(QWidget):
 
     def delete_business_group(self, group_data):
         """删除业务分组"""
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除业务分组 '{group_data['name']}' 吗？\n此操作将同时删除该分组下的所有项目！",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除", 
+                            f"确定要删除业务分组 '{group_data['name']}' 吗？\n此操作将同时删除该分组下的所有项目！")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             try:
@@ -491,11 +493,13 @@ class BusinessManagement(QWidget):
 
     def delete_project(self, project_data):
         """删除项目"""
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除项目 '{project_data['name']}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除", 
+                            f"确定要删除项目 '{project_data['name']}' 吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             try:
