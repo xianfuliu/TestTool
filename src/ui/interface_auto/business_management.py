@@ -313,7 +313,6 @@ class BusinessManagement(QWidget):
         
         # 清空并重新填充下拉框
         self.business_combo.clear()
-        self.business_combo.addItem("请选择业务")
 
         # 检查服务对象是否已初始化
         if self.business_service is None or self.project_service is None:
