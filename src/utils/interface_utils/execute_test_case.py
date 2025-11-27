@@ -81,6 +81,7 @@ class ExecuteTestCase:
                     'case_id': case_id,
                     'case_name': case_name,
                     'scheduler_id': scheduler_id,
+                    'project_id': case_data.get('project_id'),  # 添加project_id
                     'start_time': datetime.now(),
                     'status': 'running',
                     'total_steps': len(enabled_steps),
@@ -169,6 +170,7 @@ class ExecuteTestCase:
                     'case_id': case_data.get('id', 0),
                     'case_name': case_data.get('name', '未知用例'),
                     'scheduler_id': scheduler_id,
+                    'project_id': case_data.get('project_id'),  # 添加project_id
                     'start_time': datetime.now(),
                     'end_time': datetime.now(),
                     'duration': 0,

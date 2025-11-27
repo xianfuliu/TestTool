@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-统一调度服务 - 整合production_scheduler_service.py、scheduler_background_service.py和scheduler_service.py的功能
-"""
-
 import sys
 import os
 import time
@@ -422,9 +416,6 @@ class UnifiedSchedulerService:
             
             logger.info(f"调度 {scheduler_name} 执行完成 - 成功: {success_count}/{total_count}, 耗时: {execution_duration:.2f}秒")
             
-            # 生成调度级别的测试报告
-            self._generate_scheduler_report(scheduler_data, case_results, execution_start_time, execution_end_time, execution_duration)
-            
             # 更新调度执行时间
             try:
                 self._update_last_run(scheduler_id)
@@ -435,80 +426,6 @@ class UnifiedSchedulerService:
             
         except Exception as e:
             logger.error(f"执行调度失败: {str(e)}")
-    
-    def _generate_scheduler_report(self, scheduler_data, case_results, start_time, end_time, duration):
-        """生成调度级别的测试报告"""
-        try:
-            scheduler_id = scheduler_data['id']
-            scheduler_name = scheduler_data['name']
-            
-            # 计算统计信息
-            total_cases = len(case_results)
-            success_cases = len([r for r in case_results if r.get('success', False)])
-            failed_cases = total_cases - success_cases
-            
-            # 确定调度执行状态
-            if total_cases == 0:
-                status = 'error'
-            elif success_cases == total_cases:
-                status = 'success'
-            elif success_cases > 0:
-                status = 'failure'
-            else:
-                status = 'error'
-            
-            # 生成HTML报告文件（只保留HTML总报告，删除单个用例的数据库记录）
-            report_data = {
-                'scheduler_id': scheduler_id,
-                'report_name': f"调度报告-{scheduler_name}-{start_time.strftime('%Y%m%d%H%M%S')}",
-                'status': status,
-                'total_cases': total_cases,
-                'success_cases': success_cases,
-                'failed_cases': failed_cases,
-                'start_time': start_time,
-                'end_time': end_time,
-                'duration': duration,
-                'case_results': case_results
-            }
-            
-            self._generate_html_report(report_data)
-            
-            logger.info(f"调度 {scheduler_name} 测试报告生成完成")
-                
-        except Exception as e:
-            logger.error(f"生成调度测试报告失败: {str(e)}")
-    
-    
-    def _generate_html_report(self, report_data):
-        """生成HTML测试报告文件"""
-        try:
-            # 创建报告目录
-            reports_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'reports')
-            os.makedirs(reports_dir, exist_ok=True)
-            
-            # 获取调度名称
-            scheduler_name = f"调度{report_data['scheduler_id']}"  # 默认值
-            try:
-                schedulers = self._get_all_schedulers()
-                for scheduler in schedulers:
-                    if scheduler['id'] == report_data['scheduler_id']:
-                        scheduler_name = scheduler['name']
-                        break
-            except Exception:
-                pass
-            
-            # 生成统一格式的报告文件路径：调度名称_时间戳.html
-            timestamp = report_data['start_time'].strftime('%Y%m%d%H%M%S')
-            report_filename = f"{scheduler_name}_{timestamp}.html"
-            report_filepath = os.path.join(reports_dir, report_filename)
-            
-            # 生成报告
-            self.report_generator.generate_report(report_data, report_filepath)
-            
-            logger.info(f"HTML调度测试报告生成成功: {report_filepath}")
-            
-        except Exception as e:
-            logger.error(f"生成HTML调度测试报告失败: {str(e)}")
     
     def execute_scheduler(self, scheduler_id):
         """执行指定ID的调度（公共方法，用于UI调用）"""
@@ -562,6 +479,53 @@ class UnifiedSchedulerService:
     def get_all_schedulers(self):
         """获取所有调度（公共方法，用于UI调用）"""
         return self._get_all_schedulers()
+
+    def get_schedulers_by_project(self, project_id):
+        """根据项目ID获取调度任务列表
+        
+        Args:
+            project_id: 项目ID，如果为None或空字符串则返回所有调度任务
+            
+        Returns:
+            List[Dict]: 调度任务列表
+        """
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    if project_id:
+                        # 按项目筛选
+                        cursor.execute("""
+                            SELECT id, name, description, cron_expression, enabled, 
+                                   case_ids, notify_emails, notify_wechat, 
+                                   last_run_at, next_run_at, created_by, created_at, updated_at, project_id
+                            FROM test_schedulers 
+                            WHERE project_id = %s
+                            ORDER BY created_at DESC
+                        """, (project_id,))
+                    else:
+                        # 返回所有调度任务
+                        cursor.execute("""
+                            SELECT id, name, description, cron_expression, enabled, 
+                                   case_ids, notify_emails, notify_wechat, 
+                                   last_run_at, next_run_at, created_by, created_at, updated_at, project_id
+                            FROM test_schedulers 
+                            ORDER BY created_at DESC
+                        """)
+                    
+                    schedulers = cursor.fetchall()
+                    
+                    # 处理JSON字段
+                    for scheduler in schedulers:
+                        for field in ['case_ids', 'notify_emails', 'notify_wechat']:
+                            if scheduler.get(field):
+                                scheduler[field] = json.loads(scheduler[field])
+                            else:
+                                scheduler[field] = []
+                    
+                    return schedulers
+        except Exception as e:
+            logger.error(f"获取项目调度列表失败: {e}")
+            return []
 
     def get_scheduler_by_id(self, scheduler_id):
         """根据ID获取调度（公共方法，用于UI调用）"""
@@ -621,8 +585,8 @@ class UnifiedSchedulerService:
                     sql = """
                         INSERT INTO test_schedulers 
                         (name, description, cron_expression, enabled, case_ids, 
-                         notify_emails, notify_wechat, created_by, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                         notify_emails, notify_wechat, created_by, created_at, updated_at, project_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
                     """
                     
                     # 准备参数
@@ -634,7 +598,8 @@ class UnifiedSchedulerService:
                         json.dumps(scheduler_data.get('case_ids', [])),
                         json.dumps(scheduler_data.get('notify_emails', [])),
                         json.dumps(scheduler_data.get('notify_wechat', [])),
-                        scheduler_data.get('created_by', 'system')
+                        scheduler_data.get('created_by', 'system'),
+                        scheduler_data.get('project_id')
                     )
                     
                     cursor.execute(sql, params)
@@ -701,7 +666,7 @@ class UnifiedSchedulerService:
                         UPDATE test_schedulers 
                         SET name = %s, description = %s, cron_expression = %s, 
                             enabled = %s, case_ids = %s, notify_emails = %s, 
-                            notify_wechat = %s, updated_at = NOW()
+                            notify_wechat = %s, project_id = %s, updated_at = NOW()
                         WHERE id = %s
                     """
                     
@@ -714,6 +679,7 @@ class UnifiedSchedulerService:
                         json.dumps(scheduler_data.get('case_ids', [])),
                         json.dumps(scheduler_data.get('notify_emails', [])),
                         json.dumps(scheduler_data.get('notify_wechat', [])),
+                        scheduler_data.get('project_id'),
                         scheduler_id
                     )
                     
@@ -745,7 +711,7 @@ class UnifiedSchedulerService:
                     cursor.execute("""
                         SELECT id, name, description, cron_expression, enabled, 
                                case_ids, notify_emails, notify_wechat, 
-                               last_run_at, next_run_at, created_by, created_at, updated_at
+                               last_run_at, next_run_at, created_by, created_at, updated_at, project_id
                         FROM test_schedulers 
                         ORDER BY created_at DESC
                     """)

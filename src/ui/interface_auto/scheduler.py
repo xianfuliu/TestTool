@@ -36,13 +36,19 @@ class SchedulerDialog(QDialog):
         self.test_case_service = None  # 延迟初始化
         self.project_service = ProjectService()
         self.folder_service = CaseFolderService()
+        self.current_project_id = None  # 存储当前项目ID
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
 
+    def set_current_project_id(self, project_id):
+        """设置当前项目ID"""
+        self.current_project_id = project_id
+
     def init_ui(self):
         self.setWindowTitle("编辑调度" if self.is_edit else "新增调度")
-        self.setMinimumSize(900, 800)
+        self.setMinimumSize(1300, 1000)
+        self.resize(1300, 1000)
 
         layout = QVBoxLayout(self)
 
@@ -77,10 +83,6 @@ class SchedulerDialog(QDialog):
         layout.addWidget(tab_widget)
         layout.addWidget(button_box)
 
-        # 加载数据
-        if self.is_edit:
-            self.load_scheduler_data()
-
     def setup_basic_tab(self, parent):
         layout = QVBoxLayout(parent)
         layout.setSpacing(15)  # 增加间距
@@ -93,9 +95,11 @@ class SchedulerDialog(QDialog):
         
         # 调度名称
         name_layout = QHBoxLayout()
+        name_layout.setAlignment(Qt.AlignLeft)  # 设置整体靠左对齐
         name_label = QLabel("调度名称")
         name_label.setFixedWidth(80)
         name_label.setStyleSheet("font-weight: bold; color: #333;")
+        name_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # 设置标签靠左对齐
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("请输入调度名称")
         self.name_edit.setStyleSheet("""
@@ -112,13 +116,16 @@ class SchedulerDialog(QDialog):
             }
         """)
         name_layout.addWidget(name_label)
+        self.name_edit.setFixedWidth(400)  # 设置固定宽度
         name_layout.addWidget(self.name_edit)
         
         # 调度描述 - 与标题放在同一行
         desc_layout = QHBoxLayout()
+        desc_layout.setAlignment(Qt.AlignLeft)  # 设置整体靠左对齐
         desc_label = QLabel("调度描述")
         desc_label.setFixedWidth(80)
         desc_label.setStyleSheet("font-weight: bold; color: #333;")
+        desc_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # 设置标签靠左对齐
         self.desc_edit = QTextEdit()
         self.desc_edit.setMaximumHeight(60)
         self.desc_edit.setPlaceholderText("请输入调度描述（可选）")
@@ -136,6 +143,7 @@ class SchedulerDialog(QDialog):
             }
         """)
         desc_layout.addWidget(desc_label)
+        self.desc_edit.setFixedWidth(400)  # 设置固定宽度
         desc_layout.addWidget(self.desc_edit)
         
         basic_layout.addLayout(name_layout)
@@ -144,42 +152,9 @@ class SchedulerDialog(QDialog):
         # 测试用例选择区域 - 去除标题和边框
         case_selection_widget = QWidget()
         case_selection_layout = QHBoxLayout(case_selection_widget)
-        case_selection_layout.setSpacing(0)  # 移除间距，使四个竖栏紧挨在一起
+        case_selection_layout.setSpacing(0)  # 移除间距，使三个竖栏紧挨在一起
         
-        # 第一栏：项目列表
-        project_panel = QWidget()
-        project_layout = QVBoxLayout(project_panel)
-        project_layout.setSpacing(0)  # 移除内部间距
-        project_layout.setContentsMargins(0, 0, 0, 0)  # 移除内容边距
-        
-        project_label = QLabel("项目")
-        project_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 5px;")
-        self.project_list = QListWidget()
-        self.project_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                background-color: white;
-                outline: none;
-                min-height: 150px;
-                margin: 0px;
-                padding: 0px;
-            }
-            QListWidget::item {
-                padding: 8px 12px;
-                border-bottom: 1px solid #f0f0f0;
-            }
-            QListWidget::item:selected {
-                background-color: #e3f2fd;
-                color: #0078d4;
-            }
-        """)
-        self.project_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        project_layout.addWidget(project_label)
-        project_layout.addWidget(self.project_list)
-        
-        # 第二栏：文件夹列表
+        # 第一栏：文件夹列表
         folder_panel = QWidget()
         folder_layout = QVBoxLayout(folder_panel)
         folder_layout.setSpacing(0)  # 移除内部间距
@@ -194,7 +169,7 @@ class SchedulerDialog(QDialog):
                 border-radius: 6px;
                 background-color: white;
                 outline: none;
-                min-height: 150px;
+                min-height: 350px;
                 margin: 0px;
                 padding: 0px;
             }
@@ -212,7 +187,7 @@ class SchedulerDialog(QDialog):
         folder_layout.addWidget(folder_label)
         folder_layout.addWidget(self.folder_list)
         
-        # 第三栏：测试用例列表
+        # 第二栏：测试用例列表
         case_panel = QWidget()
         case_layout = QVBoxLayout(case_panel)
         case_layout.setSpacing(0)  # 移除内部间距
@@ -228,7 +203,7 @@ class SchedulerDialog(QDialog):
                 border-radius: 6px;
                 background-color: white;
                 outline: none;
-                min-height: 250px;
+                min-height: 350px;
                 margin: 0px;
                 padding: 0px;
             }
@@ -243,32 +218,65 @@ class SchedulerDialog(QDialog):
         """)
         self.case_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        # 导入按钮
-        import_btn = QPushButton("导入")
-        import_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-                margin-top: 5px;
-            }
-            QPushButton:hover {
-                background-color: #106ebe;
-            }
-            QPushButton:pressed {
-                background-color: #005a9e;
-            }
-        """)
-        import_btn.clicked.connect(self.import_selected_cases)
-        
         case_layout.addWidget(case_label)
         case_layout.addWidget(self.case_list)
-        case_layout.addWidget(import_btn)
         
-        # 第四栏：已选用例区域
+        # 按钮区域（放在选择用例和已选用例之间）
+        button_panel = QWidget()
+        button_layout = QVBoxLayout(button_panel)
+        button_layout.setSpacing(10)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 导入按钮（使用图标）
+        self.import_btn = QPushButton()
+        self.import_btn.setIcon(self.get_icon("input.png"))
+        self.import_btn.setFixedSize(32, 32)
+        self.import_btn.setToolTip("导入")
+        self.import_btn.clicked.connect(self.import_selected_cases)
+        self.import_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+        """)
+        
+        # 移除按钮（使用图标）
+        self.remove_btn = QPushButton()
+        self.remove_btn.setIcon(self.get_icon("out.png"))
+        self.remove_btn.setFixedSize(32, 32)
+        self.remove_btn.setToolTip("移除")
+        self.remove_btn.clicked.connect(self.remove_selected_cases)
+        self.remove_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+        """)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(self.import_btn)
+        button_layout.addWidget(self.remove_btn)
+        button_layout.addStretch()
+        
+        # 第三栏：已选用例区域
         selected_panel = QWidget()
         selected_layout = QVBoxLayout(selected_panel)
         selected_layout.setSpacing(0)  # 移除内部间距
@@ -284,7 +292,7 @@ class SchedulerDialog(QDialog):
                 border-radius: 6px;
                 background-color: #f8f9fa;
                 outline: none;
-                min-height: 250px;
+                min-height: 350px;
                 margin: 0px;
                 padding: 0px;
             }
@@ -300,45 +308,21 @@ class SchedulerDialog(QDialog):
         """)
         self.selected_case_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        # 移除按钮
-        remove_btn = QPushButton("移除")
-        remove_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-                margin-top: 5px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-            QPushButton:pressed {
-                background-color: #bd2130;
-            }
-        """)
-        remove_btn.clicked.connect(self.remove_selected_cases)
-        
         selected_layout.addWidget(selected_label)
         selected_layout.addWidget(self.selected_case_list)
-        selected_layout.addWidget(remove_btn)
         
-        # 设置面板大小策略，四个竖栏可以拉伸
-        project_panel.setMinimumWidth(180)
-        project_panel.setMaximumWidth(300)
-        folder_panel.setMinimumWidth(180)
-        folder_panel.setMaximumWidth(300)
-        case_panel.setMinimumWidth(220)
-        case_panel.setMaximumWidth(400)
-        selected_panel.setMinimumWidth(220)
-        selected_panel.setMaximumWidth(400)
+        # 设置面板大小策略，三个竖栏可以拉伸
+        folder_panel.setMinimumWidth(200)
+        folder_panel.setMaximumWidth(350)
+        case_panel.setMinimumWidth(250)
+        case_panel.setMaximumWidth(450)
+        selected_panel.setMinimumWidth(250)
+        selected_panel.setMaximumWidth(450)
         
-        # 设置拉伸因子，让四个竖栏可以按比例拉伸
-        case_selection_layout.addWidget(project_panel, 1)
+        # 设置拉伸因子，让三个竖栏可以按比例拉伸
         case_selection_layout.addWidget(folder_panel, 1)
         case_selection_layout.addWidget(case_panel, 2)
+        case_selection_layout.addWidget(button_panel, 0)  # 按钮区域不拉伸
         case_selection_layout.addWidget(selected_panel, 2)
         
         # 添加到主布局，设置拉伸因子让测试用例选择区域可以拉伸
@@ -346,11 +330,20 @@ class SchedulerDialog(QDialog):
         layout.addWidget(case_selection_widget, 1)  # 测试用例选择区域可以拉伸
         
         # 连接信号
-        self.project_list.itemSelectionChanged.connect(self.on_project_selected)
         self.folder_list.itemSelectionChanged.connect(self.on_folder_selected)
         
-        # 加载项目列表
-        self.load_projects()
+        # 加载文件夹列表（基于当前选中的项目）
+        self.load_folders()
+
+    def get_icon(self, icon_name):
+        """获取图标文件"""
+        icon_path = os.path.join("src", "resources", "icons", icon_name)
+        if os.path.exists(icon_path):
+            return QIcon(icon_path)
+        else:
+            # 如果图标文件不存在，返回默认图标
+            logger.warning(f"图标文件不存在: {icon_path}")
+            return QIcon()
 
     def setup_schedule_tab(self, parent):
         layout = QVBoxLayout(parent)
@@ -377,9 +370,11 @@ class SchedulerDialog(QDialog):
         # Cron表达式输入行
         cron_input_layout = QHBoxLayout()
         cron_input_layout.setSpacing(10)
+        cron_input_layout.setAlignment(Qt.AlignLeft)  # 设置整体靠左对齐
         
         cron_label = QLabel("Cron表达式")
         cron_label.setStyleSheet("font-weight: bold; color: #555; min-width: 80px;")
+        cron_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # 设置标签靠左对齐
         
         self.cron_edit = QLineEdit()
         self.cron_edit.setPlaceholderText("例如: 0 0 12 * * ? (每天12点执行)")
@@ -398,19 +393,23 @@ class SchedulerDialog(QDialog):
         """)
         
         cron_input_layout.addWidget(cron_label)
-        cron_input_layout.addWidget(self.cron_edit, 1)  # 设置拉伸因子
+        self.cron_edit.setFixedWidth(400)  # 设置固定宽度
+        cron_input_layout.addWidget(self.cron_edit)
 
-        # 校验状态标签
+        # 校验状态标签（放在输入框右侧，同一行）
         self.cron_validation_label = QLabel()
         self.cron_validation_label.setStyleSheet("""
             QLabel {
                 font-size: 12px;
                 padding: 4px 8px;
                 border-radius: 4px;
-                margin-top: 5px;
+                margin-left: 10px;
             }
         """)
         cron_input_layout.addWidget(self.cron_validation_label)
+        
+        # 添加拉伸因子，确保内容靠左对齐
+        cron_input_layout.addStretch(1)
 
         # Cron表达式详细配置Tab栏
         self.setup_cron_tabs(cron_layout)
@@ -430,6 +429,9 @@ class SchedulerDialog(QDialog):
         """设置Cron表达式详细配置Tab栏"""
         # Tab容器
         tab_widget = QTabWidget()
+        tab_widget.setFixedHeight(300)  # 设置固定高度，避免自适应
+        tab_widget.setFixedWidth(1000)  # 设置固定宽度，避免自适应
+        tab_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # 设置固定大小策略
         tab_widget.setStyleSheet("""
             QTabWidget::pane {
                 border: 1px solid #ddd;
@@ -1045,25 +1047,33 @@ class SchedulerDialog(QDialog):
 
     def setup_notify_tab(self, parent):
         layout = QVBoxLayout(parent)
+        layout.setContentsMargins(10, 10, 10, 10)  # 设置边距
+        layout.setAlignment(Qt.AlignLeft)  # 设置整体靠左对齐
 
         # 邮件通知配置
         email_layout = QFormLayout()
+        email_layout.setLabelAlignment(Qt.AlignLeft)  # 设置标签靠左对齐
+        email_layout.setFormAlignment(Qt.AlignLeft)   # 设置表单靠左对齐
         
         self.email_enabled_check = QCheckBox("启用邮件通知")
         email_layout.addRow("邮件通知:", self.email_enabled_check)
 
         self.email_recipient_edit = QLineEdit()
         self.email_recipient_edit.setPlaceholderText("多个邮箱用逗号分隔")
+        self.email_recipient_edit.setFixedWidth(400)  # 设置固定宽度
         email_layout.addRow("收件人:", self.email_recipient_edit)
 
         # 企业微信通知配置
         wechat_layout = QFormLayout()
+        wechat_layout.setLabelAlignment(Qt.AlignLeft)  # 设置标签靠左对齐
+        wechat_layout.setFormAlignment(Qt.AlignLeft)   # 设置表单靠左对齐
         
         self.wechat_enabled_check = QCheckBox("启用企业微信通知")
         wechat_layout.addRow("企业微信:", self.wechat_enabled_check)
 
         self.wechat_webhook_edit = QLineEdit()
         self.wechat_webhook_edit.setPlaceholderText("输入企业微信机器人Webhook URL")
+        self.wechat_webhook_edit.setFixedWidth(400)  # 设置固定宽度
         wechat_layout.addRow("Webhook URL:", self.wechat_webhook_edit)
 
         # 添加布局到主布局
@@ -1076,56 +1086,71 @@ class SchedulerDialog(QDialog):
         try:
             # 初始化服务对象
             self.test_case_service = TestCaseService()
-            # 只加载项目列表，测试用例列表保持为空
-            self.load_projects()
+            
+            # 如果是编辑模式，先从scheduler_data中获取项目ID并设置
+            if self.is_edit and self.scheduler_data:
+                project_id = self.scheduler_data.get('project_id')
+                if project_id:
+                    self.current_project_id = project_id
+            
+            # 直接加载文件夹列表（根据当前选中的项目）
+            self.load_folders()
+            
+            # 如果是编辑模式，在文件夹列表加载完成后重新加载调度数据
+            if self.is_edit:
+                self.load_scheduler_data()
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"延迟加载数据失败: {str(e)}")
 
-    def load_projects(self):
-        """加载项目列表"""
-        try:
-            # 从数据库动态获取所有项目
-            projects = self.project_service.get_all_projects()
-            
-            self.project_list.clear()
-            for project in projects:
-                item = QListWidgetItem(project['name'])
-                item.setData(Qt.UserRole, project['id'])
-                self.project_list.addItem(item)
-        except Exception as e:
-            print(f"加载项目列表失败: {e}")
 
-    def on_project_selected(self):
-        """项目选择变化时加载文件夹"""
-        selected_items = self.project_list.selectedItems()
-        if not selected_items:
-            return
-            
-        project_id = selected_items[0].data(Qt.UserRole)
-        self.load_folders(project_id)
-        
-        # 切换项目时自动清空测试用例列表
-        self.case_list.clear()
 
-    def load_folders(self, project_id):
-        """根据项目ID加载文件夹列表"""
+    def load_folders(self):
+        """加载当前选中项目的文件夹列表"""
         try:
+            # 检查是否有有效的项目ID
+            if not self.current_project_id:
+                # 如果没有项目ID，显示提示信息
+                self.folder_list.clear()
+                self.show_no_data_message("请先在调度管理页面选择项目")
+                return
+                
             # 从数据库动态获取指定项目的文件夹
-            folders = self.folder_service.get_folders_by_project(project_id)
+            folders = self.folder_service.get_folders_by_project(self.current_project_id)
             
             self.folder_list.clear()
+            if not folders:
+                # 如果没有文件夹，显示提示信息
+                self.show_no_data_message("该项目下暂无文件夹")
+                return
+                
             for folder in folders:
                 item = QListWidgetItem(folder['name'])
                 item.setData(Qt.UserRole, folder['id'])
+                # 设置文件夹图标
+                item.setIcon(self.get_icon("folder.png"))
                 self.folder_list.addItem(item)
         except Exception as e:
             print(f"加载文件夹列表失败: {e}")
+            self.show_no_data_message("加载文件夹失败，请检查数据库连接")
+
+    def show_no_data_message(self, message):
+        """在文件夹列表中显示无数据提示"""
+        item = QListWidgetItem(message)
+        item.setFlags(Qt.NoItemFlags)  # 设置为不可选择
+        item.setTextAlignment(Qt.AlignCenter)
+        item.setForeground(QColor("#999"))
+        self.folder_list.addItem(item)
 
     def on_folder_selected(self):
         """文件夹选择变化时加载测试用例"""
         selected_items = self.folder_list.selectedItems()
         if not selected_items:
+            return
+            
+        # 检查是否是提示信息项（不可选择的项）
+        if selected_items[0].flags() == Qt.NoItemFlags:
+            self.case_list.clear()
             return
             
         folder_id = selected_items[0].data(Qt.UserRole)
@@ -1138,23 +1163,37 @@ class SchedulerDialog(QDialog):
             if self.test_case_service is None:
                 self.test_case_service = TestCaseService()
             
-            # 获取当前选中的项目ID
-            selected_project_items = self.project_list.selectedItems()
-            if not selected_project_items:
+            # 检查是否有有效的项目ID
+            if not self.current_project_id:
+                self.case_list.clear()
                 return
                 
-            project_id = selected_project_items[0].data(Qt.UserRole)
-            
             # 从数据库动态获取指定文件夹的测试用例
-            cases = self.test_case_service.get_cases_by_folder(project_id, folder_id)
+            cases = self.test_case_service.get_cases_by_folder(self.current_project_id, folder_id)
             
             self.case_list.clear()
+            if not cases:
+                # 如果没有测试用例，显示提示信息
+                self.show_no_cases_message("该文件夹下暂无测试用例")
+                return
+                
             for case in cases:
                 item = QListWidgetItem(case['name'])
                 item.setData(Qt.UserRole, case['id'])
+                # 设置测试用例图标
+                item.setIcon(self.get_icon("test_case.png"))
                 self.case_list.addItem(item)
         except Exception as e:
             print(f"加载测试用例失败: {e}")
+            self.show_no_cases_message("加载测试用例失败")
+
+    def show_no_cases_message(self, message):
+        """在测试用例列表中显示无数据提示"""
+        item = QListWidgetItem(message)
+        item.setFlags(Qt.NoItemFlags)  # 设置为不可选择
+        item.setTextAlignment(Qt.AlignCenter)
+        item.setForeground(QColor("#999"))
+        self.case_list.addItem(item)
 
     def import_selected_cases(self):
         """导入选中的测试用例到已选用例区域"""
@@ -1175,6 +1214,8 @@ class SchedulerDialog(QDialog):
             if not exists:
                 new_item = QListWidgetItem(item.text())
                 new_item.setData(Qt.UserRole, item.data(Qt.UserRole))
+                # 设置测试用例图标
+                new_item.setIcon(self.get_icon("test_case.png"))
                 self.selected_case_list.addItem(new_item)
 
     def remove_selected_cases(self):
@@ -1214,6 +1255,9 @@ class SchedulerDialog(QDialog):
         self.name_edit.setText(self.scheduler_data.get('name', ''))
         self.desc_edit.setText(self.scheduler_data.get('description', ''))
 
+        # 项目选择 - 已移除项目列表，直接使用当前选中的项目
+        # 不再需要手动选择项目，系统会自动使用当前业务管理页面选中的项目
+
         # 测试用例选择
         case_ids = self.scheduler_data.get('case_ids', [])
         # 清空已选用例列表
@@ -1230,6 +1274,8 @@ class SchedulerDialog(QDialog):
                 if case['id'] in case_ids:
                     item = QListWidgetItem(case['name'])
                     item.setData(Qt.UserRole, case['id'])
+                    # 设置测试用例图标
+                    item.setIcon(self.get_icon("test_case.png"))
                     self.selected_case_list.addItem(item)
         except Exception as e:
             print(f"加载已选用例失败: {e}")
@@ -1310,7 +1356,8 @@ class SchedulerDialog(QDialog):
             'name': self.name_edit.text().strip(),
             'description': self.desc_edit.toPlainText().strip(),
             'cron_expression': self.cron_edit.text().strip(),
-            'enabled': False  # 新增调度默认为不启用状态
+            'enabled': False,  # 新增调度默认为不启用状态
+            'project_id': self.current_project_id  # 使用传递的项目ID
         }
 
         # 测试用例ID列表（从已选用例区域获取）
@@ -2347,6 +2394,7 @@ class SchedulerManager(QWidget):
         self.timer.timeout.connect(self.update_next_run_times)
         self.timer.start(60000)  # 每分钟更新一次
         self.execution_status = {}  # 执行状态监控
+        self.current_business_id = None  # 当前选中的业务分组ID
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
@@ -2360,12 +2408,81 @@ class SchedulerManager(QWidget):
         toolbar = QToolBar()
         toolbar.setIconSize(QSize(16, 16))
 
+        # 项目选择下拉框
+        project_label = QLabel("项目:")
+        project_label.setStyleSheet("color: #333; font-weight: bold; margin-left: 5px; margin-right: 5px;")
+        toolbar.addWidget(project_label)
+        
+        self.project_combo = NoWheelComboBox()
+        self.project_combo.setMinimumWidth(150)
+        self.project_combo.setStyleSheet("""
+            QComboBox {
+                padding: 6px 30px 6px 8px;
+                background-color: white;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                color: #495057;
+                font-size: 13px;
+                min-height: 28px;
+            }
+            QComboBox:hover {
+                border-color: #adb5bd;
+                background-color: #f8f9fa;
+            }
+            QComboBox:focus {
+                border-color: #0078d4;
+                background-color: #fff;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
+                border-left: 1px solid #ced4da;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                background-color: #f8f9fa;
+            }
+            QComboBox::down-arrow {
+                width: 12px;
+                height: 12px;
+                image: url(src/resources/icons/combobox.png);
+            }
+            QComboBox::down-arrow:hover {
+                image: url(src/resources/icons/combobox.png);
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                background-color: white;
+                outline: none;
+                margin-top: 2px;
+                padding: 4px 0px;
+            }
+            QComboBox QAbstractItemView::item {
+                padding: 8px 12px;
+                color: #495057;
+                background-color: transparent;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e9ecef;
+                color: #0078d4;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #0078d4;
+                color: white;
+            }
+        """)
+        self.project_combo.currentIndexChanged.connect(self.on_project_changed)
+        toolbar.addWidget(self.project_combo)
+        
+        toolbar.addSeparator()
+
         self.add_action = QAction("新增调度", self)
         self.add_action.triggered.connect(self.add_scheduler)
         self.add_action.setIcon(self.get_icon("add.png"))
 
         self.refresh_action = QAction("刷新", self)
-        self.refresh_action.triggered.connect(self.load_schedulers)
+        self.refresh_action.triggered.connect(lambda: self.load_schedulers(self.project_combo.currentData()))
         self.refresh_action.setIcon(self.get_icon("refresh.png"))
 
         toolbar.addAction(self.add_action)
@@ -2471,11 +2588,208 @@ class SchedulerManager(QWidget):
         try:
             # 初始化服务对象
             self.scheduler_service = UnifiedSchedulerService()
-            # 加载数据
-            self.load_schedulers()
+            # 加载项目列表（初始不按业务过滤）
+            self.load_projects()
+            # 加载数据 - 根据当前选中的项目进行过滤
+            project_id = self.project_combo.currentData() if self.project_combo.count() > 0 else None
+            self.load_schedulers(project_id)
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"延迟加载数据失败: {str(e)}")
+
+    def load_projects(self, business_id=None):
+        """加载项目列表到下拉框，支持按业务分组过滤"""
+        try:
+            # 清空下拉框
+            self.project_combo.clear()
+            
+            # 获取项目列表
+            project_service = ProjectService()
+            
+            # 根据业务分组ID过滤项目
+            if business_id is not None:
+                projects = project_service.get_projects_by_group(business_id)
+            else:
+                projects = project_service.get_all_projects()
+            
+            # 添加项目到下拉框
+            for project in projects:
+                self.project_combo.addItem(project['name'], project['id'])
+                
+            # 设置默认选中第一个项目
+            if projects:
+                self.project_combo.setCurrentIndex(0)
+            
+        except Exception as e:
+            print(f"加载项目列表失败: {str(e)}")
+            # 添加一个错误提示选项
+            self.project_combo.addItem("加载失败", None)
+
+    def on_business_changed(self, business_id):
+        """业务切换事件处理"""
+        self.current_business_id = business_id
+        # 重新加载项目列表，按业务分组过滤
+        self.load_projects(business_id)
+        # 重新加载调度列表
+        project_id = self.project_combo.currentData() if self.project_combo.count() > 0 else None
+        self.load_schedulers(project_id)
+
+    def on_project_changed(self):
+        """项目选择变更事件"""
+        # 获取当前选中的项目ID
+        project_id = self.project_combo.currentData()
+        
+        # 根据项目ID筛选调度列表
+        self.load_schedulers(project_id)
+
+    def load_schedulers(self, project_id=None):
+        """加载调度列表，支持按项目筛选"""
+        # 检查服务对象是否已初始化
+        if self.scheduler_service is None:
+            print("调度服务未初始化，跳过加载调度列表")
+            self.status_label.setText("调度服务未就绪")
+            return
+            
+        try:
+            schedulers = self.scheduler_service.get_all_schedulers()
+            
+            # 如果指定了项目ID，进行筛选
+            if project_id is not None:
+                schedulers = [s for s in schedulers if s.get('project_id') == project_id]
+            
+            self.table_widget.setRowCount(len(schedulers))
+
+            for row, scheduler in enumerate(schedulers):
+                # 序号列（第0列）- 自定义序号
+                index_item = QTableWidgetItem(str(row + 1))
+                index_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 0, index_item)
+
+                # 调度名称（原第0列，现在第1列）
+                name_item = QTableWidgetItem(scheduler['name'])
+                name_item.setData(Qt.UserRole, scheduler['id'])
+                name_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 1, name_item)
+
+                # 状态（原第1列，现在第2列）
+                status_item = QTableWidgetItem("启用" if scheduler['enabled'] else "禁用")
+                status_item.setForeground(QColor("green") if scheduler['enabled'] else QColor("red"))
+                status_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 2, status_item)
+
+                # Cron表达式（原第2列，现在第3列）
+                cron_item = QTableWidgetItem(scheduler['cron_expression'])
+                cron_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 3, cron_item)
+
+                # 用例数量（原第3列，现在第4列）
+                case_ids = scheduler.get('case_ids', [])
+                case_count = len(case_ids) if isinstance(case_ids, list) else 0
+                case_item = QTableWidgetItem(str(case_count))
+                case_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 4, case_item)
+
+                # 上次执行时间（原第4列，现在第5列）
+                last_run = scheduler.get('last_run_at')
+                last_run_text = last_run.strftime('%Y-%m-%d %H:%M:%S') if last_run else "从未执行"
+                last_run_item = QTableWidgetItem(last_run_text)
+                last_run_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 5, last_run_item)
+
+                # 下次执行时间（原第5列，现在第6列）
+                next_run = scheduler.get('next_run_at')
+                next_run_text = next_run.strftime('%Y-%m-%d %H:%M:%S') if next_run else "未计算"
+                next_run_item = QTableWidgetItem(next_run_text)
+                next_run_item.setTextAlignment(Qt.AlignCenter)
+                if next_run and next_run < datetime.now():
+                    next_run_item.setForeground(QColor("orange"))
+                self.table_widget.setItem(row, 6, next_run_item)
+
+                # 创建时间（原第6列，现在第7列）
+                created_at = scheduler.get('created_at')
+                created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
+                created_item = QTableWidgetItem(created_text)
+                created_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 7, created_item)
+
+                # 操作栏（原第7列，现在第8列）
+                operation_widget = QWidget()
+                operation_layout = QHBoxLayout(operation_widget)
+                operation_layout.setContentsMargins(5, 2, 5, 2)
+                operation_layout.setSpacing(3)
+                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
+                
+                # 执行按钮
+                run_btn = QPushButton()
+                run_btn.setFixedSize(25, 25)
+                run_btn.setIcon(self.get_icon("running.png"))
+                run_btn.setToolTip("执行")
+                run_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                run_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.run_scheduler_by_id(sched_id))
+                
+                # 编辑按钮
+                edit_btn = QPushButton()
+                edit_btn.setFixedSize(25, 25)
+                edit_btn.setIcon(self.get_icon("edit.png"))
+                edit_btn.setToolTip("编辑")
+                edit_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                edit_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.edit_scheduler_by_id(sched_id))
+                
+                # 启用/禁用按钮
+                toggle_btn = QPushButton()
+                toggle_btn.setFixedSize(25, 25)
+                # 根据调度状态设置不同图标
+                if scheduler['enabled']:
+                    toggle_btn.setIcon(self.get_icon("stop.png"))
+                    toggle_btn.setToolTip("禁用")
+                else:
+                    toggle_btn.setIcon(self.get_icon("start.png"))
+                    toggle_btn.setToolTip("启用")
+                toggle_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                toggle_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.toggle_scheduler_by_id(sched_id))
+                
+                # 复制按钮
+                copy_btn = QPushButton()
+                copy_btn.setFixedSize(25, 25)
+                copy_btn.setIcon(self.get_icon("copy.png"))
+                copy_btn.setToolTip("复制")
+                copy_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                copy_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.copy_scheduler_by_id(sched_id))
+                
+                # 删除按钮
+                delete_btn = QPushButton()
+                delete_btn.setFixedSize(25, 25)
+                delete_btn.setIcon(self.get_icon("delete.png"))
+                delete_btn.setToolTip("删除")
+                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                delete_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.delete_scheduler_by_id(sched_id))
+                
+                # 详情按钮 - 查看执行记录日志
+                detail_btn = QPushButton()
+                detail_btn.setFixedSize(25, 25)
+                detail_btn.setIcon(self.get_icon("detail.png"))
+                detail_btn.setToolTip("查看执行记录")
+                detail_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                detail_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.show_execution_logs(sched_id))
+                
+                operation_layout.addWidget(run_btn)
+                operation_layout.addWidget(edit_btn)
+                operation_layout.addWidget(toggle_btn)
+                operation_layout.addWidget(copy_btn)
+                operation_layout.addWidget(delete_btn)
+                operation_layout.addWidget(detail_btn)
+                
+                self.table_widget.setCellWidget(row, 8, operation_widget)
+
+            self.status_label.setText(f"共 {len(schedulers)} 个调度任务")
+            
+            # 加载完成后重新计算下次执行时间
+            self.update_next_run_times()
+
+        except Exception as e:
+            # 静默处理，不显示弹窗
+            print(f"加载调度列表失败: {str(e)}")
+            self.status_label.setText("加载失败")
 
     def start_service(self):
         """启动调度服务"""
@@ -2618,149 +2932,7 @@ class SchedulerManager(QWidget):
             pass
         return QIcon()
 
-    def load_schedulers(self):
-        """加载调度列表"""
-        # 检查服务对象是否已初始化
-        if self.scheduler_service is None:
-            print("调度服务未初始化，跳过加载调度列表")
-            self.status_label.setText("调度服务未就绪")
-            return
-            
-        try:
-            schedulers = self.scheduler_service.get_all_schedulers()
-            self.table_widget.setRowCount(len(schedulers))
 
-            for row, scheduler in enumerate(schedulers):
-                # 序号列（第0列）- 自定义序号
-                index_item = QTableWidgetItem(str(row + 1))
-                index_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 0, index_item)
-
-                # 调度名称（原第0列，现在第1列）
-                name_item = QTableWidgetItem(scheduler['name'])
-                name_item.setData(Qt.UserRole, scheduler['id'])
-                name_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 1, name_item)
-
-                # 状态（原第1列，现在第2列）
-                status_item = QTableWidgetItem("启用" if scheduler['enabled'] else "禁用")
-                status_item.setForeground(QColor("green") if scheduler['enabled'] else QColor("red"))
-                status_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 2, status_item)
-
-                # Cron表达式（原第2列，现在第3列）
-                cron_item = QTableWidgetItem(scheduler['cron_expression'])
-                cron_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 3, cron_item)
-
-                # 用例数量（原第3列，现在第4列）
-                case_ids = scheduler.get('case_ids', [])
-                case_count = len(case_ids) if isinstance(case_ids, list) else 0
-                case_item = QTableWidgetItem(str(case_count))
-                case_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 4, case_item)
-
-                # 上次执行时间（原第4列，现在第5列）
-                last_run = scheduler.get('last_run_at')
-                last_run_text = last_run.strftime('%Y-%m-%d %H:%M:%S') if last_run else "从未执行"
-                last_run_item = QTableWidgetItem(last_run_text)
-                last_run_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 5, last_run_item)
-
-                # 下次执行时间（原第5列，现在第6列）
-                next_run = scheduler.get('next_run_at')
-                next_run_text = next_run.strftime('%Y-%m-%d %H:%M:%S') if next_run else "未计算"
-                next_run_item = QTableWidgetItem(next_run_text)
-                next_run_item.setTextAlignment(Qt.AlignCenter)
-                if next_run and next_run < datetime.now():
-                    next_run_item.setForeground(QColor("orange"))
-                self.table_widget.setItem(row, 6, next_run_item)
-
-                # 创建时间（原第6列，现在第7列）
-                created_at = scheduler.get('created_at')
-                created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
-                created_item = QTableWidgetItem(created_text)
-                created_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 7, created_item)
-
-                # 操作栏（原第7列，现在第8列）
-                operation_widget = QWidget()
-                operation_layout = QHBoxLayout(operation_widget)
-                operation_layout.setContentsMargins(5, 2, 5, 2)
-                operation_layout.setSpacing(3)
-                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
-                
-                # 执行按钮
-                run_btn = QPushButton()
-                run_btn.setFixedSize(25, 25)
-                run_btn.setIcon(self.get_icon("running.png"))
-                run_btn.setToolTip("执行")
-                run_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
-                run_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.run_scheduler_by_id(sched_id))
-                
-                # 编辑按钮
-                edit_btn = QPushButton()
-                edit_btn.setFixedSize(25, 25)
-                edit_btn.setIcon(self.get_icon("edit.png"))
-                edit_btn.setToolTip("编辑")
-                edit_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
-                edit_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.edit_scheduler_by_id(sched_id))
-                
-                # 启用/禁用按钮
-                toggle_btn = QPushButton()
-                toggle_btn.setFixedSize(25, 25)
-                # 根据调度状态设置不同图标
-                if scheduler['enabled']:
-                    toggle_btn.setIcon(self.get_icon("stop.png"))
-                    toggle_btn.setToolTip("禁用")
-                else:
-                    toggle_btn.setIcon(self.get_icon("start.png"))
-                    toggle_btn.setToolTip("启用")
-                toggle_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
-                toggle_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.toggle_scheduler_by_id(sched_id))
-                
-                # 复制按钮
-                copy_btn = QPushButton()
-                copy_btn.setFixedSize(25, 25)
-                copy_btn.setIcon(self.get_icon("copy.png"))
-                copy_btn.setToolTip("复制")
-                copy_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
-                copy_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.copy_scheduler_by_id(sched_id))
-                
-                # 删除按钮
-                delete_btn = QPushButton()
-                delete_btn.setFixedSize(25, 25)
-                delete_btn.setIcon(self.get_icon("delete.png"))
-                delete_btn.setToolTip("删除")
-                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
-                delete_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.delete_scheduler_by_id(sched_id))
-                
-                # 详情按钮 - 查看执行记录日志
-                detail_btn = QPushButton()
-                detail_btn.setFixedSize(25, 25)
-                detail_btn.setIcon(self.get_icon("detail.png"))
-                detail_btn.setToolTip("查看执行记录")
-                detail_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
-                detail_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.show_execution_logs(sched_id))
-                
-                operation_layout.addWidget(run_btn)
-                operation_layout.addWidget(edit_btn)
-                operation_layout.addWidget(toggle_btn)
-                operation_layout.addWidget(copy_btn)
-                operation_layout.addWidget(delete_btn)
-                operation_layout.addWidget(detail_btn)
-                
-                self.table_widget.setCellWidget(row, 8, operation_widget)
-
-            self.status_label.setText(f"共 {len(schedulers)} 个调度任务")
-            
-            # 加载完成后重新计算下次执行时间
-            self.update_next_run_times()
-
-        except Exception as e:
-            # 静默处理，不显示弹窗
-            print(f"加载调度列表失败: {str(e)}")
-            self.status_label.setText("加载失败")
 
     def update_next_run_times(self):
         """更新下次执行时间显示"""
@@ -2819,7 +2991,17 @@ class SchedulerManager(QWidget):
 
     def add_scheduler(self):
         """新增调度"""
+        # 获取当前选中的项目ID
+        current_project_id = self.project_combo.currentData()
+        
+        # 创建调度对话框，并传递当前选中的项目ID
         dialog = SchedulerDialog(self)
+        
+        # 如果当前选中了具体项目，则在对话框中自动选中该项目
+        if current_project_id is not None:
+            # 延迟执行，确保对话框已初始化完成
+            QTimer.singleShot(100, lambda: self._preselect_project_in_dialog(dialog, current_project_id))
+        
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
@@ -2840,7 +3022,7 @@ class SchedulerManager(QWidget):
                     return
 
                 self.scheduler_service.create_scheduler(data)
-                self.load_schedulers()
+                self.load_schedulers(self.project_combo.currentData())
                 self.data_changed.emit()
                 Toast.info(self, "调度创建成功")
                 
@@ -2848,6 +3030,17 @@ class SchedulerManager(QWidget):
                 self.update_next_run_times()
             except Exception as e:
                 Toast.error(self, f"创建调度失败: {str(e)}")
+
+    def _preselect_project_in_dialog(self, dialog, project_id):
+        """在对话框中选择指定的项目（已移除项目列表，直接加载文件夹）"""
+        try:
+            # 设置当前项目ID
+            dialog.set_current_project_id(project_id)
+            # 项目列表功能已移除，系统会自动使用当前业务管理页面选中的项目
+            # 直接加载文件夹列表，无需手动选择项目
+            dialog.load_folders()
+        except Exception as e:
+            print(f"预选项目失败: {str(e)}")
 
 
 
@@ -2886,7 +3079,7 @@ class SchedulerManager(QWidget):
         if msg_box.clickedButton() == confirm_btn:
             try:
                 self.scheduler_service.delete_scheduler(scheduler_data['id'])
-                self.load_schedulers()
+                self.load_schedulers(self.project_combo.currentData())
                 self.data_changed.emit()
                 Toast.info(self, "调度删除成功")
             except Exception as e:
@@ -2931,7 +3124,7 @@ class SchedulerManager(QWidget):
                     return
 
                 self.scheduler_service.update_scheduler(scheduler_data['id'], data)
-                self.load_schedulers()
+                self.load_schedulers(self.project_combo.currentData())
                 self.data_changed.emit()
                 Toast.info(self, "调度更新成功")
                 
@@ -2962,7 +3155,7 @@ class SchedulerManager(QWidget):
                     Toast.info(self, f"调度 '{scheduler_data['name']}' 已提交执行")
                     
                     # 刷新调度列表以更新状态
-                    self.load_schedulers()
+                    self.load_schedulers(self.project_combo.currentData())
                 else:
                     # 如果异步执行失败，使用同步执行方式
                     self._run_scheduler_sync(scheduler_data)
@@ -3030,7 +3223,7 @@ class SchedulerManager(QWidget):
                 Toast.warn(self, f"调度执行完成: 成功 {success_count}/{total_count} 个测试用例")
             
             # 刷新调度列表
-            self.load_schedulers()
+            self.load_schedulers(self.project_combo.currentData())
 
         except Exception as e:
             Toast.error(self, f"同步执行调度失败: {str(e)}")
@@ -3073,7 +3266,7 @@ class SchedulerManager(QWidget):
 
         try:
             self.scheduler_service.update_scheduler_status(scheduler_data['id'], new_status)
-            self.load_schedulers()
+            self.load_schedulers(self.project_combo.currentData())
             self.data_changed.emit()
             Toast.info(self, f"调度已{status_text}")
         except Exception as e:
@@ -3094,7 +3287,8 @@ class SchedulerManager(QWidget):
                 'cron_expression': scheduler_data['cron_expression'],
                 'case_ids': scheduler_data.get('case_ids', []),
                 'enabled': False,  # 默认禁用副本
-                'description': scheduler_data.get('description', '')
+                'description': scheduler_data.get('description', ''),
+                'project_id': scheduler_data.get('project_id')  # 复制项目ID
             }
 
             # 验证名称是否重复
@@ -3107,7 +3301,7 @@ class SchedulerManager(QWidget):
 
             # 创建副本
             self.scheduler_service.create_scheduler(copy_data)
-            self.load_schedulers()
+            self.load_schedulers(self.project_combo.currentData())
             self.data_changed.emit()
             Toast.info(self, f"调度复制成功: {copy_data['name']}")
 

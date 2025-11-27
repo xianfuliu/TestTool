@@ -13,10 +13,11 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QProgressBar, QTreeWidget, QTreeWidgetItem, QFrame, QFileDialog,
                              QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QUrl
-from PyQt5.QtGui import QIcon, QFont, QColor, QDesktopServices, QCursor
+from PyQt5.QtGui import QIcon, QFont, QColor, QDesktopServices, QCursor, QBrush
 from src.core.services.scheduler_service import UnifiedSchedulerService
 from src.core.services.test_report_service import TestReportService
 from src.core.services.test_case_service import TestCaseService
+from src.core.services.project_service import ProjectService
 from src.core.models.interface_models import TestReport, TestStepResult
 from src.utils.interface_utils.report_generator import HTMLReportGenerator
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
@@ -425,6 +426,9 @@ class TestReportManager(QWidget):
         self.report_service = None
         self.case_service = None
         self.scheduler_service = None
+        self.project_service = None
+        self.current_scheduler_id = None  # 当前选中的调度ID，用于过滤
+        self.current_business_id = None  # 当前选中的业务分组ID，用于项目过滤
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
@@ -435,10 +439,103 @@ class TestReportManager(QWidget):
         # 筛选工具栏
         filter_toolbar = QToolBar()
         filter_toolbar.setIconSize(QSize(16, 16))
+        filter_toolbar.setStyleSheet("""
+            QToolBar {
+                spacing: 15px;  /* 工具栏内控件间距 */
+                padding: 8px 12px;  /* 工具栏内边距 */
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 6px;
+                margin-bottom: 8px;
+            }
+            QToolBar QLabel {
+                font-weight: bold;
+                color: #495057;
+                margin-right: 5px;
+                padding: 4px 0px;
+            }
+            QToolBar QComboBox, QToolBar QLineEdit {
+                margin-right: 15px;  /* 控件右侧间距 */
+                padding: 6px 8px;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                background-color: white;
+                min-height: 28px;
+            }
+            QToolBar QComboBox:focus, QToolBar QLineEdit:focus {
+                border-color: #0078d4;
+                outline: none;
+            }
+            /* 优化下拉框样式 */
+            QToolBar QComboBox {
+                padding: 6px 30px 6px 8px;  /* 右侧留出下拉箭头空间 */
+                background-color: white;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                color: #495057;
+                font-size: 13px;
+                min-height: 28px;
+            }
+            QToolBar QComboBox:hover {
+                border-color: #adb5bd;
+                background-color: #f8f9fa;
+            }
+            QToolBar QComboBox:focus {
+                border-color: #0078d4;
+                background-color: #fff;
+            }
+            QToolBar QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
+                border-left: 1px solid #ced4da;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                background-color: #f8f9fa;
+            }
+            QToolBar QComboBox::down-arrow {
+                width: 12px;
+                height: 12px;
+                image: url(src/resources/icons/combobox.png);
+            }
+            QToolBar QComboBox::down-arrow:hover {
+                image: url(src/resources/icons/combobox.png);
+            }
+            QToolBar QComboBox QAbstractItemView {
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                background-color: white;
+                outline: none;
+                margin-top: 2px;
+                padding: 4px 0px;
+            }
+            QToolBar QComboBox QAbstractItemView::item {
+                padding: 8px 12px;
+                color: #495057;
+                background-color: transparent;
+            }
+            QToolBar QComboBox QAbstractItemView::item:hover {
+                background-color: #e9ecef;
+                color: #0078d4;
+            }
+            QToolBar QComboBox QAbstractItemView::item:selected {
+                background-color: #0078d4;
+                color: white;
+            }
+        """)
+
+        # 项目筛选（移到最左边）
+        filter_toolbar.addWidget(QLabel("项目:"))
+        self.project_combo = NoWheelComboBox()
+        self.project_combo.setMinimumWidth(150)
+        # 延迟加载项目列表，避免服务未初始化
+        self.project_combo.currentIndexChanged.connect(self.on_filter_changed)
+        filter_toolbar.addWidget(self.project_combo)
 
         # 时间筛选
         filter_toolbar.addWidget(QLabel("时间范围:"))
         self.time_range_combo = NoWheelComboBox()
+        self.time_range_combo.setMinimumWidth(120)
         self.time_range_combo.addItems([
             "全部", "今天", "最近7天", "最近30天", "最近90天", "自定义"
         ])
@@ -448,17 +545,10 @@ class TestReportManager(QWidget):
         # 状态筛选
         filter_toolbar.addWidget(QLabel("状态:"))
         self.status_combo = NoWheelComboBox()
+        self.status_combo.setMinimumWidth(100)
         self.status_combo.addItems(["全部", "成功", "失败", "错误", "执行中"])
         self.status_combo.currentIndexChanged.connect(self.on_filter_changed)
         filter_toolbar.addWidget(self.status_combo)
-
-        # 用例筛选
-        filter_toolbar.addWidget(QLabel("测试用例:"))
-        self.case_combo = NoWheelComboBox()
-        self.case_combo.addItem("全部", 0)
-        self.load_test_cases()
-        self.case_combo.currentIndexChanged.connect(self.on_filter_changed)
-        filter_toolbar.addWidget(self.case_combo)
 
         filter_toolbar.addSeparator()
 
@@ -467,7 +557,7 @@ class TestReportManager(QWidget):
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("报告名称...")
         self.search_edit.textChanged.connect(self.on_filter_changed)
-        self.search_edit.setMaximumWidth(200)
+        self.search_edit.setFixedWidth(300)  # 固定宽度180px
         filter_toolbar.addWidget(self.search_edit)
 
         main_layout.addWidget(filter_toolbar)
@@ -476,20 +566,14 @@ class TestReportManager(QWidget):
         toolbar = QToolBar()
         toolbar.setIconSize(QSize(16, 16))
 
-        self.delete_action = QAction("删除报告", self)
-        self.delete_action.triggered.connect(self.delete_selected_report)
-        self.delete_action.setIcon(self.get_icon("delete.png"))
-
         self.refresh_action = QAction("刷新", self)
-        self.refresh_action.triggered.connect(self.load_reports)
+        self.refresh_action.triggered.connect(self.on_refresh_clicked)
         self.refresh_action.setIcon(self.get_icon("refresh.png"))
 
         self.clear_action = QAction("清理报告", self)
         self.clear_action.triggered.connect(self.clear_old_reports)
         self.clear_action.setIcon(self.get_icon("clear.png"))
 
-        toolbar.addAction(self.delete_action)
-        toolbar.addSeparator()
         toolbar.addAction(self.refresh_action)
         toolbar.addAction(self.clear_action)
 
@@ -734,6 +818,10 @@ class TestReportManager(QWidget):
             self.report_service = TestReportService()
             self.case_service = TestCaseService()
             self.scheduler_service = UnifiedSchedulerService()
+            self.project_service = ProjectService()
+            
+            # 加载项目列表
+            self.load_projects()
             
             # 加载调度任务列表
             self.load_schedulers()
@@ -741,10 +829,7 @@ class TestReportManager(QWidget):
             # 加载报告数据
             self.load_reports()
             
-            # 启动定时刷新调度任务列表（每30秒刷新一次）
-            self.scheduler_refresh_timer = QTimer(self)
-            self.scheduler_refresh_timer.timeout.connect(self.load_schedulers)
-            self.scheduler_refresh_timer.start(30000)  # 30秒
+            # 不再启动定时刷新调度任务列表，改为手动刷新
             
         except Exception as e:
             # 静默处理，不显示弹窗
@@ -785,19 +870,68 @@ class TestReportManager(QWidget):
             pass
         return QIcon()
 
-    def load_test_cases(self):
-        """加载测试用例列表"""
+    def load_projects(self, business_id=None):
+        """加载项目列表到下拉框，支持按业务分组过滤
+        
+        Args:
+            business_id: 业务分组ID，为None时加载所有项目
+        """
         # 检查服务对象是否已初始化
-        if self.case_service is None:
-            print("测试用例服务未初始化，跳过加载测试用例")
+        if not hasattr(self, 'project_service') or self.project_service is None:
+            print("项目服务未初始化，跳过加载项目列表")
             return
             
         try:
-            cases = self.case_service.get_all_cases()
-            for case in cases:
-                self.case_combo.addItem(case['name'], case['id'])
+            # 根据business_id参数决定加载方式
+            if business_id:
+                projects = self.project_service.get_projects_by_group(business_id)
+            else:
+                projects = self.project_service.get_all_projects()
+                
+            self.project_combo.clear()
+            
+            # 不再添加"全部"选项，直接添加实际项目列表
+            for project in projects:
+                self.project_combo.addItem(project['name'], project['id'])
+                
+            # 如果项目列表不为空，默认选中第一个项目
+            if projects:
+                self.project_combo.setCurrentIndex(0)
         except Exception as e:
-            print(f"加载测试用例失败: {e}")
+            print(f"加载项目列表失败: {e}")
+
+    def on_business_changed(self, business_id):
+        """业务切换事件处理
+        
+        Args:
+            business_id: 业务分组ID
+        """
+        try:
+            # 更新当前业务分组ID
+            self.current_business_id = business_id
+            
+            # 根据业务分组重新加载项目列表
+            self.load_projects(business_id)
+            
+            # 重新加载调度任务列表
+            self.load_schedulers()
+            
+            # 清空调度任务选择状态
+            self.current_scheduler_id = None
+            self.scheduler_list_widget.clearSelection()
+            
+            # 清空报告列表
+            self.tree_widget.clear()
+            
+            # 更新状态栏
+            if business_id:
+                self.status_label.setText(f"已切换到业务分组，正在加载对应项目...")
+            else:
+                self.status_label.setText("已切换到全部业务，正在加载所有项目...")
+                
+        except Exception as e:
+            print(f"处理业务切换事件失败: {e}")
+            self.status_label.setText("业务切换失败")
 
     def load_schedulers(self):
         """加载测试用例集列表"""
@@ -811,17 +945,31 @@ class TestReportManager(QWidget):
             # 清空调度任务列表
             self.scheduler_list_widget.clear()
             
-            # 获取所有调度任务
-            schedulers = self.scheduler_service.get_all_schedulers()
+            # 获取当前选中的项目ID
+            project_id = None
+            if self.project_combo.currentIndex() >= 0:
+                project_id = self.project_combo.currentData()
+            
+            # 根据项目筛选调度任务
+            schedulers = self.scheduler_service.get_schedulers_by_project(project_id)
             
             if not schedulers:
                 # 添加提示项
-                empty_item = QListWidgetItem("暂无测试用例集")
+                if project_id:
+                    project_name = self.project_combo.currentText()
+                    empty_item = QListWidgetItem(f"项目 '{project_name}' 暂无测试用例集")
+                else:
+                    empty_item = QListWidgetItem("暂无测试用例集")
                 empty_item.setFlags(Qt.NoItemFlags)  # 不可选择
                 empty_item.setForeground(QColor("#6c757d"))
                 empty_item.setTextAlignment(Qt.AlignCenter)
                 self.scheduler_list_widget.addItem(empty_item)
-                self.status_label.setText("暂无测试用例集")
+                
+                if project_id:
+                    project_name = self.project_combo.currentText()
+                    self.status_label.setText(f"项目 '{project_name}' 暂无测试用例集")
+                else:
+                    self.status_label.setText("暂无测试用例集")
                 return
                 
             # 添加测试用例集到列表
@@ -844,15 +992,15 @@ class TestReportManager(QWidget):
                 
                 self.scheduler_list_widget.addItem(item)
                 
-            self.status_label.setText(f"已加载 {len(schedulers)} 个测试用例集")
+            # 更新状态栏显示
+            if project_id:
+                project_name = self.project_combo.currentText()
+                self.status_label.setText(f"项目 '{project_name}' 已加载 {len(schedulers)} 个测试用例集")
+            else:
+                self.status_label.setText(f"已加载 {len(schedulers)} 个测试用例集")
             
-            # 如果有测试用例集，自动选择第一个并加载其报告
-            if schedulers and self.scheduler_list_widget.count() > 0:
-                first_item = self.scheduler_list_widget.item(0)
-                if first_item.flags() != Qt.NoItemFlags:  # 确保不是提示项
-                    self.scheduler_list_widget.setCurrentItem(first_item)
-                    # 注释掉自动点击，避免自动触发日志
-                    # self.on_scheduler_item_clicked(first_item)
+            # 如果有测试用例集，只加载列表，不自动选择
+            # 用户手动选择调度后，切换项目时保持当前选择状态
             
         except Exception as e:
             print(f"加载测试用例集失败: {e}")
@@ -867,6 +1015,9 @@ class TestReportManager(QWidget):
                 
             # 获取选中的测试用例集ID
             scheduler_id = item.data(Qt.UserRole)
+            
+            # 设置当前选中的调度ID
+            self.current_scheduler_id = scheduler_id
             
             # 调试信息：打印测试用例集ID
             # print(f"点击测试用例集，ID: {scheduler_id}")
@@ -906,21 +1057,28 @@ class TestReportManager(QWidget):
             self.tree_widget.clear()
             
             if not reports:
-                # 创建提示节点
+                # 创建提示节点 - 合并第一行所有单元格并居中显示
                 empty_item = QTreeWidgetItem(self.tree_widget)
-                empty_item.setText(0, "1")
-                empty_item.setText(1, "该测试用例集暂无测试报告")
-                empty_item.setText(2, "0")
-                empty_item.setText(3, "N/A")
-                empty_item.setText(4, "0%")
-                empty_item.setText(5, "N/A")
-                empty_item.setText(6, "N/A")
-                empty_item.setText(7, "N/A")
-                empty_item.setText(8, "N/A")
+                empty_item.setText(0, "该测试用例集暂无测试报告")
                 
-                # 设置所有列文本居中对齐
-                for i in range(9):
-                    empty_item.setTextAlignment(i, Qt.AlignCenter)
+                # 合并所有列（从第0列到第8列）
+                self.tree_widget.setFirstItemColumnSpanned(empty_item, True)
+                
+                # 设置文本居中对齐（水平和垂直都居中）
+                empty_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
+                
+                # 设置特殊样式
+                empty_item.setBackground(0, QBrush(QColor("#f8f9fa")))
+                empty_item.setForeground(0, QBrush(QColor("#6c757d")))
+                
+                # 设置更大的字体和行高
+                font = QFont()
+                font.setPointSize(12)
+                font.setBold(True)
+                empty_item.setFont(0, font)
+                
+                # 设置更大的行高
+                empty_item.setSizeHint(0, QSize(0, 60))
                 
                 self.status_label.setText("该测试用例集暂无测试报告")
                 return
@@ -1021,21 +1179,28 @@ class TestReportManager(QWidget):
             self.tree_widget.clear()
             
             if not reports:
-                # 创建提示节点
+                # 创建提示节点 - 合并第一行所有单元格并居中显示
                 empty_item = QTreeWidgetItem(self.tree_widget)
-                empty_item.setText(0, "1")
-                empty_item.setText(1, "暂无测试报告")
-                empty_item.setText(2, "0")
-                empty_item.setText(3, "N/A")
-                empty_item.setText(4, "0%")
-                empty_item.setText(5, "N/A")
-                empty_item.setText(6, "N/A")
-                empty_item.setText(7, "N/A")
-                empty_item.setText(8, "N/A")
+                empty_item.setText(0, "暂无测试报告")
                 
-                # 设置所有列文本居中对齐
-                for i in range(9):
-                    empty_item.setTextAlignment(i, Qt.AlignCenter)
+                # 合并所有列（从第0列到第8列）
+                self.tree_widget.setFirstItemColumnSpanned(empty_item, True)
+                
+                # 设置文本居中对齐（水平和垂直都居中）
+                empty_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
+                
+                # 设置特殊样式
+                empty_item.setBackground(0, QBrush(QColor("#f8f9fa")))
+                empty_item.setForeground(0, QBrush(QColor("#6c757d")))
+                
+                # 设置更大的字体和行高
+                font = QFont()
+                font.setPointSize(12)
+                font.setBold(True)
+                empty_item.setFont(0, font)
+                
+                # 设置更大的行高
+                empty_item.setSizeHint(0, QSize(0, 60))
                 
                 self.status_label.setText("暂无测试报告")
                 return
@@ -1154,10 +1319,14 @@ class TestReportManager(QWidget):
         if status_text != "全部":
             filters['status'] = status_map.get(status_text, status_text)
 
-        # 测试用例
-        case_id = self.case_combo.currentData()
-        if case_id:
-            filters['case_id'] = case_id
+        # 项目
+        project_id = self.project_combo.currentData()
+        if project_id:
+            filters['project_id'] = project_id
+
+        # 调度（测试用例集）
+        if self.current_scheduler_id:
+            filters['scheduler_id'] = self.current_scheduler_id
 
         # 搜索关键词
         search_text = self.search_edit.text().strip()
@@ -1168,7 +1337,58 @@ class TestReportManager(QWidget):
 
     def on_filter_changed(self):
         """筛选条件变化"""
-        self.load_reports()
+        # 获取发送信号的控件
+        sender = self.sender()
+        
+        # 如果是项目选择变更，需要刷新测试用例集
+        if sender == self.project_combo:
+            # 保存当前选中的调度ID
+            current_scheduler_id = self.current_scheduler_id
+            
+            # 刷新测试用例集列表
+            self.load_schedulers()
+            
+            # 尝试恢复之前选中的调度项
+            if current_scheduler_id:
+                for i in range(self.scheduler_list_widget.count()):
+                    item = self.scheduler_list_widget.item(i)
+                    if item.flags() != Qt.NoItemFlags and item.data(Qt.UserRole) == current_scheduler_id:
+                        self.scheduler_list_widget.setCurrentItem(item)
+                        self.current_scheduler_id = current_scheduler_id
+                        break
+        
+        # 刷新报告列表，根据是否有当前选中的调度ID决定调用哪个方法
+        if self.current_scheduler_id:
+            # 如果有选中的调度ID，使用调度过滤方法
+            self.load_reports_by_scheduler(self.current_scheduler_id)
+        else:
+            # 如果没有选中的调度ID，使用普通加载方法
+            self.load_reports()
+
+    def on_refresh_clicked(self):
+        """刷新按钮点击事件"""
+        # 保存当前选中的调度ID
+        current_scheduler_id = self.current_scheduler_id
+        
+        # 刷新测试用例集列表（新增调度后需要更新列表）
+        self.load_schedulers()
+        
+        # 尝试恢复之前选中的调度项
+        if current_scheduler_id:
+            for i in range(self.scheduler_list_widget.count()):
+                item = self.scheduler_list_widget.item(i)
+                if item.flags() != Qt.NoItemFlags and item.data(Qt.UserRole) == current_scheduler_id:
+                    self.scheduler_list_widget.setCurrentItem(item)
+                    self.current_scheduler_id = current_scheduler_id
+                    break
+        
+        # 根据当前选中的调度ID决定如何刷新报告列表
+        if self.current_scheduler_id:
+            # 如果有选中的调度ID，使用调度过滤方法
+            self.load_reports_by_scheduler(self.current_scheduler_id)
+        else:
+            # 如果没有选中的调度ID，使用普通加载方法
+            self.load_reports()
 
     def on_tree_item_clicked(self, item, column):
         """处理树形表格点击事件"""

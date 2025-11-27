@@ -47,6 +47,11 @@ class TestReportService:
                             sql += " AND r.scheduler_id = %s"
                             params.append(filters['scheduler_id'])
 
+                        # 项目筛选
+                        if 'project_id' in filters and filters['project_id']:
+                            sql += " AND r.project_id = %s"
+                            params.append(filters['project_id'])
+
                         # 搜索
                         if 'search' in filters:
                             sql += " AND r.report_name LIKE %s"
@@ -232,15 +237,16 @@ class TestReportService:
                     # 准备插入数据
                     sql = """
                         INSERT INTO test_reports (
-                            scheduler_id, case_id, report_name, status, 
+                            scheduler_id, case_id, project_id, report_name, status, 
                             total_steps, passed_steps, failed_steps, error_steps,
                             start_time, end_time, duration, log_path
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
                     params = (
                         report_data.get('scheduler_id'),
                         report_data.get('case_id', 0),
+                        report_data.get('project_id'),
                         report_data.get('report_name', report_name),
                         report_data.get('status', 'running'),
                         report_data.get('total_steps', 0),

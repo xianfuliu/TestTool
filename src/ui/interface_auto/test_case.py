@@ -648,8 +648,66 @@ class TestCaseManager(QWidget):
 
         # 项目选择
         project_layout = QHBoxLayout()
-        project_layout.addWidget(QLabel("选择项目:"))
+        project_layout.addWidget(QLabel("项目:"))
         self.project_combo = NoWheelComboBox()
+        self.project_combo.setMinimumWidth(150)
+        self.project_combo.setStyleSheet("""
+            QComboBox {
+                padding: 6px 30px 6px 8px;
+                background-color: white;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                color: #495057;
+                font-size: 13px;
+                min-height: 28px;
+            }
+            QComboBox:hover {
+                border-color: #adb5bd;
+                background-color: #f8f9fa;
+            }
+            QComboBox:focus {
+                border-color: #0078d4;
+                background-color: #fff;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
+                border-left: 1px solid #ced4da;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                background-color: #f8f9fa;
+            }
+            QComboBox::down-arrow {
+                width: 12px;
+                height: 12px;
+                image: url(src/resources/icons/combobox.png);
+            }
+            QComboBox::down-arrow:hover {
+                image: url(src/resources/icons/combobox.png);
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                background-color: white;
+                outline: none;
+                margin-top: 2px;
+                padding: 4px 0px;
+            }
+            QComboBox QAbstractItemView::item {
+                padding: 8px 12px;
+                color: #495057;
+                background-color: transparent;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e9ecef;
+                color: #0078d4;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #0078d4;
+                color: white;
+            }
+        """)
         self.project_combo.currentIndexChanged.connect(self.on_project_changed)
         project_layout.addWidget(self.project_combo)
         
@@ -845,8 +903,12 @@ class TestCaseManager(QWidget):
             # 静默处理，不显示弹窗
             print(f"加载项目列表失败: {str(e)}")
 
-    def refresh_project_list(self):
-        """刷新项目下拉列表"""
+    def refresh_project_list(self, business_group_id=None):
+        """刷新项目下拉列表
+        
+        Args:
+            business_group_id: 业务分组ID，如果提供则只显示该业务分组下的项目
+        """
         # 检查服务对象是否已初始化
         if self.project_service is None:
             print("项目服务未初始化，跳过刷新项目列表")
@@ -857,7 +919,13 @@ class TestCaseManager(QWidget):
             current_project_id = self.current_project
 
             # 重新加载项目列表
-            projects = self.project_service.get_all_projects()
+            if business_group_id:
+                # 根据业务分组ID过滤项目
+                projects = self.project_service.get_projects_by_group(business_group_id)
+            else:
+                # 获取所有项目
+                projects = self.project_service.get_all_projects()
+                
             self.project_combo.clear()
 
             for project in projects:

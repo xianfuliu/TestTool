@@ -58,15 +58,29 @@ class InterfaceAutoTab(QWidget):
         # 当业务管理页面数据变化时，刷新测试用例管理页面的项目列表
         self.business_management.data_changed.connect(self.test_case.refresh_project_list)
         
+        # 当业务切换时，刷新接口模板页面的项目列表（根据业务分组ID过滤）
+        self.business_management.business_changed.connect(self.api_template.refresh_project_list)
+        
+        # 当业务切换时，刷新测试用例管理页面的项目列表（根据业务分组ID过滤）
+        self.business_management.business_changed.connect(self.test_case.refresh_project_list)
+        
+        # 当业务切换时，刷新定时调度页面的项目列表（根据业务分组ID过滤）
+        self.business_management.business_changed.connect(self.scheduler.on_business_changed)
+        
+        # 当业务切换时，刷新测试报告页面的项目列表（根据业务分组ID过滤）
+        self.business_management.business_changed.connect(self.test_report.on_business_changed)
+        
+        # 当业务切换时，刷新变量管理页面的项目列表（根据业务分组ID过滤）
+        self.business_management.business_changed.connect(self.variable_management.on_business_changed)
+        
         # 当测试用例管理页面请求编辑接口模板时，跳转到接口模板标签页并打开对应模板
         self.test_case.api_template_edit_requested.connect(self.on_api_template_edit_requested)
 
-        # 如果需要，也可以连接其他页面的信号
-        # self.business_management.data_changed.connect(self.test_case.refresh_project_list)
-
     def delayed_init(self):
         """延迟初始化数据库连接和实际UI"""
+        print("开始执行delayed_init方法")
         if not self.ui_initialized:
+            print("UI未初始化，跳过delayed_init")
             return
             
         # 检查数据库连接是否可用
@@ -95,10 +109,46 @@ class InterfaceAutoTab(QWidget):
             return
         
         # 数据库连接成功，创建实际界面
+        print("开始创建实际界面")
         self.create_actual_ui()
         
         # 连接信号
+        print("开始连接信号")
         self.connect_signals()
+        
+        # 在所有页面创建和信号连接完成后，延迟触发初始业务切换
+        print("开始延迟触发初始业务切换")
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(1000, self.delayed_trigger_initial_business_change)
+        print("delayed_init方法执行完成")
+    
+    def delayed_trigger_initial_business_change(self):
+        """延迟触发初始业务切换，确保数据已加载完成"""
+        print("开始执行delayed_trigger_initial_business_change")
+        
+        # 检查business_management对象是否存在
+        if not hasattr(self, 'business_management') or not self.business_management:
+            print("business_management对象不存在，跳过业务切换")
+            return
+            
+        # 检查数据是否已加载完成
+        if not hasattr(self.business_management, 'initial_business_ready'):
+            print("initial_business_ready属性不存在，跳过业务切换")
+            return
+            
+        # 如果数据尚未准备好，继续延迟检查
+        if not self.business_management.initial_business_ready:
+            print("数据尚未准备好，继续延迟检查")
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(500, self.delayed_trigger_initial_business_change)
+            return
+            
+        print("数据已准备好，开始触发初始业务切换")
+        
+        # 手动触发初始业务切换
+        self.trigger_initial_business_change()
+        
+        print("delayed_trigger_initial_business_change执行完成")
 
     def create_actual_ui(self):
         """创建实际的界面组件"""
@@ -256,3 +306,18 @@ class InterfaceAutoTab(QWidget):
                 
         except Exception as e:
             print(f"跳转到接口模板编辑页面失败: {str(e)}")
+    
+    def trigger_initial_business_change(self):
+        """在所有页面创建和信号连接完成后，手动触发初始业务切换"""
+        print("检查business_management对象和trigger_initial_business_change方法")
+        print(f"business_management对象是否存在: {self.business_management is not None}")
+        if self.business_management:
+            print(f"business_management对象类型: {type(self.business_management)}")
+            print(f"是否有trigger_initial_business_change方法: {hasattr(self.business_management, 'trigger_initial_business_change')}")
+            
+        if self.business_management and hasattr(self.business_management, 'trigger_initial_business_change'):
+            print("开始调用business_management.trigger_initial_business_change()")
+            self.business_management.trigger_initial_business_change()
+            print("business_management.trigger_initial_business_change()调用完成")
+        else:
+            print("无法调用trigger_initial_business_change方法，条件不满足")

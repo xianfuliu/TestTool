@@ -120,6 +120,7 @@ class ProjectDialog(QDialog):
 class BusinessManagement(QWidget):
     """业务管理页面"""
     data_changed = pyqtSignal()  # 数据变化信号
+    business_changed = pyqtSignal(int)  # 业务切换信号，参数为业务分组ID
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -128,6 +129,8 @@ class BusinessManagement(QWidget):
         self.project_service = None
         self.current_group = None
         self.current_project = None
+        self.business_groups = []  # 存储业务分组列表
+        self.initial_business_ready = False  # 初始业务切换状态
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
@@ -147,15 +150,89 @@ class BusinessManagement(QWidget):
         # 业务列表下拉框
         self.business_combo = QComboBox()
         self.business_combo.setMinimumWidth(150)
+        self.business_combo.setStyleSheet("""
+            QComboBox {
+                padding: 6px 30px 6px 8px;
+                background-color: white;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                color: #495057;
+                font-size: 13px;
+                min-height: 28px;
+            }
+            QComboBox:hover {
+                border-color: #adb5bd;
+                background-color: #f8f9fa;
+            }
+            QComboBox:focus {
+                border-color: #0078d4;
+                background-color: #fff;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 24px;
+                border-left: 1px solid #ced4da;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                background-color: #f8f9fa;
+            }
+            QComboBox::down-arrow {
+                width: 12px;
+                height: 12px;
+                image: url(src/resources/icons/combobox.png);
+            }
+            QComboBox::down-arrow:hover {
+                image: url(src/resources/icons/combobox.png);
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                background-color: white;
+                outline: none;
+                margin-top: 2px;
+                padding: 4px 0px;
+            }
+            QComboBox QAbstractItemView::item {
+                padding: 8px 12px;
+                color: #495057;
+                background-color: transparent;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #e9ecef;
+                color: #0078d4;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background-color: #0078d4;
+                color: white;
+            }
+        """)
+        # 暂时不连接业务切换信号，等待所有页面准备好后再连接
+        # self.business_combo.currentTextChanged.connect(self.on_business_changed)
         group_header_layout.addWidget(self.business_combo)
         
         group_header_layout.addStretch()
         
         self.add_group_btn = QPushButton()
         self.add_group_btn.setIcon(self.get_icon("add.png"))
-        self.add_group_btn.setFixedSize(24, 24)
+        self.add_group_btn.setFixedSize(20, 20)  # 减小按钮尺寸
         self.add_group_btn.setToolTip("新增分组")
         self.add_group_btn.clicked.connect(self.add_business_group)
+        self.add_group_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                margin: 0px;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+        """)
         
         group_header_layout.addWidget(self.add_group_btn)
 
@@ -306,12 +383,52 @@ class BusinessManagement(QWidget):
             print(f"初始化服务失败: {e}")
             # 静默处理，不显示弹窗
 
+    def on_business_changed(self, business_name):
+        """业务切换事件处理"""
+        if not business_name:
+            return
+            
+        # 根据业务名称查找对应的业务分组ID
+        for group in self.business_groups:
+            if group['name'] == business_name:
+                # 发射业务切换信号，传递业务分组ID
+                self.business_changed.emit(group['id'])
+                break
+    
+    def trigger_initial_business_change(self):
+        """手动触发初始业务切换"""
+        print(f"trigger_initial_business_change调用开始")
+        print(f"initial_business_ready状态: {self.initial_business_ready}")
+        print(f"business_groups是否存在: {self.business_groups is not None}")
+        print(f"business_groups长度: {len(self.business_groups) if self.business_groups else 0}")
+        
+        if self.initial_business_ready and self.business_groups:
+            current_text = self.business_combo.currentText()
+            print(f"下拉框当前文本: '{current_text}'")
+            if current_text:
+                print(f"触发初始业务切换: {current_text}")
+                
+                # 重新连接业务切换信号
+                self.business_combo.currentTextChanged.connect(self.on_business_changed)
+                
+                # 触发业务切换
+                self.on_business_changed(current_text)
+                self.initial_business_ready = False  # 重置状态
+                print("业务切换完成，initial_business_ready已重置为False")
+        else:
+            print("条件不满足，跳过业务切换")
+            print(f"initial_business_ready: {self.initial_business_ready}")
+            print(f"business_groups: {self.business_groups}")
+            
+        print("trigger_initial_business_change调用结束")
+
     def load_data(self):
         """加载业务分组和项目数据"""
         self.tree_widget.clear()
         
         # 清空并重新填充下拉框
         self.business_combo.clear()
+        self.business_groups.clear()
 
         # 检查服务对象是否已初始化
         if self.business_service is None or self.project_service is None:
@@ -320,6 +437,8 @@ class BusinessManagement(QWidget):
         try:
             # 加载业务分组
             groups = self.business_service.get_all_groups()
+            self.business_groups = groups  # 存储业务分组列表
+            
             for group in groups:
                 # 添加到树形结构
                 group_item = QTreeWidgetItem(self.tree_widget)
@@ -343,6 +462,14 @@ class BusinessManagement(QWidget):
         except Exception as e:
             print(f"加载业务数据失败: {str(e)}")
             # 静默处理，不显示弹窗
+        finally:
+            # 数据加载完成后，如果存在业务分组，设置下拉框但延迟触发业务切换信号
+            if self.business_groups:
+                # 设置下拉框当前索引为0（第一个业务）
+                self.business_combo.setCurrentIndex(0)
+                # 延迟触发业务切换信号，等待所有页面都创建完成
+                self.initial_business_ready = True
+                print("业务数据加载完成，等待手动触发初始业务切换")
 
     def on_tree_item_clicked(self, item):
         """树形项目点击事件"""

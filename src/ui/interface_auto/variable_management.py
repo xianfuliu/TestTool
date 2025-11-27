@@ -132,6 +132,7 @@ class VariableManagement(QWidget):
         self.variable_service = None
         self.variable_manager = VariableManager()
         self.current_project = None
+        self.current_business_id = None  # 当前选中的业务分组ID
         self.init_ui()
         # 延迟加载数据
         QTimer.singleShot(100, self.delayed_load_data)
@@ -395,16 +396,24 @@ class VariableManagement(QWidget):
         except Exception as e:
             print(f"初始化服务失败: {e}")
 
-    def load_projects(self):
-        """加载项目数据"""
+    def load_projects(self, business_id=None):
+        """加载项目数据到树形控件，支持按业务分组过滤
+        
+        Args:
+            business_id: 业务分组ID，为None时加载所有项目
+        """
         self.project_tree.clear()
 
         if self.project_service is None:
             return
 
         try:
-            # 加载所有项目
-            projects = self.project_service.get_all_projects()
+            # 根据业务ID加载项目
+            if business_id:
+                projects = self.project_service.get_projects_by_group(business_id)
+            else:
+                projects = self.project_service.get_all_projects()
+                
             for project in projects:
                 project_item = QTreeWidgetItem(self.project_tree)
                 project_item.setText(0, project['name'])
@@ -421,6 +430,33 @@ class VariableManagement(QWidget):
             self.current_project = data['data']
             self.show_variable_management()
             self.load_variables()
+
+    def on_business_changed(self, business_id):
+        """业务切换事件处理
+        
+        Args:
+            business_id: 新选中的业务分组ID
+        """
+        # 更新当前业务ID
+        self.current_business_id = business_id
+        
+        # 根据业务ID重新加载项目列表
+        self.load_projects(business_id)
+        
+        # 清空当前选中的项目和变量数据
+        self.current_project = None
+        self.project_info_label.show()
+        self.variable_container.hide()
+        
+        # 清空变量表格
+        self.system_table.setRowCount(0)
+        self.global_table.setRowCount(0)
+        
+        # 更新状态栏信息
+        if business_id:
+            print(f"变量管理页面：已切换到业务分组 {business_id}")
+        else:
+            print("变量管理页面：显示所有项目")
 
     def show_variable_management(self):
         """显示变量管理界面"""

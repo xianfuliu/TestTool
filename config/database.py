@@ -220,12 +220,15 @@ DB_TABLES = {
             notify_wechat JSON COMMENT '微信通知配置',
             last_run_at TIMESTAMP NULL,
             next_run_at TIMESTAMP NULL,
+            project_id INT,
             created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
             INDEX idx_name (name),
             INDEX idx_enabled (enabled),
-            INDEX idx_next_run_at (next_run_at)
+            INDEX idx_next_run_at (next_run_at),
+            INDEX idx_project_id (project_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
@@ -233,7 +236,8 @@ DB_TABLES = {
         CREATE TABLE IF NOT EXISTS test_reports (
             id INT AUTO_INCREMENT PRIMARY KEY,
             scheduler_id INT,
-            case_id INT NOT NULL,
+            case_id INT NULL,
+            project_id INT,
             report_name VARCHAR(200) NOT NULL,
             status ENUM('success', 'failure', 'error', 'running') DEFAULT 'running',
             total_steps INT DEFAULT 0,
@@ -247,8 +251,10 @@ DB_TABLES = {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (scheduler_id) REFERENCES test_schedulers(id) ON DELETE SET NULL,
             FOREIGN KEY (case_id) REFERENCES test_cases(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
             INDEX idx_scheduler_id (scheduler_id),
             INDEX idx_case_id (case_id),
+            INDEX idx_project_id (project_id),
             INDEX idx_status (status),
             INDEX idx_created_at (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

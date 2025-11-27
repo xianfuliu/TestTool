@@ -1031,6 +1031,7 @@ class TestScheduler:
     notify_wechat: Dict[str, Any] = field(default_factory=dict)
     last_run_at: Optional[datetime] = None
     next_run_at: Optional[datetime] = None
+    project_id: Optional[int] = None
     created_by: str = "admin"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -1107,6 +1108,7 @@ class TestScheduler:
             notify_wechat=notify_wechat,
             last_run_at=last_run_at,
             next_run_at=next_run_at,
+            project_id=data.get('project_id'),
             created_by=data.get('created_by', 'admin'),
             created_at=created_at,
             updated_at=updated_at,
@@ -1130,6 +1132,7 @@ class TestScheduler:
             'notify_wechat': self.notify_wechat,
             'last_run_at': self.last_run_at,
             'next_run_at': self.next_run_at,
+            'project_id': self.project_id,
             'created_by': self.created_by,
             'created_at': self.created_at,
             'updated_at': self.updated_at
