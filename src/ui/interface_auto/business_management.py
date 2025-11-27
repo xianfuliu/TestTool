@@ -144,10 +144,9 @@ class BusinessManagement(QWidget):
         group_header_layout = QHBoxLayout()
         group_header_layout.addWidget(QLabel("当前业务"))
         
-        # 业务列表下拉框（仅展示用）
+        # 业务列表下拉框
         self.business_combo = QComboBox()
         self.business_combo.setMinimumWidth(150)
-        self.business_combo.setEnabled(False)  # 禁用交互
         group_header_layout.addWidget(self.business_combo)
         
         group_header_layout.addStretch()
