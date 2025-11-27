@@ -11,7 +11,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
                              QProgressBar, QFrame, QScrollArea, QGridLayout,
                              QTableWidget, QTableWidgetItem, QListWidget, QAbstractItemView,
-                             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit)
+                             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
+                             QComboBox)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QMimeData, QPoint
 from PyQt5.QtGui import QIcon, QFont, QColor, QDrag, QPixmap, QCursor
 from src.core.services.project_service import ProjectService
@@ -139,15 +140,24 @@ class BusinessManagement(QWidget):
         left_widget.setMaximumWidth(350)
         left_layout = QVBoxLayout(left_widget)
 
-        # 业务分组标题和按钮
+        # 当前业务标题和下拉框
         group_header_layout = QHBoxLayout()
-        group_header_layout.addWidget(QLabel("业务分组"))
-
-        self.add_group_btn = QPushButton("新增分组")
-        self.add_group_btn.setIcon(self.get_icon("add.png"))
-        self.add_group_btn.clicked.connect(self.add_business_group)
-
+        group_header_layout.addWidget(QLabel("当前业务"))
+        
+        # 业务列表下拉框（仅展示用）
+        self.business_combo = QComboBox()
+        self.business_combo.setMinimumWidth(150)
+        self.business_combo.setEnabled(False)  # 禁用交互
+        group_header_layout.addWidget(self.business_combo)
+        
         group_header_layout.addStretch()
+        
+        self.add_group_btn = QPushButton()
+        self.add_group_btn.setIcon(self.get_icon("add.png"))
+        self.add_group_btn.setFixedSize(24, 24)
+        self.add_group_btn.setToolTip("新增分组")
+        self.add_group_btn.clicked.connect(self.add_business_group)
+        
         group_header_layout.addWidget(self.add_group_btn)
 
         # 业务分组树
@@ -160,6 +170,8 @@ class BusinessManagement(QWidget):
         # 右侧：详细信息
         self.detail_widget = QWidget()
         detail_layout = QVBoxLayout(self.detail_widget)
+
+
 
         # 分组/项目信息标签
         self.info_label = QLabel("请选择业务分组或项目查看详细信息")
@@ -298,6 +310,10 @@ class BusinessManagement(QWidget):
     def load_data(self):
         """加载业务分组和项目数据"""
         self.tree_widget.clear()
+        
+        # 清空并重新填充下拉框
+        self.business_combo.clear()
+        self.business_combo.addItem("请选择业务")
 
         # 检查服务对象是否已初始化
         if self.business_service is None or self.project_service is None:
@@ -307,10 +323,14 @@ class BusinessManagement(QWidget):
             # 加载业务分组
             groups = self.business_service.get_all_groups()
             for group in groups:
+                # 添加到树形结构
                 group_item = QTreeWidgetItem(self.tree_widget)
                 group_item.setText(0, group['name'])
                 group_item.setData(0, Qt.UserRole, {'type': 'group', 'data': group})
                 group_item.setIcon(0, self.get_icon("group.png"))
+                
+                # 添加到下拉框
+                self.business_combo.addItem(group['name'])
 
                 # 加载该分组下的项目
                 projects = self.project_service.get_projects_by_group(group['id'])

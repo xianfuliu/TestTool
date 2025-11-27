@@ -8,6 +8,7 @@ from PyQt5.QtGui import QFont
 from src.ui.main_window import MainWindow
 from src.utils.resource_utils import resource_path
 from src.utils.except_hook import excepthook
+from src.core.services.scheduler_service import UnifiedSchedulerService
 
 # 添加src目录到Python路径
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -93,6 +94,33 @@ if __name__ == "__main__":
 
     # 设置应用程序图标（使用已经创建的主窗口实例）
     app.setWindowIcon(window.create_icon())
+
+    # 启动调度后台服务（使用分布式锁确保单实例运行）
+    try:
+        scheduler_service = UnifiedSchedulerService()
+        
+        # 直接调用start_service()，它内部会处理分布式锁检查
+        if scheduler_service.start_service():
+            # 成功启动服务，启动服务主循环（在新线程中）
+            import threading
+            service_thread = threading.Thread(target=scheduler_service.run_service_loop, daemon=True)
+            service_thread.start()
+            
+            print("统一调度服务已启动（当前实例持有调度锁）")
+            
+            # 将调度服务实例传递给主窗口
+            window.set_scheduler_service(scheduler_service)
+        else:
+            # 无法启动服务，说明已有其他实例在运行
+            print("警告：检测到已有调度服务实例在运行，当前实例将作为只读客户端运行")
+            print("调度任务将由已运行的实例统一执行，避免重复执行")
+            
+            # 创建只读的调度服务实例（不启动调度循环）
+            scheduler_service.running = False
+            window.set_scheduler_service(scheduler_service)
+            
+    except Exception as e:
+        print(f"启动统一调度服务失败: {e}")
 
     # 显示窗口（最大化模式）
     window.showMaximized()

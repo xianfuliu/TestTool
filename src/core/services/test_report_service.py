@@ -42,6 +42,11 @@ class TestReportService:
                             sql += " AND r.case_id = %s"
                             params.append(filters['case_id'])
 
+                        # 调度任务筛选
+                        if 'scheduler_id' in filters and filters['scheduler_id']:
+                            sql += " AND r.scheduler_id = %s"
+                            params.append(filters['scheduler_id'])
+
                         # 搜索
                         if 'search' in filters:
                             sql += " AND r.report_name LIKE %s"
@@ -152,7 +157,7 @@ class TestReportService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cutoff_date = datetime.now() - datetime.timedelta(days=days)
+                    cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days)
 
                     # 获取要删除的报告ID
                     cursor.execute("SELECT id FROM test_reports WHERE created_at < %s", (cutoff_date,))
@@ -201,3 +206,59 @@ class TestReportService:
         except Exception as e:
             print(f"根据调度ID获取执行记录失败: {e}")
             return []
+
+    def create_report(self, report_data: Dict[str, Any]) -> int:
+        """创建测试报告"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 生成统一格式的报告名称：调度名称_时间戳
+                    scheduler_name = "手动执行"  # 默认值
+                    if report_data.get('scheduler_id'):
+                        # 获取调度名称
+                        try:
+                            from src.core.services.scheduler_service import UnifiedSchedulerService
+                            scheduler_service = UnifiedSchedulerService()
+                            scheduler = scheduler_service.get_scheduler_by_id(report_data['scheduler_id'])
+                            if scheduler and scheduler.get('name'):
+                                scheduler_name = scheduler['name']
+                        except Exception:
+                            scheduler_name = f"调度{report_data['scheduler_id']}"
+                    
+                    # 使用统一格式：调度名称_时间戳
+                    timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+                    report_name = f"{scheduler_name}_{timestamp}"
+                    
+                    # 准备插入数据
+                    sql = """
+                        INSERT INTO test_reports (
+                            scheduler_id, case_id, report_name, status, 
+                            total_steps, passed_steps, failed_steps, error_steps,
+                            start_time, end_time, duration, log_path
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    params = (
+                        report_data.get('scheduler_id'),
+                        report_data.get('case_id', 0),
+                        report_data.get('report_name', report_name),
+                        report_data.get('status', 'running'),
+                        report_data.get('total_steps', 0),
+                        report_data.get('passed_steps', 0),
+                        report_data.get('failed_steps', 0),
+                        report_data.get('error_steps', 0),
+                        report_data.get('start_time'),
+                        report_data.get('end_time'),
+                        report_data.get('duration', 0.0),
+                        report_data.get('log_path', '')
+                    )
+                    
+                    cursor.execute(sql, params)
+                    report_id = cursor.lastrowid
+                    conn.commit()
+                    
+                    return report_id
+                    
+        except Exception as e:
+            print(f"创建测试报告失败: {e}")
+            raise e

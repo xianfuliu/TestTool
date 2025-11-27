@@ -6,7 +6,7 @@ from .api_template_service import ApiTemplateService
 from .environment_service import EnvironmentService
 from .global_tool_service import GlobalToolService
 from .test_case_service import TestCaseService
-from .scheduler_service import SchedulerService
+from .scheduler_service import UnifiedSchedulerService
 from .test_report_service import TestReportService
 from .api_folder_service import ApiFolderService
 from .case_folder_service import CaseFolderService
@@ -19,7 +19,7 @@ __all__ = [
     'EnvironmentService',
     'GlobalToolService',
     'TestCaseService',
-    'SchedulerService',
+    'UnifiedSchedulerService',
     'TestReportService',
     'ApiFolderService',
     'CaseFolderService',

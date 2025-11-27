@@ -1,7 +1,7 @@
 import os
 from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox, QMenuBar, QMenu, QAction)
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QEvent
 
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_filler import IDCardFiller
@@ -86,6 +86,9 @@ class MainWindow(QMainWindow):
 
         # 标记为已初始化
         self._initialized = True
+        
+        # 存储调度服务实例
+        self.scheduler_service = None
 
     def init_ui(self):
         """初始化UI，确保只执行一次"""
@@ -354,3 +357,20 @@ class MainWindow(QMainWindow):
             dialog.exec_()
         except Exception as e:
             QMessageBox.critical(self, "错误", f"打开变量管理失败: {str(e)}")
+    
+    def set_scheduler_service(self, scheduler_service):
+        """设置调度服务实例"""
+        self.scheduler_service = scheduler_service
+    
+    def closeEvent(self, event):
+        """重写关闭事件，确保调度服务正确停止"""
+        try:
+            if self.scheduler_service:
+                print("正在停止调度后台服务...")
+                self.scheduler_service.stop_service()
+                print("调度后台服务已停止")
+        except Exception as e:
+            print(f"停止调度服务时出错: {e}")
+        
+        # 接受关闭事件
+        event.accept()

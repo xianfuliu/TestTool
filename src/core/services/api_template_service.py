@@ -28,7 +28,7 @@ class ApiTemplateService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT id, project_id, folder_id, name, method, url_path, 
-                               headers, params, body, description, sort_order, created_at, updated_at
+                               headers, params, body, description, sort_order, timeout, created_at, updated_at
                         FROM api_templates 
                         WHERE project_id = %s
                         ORDER BY sort_order ASC, created_at DESC
@@ -53,7 +53,7 @@ class ApiTemplateService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT id, project_id, folder_id, name, method, url_path, 
-                               headers, params, body, description, sort_order, created_at, updated_at
+                               headers, params, body, description, sort_order, timeout, created_at, updated_at
                         FROM api_templates 
                         WHERE id = %s
                     """, (template_id,))
@@ -84,8 +84,8 @@ class ApiTemplateService:
 
                     cursor.execute("""
                         INSERT INTO api_templates (project_id, folder_id, name, method, url_path, 
-                                                 headers, params, body, description, sort_order)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                                 headers, params, body, description, sort_order, timeout)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         processed_data['project_id'],
                         processed_data.get('folder_id'),
@@ -96,7 +96,8 @@ class ApiTemplateService:
                         processed_data.get('params', '{}'),
                         processed_data.get('body', '{}'),
                         processed_data.get('description', ''),
-                        processed_data.get('sort_order', 0)
+                        processed_data.get('sort_order', 0),
+                        processed_data.get('timeout', 30)  # 默认超时时间30秒
                     ))
                     conn.commit()
                     return cursor.lastrowid
@@ -144,6 +145,7 @@ class ApiTemplateService:
                         processed_data.get('description', ''),
                         processed_data.get('folder_id'),
                         processed_data.get('sort_order', 0),
+                        processed_data.get('timeout', 30),  # 默认超时时间30秒
                         template_id
                     )
                     print(f"SQL参数: {sql_params}")
@@ -151,7 +153,7 @@ class ApiTemplateService:
                     cursor.execute("""
                         UPDATE api_templates 
                         SET name = %s, method = %s, url_path = %s, headers = %s, 
-                            params = %s, body = %s, description = %s, folder_id = %s, sort_order = %s
+                            params = %s, body = %s, description = %s, folder_id = %s, sort_order = %s, timeout = %s
                         WHERE id = %s
                     """, sql_params)
                     conn.commit()
@@ -170,7 +172,7 @@ class ApiTemplateService:
                             
                             # 比较数据差异
                             print("\n数据比较:")
-                            fields_to_compare = ['name', 'method', 'url_path', 'headers', 'params', 'body', 'description', 'folder_id', 'sort_order']
+                            fields_to_compare = ['name', 'method', 'url_path', 'headers', 'params', 'body', 'description', 'folder_id', 'sort_order', 'timeout']
                             has_changes = False
                             for field in fields_to_compare:
                                 db_value = current_record.get(field)
@@ -226,7 +228,7 @@ class ApiTemplateService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT id, project_id, folder_id, name, method, url_path, 
-                               headers, params, body, description, sort_order, created_at, updated_at
+                               headers, params, body, description, sort_order, timeout, created_at, updated_at
                         FROM api_templates 
                         WHERE folder_id = %s
                         ORDER BY sort_order ASC, created_at DESC

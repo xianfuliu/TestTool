@@ -147,6 +147,7 @@ DB_TABLES = {
             params JSON,
             body JSON,
             description TEXT,
+            timeout INT DEFAULT 30 COMMENT '请求超时时间(秒)',
             sort_order INT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -213,7 +214,7 @@ DB_TABLES = {
             name VARCHAR(100) NOT NULL,
             description TEXT,
             cron_expression VARCHAR(50) NOT NULL,
-            enabled BOOLEAN DEFAULT TRUE,
+            enabled BOOLEAN DEFAULT FALSE,
             case_ids JSON COMMENT '测试用例ID列表',
             notify_emails JSON COMMENT '邮件通知列表',
             notify_wechat JSON COMMENT '微信通知配置',
@@ -356,6 +357,20 @@ DB_TABLES = {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uk_user_setting (user_id, setting_key),
             INDEX idx_user_id (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
+
+    'distributed_locks': '''
+        CREATE TABLE IF NOT EXISTS distributed_locks (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            lock_key VARCHAR(100) NOT NULL COMMENT '锁键名',
+            instance_id VARCHAR(100) NOT NULL COMMENT '实例标识',
+            acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '获取时间',
+            expires_at TIMESTAMP NOT NULL COMMENT '过期时间',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_lock_key (lock_key),
+            INDEX idx_expires_at (expires_at),
+            INDEX idx_instance_id (instance_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     '''
 }

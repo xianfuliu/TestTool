@@ -16,11 +16,10 @@ from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QFont, QColor
-from src.core.services.scheduler_service import SchedulerService
+from src.core.services.scheduler_service import UnifiedSchedulerService
 from src.core.services.test_case_service import TestCaseService
 from src.core.services.project_service import ProjectService
 from src.core.services.case_folder_service import CaseFolderService
-from src.core.services.scheduler_background_service import SchedulerBackgroundService
 from src.core.models.interface_models import TestScheduler
 from src.utils.interface_utils.cron_parser import CronParser
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelTabWidget
@@ -37,7 +36,6 @@ class SchedulerDialog(QDialog):
         self.test_case_service = None  # 延迟初始化
         self.project_service = ProjectService()
         self.folder_service = CaseFolderService()
-        self.scheduler_background_service = SchedulerBackgroundService()
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
@@ -69,7 +67,7 @@ class SchedulerDialog(QDialog):
 
         # 按钮布局
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
+        button_box.accepted.connect(self.validate_and_accept)
         button_box.rejected.connect(self.reject)
         
         # 修改按钮文本为中文
@@ -913,7 +911,6 @@ class SchedulerDialog(QDialog):
         # 选项1: 每周
         option1_layout = QHBoxLayout()
         self.week_option1 = QRadioButton("每周")
-        self.week_option1.setChecked(True)
         option1_layout.addWidget(self.week_option1)
         option1_layout.addWidget(QLabel("允许的通配符[, - * / L #]"))
         option1_layout.addStretch()
@@ -922,6 +919,7 @@ class SchedulerDialog(QDialog):
         # 选项2: 不指定
         option2_layout = QHBoxLayout()
         self.week_option2 = QRadioButton("不指定")
+        self.week_option2.setChecked(True)
         option2_layout.addWidget(self.week_option2)
         option2_layout.addWidget(QLabel("忽略周字段"))
         option2_layout.addStretch()
@@ -1259,13 +1257,60 @@ class SchedulerDialog(QDialog):
         
         self.wechat_webhook_edit.setText(notify_wechat.get('webhook', ''))
 
+    def validate_and_accept(self):
+        """校验表单数据，通过后关闭对话框"""
+        # 校验调度名称
+        name = self.name_edit.text().strip()
+        if not name:
+            Toast.warning(self, "校验错误", "请填写调度名称")
+            self.name_edit.setFocus()
+            return
+            
+        # 校验调度名称是否重复
+        scheduler_service = UnifiedSchedulerService()
+        if self.is_edit:
+            # 编辑模式：检查除当前调度外的其他调度是否有相同名称
+            if scheduler_service.check_scheduler_name_exists(name, self.scheduler_data.get('id')):
+                Toast.warning(self, "校验错误", f"调度名称 '{name}' 已存在，请使用其他名称")
+                self.name_edit.setFocus()
+                return
+        else:
+            # 新增模式：检查是否有相同名称的调度
+            if scheduler_service.check_scheduler_name_exists(name):
+                Toast.warning(self, "校验错误", f"调度名称 '{name}' 已存在，请使用其他名称")
+                self.name_edit.setFocus()
+                return
+            
+        # 校验Cron表达式
+        cron_expression = self.cron_edit.text().strip()
+        if not cron_expression:
+            Toast.warning(self, "校验错误", "请填写Cron表达式")
+            self.cron_edit.setFocus()
+            return
+            
+        # 校验Cron表达式格式
+        is_valid, error_msg = self.validate_cron_expression(cron_expression)
+        if not is_valid:
+            Toast.warning(self, "校验错误", f"Cron表达式格式错误：{error_msg}")
+            self.cron_edit.setFocus()
+            return
+            
+        # 校验测试用例选择
+        if self.selected_case_list.count() == 0:
+            Toast.warning(self, "校验错误", "请至少关联一个测试用例")
+            return
+            
+        # 所有校验通过，关闭对话框
+        self.accept()
+
     def get_data(self):
         """获取表单数据"""
         # 基本信息
         data = {
             'name': self.name_edit.text().strip(),
             'description': self.desc_edit.toPlainText().strip(),
-            'cron_expression': self.cron_edit.text().strip()
+            'cron_expression': self.cron_edit.text().strip(),
+            'enabled': False  # 新增调度默认为不启用状态
         }
 
         # 测试用例ID列表（从已选用例区域获取）
@@ -1520,6 +1565,9 @@ class SchedulerDialog(QDialog):
             self._update_year_tab(year_field)
             
             print(f"[DEBUG] ===== Cron表达式解析完成 =====")
+            
+            # 解析完成后立即更新Cron表达式显示
+            self.update_cron_expression()
             
         except Exception as e:
             print(f"[ERROR] 解析cron表达式失败: {e}")
@@ -1925,11 +1973,10 @@ class SchedulerDialog(QDialog):
                 day_field = parts[3]  # 第4个字段是日
                 week_field = parts[5]  # 第6个字段是周
                 
-                # 如果日字段不是?，周字段应该是?，反之亦然
+                # 正确的日周互斥逻辑：如果日字段不是?，周字段必须是?；如果周字段不是?，日字段必须是?
                 if day_field != "?" and week_field != "?":
                     return False, "日和周字段不能同时指定，其中一个必须为?"
-                if day_field == "?" and week_field == "?":
-                    return False, "日和周字段不能同时为?，必须指定其中一个"
+                # 注意：日和周字段可以同时为?，这是允许的
             
             return True, "表达式格式正确"
             
@@ -2160,7 +2207,10 @@ class SchedulerDialog(QDialog):
         elif self.minute_option2.isChecked():
             return f"{self.minute_start.value()}-{self.minute_end.value()}"
         elif self.minute_option3.isChecked():
-            return f"{self.minute_from.value()}/{self.minute_interval.value()}"
+            from_val = self.minute_from.value()
+            interval_val = self.minute_interval.value()
+            print(f"[DEBUG] 分钟字段：选项3被选中，开始值={from_val}, 间隔值={interval_val}")
+            return f"{from_val}/{interval_val}"
         elif self.minute_option4.isChecked():
             return self.minute_specific.currentText()
         return "*"
@@ -2179,10 +2229,10 @@ class SchedulerDialog(QDialog):
 
     def get_day_cron(self):
         """获取日字段的Cron表达式"""
-        # 如果周字段被指定了具体值（不是"*"或"?"），日字段应该为?
-        if not self.week_option1.isChecked() and not self.week_option2.isChecked():
+        # 正确的日周互斥逻辑：如果周字段被指定了具体值（不是"*"或"?"），日字段应该为"?"
+        # 避免递归调用，直接检查周字段的选项状态
+        if self.week_option3.isChecked() or self.week_option4.isChecked() or self.week_option5.isChecked() or self.week_option6.isChecked():
             print(f"[DEBUG] 日字段：周字段被指定了具体值，日字段返回'?'")
-            print(f"[DEBUG] 周字段选项状态：week_option1={self.week_option1.isChecked()}, week_option2={self.week_option2.isChecked()}")
             return "?"
         
         if self.day_option1.isChecked():
@@ -2225,10 +2275,10 @@ class SchedulerDialog(QDialog):
 
     def get_week_cron(self):
         """获取周字段的Cron表达式"""
-        # 如果日字段被指定了具体值（不是"*"或"?"），周字段应该为?
-        if not self.day_option1.isChecked() and not self.day_option2.isChecked():
+        # 正确的日周互斥逻辑：如果日字段被指定了具体值（不是"*"或"?"），周字段应该为"?"
+        # 避免递归调用，直接检查日字段的选项状态
+        if self.day_option3.isChecked() or self.day_option4.isChecked() or self.day_option5.isChecked() or self.day_option6.isChecked():
             print(f"[DEBUG] 周字段：日字段被指定了具体值，周字段返回'?'")
-            print(f"[DEBUG] 日字段选项状态：day_option1={self.day_option1.isChecked()}, day_option2={self.day_option2.isChecked()}")
             return "?"
         
         if self.week_option1.isChecked():
@@ -2293,7 +2343,6 @@ class SchedulerManager(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.scheduler_service = None
-        self.scheduler_background_service = SchedulerBackgroundService()
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_next_run_times)
         self.timer.start(60000)  # 每分钟更新一次
@@ -2301,10 +2350,8 @@ class SchedulerManager(QWidget):
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
-        # 启动后台调度服务
-        self.start_background_service()
-        # 连接后台服务信号
-        self.connect_background_service_signals()
+        # 启动调度服务
+        self.start_service()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -2423,37 +2470,30 @@ class SchedulerManager(QWidget):
         """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
         try:
             # 初始化服务对象
-            self.scheduler_service = SchedulerService()
+            self.scheduler_service = UnifiedSchedulerService()
             # 加载数据
             self.load_schedulers()
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"延迟加载数据失败: {str(e)}")
 
-    def start_background_service(self):
-        """启动后台调度服务"""
+    def start_service(self):
+        """启动调度服务"""
         try:
-            if self.scheduler_background_service:
-                self.scheduler_background_service.start_service()
-                logger.info("后台调度服务已启动")
+            if self.scheduler_service:
+                self.scheduler_service.start_service()
+                logger.info("调度服务已启动")
         except Exception as e:
-            logger.error(f"启动后台调度服务失败: {str(e)}")
+            logger.error(f"启动调度服务失败: {str(e)}")
 
-    def stop_background_service(self):
-        """停止后台调度服务"""
+    def stop_service(self):
+        """停止调度服务"""
         try:
-            if self.scheduler_background_service:
-                self.scheduler_background_service.stop_service()
-                logger.info("后台调度服务已停止")
+            if self.scheduler_service:
+                self.scheduler_service.stop_service()
+                logger.info("调度服务已停止")
         except Exception as e:
-            logger.error(f"停止后台调度服务失败: {str(e)}")
-
-    def connect_background_service_signals(self):
-        """连接后台服务信号"""
-        if self.scheduler_background_service:
-            # 连接调度执行信号
-            self.scheduler_background_service.scheduler_executed.connect(self.on_scheduler_executed)
-            self.scheduler_background_service.scheduler_error.connect(self.on_scheduler_error)
+            logger.error(f"停止调度服务失败: {str(e)}")
     
     def on_scheduler_executed(self, scheduler_data, success, message):
         """调度执行完成回调"""
@@ -2827,6 +2867,11 @@ class SchedulerManager(QWidget):
 
     def delete_scheduler(self, scheduler_data):
         """删除调度"""
+        # 检查调度是否已启用
+        if scheduler_data.get('enabled', False):
+            Toast.warn(self, f"调度 '{scheduler_data['name']}' 当前处于启用状态，请先禁用后再删除")
+            return
+        
         # 创建确认对话框，手动设置按钮文本
         msg_box = QMessageBox(QMessageBox.Question, "确认删除",
                              f"确定要删除调度 '{scheduler_data['name']}' 吗？")
@@ -2907,18 +2952,22 @@ class SchedulerManager(QWidget):
             # 显示开始执行提示
             Toast.info(self, f"开始执行调度: {scheduler_data['name']} (包含 {len(case_ids)} 个测试用例)")
 
-            # 使用后台调度服务执行调度
-            if self.scheduler_background_service:
-                # 通过后台服务执行调度
-                self.scheduler_background_service.execute_scheduler(scheduler_data['id'])
+            # 使用统一调度服务执行调度
+            if self.scheduler_service:
+                # 通过统一调度服务执行调度
+                success = self.scheduler_service.execute_scheduler(scheduler_data['id'])
                 
-                # 显示异步执行提示
-                Toast.info(self, f"调度 '{scheduler_data['name']}' 已提交到后台执行")
-                
-                # 刷新调度列表以更新状态
-                self.load_schedulers()
+                if success:
+                    # 显示异步执行提示
+                    Toast.info(self, f"调度 '{scheduler_data['name']}' 已提交执行")
+                    
+                    # 刷新调度列表以更新状态
+                    self.load_schedulers()
+                else:
+                    # 如果异步执行失败，使用同步执行方式
+                    self._run_scheduler_sync(scheduler_data)
             else:
-                # 如果没有后台服务，使用原来的同步执行方式
+                # 如果没有调度服务，使用原来的同步执行方式
                 self._run_scheduler_sync(scheduler_data)
 
         except Exception as e:
