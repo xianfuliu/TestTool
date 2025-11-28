@@ -5,19 +5,14 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTreeWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,
-                             QHeaderView, QInputDialog, QCheckBox, QSpinBox,
-                             QListWidget, QListWidgetItem, QSplitter, QToolBar,
-                             QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
-                             QProgressBar, QFrame, QScrollArea, QGridLayout,
-                             QTableWidget, QTableWidgetItem, QListWidget, QAbstractItemView,
-                             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
-                             QComboBox)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QMimeData, QPoint
-from PyQt5.QtGui import QIcon, QFont, QColor, QDrag, QPixmap, QCursor
+                             QFormLayout, QApplication, QComboBox,
+                             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit)
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import QIcon
 from src.core.services.project_service import ProjectService
 from src.core.services.business_service import BusinessService
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelTabWidget
+from src.ui.widgets.toast_tips import Toast
 
 
 
@@ -28,6 +23,7 @@ class BusinessGroupDialog(QDialog):
         super().__init__(parent)
         self.group_data = group_data or {}
         self.is_edit = bool(group_data)
+        self.business_service = None
         self.init_ui()
 
     def init_ui(self):
@@ -55,11 +51,42 @@ class BusinessGroupDialog(QDialog):
 
         # 按钮布局
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
+        button_box.accepted.connect(self.validate_and_accept)
         button_box.rejected.connect(self.reject)
+        
+        # 修改按钮文本
+        button_box.button(QDialogButtonBox.Ok).setText("确认")
+        button_box.button(QDialogButtonBox.Cancel).setText("取消")
 
         layout.addLayout(form_layout)
         layout.addWidget(button_box)
+
+    def set_business_service(self, business_service):
+        """设置业务服务对象"""
+        self.business_service = business_service
+
+    def validate_and_accept(self):
+        """校验并接受对话框"""
+        name = self.name_edit.text().strip()
+        if not name:
+            Toast.warning(self, "警告", "分组名称不能为空")
+            return
+
+        # 检查名称是否重复（排除当前编辑的分组）
+        if self.business_service:
+            existing_groups = self.business_service.get_all_groups()
+            for group in existing_groups:
+                if group['name'] == name:
+                    # 如果是编辑模式且名称未改变，允许通过
+                    if self.is_edit and self.group_data.get('name') == name:
+                        self.accept()
+                        return
+                    else:
+                        Toast.warning(self, "警告", f"分组名称 '{name}' 已存在，请使用其他名称")
+                        return
+
+        # 所有校验通过，接受对话框
+        self.accept()
 
     def get_data(self):
         return {
@@ -76,6 +103,7 @@ class ProjectDialog(QDialog):
         self.project_data = project_data or {}
         self.group_id = group_id
         self.is_edit = bool(project_data)
+        self.project_service = None
         self.init_ui()
 
     def init_ui(self):
@@ -103,11 +131,45 @@ class ProjectDialog(QDialog):
 
         # 按钮布局
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
+        button_box.accepted.connect(self.validate_and_accept)
         button_box.rejected.connect(self.reject)
+        
+        # 修改按钮文本
+        button_box.button(QDialogButtonBox.Ok).setText("确认")
+        button_box.button(QDialogButtonBox.Cancel).setText("取消")
 
         layout.addLayout(form_layout)
         layout.addWidget(button_box)
+
+    def set_project_service(self, project_service):
+        """设置项目服务对象"""
+        self.project_service = project_service
+
+    def validate_and_accept(self):
+        """校验并接受对话框"""
+        name = self.name_edit.text().strip()
+        if not name:
+            Toast.warning(self, "警告", "项目名称不能为空")
+            return
+
+        # 检查名称是否重复（排除当前编辑的项目）
+        if self.project_service:
+            # 获取当前业务分组下的所有项目
+            group_id = self.group_id or self.project_data.get('group_id')
+            if group_id:
+                existing_projects = self.project_service.get_projects_by_group(group_id)
+                for project in existing_projects:
+                    if project['name'] == name:
+                        # 如果是编辑模式且名称未改变，允许通过
+                        if self.is_edit and self.project_data.get('name') == name:
+                            self.accept()
+                            return
+                        else:
+                            Toast.warning(self, "警告", f"项目名称 '{name}' 已存在，请使用其他名称")
+                            return
+
+        # 所有校验通过，接受对话框
+        self.accept()
 
     def get_data(self):
         return {
@@ -216,7 +278,7 @@ class BusinessManagement(QWidget):
         self.add_group_btn = QPushButton()
         self.add_group_btn.setIcon(self.get_icon("add.png"))
         self.add_group_btn.setFixedSize(20, 20)  # 减小按钮尺寸
-        self.add_group_btn.setToolTip("新增分组")
+        self.add_group_btn.setToolTip("新增业务")
         self.add_group_btn.clicked.connect(self.add_business_group)
         self.add_group_btn.setStyleSheet("""
             QPushButton {
@@ -238,10 +300,15 @@ class BusinessManagement(QWidget):
 
         # 业务分组树
         self.tree_widget = QTreeWidget()
-        self.tree_widget.setHeaderLabels(["业务分组/项目"])
-        self.tree_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.tree_widget.customContextMenuRequested.connect(self.show_tree_context_menu)
+        self.tree_widget.setHeaderLabels(["业务/项目", "操作"])
         self.tree_widget.itemClicked.connect(self.on_tree_item_clicked)
+        self.tree_widget.itemExpanded.connect(self.on_tree_item_expanded)
+        self.tree_widget.itemCollapsed.connect(self.on_tree_item_collapsed)
+        # 设置列宽
+        self.tree_widget.setColumnWidth(0, 180)  # 名称列
+        self.tree_widget.setColumnWidth(1, 80)   # 操作列
+        # 隐藏表头
+        self.tree_widget.setHeaderHidden(True)
 
         # 右侧：详细信息
         self.detail_widget = QWidget()
@@ -289,15 +356,9 @@ class BusinessManagement(QWidget):
         detail_tabs.addTab(basic_info_tab, "基本信息")
         detail_tabs.addTab(stats_tab, "统计信息")
 
-        # 操作按钮
+        # 操作按钮（已删除，功能移至树形结构中的icon按钮）
+        # 保留弹性空间以保持布局平衡
         button_layout = QHBoxLayout()
-        self.edit_btn = QPushButton("编辑")
-        self.edit_btn.clicked.connect(self.edit_current_item)
-        self.delete_btn = QPushButton("删除")
-        self.delete_btn.clicked.connect(self.delete_current_item)
-
-        button_layout.addWidget(self.edit_btn)
-        button_layout.addWidget(self.delete_btn)
         button_layout.addStretch()
 
         detail_container_layout = QVBoxLayout(self.detail_container)
@@ -446,6 +507,9 @@ class BusinessManagement(QWidget):
                 group_item.setData(0, Qt.UserRole, {'type': 'group', 'data': group})
                 group_item.setIcon(0, self.get_icon("group.png"))
                 
+                # 为业务分组添加操作按钮
+                self.add_operation_buttons(group_item, 'group', group)
+                
                 # 添加到下拉框
                 self.business_combo.addItem(group['name'])
 
@@ -456,6 +520,9 @@ class BusinessManagement(QWidget):
                     project_item.setText(0, project['name'])
                     project_item.setData(0, Qt.UserRole, {'type': 'project', 'data': project})
                     project_item.setIcon(0, self.get_icon("project.png"))
+                    
+                    # 为项目添加操作按钮
+                    self.add_operation_buttons(project_item, 'project', project)
 
                 group_item.setExpanded(True)
 
@@ -470,9 +537,113 @@ class BusinessManagement(QWidget):
                 # 延迟触发业务切换信号，等待所有页面都创建完成
                 self.initial_business_ready = True
                 print("业务数据加载完成，等待手动触发初始业务切换")
+                
+            # 初始化时隐藏所有操作按钮
+            self.hide_all_operation_buttons_except_current()
+    
+    def add_operation_buttons(self, item, item_type, item_data):
+        """为树形项目添加操作按钮"""
+        # 创建操作按钮容器
+        operation_widget = QWidget()
+        operation_layout = QHBoxLayout(operation_widget)
+        operation_layout.setContentsMargins(0, 0, 0, 0)
+        operation_layout.setSpacing(6)  # 增加按钮间距
+        operation_layout.setAlignment(Qt.AlignCenter)
+        
+        # 为业务分组添加新增项目按钮
+        if item_type == 'group':
+            add_project_btn = QPushButton()
+            add_project_btn.setFixedSize(18, 18)
+            add_project_btn.setIcon(self.get_icon("add_project.png"))
+            add_project_btn.setToolTip("新增项目")
+            add_project_btn.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    background: transparent;
+                    padding: 0px;
+                    border-radius: 2px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(0, 0, 0, 0.1);
+                }
+                QPushButton:pressed {
+                    background-color: rgba(0, 0, 0, 0.2);
+                }
+            """)
+            add_project_btn.clicked.connect(lambda: self.add_project(item_data['id']))
+            operation_layout.addWidget(add_project_btn)
+        
+        # 编辑按钮
+        edit_btn = QPushButton()
+        edit_btn.setFixedSize(20, 20)
+        edit_btn.setIcon(self.get_icon("edit.png"))
+        edit_btn.setToolTip("编辑")
+        edit_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+        """)
+        
+        # 删除按钮
+        delete_btn = QPushButton()
+        delete_btn.setFixedSize(20, 20)
+        delete_btn.setIcon(self.get_icon("delete.png"))
+        delete_btn.setToolTip("删除")
+        delete_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                padding: 0px;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+        """)
+        
+        # 连接按钮事件
+        if item_type == 'group':
+            edit_btn.clicked.connect(lambda: self.edit_business_group(item_data))
+            delete_btn.clicked.connect(lambda: self.delete_business_group(item_data))
+        else:
+            edit_btn.clicked.connect(lambda: self.edit_project(item_data))
+            delete_btn.clicked.connect(lambda: self.delete_project(item_data))
+        
+        # 添加按钮到布局
+        operation_layout.addWidget(edit_btn)
+        operation_layout.addWidget(delete_btn)
+        
+        # 默认隐藏操作按钮
+        operation_widget.setVisible(False)
+        
+        # 存储按钮引用，用于后续显示/隐藏控制
+        item.setData(0, Qt.UserRole + 1, operation_widget)
+        
+        # 设置操作列
+        self.tree_widget.setItemWidget(item, 1, operation_widget)
 
     def on_tree_item_clicked(self, item):
         """树形项目点击事件"""
+        # 隐藏所有行的操作按钮
+        self.hide_all_operation_buttons_except_current()
+        
+        # 显示当前选中行的操作按钮
+        operation_widget = item.data(0, Qt.UserRole + 1)
+        if operation_widget:
+            operation_widget.setVisible(True)
+        
         data = item.data(0, Qt.UserRole)
         if not data:
             return
@@ -488,6 +659,74 @@ class BusinessManagement(QWidget):
             self.current_project = item_data
             self.current_group = None
             self.show_project_details(item_data)
+    
+    def on_tree_item_expanded(self, item):
+        """树形项目展开事件"""
+        # 使用极短延迟，确保UI更新完成但避免明显闪现
+        QTimer.singleShot(5, lambda: self.hide_all_operation_buttons_except_current())
+    
+    def on_tree_item_collapsed(self, item):
+        """树形项目收起事件"""
+        # 使用极短延迟，确保UI更新完成但避免明显闪现
+        QTimer.singleShot(5, lambda: self.hide_all_operation_buttons_except_current())
+    
+    def hide_all_operation_buttons(self, exclude_current_item=False):
+        """隐藏所有行的操作按钮"""
+        current_item = self.tree_widget.currentItem()
+        
+        # 遍历所有树形项目
+        def hide_buttons(item):
+            operation_widget = item.data(0, Qt.UserRole + 1)
+            if operation_widget:
+                # 如果设置了排除当前项，且当前项是当前选中的项，则显示操作按钮；否则隐藏
+                if exclude_current_item and item == current_item:
+                    operation_widget.setVisible(True)
+                else:
+                    operation_widget.setVisible(False)
+            
+            # 递归处理子项目
+            for i in range(item.childCount()):
+                hide_buttons(item.child(i))
+        
+        # 遍历根项目
+        for i in range(self.tree_widget.topLevelItemCount()):
+            hide_buttons(self.tree_widget.topLevelItem(i))
+    
+    def hide_all_operation_buttons_except_current(self):
+        """隐藏所有行的操作按钮，只保留当前选中行的操作按钮"""
+        current_item = self.tree_widget.currentItem()
+        
+        # 检查当前选中项是否可见（即其所有父节点都是展开状态）
+        def is_item_visible(item):
+            parent = item.parent()
+            while parent:
+                if not parent.isExpanded():
+                    return False
+                parent = parent.parent()
+            return True
+        
+        # 遍历所有树形项目
+        def process_item(item):
+            operation_widget = item.data(0, Qt.UserRole + 1)
+            if operation_widget:
+                # 如果是当前选中项且可见，显示操作按钮；否则隐藏
+                if item == current_item and is_item_visible(item):
+                    operation_widget.setVisible(True)
+                else:
+                    operation_widget.setVisible(False)
+            
+            # 递归处理子项目
+            for i in range(item.childCount()):
+                process_item(item.child(i))
+        
+        # 遍历根项目
+        for i in range(self.tree_widget.topLevelItemCount()):
+            process_item(self.tree_widget.topLevelItem(i))
+
+    def update_operation_buttons_visibility(self):
+        """更新操作按钮的可见性状态，确保与树形控件的展开状态一致"""
+        # 调用现有的按钮隐藏方法，确保操作按钮状态正确
+        self.hide_all_operation_buttons_except_current()
 
     def show_group_details(self, group_data):
         """显示业务分组详情"""
@@ -536,36 +775,38 @@ class BusinessManagement(QWidget):
     def add_business_group(self):
         """新增业务分组"""
         dialog = BusinessGroupDialog(self)
+        dialog.set_business_service(self.business_service)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            if not data['name']:
-                QMessageBox.warning(self, "输入错误", "分组名称不能为空")
-                return
-
             try:
                 self.business_service.create_group(data)
                 self.load_data()
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "业务分组创建成功")
+                Toast.success(self, "业务分组创建成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"创建业务分组失败: {str(e)}")
+                Toast.error(self, f"创建业务分组失败: {str(e)}")
 
     def add_project(self, group_id):
         """新增项目"""
         dialog = ProjectDialog(self, group_id=group_id)
+        dialog.set_project_service(self.project_service)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            if not data['name']:
-                QMessageBox.warning(self, "输入错误", "项目名称不能为空")
-                return
-
             try:
+                # 保存更新前的展开状态
+                expanded_states = self.get_tree_expanded_states()
+                
+                # 创建项目
                 self.project_service.create_project(data)
+                
+                # 重新加载数据但保持展开状态
                 self.load_data()
+                self.restore_tree_expanded_states(expanded_states)
+                
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "项目创建成功")
+                Toast.success(self, "项目创建成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"创建项目失败: {str(e)}")
+                Toast.error(self, f"创建项目失败: {str(e)}")
 
     def edit_current_item(self):
         """编辑当前选中的项目"""
@@ -576,37 +817,59 @@ class BusinessManagement(QWidget):
 
     def edit_business_group(self, group_data):
         """编辑业务分组"""
-        dialog = BusinessGroupDialog(self, group_data)
+        # 创建对话框时使用数据的副本，避免修改原始数据
+        dialog = BusinessGroupDialog(self, group_data.copy())
+        dialog.set_business_service(self.business_service)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            if not data['name']:
-                QMessageBox.warning(self, "输入错误", "分组名称不能为空")
-                return
-
             try:
+                # 保存更新前的展开状态
+                expanded_states = self.get_tree_expanded_states()
+                
+                # 更新业务分组
                 self.business_service.update_group(group_data['id'], data)
-                self.load_data()
+                
+                # 局部更新树形结构中的对应项
+                self.update_business_group_in_tree(group_data['id'], data)
+                
+                # 更新原始数据对象，确保下次编辑时显示最新数据
+                group_data.update(data)
+                
+                # 恢复展开状态
+                self.restore_tree_expanded_states(expanded_states)
+                
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "业务分组更新成功")
+                Toast.success(self, "业务分组更新成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"更新业务分组失败: {str(e)}")
+                Toast.error(self, f"更新业务分组失败: {str(e)}")
 
     def edit_project(self, project_data):
         """编辑项目"""
-        dialog = ProjectDialog(self, project_data)
+        # 创建对话框时使用数据的副本，避免修改原始数据
+        dialog = ProjectDialog(self, project_data.copy())
+        dialog.set_project_service(self.project_service)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            if not data['name']:
-                QMessageBox.warning(self, "输入错误", "项目名称不能为空")
-                return
-
             try:
+                # 保存更新前的展开状态
+                expanded_states = self.get_tree_expanded_states()
+                
+                # 更新项目
                 self.project_service.update_project(project_data['id'], data)
-                self.load_data()
+                
+                # 局部更新树形结构中的对应项
+                self.update_project_in_tree(project_data['id'], data)
+                
+                # 更新原始数据对象，确保下次编辑时显示最新数据
+                project_data.update(data)
+                
+                # 恢复展开状态
+                self.restore_tree_expanded_states(expanded_states)
+                
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "项目更新成功")
+                Toast.success(self, "项目更新成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"更新项目失败: {str(e)}")
+                Toast.error(self, f"更新项目失败: {str(e)}")
 
     def delete_current_item(self):
         """删除当前选中的项目"""
@@ -627,14 +890,22 @@ class BusinessManagement(QWidget):
 
         if reply == QMessageBox.Yes:
             try:
+                # 保存更新前的展开状态
+                expanded_states = self.get_tree_expanded_states()
+                
+                # 删除业务分组
                 self.business_service.delete_group(group_data['id'])
+                
+                # 重新加载数据但保持展开状态
                 self.load_data()
+                self.restore_tree_expanded_states(expanded_states)
+                
                 self.data_changed.emit()
                 self.info_label.show()
                 self.detail_container.hide()
-                QMessageBox.information(self, "成功", "业务分组删除成功")
+                Toast.success(self, "业务分组删除成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除业务分组失败: {str(e)}")
+                Toast.error(self, f"删除业务分组失败: {str(e)}")
 
     def delete_project(self, project_data):
         """删除项目"""
@@ -648,53 +919,118 @@ class BusinessManagement(QWidget):
 
         if reply == QMessageBox.Yes:
             try:
+                # 保存更新前的展开状态
+                expanded_states = self.get_tree_expanded_states()
+                
+                # 删除项目
                 self.project_service.delete_project(project_data['id'])
+                
+                # 重新加载数据但保持展开状态
                 self.load_data()
+                self.restore_tree_expanded_states(expanded_states)
+                
                 self.data_changed.emit()
                 self.info_label.show()
                 self.detail_container.hide()
-                QMessageBox.information(self, "成功", "项目删除成功")
+                Toast.success(self, "项目删除成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除项目失败: {str(e)}")
+                Toast.error(self, f"删除项目失败: {str(e)}")
 
-    def show_tree_context_menu(self, position):
-        """显示树形结构的右键菜单"""
-        item = self.tree_widget.itemAt(position)
-        if not item:
-            return
 
-        data = item.data(0, Qt.UserRole)
-        if not data:
-            return
 
-        from PyQt5.QtWidgets import QMenu, QAction
+    def showEvent(self, event):
+        """页面显示事件处理"""
+        super().showEvent(event)
+        # 页面显示时，先隐藏所有操作按钮，然后重新显示当前选中项的操作按钮
+        # 使用QApplication.processEvents()确保UI更新完成后再执行操作
+        QApplication.processEvents()
+        
+        # 先隐藏所有按钮
+        self.hide_all_operation_buttons_except_current()
+        
+        # 然后重新显示当前选中项的操作按钮
+        current_item = self.tree_widget.currentItem()
+        if current_item:
+            operation_widget = current_item.data(0, Qt.UserRole + 1)
+            if operation_widget:
+                operation_widget.setVisible(True)
 
-        menu = QMenu(self)
+    def hideEvent(self, event):
+        """页面隐藏事件处理"""
+        super().hideEvent(event)
+        # 页面隐藏时，确保所有操作按钮都隐藏
+        self.hide_all_operation_buttons_except_current()
 
-        if data['type'] == 'group':
-            # 业务分组的右键菜单
-            add_project_action = QAction("新增项目", self)
-            add_project_action.triggered.connect(lambda: self.add_project(data['data']['id']))
-            menu.addAction(add_project_action)
+    def get_tree_expanded_states(self):
+        """获取树形结构中所有分组的展开状态"""
+        expanded_states = {}
+        for i in range(self.tree_widget.topLevelItemCount()):
+            group_item = self.tree_widget.topLevelItem(i)
+            data = group_item.data(0, Qt.UserRole)
+            if data and data['type'] == 'group':
+                group_id = data['data']['id']
+                expanded_states[group_id] = group_item.isExpanded()
+        return expanded_states
 
-            menu.addSeparator()
+    def restore_tree_expanded_states(self, expanded_states):
+        """恢复树形结构的展开状态"""
+        for i in range(self.tree_widget.topLevelItemCount()):
+            group_item = self.tree_widget.topLevelItem(i)
+            data = group_item.data(0, Qt.UserRole)
+            if data and data['type'] == 'group':
+                group_id = data['data']['id']
+                if group_id in expanded_states:
+                    group_item.setExpanded(expanded_states[group_id])
 
-            edit_action = QAction("编辑", self)
-            edit_action.triggered.connect(lambda: self.edit_business_group(data['data']))
-            menu.addAction(edit_action)
+    def update_business_group_in_tree(self, group_id, new_data):
+        """局部更新树形结构中的业务分组项"""
+        for i in range(self.tree_widget.topLevelItemCount()):
+            group_item = self.tree_widget.topLevelItem(i)
+            data = group_item.data(0, Qt.UserRole)
+            if data and data['type'] == 'group' and data['data']['id'] == group_id:
+                # 更新分组名称
+                group_item.setText(0, new_data['name'])
+                
+                # 更新数据
+                updated_data = data['data'].copy()
+                updated_data.update(new_data)
+                group_item.setData(0, Qt.UserRole, {'type': 'group', 'data': updated_data})
+                
+                # 更新下拉框中的名称
+                for j in range(self.business_combo.count()):
+                    if self.business_combo.itemText(j) == data['data']['name']:
+                        self.business_combo.setItemText(j, new_data['name'])
+                        break
+                
+                # 如果当前显示的是该分组的详情，则更新详情显示
+                if self.current_group and self.current_group['id'] == group_id:
+                    self.current_group = updated_data
+                    self.show_group_details(updated_data)
+                
+                break
 
-            delete_action = QAction("删除", self)
-            delete_action.triggered.connect(lambda: self.delete_business_group(data['data']))
-            menu.addAction(delete_action)
-
-        else:
-            # 项目的右键菜单
-            edit_action = QAction("编辑", self)
-            edit_action.triggered.connect(lambda: self.edit_project(data['data']))
-            menu.addAction(edit_action)
-
-            delete_action = QAction("删除", self)
-            delete_action.triggered.connect(lambda: self.delete_project(data['data']))
-            menu.addAction(delete_action)
-
-        menu.exec_(self.tree_widget.mapToGlobal(position))
+    def update_project_in_tree(self, project_id, new_data):
+        """局部更新树形结构中的项目项"""
+        # 遍历所有分组和项目
+        for i in range(self.tree_widget.topLevelItemCount()):
+            group_item = self.tree_widget.topLevelItem(i)
+            
+            # 遍历该分组下的所有项目
+            for j in range(group_item.childCount()):
+                project_item = group_item.child(j)
+                data = project_item.data(0, Qt.UserRole)
+                if data and data['type'] == 'project' and data['data']['id'] == project_id:
+                    # 更新项目名称
+                    project_item.setText(0, new_data['name'])
+                    
+                    # 更新数据
+                    updated_data = data['data'].copy()
+                    updated_data.update(new_data)
+                    project_item.setData(0, Qt.UserRole, {'type': 'project', 'data': updated_data})
+                    
+                    # 如果当前显示的是该项目的详情，则更新详情显示
+                    if self.current_project and self.current_project['id'] == project_id:
+                        self.current_project = updated_data
+                        self.show_project_details(updated_data)
+                    
+                    return

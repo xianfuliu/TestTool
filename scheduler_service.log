@@ -1,22 +1,4 @@
-2025-11-27 18:42:37,089 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-11-27 18:42:37,152 - UnifiedSchedulerService - INFO - 成功获取分布式锁
-2025-11-27 18:42:37,154 - UnifiedSchedulerService - INFO - 统一调度服务已启动，检查间隔: 5秒
-2025-11-27 18:42:37,154 - UnifiedSchedulerService - INFO - 服务启动时间: 2025-11-27 18:42:37.154080
-2025-11-27 18:42:37,154 - UnifiedSchedulerService - INFO - 当前实例持有调度锁
-2025-11-27 18:42:37,154 - UnifiedSchedulerService - INFO - 服务主循环开始运行
-2025-11-27 18:42:37,520 - UnifiedSchedulerService - INFO - 当前时间: 2025-11-27 18:42:37.520075, 等待 23 秒到整分钟再开始运行...
-2025-11-27 18:42:38,548 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-11-27 18:42:38,602 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-11-27 18:42:47,563 - UnifiedSchedulerService - INFO - 等待倒计时: 13秒
-2025-11-27 18:42:55,652 - UnifiedSchedulerService - INFO - 等待倒计时: 5秒
-2025-11-27 18:42:56,661 - UnifiedSchedulerService - INFO - 等待倒计时: 4秒
-2025-11-27 18:42:57,665 - UnifiedSchedulerService - INFO - 等待倒计时: 3秒
-2025-11-27 18:42:58,678 - UnifiedSchedulerService - INFO - 等待倒计时: 2秒
-2025-11-27 18:42:59,633 - UnifiedSchedulerService - INFO - 等待所有执行线程完成...
-2025-11-27 18:42:59,680 - UnifiedSchedulerService - INFO - 分布式锁已释放
-2025-11-27 18:42:59,680 - UnifiedSchedulerService - INFO - 分布式锁释放完成
-2025-11-27 18:42:59,681 - UnifiedSchedulerService - INFO - 统一调度服务已停止
-2025-11-27 18:42:59,681 - UnifiedSchedulerService - INFO - 服务运行时长: 22.48秒
-2025-11-27 18:42:59,681 - UnifiedSchedulerService - INFO - 检查次数: 0, 错误次数: 0
-2025-11-27 18:42:59,695 - UnifiedSchedulerService - INFO - 等待倒计时: 1秒
-2025-11-27 18:42:59,695 - UnifiedSchedulerService - INFO - 服务在等待期间被停止
+2025-11-28 18:21:31,834 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-11-28 18:21:31,855 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
+2025-11-28 18:21:33,258 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-11-28 18:21:33,324 - UnifiedSchedulerService - INFO - 服务组件初始化成功

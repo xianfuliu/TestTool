@@ -735,7 +735,7 @@ class ApiTemplateManager(QWidget):
         self.left_widget = QWidget()
         # 移除固定宽度限制，允许用户调整
         left_layout = QVBoxLayout(self.left_widget)
-        left_layout.setContentsMargins(5, 0, 5, 5)
+        left_layout.setContentsMargins(11, 10, 5, 5)
 
         # 项目选择和文件夹操作按钮
         project_layout = QHBoxLayout()
@@ -915,7 +915,7 @@ class ApiTemplateManager(QWidget):
         self.splitter.addWidget(left_container)
         self.splitter.addWidget(self.detail_widget)
         # 设置更灵活的初始大小，允许用户调整
-        self.splitter.setSizes([180, 1200])
+        self.splitter.setSizes([180, 1480])
 
         main_container_layout.addWidget(self.splitter)
         main_layout.addWidget(main_container)
@@ -925,44 +925,9 @@ class ApiTemplateManager(QWidget):
                 background-color: white;
             }
             QTreeWidget {
-                border: none;
-                border-radius: 0px;
-                padding: 0px;
-                background-color: white;
-                color: black;
-                alternate-background-color: white;
-            }
-            QTreeWidget::item {
+                border: 1px solid #ddd;
+                border-radius: 4px;
                 padding: 5px;
-                border: none;
-                border-radius: 0px;
-                background-color: white;
-                color: black;
-            }
-            QTreeWidget::item:hover {
-                background-color: #f0f0f0;
-                border: none;
-                color: black;
-            }
-            QTreeWidget::item:selected {
-                background-color: #e0e0e0;
-                border: none;
-                color: black;
-            }
-            QTreeWidget::item[dragEnabled=\"true\"] {
-                background-color: #f8f9fa;
-                border: none;
-                color: black;
-            }
-            QTreeWidget::item[dropIndicator=\"true\"] {
-                background-color: #f8f9fa;
-                border: none;
-                color: black;
-            }
-            QTreeWidget::branch {
-                subcontrol-position: center left;
-                width: 16px;
-                height: 16px;
             }
             QPushButton {
                 padding: 6px 12px;
@@ -992,7 +957,7 @@ class ApiTemplateManager(QWidget):
         if is_expanded:
             # 展开状态：显示左侧菜单栏
             self.left_widget.show()
-            self.splitter.setSizes([300, 700])
+            self.splitter.setSizes([300, 1480])
         else:
             # 收起状态：隐藏左侧菜单栏内容，但保留按钮可见
             self.left_widget.hide()
@@ -2432,11 +2397,13 @@ class ApiTemplateManager(QWidget):
 
     def delete_api_folder(self, folder_data):
         """删除接口文件夹"""
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除文件夹 '{folder_data['name']}' 吗？\n此操作将同时删除文件夹下的所有接口模板！",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                            f"确定要删除文件夹 '{folder_data['name']}' 吗？\n此操作将同时删除文件夹下的所有接口模板！")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
 
         if reply == QMessageBox.Yes:
             try:

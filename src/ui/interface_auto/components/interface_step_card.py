@@ -241,12 +241,12 @@ class InterfaceStepCard(QFrame):
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: rgba(76, 175, 80, 0.15);
-                border: 1px solid rgba(76, 175, 80, 0.3);
+                background-color: transparent;
+                border: none;
             }
             QPushButton:pressed {
-                background-color: rgba(76, 175, 80, 0.25);
-                border: 1px solid rgba(76, 175, 80, 0.4);
+                background-color: transparent;
+                border: none;
             }
         """)
         self.add_tool_btn.setCursor(Qt.PointingHandCursor)

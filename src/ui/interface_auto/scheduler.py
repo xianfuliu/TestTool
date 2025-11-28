@@ -3,6 +3,7 @@ import json
 import sys
 import logging
 from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
 
 # 配置日志
 logger = logging.getLogger('SchedulerManager')
@@ -11,7 +12,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
                              QFormLayout, QHeaderView, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QToolBar, QAction,
-                             QSizePolicy, QTabWidget, QRadioButton)
+                             QSizePolicy, QTabWidget, QRadioButton, QTreeWidget, QTreeWidgetItem)
 from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
@@ -47,8 +48,8 @@ class SchedulerDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("编辑调度" if self.is_edit else "新增调度")
-        self.setMinimumSize(1300, 1000)
-        self.resize(1300, 1000)
+        self.setMinimumSize(1250, 1000)
+        self.resize(1250, 1000)
 
         layout = QVBoxLayout(self)
 
@@ -154,7 +155,7 @@ class SchedulerDialog(QDialog):
         case_selection_layout = QHBoxLayout(case_selection_widget)
         case_selection_layout.setSpacing(0)  # 移除间距，使三个竖栏紧挨在一起
         
-        # 第一栏：文件夹列表
+        # 第一栏：文件夹树形列表
         folder_panel = QWidget()
         folder_layout = QVBoxLayout(folder_panel)
         folder_layout.setSpacing(0)  # 移除内部间距
@@ -162,9 +163,10 @@ class SchedulerDialog(QDialog):
         
         folder_label = QLabel("文件夹")
         folder_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 5px;")
-        self.folder_list = QListWidget()
-        self.folder_list.setStyleSheet("""
-            QListWidget {
+        self.folder_tree = QTreeWidget()
+        self.folder_tree.setHeaderHidden(True)
+        self.folder_tree.setStyleSheet("""
+            QTreeWidget {
                 border: 1px solid #ddd;
                 border-radius: 6px;
                 background-color: white;
@@ -173,19 +175,23 @@ class SchedulerDialog(QDialog):
                 margin: 0px;
                 padding: 0px;
             }
-            QListWidget::item {
+            QTreeWidget::item {
                 padding: 8px 12px;
                 border-bottom: 1px solid #f0f0f0;
+                height: 30px;
             }
-            QListWidget::item:selected {
+            QTreeWidget::item:selected {
                 background-color: #e3f2fd;
                 color: #0078d4;
             }
+            QTreeWidget::item:hover {
+                background-color: #f5f5f5;
+            }
         """)
-        self.folder_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.folder_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         folder_layout.addWidget(folder_label)
-        folder_layout.addWidget(self.folder_list)
+        folder_layout.addWidget(self.folder_tree)
         
         # 第二栏：测试用例列表
         case_panel = QWidget()
@@ -311,26 +317,35 @@ class SchedulerDialog(QDialog):
         selected_layout.addWidget(selected_label)
         selected_layout.addWidget(self.selected_case_list)
         
-        # 设置面板大小策略，三个竖栏可以拉伸
-        folder_panel.setMinimumWidth(200)
-        folder_panel.setMaximumWidth(350)
-        case_panel.setMinimumWidth(250)
-        case_panel.setMaximumWidth(450)
-        selected_panel.setMinimumWidth(250)
-        selected_panel.setMaximumWidth(450)
+        # 创建右侧固定区域：按钮 + 已选用例
+        right_panel = QWidget()
+        right_layout = QHBoxLayout(right_panel)
+        right_layout.setSpacing(10)
+        right_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 设置拉伸因子，让三个竖栏可以按比例拉伸
-        case_selection_layout.addWidget(folder_panel, 1)
-        case_selection_layout.addWidget(case_panel, 2)
-        case_selection_layout.addWidget(button_panel, 0)  # 按钮区域不拉伸
-        case_selection_layout.addWidget(selected_panel, 2)
+        # 将按钮区域和已选用例区域添加到右侧固定区域
+        right_layout.addWidget(button_panel)
+        right_layout.addWidget(selected_panel)
+        
+        # 设置面板大小策略，两个竖栏可以拉伸
+        folder_panel.setMinimumWidth(250)  # 增加文件夹栏最小宽度
+        folder_panel.setMaximumWidth(400)  # 增加文件夹栏最大宽度
+        case_panel.setMinimumWidth(200)    # 减小选择用例栏最小宽度
+        case_panel.setMaximumWidth(350)    # 减小选择用例栏最大宽度
+        right_panel.setMinimumWidth(250)   # 右侧固定区域最小宽度
+        right_panel.setMaximumWidth(400)   # 右侧固定区域最大宽度
+        
+        # 设置拉伸因子，让两个竖栏可以按比例拉伸
+        case_selection_layout.addWidget(folder_panel, 3)  # 增加文件夹栏拉伸因子
+        case_selection_layout.addWidget(case_panel, 2)    # 保持选择用例栏拉伸因子
+        case_selection_layout.addWidget(right_panel, 0)   # 右侧固定区域不拉伸
         
         # 添加到主布局，设置拉伸因子让测试用例选择区域可以拉伸
         layout.addWidget(basic_info_widget, 0)  # 基本信息区域不拉伸
         layout.addWidget(case_selection_widget, 1)  # 测试用例选择区域可以拉伸
         
         # 连接信号
-        self.folder_list.itemSelectionChanged.connect(self.on_folder_selected)
+        self.folder_tree.itemSelectionChanged.connect(self.on_folder_selected)
         
         # 加载文件夹列表（基于当前选中的项目）
         self.load_folders()
@@ -1106,45 +1121,62 @@ class SchedulerDialog(QDialog):
 
 
     def load_folders(self):
-        """加载当前选中项目的文件夹列表"""
+        """加载当前选中项目的文件夹树形结构"""
         try:
             # 检查是否有有效的项目ID
             if not self.current_project_id:
                 # 如果没有项目ID，显示提示信息
-                self.folder_list.clear()
+                self.folder_tree.clear()
                 self.show_no_data_message("请先在调度管理页面选择项目")
                 return
                 
-            # 从数据库动态获取指定项目的文件夹
-            folders = self.folder_service.get_folders_by_project(self.current_project_id)
+            # 从数据库动态获取指定项目的文件夹（带层级结构）
+            root_folders = self.folder_service.get_folders_by_project(self.current_project_id)
             
-            self.folder_list.clear()
-            if not folders:
+            self.folder_tree.clear()
+            if not root_folders:
                 # 如果没有文件夹，显示提示信息
                 self.show_no_data_message("该项目下暂无文件夹")
                 return
                 
-            for folder in folders:
-                item = QListWidgetItem(folder['name'])
-                item.setData(Qt.UserRole, folder['id'])
-                # 设置文件夹图标
-                item.setIcon(self.get_icon("folder.png"))
-                self.folder_list.addItem(item)
+            # 递归构建树形结构
+            self._build_folder_tree(root_folders, None)
+            self.folder_tree.expandAll()  # 展开所有节点
         except Exception as e:
-            print(f"加载文件夹列表失败: {e}")
+            print(f"加载文件夹树失败: {e}")
             self.show_no_data_message("加载文件夹失败，请检查数据库连接")
 
+    def _build_folder_tree(self, folders: List[Dict[str, Any]], parent_item: Optional[QTreeWidgetItem]):
+        """递归构建文件夹树形结构"""
+        for folder in folders:
+            # 创建树节点
+            item = QTreeWidgetItem()
+            item.setText(0, folder['name'])
+            item.setData(0, Qt.UserRole, folder['id'])
+            item.setIcon(0, self.get_icon("folder.png"))
+            
+            # 添加到父节点或根节点
+            if parent_item:
+                parent_item.addChild(item)
+            else:
+                self.folder_tree.addTopLevelItem(item)
+            
+            # 递归处理子文件夹
+            if 'children' in folder and folder['children']:
+                self._build_folder_tree(folder['children'], item)
+
     def show_no_data_message(self, message):
-        """在文件夹列表中显示无数据提示"""
-        item = QListWidgetItem(message)
+        """在文件夹树中显示无数据提示"""
+        item = QTreeWidgetItem()
+        item.setText(0, message)
         item.setFlags(Qt.NoItemFlags)  # 设置为不可选择
-        item.setTextAlignment(Qt.AlignCenter)
-        item.setForeground(QColor("#999"))
-        self.folder_list.addItem(item)
+        item.setTextAlignment(0, Qt.AlignCenter)
+        item.setForeground(0, QColor("#999"))
+        self.folder_tree.addTopLevelItem(item)
 
     def on_folder_selected(self):
         """文件夹选择变化时加载测试用例"""
-        selected_items = self.folder_list.selectedItems()
+        selected_items = self.folder_tree.selectedItems()
         if not selected_items:
             return
             
@@ -1153,7 +1185,7 @@ class SchedulerDialog(QDialog):
             self.case_list.clear()
             return
             
-        folder_id = selected_items[0].data(Qt.UserRole)
+        folder_id = selected_items[0].data(0, Qt.UserRole)
         self.load_test_cases_by_folder(folder_id)
 
     def load_test_cases_by_folder(self, folder_id):
@@ -2523,41 +2555,55 @@ class SchedulerManager(QWidget):
         self.table_widget.verticalHeader().setVisible(False)  # 隐藏垂直序号列
         self.table_widget.setStyleSheet("""
             QTableWidget {
-                background-color: #fafafa;
-                alternate-background-color: #f0f0f0;
-                gridline-color: #e0e0e0;
-                border: 1px solid #d0d0d0;
+                background-color: #f8f9fa;
+                alternate-background-color: #ffffff;
+                gridline-color: #e9ecef;
+                border: 1px solid #dee2e6;
                 border-radius: 4px;
+                outline: 0;
             }
             QTableWidget::item {
-                padding: 6px;
-                border-bottom: 1px solid #e8e8e8;
+                padding: 12px 8px;
+                border-bottom: 1px solid #e9ecef;
                 text-align: center;
+                height: 100px;
             }
             QTableWidget::item:selected {
-                background-color: #f0f0f0;
-                color: #333333;
+                background-color: #e3f2fd;
+                color: #1976d2;
+                font-weight: bold;
             }
             QTableWidget::item:selected:!active {
-                background-color: #f0f0f0;
-                color: #333333;
+                background-color: #e3f2fd;
+                color: #1976d2;
+                font-weight: bold;
             }
             QTableWidget::item:hover {
-                background-color: #f5f5f5;
+                background-color: #f8f9fa;
             }
             QHeaderView::section {
-                background-color: #d0d0d0;
-                color: #333333;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 6px;
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
+                font-size: 13px;
+                padding: 12px 8px;
                 border: none;
-                border-right: 1px solid #b0b0b0;
+                border-bottom: 2px solid #1976d2;
                 min-height: 25px;
+                text-align: center;
+            }
+            QHeaderView::section:hover {
+                background-color: #e9ecef;
+            }
+            /* 自定义序号列样式 */
+            QTableWidget QTableWidget::item:first-column {
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
             }
         """)
         self.table_widget.setMinimumHeight(400)  # 增加表格高度
-        self.table_widget.verticalHeader().setDefaultSectionSize(45)  # 设置行高
+        self.table_widget.verticalHeader().setDefaultSectionSize(60)  # 设置行高
 
         # 移除重复的表格设置代码
         # 移除双击编辑功能

@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QListWidget, QListWidgetItem, QSplitter,QFrame, 
                              QListWidget, QAbstractItemView,
                              QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit)
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QMimeData
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QMimeData, QSize
 from PyQt5.QtGui import QIcon, QColor, QDrag, QPixmap
 from src.core.services.case_folder_service import CaseFolderService
 from src.core.services.api_template_service import ApiTemplateService
@@ -648,9 +648,12 @@ class TestCaseManager(QWidget):
 
         # 项目选择
         project_layout = QHBoxLayout()
+        project_layout.setSpacing(10)  # 增加控件之间的间距
+        project_layout.setContentsMargins(0, 0, 0, 0)  # 设置边距
+        
         project_layout.addWidget(QLabel("项目:"))
         self.project_combo = NoWheelComboBox()
-        self.project_combo.setMinimumWidth(150)
+        self.project_combo.setMinimumWidth(150)  # 完全复刻接口模板的最小宽度设置
         self.project_combo.setStyleSheet("""
             QComboBox {
                 padding: 6px 30px 6px 8px;
@@ -711,21 +714,26 @@ class TestCaseManager(QWidget):
         self.project_combo.currentIndexChanged.connect(self.on_project_changed)
         project_layout.addWidget(self.project_combo)
         
-        # 新建文件夹图标 - 放在下拉框后面
-        self.new_folder_icon = QLabel()
-        self.new_folder_icon.setPixmap(self.get_icon("add_folder.png").pixmap(24, 24))
-        self.new_folder_icon.setToolTip("新建文件夹")
-        self.new_folder_icon.mousePressEvent = lambda event: self.create_new_folder()
-        self.new_folder_icon.setCursor(Qt.PointingHandCursor)
-        project_layout.addWidget(self.new_folder_icon)
+        # 新建文件夹按钮 - 完全复刻接口模板样式
+        self.new_folder_btn = QPushButton(self)
+        self.new_folder_btn.setIcon(self.get_icon("add_folder.png"))
+        self.new_folder_btn.setIconSize(QSize(24, 24))
+        self.new_folder_btn.setFixedSize(32, 32)
+        self.new_folder_btn.setToolTip("新建文件夹")
+        self.new_folder_btn.setStyleSheet("QPushButton { background-color: transparent; border: none; } QPushButton:hover { background-color: #f0f0f0; }")
+        self.new_folder_btn.clicked.connect(self.create_new_folder)
+        project_layout.addWidget(self.new_folder_btn)
         
-        # 删除文件夹图标
-        self.del_folder_icon = QLabel()
-        self.del_folder_icon.setPixmap(self.get_icon("del_folder.png").pixmap(24, 24))
-        self.del_folder_icon.setToolTip("删除文件夹")
-        self.del_folder_icon.mousePressEvent = lambda event: self.delete_selected_folder()
-        self.del_folder_icon.setCursor(Qt.PointingHandCursor)
-        project_layout.addWidget(self.del_folder_icon)
+        # 删除文件夹按钮 - 完全复刻接口模板样式
+        self.delete_folder_btn = QPushButton(self)
+        self.delete_folder_btn.setIcon(self.get_icon("del_folder.png"))
+        self.delete_folder_btn.setIconSize(QSize(24, 24))
+        self.delete_folder_btn.setFixedSize(32, 32)
+        self.delete_folder_btn.setToolTip("删除文件夹")
+        self.delete_folder_btn.setStyleSheet("QPushButton { background-color: transparent; border: none; } QPushButton:hover { background-color: #f0f0f0; }")
+        self.delete_folder_btn.clicked.connect(self.delete_selected_folder)
+        self.delete_folder_btn.setEnabled(False)  # 初始禁用，需要选中文件夹后才能使用
+        project_layout.addWidget(self.delete_folder_btn)
         
         project_layout.addStretch()
 
@@ -734,7 +742,7 @@ class TestCaseManager(QWidget):
         self.refresh_btn.setIcon(self.get_icon("refresh.png"))
         self.refresh_btn.setToolTip("刷新项目列表")
         self.refresh_btn.clicked.connect(self.refresh_project_list)
-        self.refresh_btn.setStyleSheet("QPushButton { background-color: transparent; border: none; } QPushButton:hover { background-color: #f0f0f0; }")
+        self.refresh_btn.setStyleSheet("QPushButton { background-color: transparent; border: none; margin-left: 10px; } QPushButton:hover { background-color: #f0f0f0; }")
         project_layout.addWidget(self.refresh_btn)
 
         left_layout.addLayout(project_layout)

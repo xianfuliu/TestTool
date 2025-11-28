@@ -207,6 +207,27 @@ class MainWindow(QMainWindow):
             QMessageBox QPushButton:pressed {
                 background-color: #3d8b40;
             }
+            /* 添加QDialogButtonBox样式，修复按钮背景消失问题 */
+            QDialogButtonBox QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                background-color: #4CAF50;
+                color: white;
+                min-width: 80px;
+            }
+            QDialogButtonBox QPushButton:hover {
+                background-color: #45a049;
+            }
+            QDialogButtonBox QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            QDialogButtonBox QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
             /* 添加QToolTip样式，修复黑色背景问题 */
             QToolTip {
                 background-color: #ffffff;
@@ -263,9 +284,12 @@ class MainWindow(QMainWindow):
 
         # 设置Tab Widget为中心部件
         self.setCentralWidget(tab_widget)
-
-        # 创建菜单栏
-        self.create_menu_bar()
+        
+        # 存储tab widget引用
+        self.tab_widget = tab_widget
+        
+        # 连接tab切换信号
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
 
         # 标记UI已初始化
         self._ui_initialized = True
@@ -330,20 +354,6 @@ class MainWindow(QMainWindow):
 
         return QIcon(pixmap)
 
-    def create_menu_bar(self):
-        """创建菜单栏"""
-        # 创建菜单栏
-        menu_bar = QMenuBar(self)
-        self.setMenuBar(menu_bar)
-
-        # 创建工具菜单
-        tools_menu = QMenu("工具", self)
-        menu_bar.addMenu(tools_menu)
-
-        # 添加变量管理菜单项
-        variable_management_action = QAction("变量管理", self)
-        variable_management_action.triggered.connect(self.open_variable_management)
-        tools_menu.addAction(variable_management_action)
 
     def open_variable_management(self):
         """打开变量管理对话框"""
@@ -374,3 +384,32 @@ class MainWindow(QMainWindow):
         
         # 接受关闭事件
         event.accept()
+    
+    def on_tab_changed(self, index):
+        """Tab切换事件处理
+        
+        Args:
+            index: 新选中的tab索引
+        """
+        try:
+            # 获取当前tab的widget
+            current_widget = self.tab_widget.widget(index)
+            
+            # 如果切换到接口自动化tab，隐藏业务管理页面的操作按钮
+            if (self.enable_interface_auto and INTERFACE_AUTO_AVAILABLE and 
+                hasattr(self, 'interface_auto_tab') and current_widget == self.interface_auto_tab):
+                
+                # 检查接口自动化tab是否已经初始化
+                if hasattr(self.interface_auto_tab, 'business_management'):
+                    business_management = self.interface_auto_tab.business_management
+                    
+                    # 如果业务管理页面存在，隐藏操作按钮
+                    if business_management:
+                        # 调用业务管理页面的按钮隐藏方法
+                        if hasattr(business_management, 'hide_all_operation_buttons_except_current'):
+                            business_management.hide_all_operation_buttons_except_current()
+                        
+                        print("Tab切换：已隐藏业务管理页面的操作按钮")
+                            
+        except Exception as e:
+            print(f"处理tab切换事件时出错: {e}")

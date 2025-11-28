@@ -268,7 +268,7 @@ class InterfaceAutoTab(QWidget):
         self.main_layout.addWidget(main_container)
 
         # 连接信号
-        self.left_nav.currentRowChanged.connect(self.stacked_widget.setCurrentIndex)
+        self.left_nav.currentRowChanged.connect(self.on_nav_changed)
 
         # 默认选择第一个
         self.left_nav.setCurrentRow(0)
@@ -321,3 +321,17 @@ class InterfaceAutoTab(QWidget):
             print("business_management.trigger_initial_business_change()调用完成")
         else:
             print("无法调用trigger_initial_business_change方法，条件不满足")
+
+    def on_nav_changed(self, index):
+        """处理导航栏切换事件"""
+        # 设置堆叠窗口的当前页面
+        self.stacked_widget.setCurrentIndex(index)
+        
+        # 如果切换到业务管理页面（索引为0），重新检查并更新操作按钮的显示状态
+        if index == 0 and self.business_management:
+            # 检查business_management是否有更新操作按钮状态的方法
+            if hasattr(self.business_management, 'update_operation_buttons_visibility'):
+                self.business_management.update_operation_buttons_visibility()
+            elif hasattr(self.business_management, 'hide_all_operation_buttons_except_current'):
+                # 如果没有专门的更新方法，调用现有的按钮隐藏方法
+                self.business_management.hide_all_operation_buttons_except_current()

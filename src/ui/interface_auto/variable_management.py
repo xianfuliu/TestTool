@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
                              QGroupBox, QFormLayout, QHeaderView, QInputDialog,
                              QTableWidget, QTableWidgetItem, QSplitter, QFrame,
-                             QComboBox)
+                             QComboBox, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
 from PyQt5.QtGui import QIcon, QFont, QColor
 from src.core.services.project_service import ProjectService
@@ -30,6 +30,7 @@ class VariableDialog(QDialog):
         self.variable_data = variable_data or {}
         self.project_id = project_id
         self.is_edit = bool(variable_data)
+        self.parent_variable_management = parent  # 保存父级变量管理对象引用
         self.init_ui()
 
     def init_ui(self):
@@ -75,12 +76,54 @@ class VariableDialog(QDialog):
         form_layout.addRow("变量描述:", self.desc_edit)
 
         # 按钮布局
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box = QDialogButtonBox()
+        confirm_button = button_box.addButton("确认", QDialogButtonBox.AcceptRole)
+        cancel_button = button_box.addButton("取消", QDialogButtonBox.RejectRole)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 
         layout.addLayout(form_layout)
         layout.addWidget(button_box)
+
+    def accept(self):
+        """重写accept方法，添加变量名重复校验"""
+        # 获取输入的变量名
+        name = self.name_edit.text().strip()
+        
+        # 检查变量名是否为空
+        if not name:
+            Toast.warning(self, "警告", "变量名不能为空")
+            return
+        
+        # 检查变量名是否重复
+        if self.is_variable_name_duplicate(name):
+            Toast.warning(self, "警告", "变量名已存在，请修改变量名")
+            return
+            
+        # 调用父类的accept方法关闭对话框
+        super().accept()
+    
+    def is_variable_name_duplicate(self, name):
+        """检查变量名是否重复"""
+        # 如果是编辑模式且变量名未改变，则不算重复
+        if self.is_edit and name == self.variable_data.get('name', ''):
+            return False
+            
+        # 获取父级变量管理对象的服务
+        if hasattr(self.parent_variable_management, 'variable_service') and self.parent_variable_management.variable_service:
+            variable_service = self.parent_variable_management.variable_service
+            try:
+                # 检查变量名是否已存在（在同一项目内）
+                existing_variable = variable_service.get_global_variable_by_name(name, self.project_id)
+                if existing_variable:
+                    # 如果是编辑模式，且找到的变量就是正在编辑的变量，则不算重复
+                    if self.is_edit and existing_variable.get('id') == self.variable_data.get('id'):
+                        return False
+                    return True
+            except Exception as e:
+                print(f"检查变量名重复时出错: {e}")
+                return False
+        return False
 
     def get_data(self):
         """获取表单数据"""
@@ -222,57 +265,89 @@ class VariableManagement(QWidget):
         info_label.setStyleSheet("color: #666; padding: 10px;")
         layout.addWidget(info_label)
 
-        # 系统变量表格
+        # 系统变量表格 - 使用全局工具表格的配置和样式
         self.system_table = QTableWidget()
-        self.system_table.setColumnCount(3)
-        self.system_table.setHorizontalHeaderLabels(["变量名", "值", "描述"])
+        self.system_table.setColumnCount(4)  # 增加一列用于自定义序号
+        self.system_table.setHorizontalHeaderLabels(["序号", "变量名", "值", "描述"])
         
-        # 设置列宽 - 固定初始宽度，用户可以调整
-        self.system_table.setColumnWidth(0, 250)  # 变量名列宽
-        self.system_table.setColumnWidth(1, 300)  # 值列宽
-        self.system_table.setColumnWidth(2, 200)  # 描述列宽
-        
-        # 允许用户调整列宽，最后一列跟随窗口拉伸
-        self.system_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.system_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)  # 最后一列自动拉伸
-        self.system_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.system_table.setSelectionBehavior(QTableWidget.SelectRows)
-        
-        # 参考接口模板的请求头表格样式
+        # 设置表格属性 - 完全匹配全局工具表格配置
         self.system_table.setAlternatingRowColors(True)
-        self.system_table.verticalHeader().setVisible(False)  # 隐藏序号列
+        self.system_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.system_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 整个表格不可编辑
+        self.system_table.verticalHeader().setVisible(False)  # 去除组件自带序号栏
+        self.system_table.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        
+        # 设置序号列宽度
+        self.system_table.setColumnWidth(0, 60)  # 序号列宽度
+        
+        # 设置列宽策略 - 使用固定列宽模式
+        header = self.system_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
+        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        header.setSectionsMovable(False)  # 禁止表头拖拽
+        header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
+        
+        # 设置固定列宽 - 参考全局工具表格的列宽设计
+        self.system_table.setColumnWidth(0, 60)     # 序号
+        self.system_table.setColumnWidth(1, 300)    # 变量名
+        self.system_table.setColumnWidth(2, 400)    # 值
+        self.system_table.setColumnWidth(3, 300)    # 描述
+        
+        # 设置表格样式 - 完全匹配全局工具表格的CSS样式
         self.system_table.setStyleSheet("""
             QTableWidget {
-                background-color: #fafafa;
-                alternate-background-color: #f0f0f0;
-                gridline-color: #e0e0e0;
-                border: 1px solid #d0d0d0;
+                background-color: #f8f9fa;
+                alternate-background-color: #ffffff;
+                gridline-color: #e9ecef;
+                border: 1px solid #dee2e6;
                 border-radius: 4px;
+                outline: 0;
             }
             QTableWidget::item {
-                padding: 6px;
-                border-bottom: 1px solid #e8e8e8;
+                padding: 12px 8px;
+                border-bottom: 1px solid #e9ecef;
+                text-align: center;
+                height: 100px;
             }
             QTableWidget::item:selected {
                 background-color: #e3f2fd;
                 color: #1976d2;
+                font-weight: bold;
+            }
+            QTableWidget::item:selected:!active {
+                background-color: #e3f2fd;
+                color: #1976d2;
+                font-weight: bold;
             }
             QTableWidget::item:hover {
-                background-color: #f5f5f5;
+                background-color: #f8f9fa;
             }
             QHeaderView::section {
-                background-color: #d0d0d0;
-                color: #333333;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 6px;
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
+                font-size: 13px;
+                padding: 12px 8px;
                 border: none;
-                border-right: 1px solid #b0b0b0;
+                border-bottom: 2px solid #1976d2;
                 min-height: 25px;
+                text-align: center;
+            }
+            QHeaderView::section:hover {
+                background-color: #e9ecef;
+            }
+            /* 自定义序号列样式 */
+            QTableWidget QTableWidget::item:first-column {
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
             }
         """)
-        self.system_table.setMinimumHeight(400)  # 增加表格高度
-        self.system_table.verticalHeader().setDefaultSectionSize(50)
+        
+        # 关键设置：设置表格大小策略，允许表格充分拉伸
+        self.system_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.system_table.setMinimumHeight(400)  # 设置最小高度，避免表格太矮
+        self.system_table.verticalHeader().setDefaultSectionSize(60)  # 设置行高
 
         layout.addWidget(self.system_table)
 
@@ -280,77 +355,123 @@ class VariableManagement(QWidget):
         """设置全局变量Tab"""
         layout = QVBoxLayout(parent)
 
-        # 全局变量表格
+        # 创建顶部按钮布局（左上角）
+        top_layout = QHBoxLayout()
+        
+        self.add_global_btn = QPushButton("新增变量")
+        self.add_global_btn.setFixedSize(80, 28)  # 调整按钮大小以适应文字
+        self.add_global_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: 1px solid #45a049;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+                border-color: #3d8b40;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+        self.add_global_btn.setCursor(Qt.PointingHandCursor)
+        self.add_global_btn.clicked.connect(self.add_global_variable)
+
+        top_layout.addWidget(self.add_global_btn)
+        top_layout.addStretch()  # 添加弹性空间，将按钮推到左侧
+
+        # 全局变量表格 - 使用全局工具表格的配置和样式
         self.global_table = QTableWidget()
-        self.global_table.setColumnCount(4)
-        self.global_table.setHorizontalHeaderLabels(["变量名", "类型", "值", "描述"])
+        self.global_table.setColumnCount(6)  # 增加一列用于自定义序号，一列用于操作栏
+        self.global_table.setHorizontalHeaderLabels(["序号", "变量名", "类型", "值", "描述", "操作"])
         
-        # 设置列宽 - 固定初始宽度，用户可以调整
-        self.global_table.setColumnWidth(0, 300)  # 变量名列宽
-        self.global_table.setColumnWidth(1, 150)   # 类型列宽
-        self.global_table.setColumnWidth(2, 400)  # 值列宽
-        self.global_table.setColumnWidth(3, 300)  # 描述列宽
-        
-        # 允许用户调整列宽，最后一列跟随窗口拉伸
-        self.global_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.global_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)  # 最后一列自动拉伸
-        self.global_table.setSelectionBehavior(QTableWidget.SelectRows)
-        
-        # 参考接口模板的请求头表格样式
+        # 设置表格属性 - 完全匹配全局工具表格配置
         self.global_table.setAlternatingRowColors(True)
-        self.global_table.verticalHeader().setVisible(False)  # 隐藏序号列
+        self.global_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.global_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 整个表格不可编辑
+        self.global_table.verticalHeader().setVisible(False)  # 去除组件自带序号栏
+        self.global_table.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        
+        # 设置列宽策略 - 使用固定列宽模式
+        header = self.global_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
+        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        header.setSectionsMovable(False)  # 禁止表头拖拽
+        header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
+        
+        # 设置固定列宽 - 参考全局工具表格的列宽设计
+        self.global_table.setColumnWidth(0, 80)     # 序号
+        self.global_table.setColumnWidth(1, 300)    # 变量名
+        self.global_table.setColumnWidth(2, 100)    # 类型
+        self.global_table.setColumnWidth(3, 450)    # 值
+        self.global_table.setColumnWidth(4, 250)    # 描述
+        self.global_table.setColumnWidth(5, 400)    # 操作
+        
+        # 设置表格样式 - 完全匹配全局工具表格的CSS样式
         self.global_table.setStyleSheet("""
             QTableWidget {
-                background-color: #fafafa;
-                alternate-background-color: #f0f0f0;
-                gridline-color: #e0e0e0;
-                border: 1px solid #d0d0d0;
+                background-color: #f8f9fa;
+                alternate-background-color: #ffffff;
+                gridline-color: #e9ecef;
+                border: 1px solid #dee2e6;
                 border-radius: 4px;
+                outline: 0;
             }
             QTableWidget::item {
-                padding: 6px;
-                border-bottom: 1px solid #e8e8e8;
+                padding: 12px 8px;
+                border-bottom: 1px solid #e9ecef;
+                text-align: center;
+                height: 100px;
             }
             QTableWidget::item:selected {
                 background-color: #e3f2fd;
                 color: #1976d2;
+                font-weight: bold;
+            }
+            QTableWidget::item:selected:!active {
+                background-color: #e3f2fd;
+                color: #1976d2;
+                font-weight: bold;
             }
             QTableWidget::item:hover {
-                background-color: #f5f5f5;
+                background-color: #f8f9fa;
             }
             QHeaderView::section {
-                background-color: #d0d0d0;
-                color: #333333;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 6px;
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
+                font-size: 13px;
+                padding: 12px 8px;
                 border: none;
-                border-right: 1px solid #b0b0b0;
+                border-bottom: 2px solid #1976d2;
                 min-height: 25px;
+                text-align: center;
+            }
+            QHeaderView::section:hover {
+                background-color: #e9ecef;
+            }
+            /* 自定义序号列样式 */
+            QTableWidget QTableWidget::item:first-column {
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
             }
         """)
-        self.global_table.setMinimumHeight(400)  # 增加表格高度
-        self.global_table.verticalHeader().setDefaultSectionSize(50)
-
-        # 底部按钮布局（左下角）
-        bottom_layout = QHBoxLayout()
-        bottom_layout.addStretch()  # 添加弹性空间，将按钮推到右侧
         
-        self.add_global_btn = QPushButton("新增")
-        self.add_global_btn.clicked.connect(self.add_global_variable)
+        # 关键设置：设置表格大小策略，允许表格自适应容器宽度
+        self.global_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.global_table.setMinimumHeight(400)  # 设置最小高度，避免表格太矮
+        self.global_table.verticalHeader().setDefaultSectionSize(60)  # 设置行高
+        
+        # 设置表格水平滚动条策略，允许表格自适应
+        self.global_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
-        self.edit_global_btn = QPushButton("编辑")
-        self.edit_global_btn.clicked.connect(self.edit_global_variable)
-
-        self.delete_global_btn = QPushButton("删除")
-        self.delete_global_btn.clicked.connect(self.delete_global_variable)
-
-        bottom_layout.addWidget(self.add_global_btn)
-        bottom_layout.addWidget(self.edit_global_btn)
-        bottom_layout.addWidget(self.delete_global_btn)
-
+        # 添加布局到主布局
+        layout.addLayout(top_layout)
         layout.addWidget(self.global_table)
-        layout.addLayout(bottom_layout)
 
     def get_icon(self, icon_name):
         """获取图标"""
@@ -498,18 +619,31 @@ class VariableManagement(QWidget):
         }
 
         for row, (name, value) in enumerate(system_vars.items()):
-            self.system_table.setItem(row, 0, QTableWidgetItem(name))
+            # 序号 - 居中对齐
+            index_item = QTableWidgetItem(str(row + 1))
+            index_item.setTextAlignment(Qt.AlignCenter)
+            index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
+            self.system_table.setItem(row, 0, index_item)
+            
+            # 变量名 - 居中对齐
+            name_item = QTableWidgetItem(name)
+            name_item.setTextAlignment(Qt.AlignCenter)
+            self.system_table.setItem(row, 1, name_item)
 
-            # 值
+            # 值 - 居中对齐
             if callable(value):
                 value_str = '<动态函数>'
             else:
                 value_str = str(value)
-            self.system_table.setItem(row, 1, QTableWidgetItem(value_str))
+            value_item = QTableWidgetItem(value_str)
+            value_item.setTextAlignment(Qt.AlignCenter)
+            self.system_table.setItem(row, 2, value_item)
 
-            # 描述
+            # 描述 - 居中对齐
             desc = descriptions.get(name, '系统预定义变量')
-            self.system_table.setItem(row, 2, QTableWidgetItem(desc))
+            desc_item = QTableWidgetItem(desc)
+            desc_item.setTextAlignment(Qt.AlignCenter)
+            self.system_table.setItem(row, 3, desc_item)
 
         # 移除自动调整列宽，保持固定列宽
 
@@ -524,16 +658,107 @@ class VariableManagement(QWidget):
             self.global_table.setRowCount(len(global_vars))
 
             for row, var in enumerate(global_vars):
-                self.global_table.setItem(row, 0, QTableWidgetItem(var['name']))
-                self.global_table.setItem(row, 1, QTableWidgetItem(var.get('variable_type', 'string')))
+                # 序号 - 居中对齐
+                index_item = QTableWidgetItem(str(row + 1))
+                index_item.setTextAlignment(Qt.AlignCenter)
+                index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
+                self.global_table.setItem(row, 0, index_item)
                 
-                # 值
+                # 变量名 - 居中对齐
+                name_item = QTableWidgetItem(var['name'])
+                name_item.setTextAlignment(Qt.AlignCenter)
+                self.global_table.setItem(row, 1, name_item)
+                
+                # 类型 - 居中对齐
+                type_item = QTableWidgetItem(var.get('variable_type', 'string'))
+                type_item.setTextAlignment(Qt.AlignCenter)
+                self.global_table.setItem(row, 2, type_item)
+                
+                # 值 - 居中对齐
                 value_str = str(var['value'])
                 if len(value_str) > 50:
                     value_str = value_str[:50] + '...'
-                self.global_table.setItem(row, 2, QTableWidgetItem(value_str))
-                self.global_table.setItem(row, 3, QTableWidgetItem(var.get('description', '')))
-
+                value_item = QTableWidgetItem(value_str)
+                value_item.setTextAlignment(Qt.AlignCenter)
+                self.global_table.setItem(row, 3, value_item)
+                
+                # 描述 - 居中对齐
+                desc_item = QTableWidgetItem(var.get('description', ''))
+                desc_item.setTextAlignment(Qt.AlignCenter)
+                self.global_table.setItem(row, 4, desc_item)
+                
+                # 操作栏 - 编辑、删除、复制按钮
+                operation_widget = QWidget()
+                operation_layout = QHBoxLayout(operation_widget)
+                operation_layout.setContentsMargins(5, 2, 5, 2)
+                operation_layout.setSpacing(5)
+                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
+                
+                # 编辑按钮
+                edit_btn = QPushButton("编辑")
+                edit_btn.setFixedSize(50, 25)
+                edit_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4A90E2;
+                        color: white;
+                        border: none;
+                        border-radius: 3px;
+                        font-size: 11px;
+                    }
+                    QPushButton:hover {
+                        background-color: #3A7BC8;
+                    }
+                    QPushButton:pressed {
+                        background-color: #2A66AE;
+                    }
+                """)
+                edit_btn.clicked.connect(lambda checked, r=row: self.edit_global_variable_by_row(r))
+                
+                # 删除按钮
+                delete_btn = QPushButton("删除")
+                delete_btn.setFixedSize(50, 25)
+                delete_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #E74C3C;
+                        color: white;
+                        border: none;
+                        border-radius: 3px;
+                        font-size: 11px;
+                    }
+                    QPushButton:hover {
+                        background-color: #C0392B;
+                    }
+                    QPushButton:pressed {
+                        background-color: #A9261A;
+                    }
+                """)
+                delete_btn.clicked.connect(lambda checked, r=row: self.delete_global_variable_by_row(r))
+                
+                # 复制按钮
+                copy_btn = QPushButton("复制")
+                copy_btn.setFixedSize(50, 25)
+                copy_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #27AE60;
+                        color: white;
+                        border: none;
+                        border-radius: 3px;
+                        font-size: 11px;
+                    }
+                    QPushButton:hover {
+                        background-color: #219653;
+                    }
+                    QPushButton:pressed {
+                        background-color: #1B7D46;
+                    }
+                """)
+                copy_btn.clicked.connect(lambda checked, r=row: self.copy_global_variable_by_row(r))
+                
+                operation_layout.addWidget(edit_btn)
+                operation_layout.addWidget(delete_btn)
+                operation_layout.addWidget(copy_btn)
+                
+                self.global_table.setCellWidget(row, 5, operation_widget)
             # 移除自动调整列宽，保持固定列宽
         except Exception as e:
             print(f"加载全局变量失败: {e}")
@@ -562,29 +787,25 @@ class VariableManagement(QWidget):
             except Exception as e:
                 Toast.error(self, f"添加变量失败: {str(e)}")
 
-    def edit_global_variable(self):
-        """编辑全局变量"""
+    def format_datetime(self, dt):
+        """格式化日期时间显示"""
+        if not dt:
+            return ""
+        if isinstance(dt, datetime):
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+        return str(dt)
+
+    def edit_global_variable_by_row(self, row):
+        """通过行号编辑全局变量"""
         if not self.current_project:
             return
 
-        selected_items = self.global_table.selectedItems()
-        if not selected_items:
-            Toast.warning(self, "警告", "请先选择一个变量")
-            return
-
-        row = selected_items[0].row()
-        var_name = self.global_table.item(row, 0).text()
-
-        # 获取变量数据
         try:
+            # 获取变量数据
             variables = self.variable_service.get_global_variables_by_project(self.current_project['id'])
-            variable_data = None
-            for var in variables:
-                if var['name'] == var_name:
-                    variable_data = var
-                    break
-
-            if variable_data:
+            if row < len(variables):
+                variable_data = variables[row]
+                
                 dialog = VariableDialog(self, variable_data, self.current_project['id'])
                 if dialog.exec_() == QDialog.Accepted:
                     data = dialog.get_data()
@@ -594,49 +815,78 @@ class VariableManagement(QWidget):
                     Toast.success(self, "变量更新成功")
                     self.load_global_variables()
                     self.data_changed.emit()
-
         except Exception as e:
             Toast.error(self, f"编辑变量失败: {str(e)}")
 
-    def delete_global_variable(self):
-        """删除全局变量"""
+    def delete_global_variable_by_row(self, row):
+        """通过行号删除全局变量"""
         if not self.current_project:
             return
 
-        selected_items = self.global_table.selectedItems()
-        if not selected_items:
-            Toast.warning(self, "警告", "请先选择一个变量")
+        try:
+            # 获取变量数据
+            variables = self.variable_service.get_global_variables_by_project(self.current_project['id'])
+            if row < len(variables):
+                variable_data = variables[row]
+                
+                # 创建确认对话框
+                msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                                     f"确定要删除变量 '{variable_data['name']}' 吗？")
+                
+                # 添加确认和取消按钮
+                confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+                cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+                msg_box.setDefaultButton(cancel_btn)
+                
+                msg_box.exec_()
+                
+                if msg_box.clickedButton() == confirm_btn:
+                    # 使用支持项目维度的删除方法
+                    self.variable_service.delete_global_variable_by_name(variable_data['name'], self.current_project['id'])
+                    Toast.success(self, "变量删除成功")
+                    self.load_global_variables()
+                    self.data_changed.emit()
+        except Exception as e:
+            Toast.error(self, f"删除变量失败: {str(e)}")
+
+    def copy_global_variable_by_row(self, row):
+        """通过行号复制全局变量"""
+        if not self.current_project:
             return
 
-        row = selected_items[0].row()
-        var_name = self.global_table.item(row, 0).text()
-
-        # 创建确认对话框，手动设置按钮文本
-        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
-                             f"确定要删除变量 '{var_name}' 吗？")
-        
-        # 添加确认和取消按钮
-        confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
-        cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
-        msg_box.setDefaultButton(cancel_btn)
-        
-        msg_box.exec_()
-        
-        if msg_box.clickedButton() == confirm_btn:
-            try:
-                # 使用支持项目维度的删除方法
-                self.variable_service.delete_global_variable_by_name(var_name, self.current_project['id'])
-                Toast.success(self, "变量删除成功")
+        try:
+            # 获取变量数据
+            variables = self.variable_service.get_global_variables_by_project(self.current_project['id'])
+            if row < len(variables):
+                variable_data = variables[row]
+                
+                # 创建新变量数据（复制原变量，但修改名称）
+                new_variable_data = {
+                    'name': f"{variable_data['name']}_copy",
+                    'variable_type': variable_data.get('variable_type', 'string'),
+                    'value': variable_data['value'],
+                    'description': variable_data.get('description', ''),
+                    'project_id': self.current_project['id']
+                }
+                
+                # 检查变量名是否重复，如果重复则添加序号
+                counter = 1
+                original_name = new_variable_data['name']
+                while True:
+                    try:
+                        existing = self.variable_service.get_global_variable_by_name(new_variable_data['name'], self.current_project['id'])
+                        if existing:
+                            new_variable_data['name'] = f"{original_name}_{counter}"
+                            counter += 1
+                        else:
+                            break
+                    except:
+                        break
+                
+                # 保存新变量
+                self.variable_service.create_global_variable(new_variable_data)
+                Toast.success(self, f"变量复制成功，新变量名为: {new_variable_data['name']}")
                 self.load_global_variables()
                 self.data_changed.emit()
-
-            except Exception as e:
-                Toast.error(self, f"删除变量失败: {str(e)}")
-
-    def format_datetime(self, dt):
-        """格式化日期时间显示"""
-        if not dt:
-            return ""
-        if isinstance(dt, datetime):
-            return dt.strftime('%Y-%m-%d %H:%M:%S')
-        return str(dt)
+        except Exception as e:
+            Toast.error(self, f"复制变量失败: {str(e)}")

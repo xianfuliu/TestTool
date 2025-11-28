@@ -9,7 +9,7 @@ class CaseFolderService:
         self.db = Database()
 
     def get_folders_by_project(self, project_id: int) -> List[Dict[str, Any]]:
-        """根据项目获取文件夹列表"""
+        """根据项目获取文件夹列表（带层级结构）"""
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -18,12 +18,36 @@ class CaseFolderService:
                                created_at, updated_at
                         FROM case_folders 
                         WHERE project_id = %s
-                        ORDER BY sort_order, created_at
+                        ORDER BY parent_id IS NULL DESC, sort_order, created_at
                     """, (project_id,))
-                    return cursor.fetchall()
+                    folders = cursor.fetchall()
+                    
+                    # 构建层级结构
+                    return self._build_folder_tree(folders)
         except Exception as e:
             print(f"获取文件夹列表失败: {e}")
             return []
+
+    def _build_folder_tree(self, folders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """构建文件夹树形结构"""
+        folder_map = {}
+        root_folders = []
+        
+        # 创建文件夹映射
+        for folder in folders:
+            folder_id = folder['id']
+            folder_map[folder_id] = folder
+            folder['children'] = []
+        
+        # 构建父子关系
+        for folder in folders:
+            parent_id = folder['parent_id']
+            if parent_id and parent_id in folder_map:
+                folder_map[parent_id]['children'].append(folder)
+            else:
+                root_folders.append(folder)
+        
+        return root_folders
 
     def create_folder(self, data: Dict[str, Any]) -> int:
         """创建文件夹"""

@@ -3,21 +3,15 @@ import json
 import sys
 import random
 import string
-from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTableWidgetItem, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
                              QGroupBox, QFormLayout,
-                             QHeaderView, QInputDialog, QCheckBox, QSpinBox,
-                             QListWidget, QListWidgetItem, QSplitter, QToolBar,
-                             QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
-                             QProgressBar, QTreeWidget, QTreeWidgetItem, QFrame,
-                             QScrollArea, QGridLayout, QRadioButton, QButtonGroup)
+                             QHeaderView, QCheckBox, QSpinBox,
+                             QToolBar, QAction, QScrollArea, QSizePolicy)
 from src.ui.widgets.toast_tips import Toast
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QThread, pyqtSignal as Signal
-from PyQt5.QtGui import QIcon, QFont, QColor, QTextCursor
-from src.core.services.global_tool_service import GlobalToolService
-from src.core.models.interface_models import GlobalTool
+from PyQt5.QtCore import Qt, pyqtSignal, QSize,QThread, pyqtSignal as Signal
+from PyQt5.QtGui import QIcon, QColor, QTextCursor
 from src.utils.interface_utils.database_utils import DatabaseUtils
 from src.utils.interface_utils.script_engine import ScriptEngine
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
@@ -189,6 +183,30 @@ class GlobalToolDialog(QDialog):
     def init_ui(self):
         self.setWindowTitle("编辑全局工具" if self.is_edit else "新增全局工具")
         self.setMinimumSize(700, 600)
+        
+        # 设置弹窗样式，确保按钮可见
+        self.setStyleSheet("""
+            QDialogButtonBox QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                background-color: #4CAF50;
+                color: white;
+                min-width: 80px;
+            }
+            QDialogButtonBox QPushButton:hover {
+                background-color: #45a049;
+            }
+            QDialogButtonBox QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            QDialogButtonBox QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
 
         layout = QVBoxLayout(self)
 
@@ -215,6 +233,13 @@ class GlobalToolDialog(QDialog):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        # 将按钮文字改为中文
+        ok_button = button_box.button(QDialogButtonBox.Ok)
+        cancel_button = button_box.button(QDialogButtonBox.Cancel)
+        if ok_button:
+            ok_button.setText("确认")
+        if cancel_button:
+            cancel_button.setText("取消")
 
         layout.addWidget(tab_widget)
         layout.addWidget(button_box)
@@ -282,6 +307,30 @@ class GlobalToolDialog(QDialog):
         # 测试按钮
         self.test_btn = QPushButton("测试工具")
         self.test_btn.clicked.connect(self.test_tool)
+        # 设置测试按钮样式
+        self.test_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: 1px solid #218838;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+                border-color: #1e7e34;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+                border-color: #1c7430;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+                border-color: #6c757d;
+                color: #ced4da;
+            }
+        """)
 
         # 测试结果
         self.test_result_text = QTextEdit()
@@ -308,7 +357,7 @@ class GlobalToolDialog(QDialog):
 
         tool_type = self.type_combo.currentText()
 
-        if tool_type == "SQL查询工具":
+        if tool_type == "SQL工具":
             self.setup_sql_config()
         elif tool_type == "随机数生成器":
             self.setup_random_config()
@@ -496,7 +545,7 @@ class GlobalToolDialog(QDialog):
 
         # 设置工具类型
         type_map = {
-            'sql': 'SQL查询工具',
+            'sql': 'SQL工具',
             'random': '随机数生成器',
             'python': 'Python脚本执行器',
             'timer': '等待定时器',
@@ -512,6 +561,9 @@ class GlobalToolDialog(QDialog):
         self.desc_edit.setText(self.tool_data.get('description', ''))
         self.enabled_check.setChecked(self.tool_data.get('enabled', True))
 
+        # 先更新配置表单，确保相关控件已创建
+        self.update_config_form()
+        
         # 加载配置
         config = self.tool_data.get('config', {})
         self.load_config_data(config)
@@ -520,7 +572,7 @@ class GlobalToolDialog(QDialog):
         """加载配置数据"""
         tool_type = self.type_combo.currentText()
 
-        if tool_type == "SQL查询工具":
+        if tool_type == "SQL工具":
             self.sql_database_type.setCurrentText(config.get('database_type', 'MySQL'))
             self.sql_host.setText(config.get('host', ''))
             self.sql_port.setText(str(config.get('port', '')))
@@ -634,12 +686,13 @@ class GlobalToolDialog(QDialog):
             }
 
         else:  # 自定义工具
-            config_text = self.custom_config_text.toPlainText().strip()
-            if config_text:
-                try:
-                    return json.loads(config_text)
-                except json.JSONDecodeError:
-                    return {}
+            if hasattr(self, 'custom_config_text'):
+                config_text = self.custom_config_text.toPlainText().strip()
+                if config_text:
+                    try:
+                        return json.loads(config_text)
+                    except json.JSONDecodeError:
+                        return {}
             return {}
 
     def test_tool(self):
@@ -695,76 +748,152 @@ class GlobalToolsManager(QWidget):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(8)
 
-        # 工具栏
-        toolbar = QToolBar()
-        toolbar.setIconSize(QSize(16, 16))
+        # 工具栏 - 简化设计，直接添加按钮
+        # 使用QPushButton创建文字按钮
+        self.add_button = QPushButton("新增工具")
+        self.add_button.setFixedSize(90, 35)
+        self.add_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+            }
+        """)
+        self.add_button.clicked.connect(self.add_tool)
 
-        self.add_action = QAction("新增工具", self)
-        self.add_action.triggered.connect(self.add_tool)
-        self.add_action.setIcon(self.get_icon("add.png"))
+        # 直接添加按钮到主布局
+        main_layout.addWidget(self.add_button)
 
-        self.edit_action = QAction("编辑", self)
-        self.edit_action.triggered.connect(self.edit_selected_tool)
-        self.edit_action.setIcon(self.get_icon("edit.png"))
-
-        self.delete_action = QAction("删除", self)
-        self.delete_action.triggered.connect(self.delete_selected_tool)
-        self.delete_action.setIcon(self.get_icon("delete.png"))
-
-        self.test_action = QAction("测试工具", self)
-        self.test_action.triggered.connect(self.test_selected_tool)
-        self.test_action.setIcon(self.get_icon("test.png"))
-
-        self.enable_action = QAction("启用/禁用", self)
-        self.enable_action.triggered.connect(self.toggle_selected_tool)
-        self.enable_action.setIcon(self.get_icon("toggle.png"))
-
-        self.refresh_action = QAction("刷新", self)
-        self.refresh_action.triggered.connect(self.load_tools)
-        self.refresh_action.setIcon(self.get_icon("refresh.png"))
-
-        toolbar.addAction(self.add_action)
-        toolbar.addAction(self.edit_action)
-        toolbar.addAction(self.delete_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self.test_action)
-        toolbar.addAction(self.enable_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self.refresh_action)
-
-        main_layout.addWidget(toolbar)
-
-        # 工具列表表格
+        # 工具列表表格 - 完全匹配测试报告tab中tree_widget的配置和样式
         self.table_widget = QTableWidget()
-        self.table_widget.setColumnCount(6)
+        self.table_widget.setColumnCount(7)  # 新增序号栏和操作栏
         self.table_widget.setHorizontalHeaderLabels([
-            "工具名称", "工具类型", "状态", "描述", "创建时间", "更新时间"
+            "序号", "工具名称", "工具类型", "状态", "描述", "创建时间", "操作"
         ])
-        self.table_widget.horizontalHeader().setStretchLastSection(True)
+        
+        # 设置表格属性 - 完全匹配tree_widget配置
+        self.table_widget.setAlternatingRowColors(True)
         self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.table_widget.customContextMenuRequested.connect(self.show_table_context_menu)
-        self.table_widget.doubleClicked.connect(self.edit_selected_tool)
+        self.table_widget.setEditTriggers(QTableWidget.NoEditTriggers)  # 整个表格不可编辑
+        self.table_widget.verticalHeader().setVisible(False)  # 去除组件自带序号栏
+        self.table_widget.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        
+        # 设置列宽策略 - 使用固定列宽模式，参考tree_widget
+        header = self.table_widget.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
+        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        header.setSectionsMovable(False)  # 禁止表头拖拽
+        header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
+        
+        # 设置固定列宽 - 参考tree_widget的列宽设计
+        self.table_widget.setColumnWidth(0, 100)     # 序号
+        self.table_widget.setColumnWidth(1, 350)    # 工具名称
+        self.table_widget.setColumnWidth(2, 250)    # 工具类型
+        self.table_widget.setColumnWidth(3, 100)      # 状态
+        self.table_widget.setColumnWidth(4, 400)    # 描述
+        self.table_widget.setColumnWidth(5, 250)    # 创建时间
+        self.table_widget.setColumnWidth(6, 350)    # 操作
+        
+        # 设置表格样式 - 完全匹配tree_widget的CSS样式
+        self.table_widget.setStyleSheet("""
+            QTableWidget {
+                background-color: #f8f9fa;
+                alternate-background-color: #ffffff;
+                gridline-color: #e9ecef;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                outline: 0;
+            }
+            QTableWidget::item {
+                padding: 12px 8px;
+                border-bottom: 1px solid #e9ecef;
+                text-align: center;
+                height: 100px;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: #1976d2;
+                font-weight: bold;
+            }
+            QTableWidget::item:selected:!active {
+                background-color: #e3f2fd;
+                color: #1976d2;
+                font-weight: bold;
+            }
+            QTableWidget::item:hover {
+                background-color: #f8f9fa;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
+                font-size: 13px;
+                padding: 12px 8px;
+                border: none;
+                border-bottom: 2px solid #1976d2;
+                min-height: 25px;
+                text-align: center;
+            }
+            QHeaderView::section:hover {
+                background-color: #e9ecef;
+            }
+        """)
 
-        main_layout.addWidget(self.table_widget)
+        # 关键设置：设置表格大小策略，允许表格充分拉伸
+        self.table_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table_widget.setMinimumHeight(400)  # 设置最小高度，避免表格太矮
+        self.table_widget.verticalHeader().setDefaultSectionSize(60)  # 设置行高
+        
+        main_layout.addWidget(self.table_widget, 1)
 
-        # 状态栏
+        # 状态栏 - 现代化设计
         status_layout = QHBoxLayout()
         self.status_label = QLabel("就绪")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-size: 12px;
+                padding: 4px 8px;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+            }
+        """)
         status_layout.addWidget(self.status_label)
         status_layout.addStretch()
 
         main_layout.addLayout(status_layout)
 
+        # 设置整体样式
         self.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #ddd;
-                border-radius: 4px;
+            QWidget {
+                background-color: #f5f5f5;
             }
-            QPushButton {
-                padding: 6px 12px;
+            QToolButton {
+                background-color: #007bff;
+                color: white;
+                border: none;
                 border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QToolButton:hover {
+                background-color: #0056b3;
+            }
+            QToolButton:pressed {
+                background-color: #004085;
             }
         """)
 
@@ -825,14 +954,21 @@ class GlobalToolsManager(QWidget):
             self.table_widget.setRowCount(len(tools))
 
             for row, tool in enumerate(tools):
+                # 序号栏
+                index_item = QTableWidgetItem(str(row + 1))
+                index_item.setTextAlignment(Qt.AlignCenter)
+                index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)
+                self.table_widget.setItem(row, 0, index_item)
+
                 # 工具名称
                 name_item = QTableWidgetItem(tool['name'])
                 name_item.setData(Qt.UserRole, tool['id'])
-                self.table_widget.setItem(row, 0, name_item)
+                name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+                self.table_widget.setItem(row, 1, name_item)
 
                 # 工具类型
                 type_map = {
-                    'sql': 'SQL查询工具',
+                    'sql': 'SQL工具',
                     'random': '随机数生成器',
                     'python': 'Python脚本执行器',
                     'timer': '等待定时器',
@@ -840,37 +976,156 @@ class GlobalToolsManager(QWidget):
                     'custom': '自定义工具'
                 }
                 type_text = type_map.get(tool['tool_type'], tool['tool_type'])
-                self.table_widget.setItem(row, 1, QTableWidgetItem(type_text))
+                type_item = QTableWidgetItem(type_text)
+                type_item.setFlags(type_item.flags() & ~Qt.ItemIsEditable)
+                type_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 2, type_item)
 
-                # 状态
+                # 状态 - 使用现代化样式
                 status_item = QTableWidgetItem("启用" if tool['enabled'] else "禁用")
-                status_item.setForeground(QColor("green") if tool['enabled'] else QColor("red"))
-                self.table_widget.setItem(row, 2, status_item)
+                status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
+                if tool['enabled']:
+                    status_item.setBackground(QColor(229, 248, 237))  # 浅绿色背景
+                    status_item.setForeground(QColor(21, 115, 71))    # 深绿色文字
+                else:
+                    status_item.setBackground(QColor(248, 215, 218))  # 浅红色背景
+                    status_item.setForeground(QColor(114, 28, 36))    # 深红色文字
+                
+                # 设置状态单元格的字体和样式
+                font = status_item.font()
+                font.setBold(True)
+                status_item.setFont(font)
+                status_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 3, status_item)
 
                 # 描述
                 desc = tool.get('description', '')
                 desc_item = QTableWidgetItem(desc)
                 desc_item.setToolTip(desc)
-                self.table_widget.setItem(row, 3, desc_item)
+                desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
+                self.table_widget.setItem(row, 4, desc_item)
 
                 # 创建时间
                 created_at = tool.get('created_at')
                 created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
-                self.table_widget.setItem(row, 4, QTableWidgetItem(created_text))
+                created_item = QTableWidgetItem(created_text)
+                created_item.setFlags(created_item.flags() & ~Qt.ItemIsEditable)
+                created_item.setTextAlignment(Qt.AlignCenter)
+                self.table_widget.setItem(row, 5, created_item)
 
-                # 更新时间
-                updated_at = tool.get('updated_at')
-                updated_text = updated_at.strftime('%Y-%m-%d %H:%M:%S') if updated_at else ""
-                self.table_widget.setItem(row, 5, QTableWidgetItem(updated_text))
+                # 操作栏 - 添加编辑、删除、启用/禁用按钮
+                action_widget = QWidget()
+                action_layout = QHBoxLayout(action_widget)
+                action_layout.setContentsMargins(4, 4, 4, 4)
+                action_layout.setSpacing(6)
+                action_layout.setAlignment(Qt.AlignCenter)  # 设置按钮居中显示
+                
+                # 编辑按钮
+                edit_button = QPushButton("编辑")
+                edit_button.setFixedWidth(60)
+                edit_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 4px 8px;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #0056b3;
+                    }
+                    QPushButton:pressed {
+                        background-color: #004085;
+                    }
+                """)
+                edit_button.clicked.connect(lambda checked, tool_id=tool['id']: self.edit_tool_by_id(tool_id))
+                
+                # 删除按钮
+                delete_button = QPushButton("删除")
+                delete_button.setFixedWidth(60)
+                delete_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #dc3545;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 4px 8px;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #c82333;
+                    }
+                    QPushButton:pressed {
+                        background-color: #bd2130;
+                    }
+                """)
+                delete_button.clicked.connect(lambda checked, tool_id=tool['id']: self.delete_tool_by_id(tool_id))
+                
+                # 启用/禁用按钮
+                toggle_button = QPushButton("禁用" if tool['enabled'] else "启用")
+                toggle_button.setFixedWidth(60)
+                toggle_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #28a745;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 4px 8px;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #218838;
+                    }
+                    QPushButton:pressed {
+                        background-color: #1e7e34;
+                    }
+                """)
+                toggle_button.clicked.connect(lambda checked, tool_id=tool['id']: self.toggle_tool_by_id(tool_id))
+                
+                action_layout.addWidget(edit_button)
+                action_layout.addWidget(delete_button)
+                action_layout.addWidget(toggle_button)
+                
+                # 将按钮容器添加到表格
+                self.table_widget.setCellWidget(row, 6, action_widget)
 
-            # 调整列宽
-            self.table_widget.resizeColumnsToContents()
+            # 移除resizeColumnsToContents调用，因为我们已经设置了固定的列宽
+            # self.table_widget.resizeColumnsToContents()
             self.status_label.setText(f"共 {len(tools)} 个全局工具")
 
         except Exception as e:
             # 静默处理异常，避免启动时弹窗
             print(f"GlobalToolsManager加载工具列表失败: {e}")
             self.status_label.setText("加载失败")
+
+    def edit_tool_by_id(self, tool_id):
+        """根据工具ID编辑工具"""
+        try:
+            tool_data = self.tool_service.get_tool_by_id(tool_id)
+            if not tool_data:
+                Toast.warn(self, "工具不存在")
+                return
+
+            dialog = GlobalToolDialog(self, tool_data)
+            if dialog.exec_() == QDialog.Accepted:
+                data = dialog.get_data()
+                if not data['name']:
+                    Toast.warn(self, "工具名称不能为空")
+                    return
+
+                try:
+                    self.tool_service.update_tool(tool_id, data)
+                    self.load_tools()
+                    self.data_changed.emit()
+                    Toast.success(self, "工具更新成功")
+                except Exception as e:
+                    Toast.error(self, f"更新工具失败: {str(e)}")
+        except Exception as e:
+            Toast.error(self, f"编辑工具失败: {str(e)}")
 
     def get_selected_tool_id(self):
         """获取选中的工具ID"""
@@ -983,32 +1238,46 @@ class GlobalToolsManager(QWidget):
         except Exception as e:
             Toast.error(self, f"{status_text}工具失败: {str(e)}")
 
-    def show_table_context_menu(self, position):
-        """显示表格右键菜单"""
-        item = self.table_widget.itemAt(position)
-        if not item:
-            return
+    def delete_tool_by_id(self, tool_id):
+        """根据工具ID删除工具"""
+        try:
+            tool_data = self.tool_service.get_tool_by_id(tool_id)
+            if not tool_data:
+                Toast.warn(self, "工具不存在")
+                return
 
-        from PyQt5.QtWidgets import QMenu, QAction
+            # 创建确认对话框
+            msg_box = QMessageBox(QMessageBox.Question, "确认删除",
+                                 f"确定要删除工具 '{tool_data['name']}' 吗？")
+            
+            confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+            msg_box.setDefaultButton(cancel_btn)
+            
+            msg_box.exec_()
+            
+            if msg_box.clickedButton() == confirm_btn:
+                self.tool_service.delete_tool(tool_id)
+                self.load_tools()
+                self.data_changed.emit()
+                Toast.success(self, "工具删除成功")
+        except Exception as e:
+            Toast.error(self, f"删除工具失败: {str(e)}")
 
-        menu = QMenu(self)
+    def toggle_tool_by_id(self, tool_id):
+        """根据工具ID启用/禁用工具"""
+        try:
+            tool_data = self.tool_service.get_tool_by_id(tool_id)
+            if not tool_data:
+                Toast.warn(self, "工具不存在")
+                return
 
-        edit_action = QAction("编辑", self)
-        edit_action.triggered.connect(self.edit_selected_tool)
-        menu.addAction(edit_action)
+            new_status = not tool_data['enabled']
+            status_text = "启用" if new_status else "禁用"
 
-        test_action = QAction("测试工具", self)
-        test_action.triggered.connect(self.test_selected_tool)
-        menu.addAction(test_action)
-
-        toggle_action = QAction("启用/禁用", self)
-        toggle_action.triggered.connect(self.toggle_selected_tool)
-        menu.addAction(toggle_action)
-
-        menu.addSeparator()
-
-        delete_action = QAction("删除", self)
-        delete_action.triggered.connect(self.delete_selected_tool)
-        menu.addAction(delete_action)
-
-        menu.exec_(self.table_widget.mapToGlobal(position))
+            self.tool_service.update_tool_status(tool_id, new_status)
+            self.load_tools()
+            self.data_changed.emit()
+            Toast.success(self, f"工具已{status_text}")
+        except Exception as e:
+            Toast.error(self, f"{status_text}工具失败: {str(e)}")

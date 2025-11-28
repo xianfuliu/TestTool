@@ -61,6 +61,10 @@ class ReportDetailDialog(QDialog):
         # 按钮布局
         button_box = QDialogButtonBox(QDialogButtonBox.Close)
         button_box.rejected.connect(self.reject)
+        # 将关闭按钮文字改为中文
+        close_button = button_box.button(QDialogButtonBox.Close)
+        if close_button:
+            close_button.setText("关闭")
 
         layout.addWidget(tab_widget)
         layout.addWidget(button_box)
@@ -669,7 +673,7 @@ class TestReportManager(QWidget):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         
-        # 报告列表表格 - 重构为树形分类表格，参考定时调度UI设计
+        # 报告列表表格
         self.tree_widget = QTreeWidget()
         self.tree_widget.setColumnCount(9)
         self.tree_widget.setHeaderLabels([
@@ -721,7 +725,7 @@ class TestReportManager(QWidget):
                 padding: 12px 8px;
                 border-bottom: 1px solid #e9ecef;
                 text-align: center;
-                height: 48px;
+                height: 32px;
             }
             QTreeWidget::item:selected {
                 background-color: #e3f2fd;
@@ -1150,8 +1154,33 @@ class TestReportManager(QWidget):
                 duration_text = f"{duration:.2f}s" if duration > 0 else "N/A"
                 item.setText(7, duration_text)
                 
-                # 操作栏
-                item.setText(8, "查看详情 | 删除")
+                # 操作栏 - 使用按钮组件替换文字按钮
+                operation_widget = QWidget()
+                operation_layout = QHBoxLayout(operation_widget)
+                operation_layout.setContentsMargins(5, 2, 5, 2)
+                operation_layout.setSpacing(3)
+                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
+                
+                # 查看详情按钮
+                view_btn = QPushButton()
+                view_btn.setFixedSize(25, 25)
+                view_btn.setIcon(self.get_icon("detail.png"))
+                view_btn.setToolTip("查看详情")
+                view_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                view_btn.clicked.connect(lambda checked, report_id=report['id']: self.view_report_detail_by_id(report_id))
+                
+                # 删除按钮
+                delete_btn = QPushButton()
+                delete_btn.setFixedSize(25, 25)
+                delete_btn.setIcon(self.get_icon("delete.png"))
+                delete_btn.setToolTip("删除")
+                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                delete_btn.clicked.connect(lambda checked, report_id=report['id']: self.delete_report_by_id(report_id))
+                
+                operation_layout.addWidget(view_btn)
+                operation_layout.addWidget(delete_btn)
+                
+                self.tree_widget.setItemWidget(item, 8, operation_widget)
                 
                 # 设置数据
                 item.setData(0, Qt.UserRole, report['id'])
@@ -1272,8 +1301,33 @@ class TestReportManager(QWidget):
                 duration_text = f"{duration:.2f}s" if duration > 0 else "N/A"
                 item.setText(7, duration_text)
                 
-                # 操作栏
-                item.setText(8, "查看详情 | 删除")
+                # 操作栏 - 使用按钮组件替换文字按钮
+                operation_widget = QWidget()
+                operation_layout = QHBoxLayout(operation_widget)
+                operation_layout.setContentsMargins(5, 2, 5, 2)
+                operation_layout.setSpacing(3)
+                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
+                
+                # 查看详情按钮
+                view_btn = QPushButton()
+                view_btn.setFixedSize(25, 25)
+                view_btn.setIcon(self.get_icon("detail.png"))
+                view_btn.setToolTip("查看详情")
+                view_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                view_btn.clicked.connect(lambda checked, report_id=report['id']: self.view_report_detail_by_id(report_id))
+                
+                # 删除按钮
+                delete_btn = QPushButton()
+                delete_btn.setFixedSize(25, 25)
+                delete_btn.setIcon(self.get_icon("delete.png"))
+                delete_btn.setToolTip("删除")
+                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                delete_btn.clicked.connect(lambda checked, report_id=report['id']: self.delete_report_by_id(report_id))
+                
+                operation_layout.addWidget(view_btn)
+                operation_layout.addWidget(delete_btn)
+                
+                self.tree_widget.setItemWidget(item, 8, operation_widget)
                 
                 # 设置数据
                 item.setData(0, Qt.UserRole, report['id'])
@@ -1506,8 +1560,12 @@ class TestReportManager(QWidget):
             return
             
         # 确认删除
-        reply = QMessageBox.question(self, "确认删除", "确定要删除这个调度组的所有测试报告吗？",
-                                    QMessageBox.Yes | QMessageBox.No)
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除", "确定要删除这个调度组的所有测试报告吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
         
         if reply == QMessageBox.Yes:
             try:
@@ -1542,8 +1600,12 @@ class TestReportManager(QWidget):
             return
             
         # 确认删除
-        reply = QMessageBox.question(self, "确认删除", "确定要删除这个测试报告吗？",
-                                    QMessageBox.Yes | QMessageBox.No)
+        msg_box = QMessageBox(QMessageBox.Question, "确认删除", "确定要删除这个测试报告吗？")
+        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+        msg_box.setDefaultButton(cancel_button)
+        msg_box.exec_()
+        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
         
         if reply == QMessageBox.Yes:
             try:
@@ -1692,6 +1754,10 @@ class TestReportManager(QWidget):
             # 添加关闭按钮
             button_box = QDialogButtonBox(QDialogButtonBox.Close)
             button_box.rejected.connect(dialog.reject)
+            # 将关闭按钮文字改为中文
+            close_button = button_box.button(QDialogButtonBox.Close)
+            if close_button:
+                close_button.setText("关闭")
             layout.addWidget(button_box)
             
             dialog.exec_()
