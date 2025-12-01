@@ -9,7 +9,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QListWidget, QAbstractItemView,
                              QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QMimeData, QSize
-from PyQt5.QtGui import QIcon, QColor, QDrag, QPixmap
+from PyQt5.QtGui import QIcon, QColor, QDrag, QPixmap, QKeySequence
+from PyQt5.QtWidgets import QShortcut
 from src.core.services.case_folder_service import CaseFolderService
 from src.core.services.api_template_service import ApiTemplateService
 from src.core.services.api_folder_service import ApiFolderService
@@ -469,7 +470,8 @@ class DraggableCaseTreeWidget(QTreeWidget):
             # 发出拖拽信号，让父组件处理
             source_item = self.find_item_by_id(drag_id, drag_type)
             if source_item:
-                self.item_dragged.emit(source_item, None)
+                # 根节点拖拽时，传递源项本身作为目标项的占位符
+                self.item_dragged.emit(source_item, source_item)
 
     def handle_drop_to_folder(self, drag_type, drag_id, folder_id):
         """处理拖拽到文件夹"""
@@ -487,8 +489,8 @@ class DraggableCaseTreeWidget(QTreeWidget):
             source_item = self.find_item_by_id(drag_id, drag_type)
             target_item = self.find_item_by_id(target_id, 'case')
             if source_item and target_item:
-                # 传递目标项和位置信息（根节点没有文件夹，所以传递None）
-                self.item_dragged_with_position.emit(source_item, None, target_item, drop_position)
+                # 传递目标项和位置信息（根节点没有文件夹，所以传递目标项本身作为占位符）
+                self.item_dragged_with_position.emit(source_item, target_item, target_item, drop_position)
 
     def handle_drop_to_folder_with_position(self, drag_type, drag_id, folder_id, target_id, drop_position):
         """处理带位置的拖拽到文件夹"""
@@ -631,9 +633,13 @@ class TestCaseManager(QWidget):
         self.current_folder = None
         self.current_case = None
         self.current_case_data = None
+        # 复制粘贴相关变量
+        self.copied_case_data = None  # 存储复制的测试用例数据
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
+        # 设置快捷键
+        self.setup_shortcuts()
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -763,6 +769,7 @@ class TestCaseManager(QWidget):
         self.case_tree.setHeaderLabels(["测试用例"])
         self.case_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.case_tree.item_dragged.connect(self.on_case_dragged)
+        self.case_tree.item_dragged_with_position.connect(self.on_case_dragged_with_position)
         self.case_tree.customContextMenuRequested.connect(self.show_tree_context_menu)
         self.case_tree.itemClicked.connect(self.on_tree_item_clicked)
         left_layout.addWidget(self.case_tree)
@@ -1288,11 +1295,24 @@ class TestCaseManager(QWidget):
     def load_case_details(self, case_data):
         """加载用例详情"""
         try:
-            # 获取用例完整数据（包括步骤）
-            full_case_data = self.case_service.get_case_with_steps(case_data['id'])
-            self.current_case_data = full_case_data
-            # 使用tabbed_case_editor打开用例进行编辑
-            self.tabbed_case_editor.open_case(full_case_data, self.current_project, case_data.get('folder_id'))
+            # 参数验证：如果case_data是字符串（用例ID），则转换为字典格式
+            if isinstance(case_data, str):
+                # 如果是字符串，假设它是用例ID，获取完整的用例数据
+                full_case_data = self.case_service.get_case_with_steps(case_data)
+                if not full_case_data:
+                    Toast.warning(self, "错误", f"无法找到用例ID为 {case_data} 的测试用例")
+                    return
+                self.current_case_data = full_case_data
+                # 使用tabbed_case_editor打开用例进行编辑
+                self.tabbed_case_editor.open_case(full_case_data, self.current_project, full_case_data.get('folder_id'))
+            elif isinstance(case_data, dict) and 'id' in case_data:
+                # 如果是字典格式，正常处理
+                full_case_data = self.case_service.get_case_with_steps(case_data['id'])
+                self.current_case_data = full_case_data
+                # 使用tabbed_case_editor打开用例进行编辑
+                self.tabbed_case_editor.open_case(full_case_data, self.current_project, case_data.get('folder_id'))
+            else:
+                Toast.warning(self, "错误", f"无效的用例数据格式: {type(case_data)}")
 
         except Exception as e:
             Toast.warning(self, "错误", f"加载用例详情失败: {str(e)}")
@@ -1314,6 +1334,9 @@ class TestCaseManager(QWidget):
             target_data = target_item.data(0, Qt.UserRole)
             if target_data and target_data['type'] == 'folder':
                 target_folder_id = target_data['data']['id']
+        else:
+            # 当target_item为None时（拖拽到根节点），使用None表示根文件夹
+            target_folder_id = None
         
         try:
             # 检查目标文件夹下是否已存在同名用例
@@ -1330,13 +1353,19 @@ class TestCaseManager(QWidget):
                 )
                 return
             
-            # 更新用例的文件夹ID
+            # 更新用例的文件夹ID - 修复：获取完整的用例数据，包括步骤信息
             if source_case['folder_id'] != target_folder_id:
-                # 修复：传入完整的数据字典，包含name字段
-                self.case_service.update_case(source_case['id'], {
-                    'name': source_case['name'],
-                    'folder_id': target_folder_id
-                })
+                # 获取完整的用例数据，包括步骤信息
+                full_case_data = self.case_service.get_case_with_steps(source_case['id'])
+                if not full_case_data:
+                    Toast.error(self, "获取测试用例数据失败")
+                    return
+                
+                # 更新文件夹ID，保持其他数据不变
+                full_case_data['folder_id'] = target_folder_id
+                
+                # 使用完整的用例数据进行更新，确保步骤不会丢失
+                self.case_service.update_case(source_case['id'], full_case_data)
             
             # 重新计算并更新排序顺序
             self.update_case_order(source_case['id'], target_folder_id)
@@ -1346,7 +1375,121 @@ class TestCaseManager(QWidget):
             self.data_changed.emit()
             
         except Exception as e:
-            Toast.error(self, f"拖拽操作失败: {str(e)}")
+            # 检查是否是拖拽到根节点相关的错误
+            if "NoneType" in str(e) or "folder_id" in str(e).lower():
+                Toast.error(self, "拖拽到根节点操作失败，请确保目标用例有有效的文件夹信息")
+            else:
+                Toast.error(self, f"拖拽操作失败: {str(e)}")
+
+    def on_case_dragged_with_position(self, source_item, folder_item, target_item, drop_position):
+        """处理带位置的测试用例拖拽事件（优化版，参考接口模板实现）"""
+        print(f"[DEBUG] 拖拽事件触发: drop_position={drop_position}")
+        
+        if not source_item or not target_item:
+            print("[DEBUG] 源项或目标项为空，返回")
+            return
+            
+        source_data = source_item.data(0, Qt.UserRole)
+        if not source_data or source_data['type'] != 'case':
+            print(f"[DEBUG] 源数据类型不正确: {source_data.get('type') if source_data else 'None'}")
+            return
+            
+        target_data = target_item.data(0, Qt.UserRole)
+        if not target_data or target_data['type'] != 'case':
+            print(f"[DEBUG] 目标数据类型不正确: {target_data.get('type') if target_data else 'None'}")
+            return
+            
+        # 检查拖拽位置：只有当拖拽到目标前面或后面时才执行位置变更
+        if drop_position == 'on':
+            print("[DEBUG] 拖拽到目标位置（on），不执行位置变更")
+            return
+            
+        source_case = source_data['data']
+        target_case = target_data['data']
+        
+        # 检查是否拖拽到自身
+        if source_case['id'] == target_case['id']:
+            return
+        
+        # 确定目标文件夹ID
+        target_folder_id = None
+        if folder_item:
+            folder_data = folder_item.data(0, Qt.UserRole)
+            if folder_data and folder_data['type'] == 'folder':
+                target_folder_id = folder_data['data']['id']
+        else:
+            target_folder_id = target_case.get('folder_id')
+        
+        # 检查拖拽到根节点的情况
+        if not target_folder_id:
+            # 拖拽到根节点，使用None表示根文件夹
+            target_folder_id = None
+        
+        # 显示拖动操作提示
+        position_text = "前面" if drop_position == 'above' else "后面"
+        print(f"正在将 '{source_case['name']}' 移动到 '{target_case['name']}' 的{position_text}...")
+        
+        try:
+            # 检查目标文件夹下是否已存在同名用例
+            if self.case_service.check_case_name_exists(
+                source_case['project_id'], 
+                source_case['name'], 
+                target_folder_id, 
+                source_case['id']
+            ):
+                QMessageBox.warning(
+                    self, 
+                    "名称冲突", 
+                    f"目标文件夹下已存在名为 '{source_case['name']}' 的测试用例，请先修改用例名称再进行拖拽操作。"
+                )
+                print("拖动操作取消：名称冲突")
+                return
+            
+            # 保存原始位置信息（用于恢复机制）
+            original_folder_id = source_case['folder_id']
+            original_sort_order = source_case.get('sort_order', 0)
+            
+            # 更新用例的文件夹ID - 修复：获取完整的用例数据，包括步骤信息
+            if source_case['folder_id'] != target_folder_id:
+                # 获取完整的用例数据，包括步骤信息
+                full_case_data = self.case_service.get_case_with_steps(source_case['id'])
+                if not full_case_data:
+                    Toast.error(self, "获取测试用例数据失败")
+                    return
+                
+                # 更新文件夹ID，保持其他数据不变
+                full_case_data['folder_id'] = target_folder_id
+                
+                # 使用完整的用例数据进行更新，确保步骤不会丢失
+                self.case_service.update_case(source_case['id'], full_case_data)
+            
+            # 根据位置重新计算并更新排序顺序
+            self.update_case_order_with_position(source_case['id'], target_folder_id, target_case['id'], drop_position)
+            
+            # 刷新用例树
+            print("[DEBUG] 开始刷新用例树...")
+            self.load_case_tree()
+            print("[DEBUG] 用例树刷新完成")
+            self.data_changed.emit()
+            print("[DEBUG] 数据变更信号已发射")
+            
+            # 关键修复：同步更新编辑页面中的用例数据
+            self.sync_case_data_in_editor(source_case['id'])
+            
+            # 显示成功消息
+            print(f"成功将 '{source_case['name']}' 移动到 '{target_case['name']}' 的{position_text}")
+            
+        except Exception as e:
+            error_msg = f"带位置拖拽操作失败: {str(e)}"
+            Toast.error(self, error_msg)
+            print(f"拖动失败：{error_msg}")
+            
+            # 尝试恢复原始状态（参考接口模板的恢复机制）
+            try:
+                self._restore_case_original_state(source_case['id'], original_folder_id, original_sort_order)
+                print("已尝试恢复原始状态")
+            except Exception as restore_error:
+                print(f"恢复原始状态失败: {restore_error}")
 
     def update_case_order(self, case_id, folder_id):
         """更新测试用例的排序顺序"""
@@ -1364,24 +1507,208 @@ class TestCaseManager(QWidget):
         except Exception as e:
             print(f"更新用例顺序失败: {e}")
 
-    def on_case_saved(self, case_data):
-        """用例保存事件"""
-        print(f"[DEBUG] on_case_saved接收到数据: id={case_data.get('id')}, name={case_data.get('name')}")
-        print(f"[DEBUG] 数据包含steps字段: {'steps' in case_data}, steps数量: {len(case_data.get('steps', []))}")
+    def update_case_order_with_position(self, case_id, folder_id, target_case_id, drop_position):
+        """根据位置更新测试用例的排序顺序（优化版，参考接口模板实现）"""
+        print(f"[DEBUG] 开始更新用例顺序: case_id={case_id}, folder_id={folder_id}, target_case_id={target_case_id}, drop_position={drop_position}")
         
         try:
+            # 获取目标文件夹中的所有用例（包含源用例，用于计算完整列表）
+            if folder_id:
+                all_cases_in_folder = self.case_service.get_cases_by_folder(self.current_project, folder_id)
+            else:
+                # 对于根节点，只获取folder_id为None的用例
+                all_cases = self.case_service.get_cases_by_project(self.current_project)
+                all_cases_in_folder = [c for c in all_cases if c.get('folder_id') is None]
+            
+            # 过滤掉源用例（如果已经在文件夹中）
+            cases = [c for c in all_cases_in_folder if c['id'] != case_id]
+            
+            print(f"[DEBUG] 获取到用例数量: {len(cases)}")
+            
+            if not cases:
+                print("[DEBUG] 没有用例，使用默认排序")
+                self.update_case_order(case_id, folder_id)
+                return
+            
+            # 找到目标用例的位置
+            target_index = -1
+            for i, case in enumerate(cases):
+                if case['id'] == target_case_id:
+                    target_index = i
+                    break
+            
+            if target_index == -1:
+                # 如果找不到目标用例，使用默认排序
+                self.update_case_order(case_id, folder_id)
+                return
+            
+            # 主流拖动算法：使用更健壮的排序策略（参考接口模板）
+            if drop_position == 'above':
+                # 拖拽到目标用例上方：放在目标用例前面
+                if target_index == 0:
+                    # 如果是第一个用例，放在最前面（使用更安全的差值）
+                    new_sort_order = cases[0].get('sort_order', 0) - 100
+                else:
+                    # 放在目标用例和它前面的用例之间
+                    prev_sort = cases[target_index - 1].get('sort_order', 0)
+                    target_sort = cases[target_index].get('sort_order', 0)
+                    
+                    # 使用更健壮的算法：如果间距足够，直接使用中间值；否则重新分配排序值
+                    if target_sort - prev_sort > 1:
+                        new_sort_order = (prev_sort + target_sort) // 2
+                    else:
+                        # 间距不足，需要重新分配排序值
+                        new_sort_order = self._recalculate_case_sort_order(cases, target_index, 'above')
+            
+            elif drop_position == 'below':
+                # 拖拽到目标用例下方：放在目标用例后面
+                if target_index == len(cases) - 1:
+                    # 如果是最后一个用例，放在最后面
+                    new_sort_order = cases[-1].get('sort_order', 0) + 100
+                else:
+                    # 放在目标用例和它后面的用例之间
+                    target_sort = cases[target_index].get('sort_order', 0)
+                    next_sort = cases[target_index + 1].get('sort_order', 0)
+                    
+                    # 使用更健壮的算法
+                    if next_sort - target_sort > 1:
+                        new_sort_order = (target_sort + next_sort) // 2
+                    else:
+                        # 间距不足，需要重新分配排序值
+                        new_sort_order = self._recalculate_case_sort_order(cases, target_index, 'below')
+            
+            else:
+                # 默认放在最后
+                max_sort_order = max([c.get('sort_order', 0) for c in cases] + [0])
+                new_sort_order = max_sort_order + 100
+            
+            # 确保排序顺序是整数
+            new_sort_order = int(new_sort_order)
+            
+            # 更新用例的排序顺序
+            self.case_service.update_case_order(case_id, folder_id, new_sort_order)
+            
+            # 如果排序值冲突，重新分配所有用例的排序值
+            if self._check_case_sort_order_conflict(folder_id):
+                self._normalize_case_sort_orders(folder_id)
+            
+            print(f"[DEBUG] 用例排序更新成功: case_id={case_id}, new_sort_order={new_sort_order}")
+                
+        except Exception as e:
+            # 检查是否是拖拽到根节点相关的错误
+            if "NoneType" in str(e) or "folder_id" in str(e).lower():
+                print(f"拖拽到根节点排序失败: {str(e)}")
+                # 尝试使用默认排序方法作为备选方案
+                try:
+                    self.update_case_order(case_id, folder_id)
+                except Exception as fallback_error:
+                    print(f"备选排序方法也失败: {str(fallback_error)}")
+            else:
+                print(f"根据位置更新排序顺序失败: {str(e)}")
+                # 提供用户友好的错误提示
+                Toast.error(self, f"拖拽操作失败，请重试。错误信息: {str(e)}")
+
+    def _normalize_sort_orders(self, cases):
+        """标准化排序值，确保间距均匀"""
+        if not cases:
+            return []
+        
+        # 保持原有的顺序，只重新分配排序值
+        # 重新分配排序值，间距为100
+        for i, case in enumerate(cases):
+            case['sort_order'] = (i + 1) * 100
+        
+        return cases
+
+    def _recalculate_case_sort_order(self, cases, target_index, position):
+        """重新计算排序顺序（当间距不足时使用）"""
+        if position == 'above':
+            # 从目标位置开始向前重新分配排序值
+            base_sort = cases[target_index].get('sort_order', 0)
+            return base_sort - 1
+        else:  # 'below'
+            # 从目标位置开始向后重新分配排序值
+            base_sort = cases[target_index].get('sort_order', 0)
+            return base_sort + 1
+
+    def _check_case_sort_order_conflict(self, folder_id):
+        """检查排序值是否存在冲突"""
+        try:
+            if folder_id:
+                cases = self.case_service.get_cases_by_folder(self.current_project, folder_id)
+            else:
+                all_cases = self.case_service.get_cases_by_project(self.current_project)
+                cases = [c for c in all_cases if c.get('folder_id') is None]
+            
+            # 检查是否有重复的排序值
+            sort_orders = [c.get('sort_order', 0) for c in cases]
+            return len(sort_orders) != len(set(sort_orders))
+            
+        except Exception as e:
+            print(f"检查排序值冲突失败: {e}")
+            return False
+
+    def _normalize_case_sort_orders(self, folder_id):
+        """标准化用例排序值，解决冲突"""
+        try:
+            if folder_id:
+                cases = self.case_service.get_cases_by_folder(self.current_project, folder_id)
+            else:
+                all_cases = self.case_service.get_cases_by_project(self.current_project)
+                cases = [c for c in all_cases if c.get('folder_id') is None]
+            
+            # 按当前排序值排序
+            sorted_cases = sorted(cases, key=lambda x: x.get('sort_order', 0))
+            
+            # 重新分配排序值，间距为100
+            for i, case in enumerate(sorted_cases):
+                self.case_service.update_case_order(case['id'], folder_id, (i + 1) * 100)
+                
+        except Exception as e:
+            print(f"标准化用例排序值失败: {e}")
+
+    def _restore_case_original_state(self, case_id, original_folder_id, original_sort_order):
+        """恢复用例的原始状态（用于错误恢复）"""
+        try:
+            # 恢复文件夹ID
+            self.case_service.update_case_order(case_id, original_folder_id, original_sort_order)
+            
+            # 刷新用例树
+            self.load_case_tree()
+            self.data_changed.emit()
+            
+            print(f"已恢复用例 {case_id} 的原始状态")
+            
+        except Exception as e:
+            print(f"恢复用例原始状态失败: {e}")
+
+    def sync_case_data_in_editor(self, case_id):
+        """同步更新编辑页面中的用例数据（关键修复：确保拖拽后编辑页面数据同步）"""
+        try:
+            # 获取更新后的用例数据
+            updated_case = self.case_service.get_case_by_id(case_id)
+            
+            if updated_case:
+                # 同步到多标签页编辑器
+                self.tabbed_case_editor.sync_case_data(case_id, updated_case)
+                print(f"[DEBUG] 已同步用例数据到编辑器: case_id={case_id}")
+            else:
+                print(f"[DEBUG] 无法获取更新后的用例数据: case_id={case_id}")
+                
+        except Exception as e:
+            print(f"[DEBUG] 同步用例数据到编辑器失败: {e}")
+
+    def on_case_saved(self, case_data):
+        """用例保存事件"""
+        try:
             if 'id' in case_data and case_data['id']:
-                print("[DEBUG] 执行更新用例操作")
                 # 更新现有用例
                 self.case_service.update_case(case_data['id'], case_data)
-                print("[DEBUG] 用例更新成功")
                 Toast.success(self, "测试用例已成功更新")
             else:
-                print("[DEBUG] 执行创建新用例操作")
                 # 创建新用例
                 case_id = self.case_service.create_case(case_data)
                 case_data['id'] = case_id
-                print(f"[DEBUG] 用例创建成功，ID: {case_id}")
                 Toast.success(self, "测试用例已成功创建")
             
             # 刷新用例树和数据
@@ -1389,12 +1716,7 @@ class TestCaseManager(QWidget):
             self.data_changed.emit()
             
         except Exception as e:
-            print(f"[ERROR] 保存用例时发生错误: {e}")
-            import traceback
-            traceback.print_exc()
             Toast.error(self, f"保存测试用例失败: {str(e)}")
-        
-        print("[DEBUG] on_case_saved方法执行完成")
 
     def on_case_executed(self, case_id, result):
         """用例执行事件"""
@@ -1547,10 +1869,14 @@ class TestCaseManager(QWidget):
         
         if msg_box.clickedButton() == confirm_btn:
             try:
-                self.case_service.delete_case(case_data['id'])
+                case_id = case_data['id']
+                self.case_service.delete_case(case_id)
                 self.load_case_tree()
                 self.data_changed.emit()
-                # 多标签页编辑器不需要清空
+                
+                # 关闭对应的编辑标签页（如果存在）
+                self.tabbed_case_editor.close_tab_by_case_id(case_id)
+                
                 Toast.success(self, "测试用例删除成功")
             except Exception as e:
                 Toast.error(self, f"删除测试用例失败: {str(e)}")
@@ -1984,3 +2310,173 @@ class TestCaseManager(QWidget):
         drag.setPixmap(icon.pixmap(32, 32))
         
         return drag.exec_(supported_actions)
+
+    def setup_shortcuts(self):
+        """设置复制粘贴快捷键"""
+        # Ctrl+C 复制快捷键 - 只在用例列表区域有效
+        copy_shortcut = QShortcut(QKeySequence("Ctrl+C"), self.case_tree)
+        copy_shortcut.setContext(Qt.WidgetWithChildrenShortcut)  # 限制在用例列表及其子组件内有效
+        copy_shortcut.activated.connect(self.on_copy_shortcut)
+        
+        # Ctrl+V 粘贴快捷键 - 只在用例列表区域有效
+        paste_shortcut = QShortcut(QKeySequence("Ctrl+V"), self.case_tree)
+        paste_shortcut.setContext(Qt.WidgetWithChildrenShortcut)  # 限制在用例列表及其子组件内有效
+        paste_shortcut.activated.connect(self.on_paste_shortcut)
+
+    def on_copy_shortcut(self):
+        """处理Ctrl+C复制快捷键"""
+        # 获取当前选中的项
+        selected_items = self.case_tree.selectedItems()
+        if not selected_items:
+            return
+            
+        item = selected_items[0]
+        data = item.data(0, Qt.UserRole)
+        
+        # 只允许复制测试用例，不允许复制文件夹
+        if not data or data['type'] != 'case':
+            return
+            
+        case_data = data['data']
+        
+        # 获取完整的测试用例数据（包括步骤）
+        case_id = case_data.get('id')
+        if case_id:
+            full_case_data = self.case_service.get_case_with_steps(case_id)
+        else:
+            full_case_data = case_data
+        
+        # 保存复制的测试用例数据（深拷贝，避免引用问题）
+        import copy
+        self.copied_case_data = copy.deepcopy(full_case_data)
+        
+        # 保存当前用例的文件夹ID，用于默认粘贴位置
+        self.copied_case_folder_id = case_data.get('folder_id')
+        
+
+
+    def on_paste_shortcut(self):
+        """处理Ctrl+V粘贴快捷键"""
+        if not self.copied_case_data:
+            return
+            
+        if not self.current_project:
+            return
+            
+        # 获取当前选中的项
+        selected_items = self.case_tree.selectedItems()
+        
+        if selected_items:
+            # 如果选中了项，粘贴到对应位置
+            item = selected_items[0]
+            data = item.data(0, Qt.UserRole)
+            
+            if data and data['type'] == 'folder':
+                # 粘贴到文件夹
+                self.paste_to_folder(data['data']['id'])
+            else:
+                # 如果选中了项但不是文件夹，使用复制时的文件夹作为默认位置
+                if hasattr(self, 'copied_case_folder_id') and self.copied_case_folder_id is not None:
+                    self.paste_to_folder(self.copied_case_folder_id)
+                else:
+                    # 如果没有复制时的文件夹ID，粘贴到根目录（需要修复）
+                    self.paste_to_root()
+        else:
+            # 没有选中项，使用复制时的文件夹作为默认位置
+            if hasattr(self, 'copied_case_folder_id') and self.copied_case_folder_id is not None:
+                self.paste_to_folder(self.copied_case_folder_id)
+            else:
+                # 粘贴到根目录
+                self.paste_to_root()
+
+    def paste_to_folder(self, folder_id):
+        """粘贴到指定文件夹"""
+        try:
+            # 生成唯一的副本名称
+            copy_name = self.generate_copy_name(self.copied_case_data['name'], folder_id)
+            
+            # 创建副本数据，包含所有必要的字段
+            copy_data = {
+                'project_id': self.current_project,
+                'folder_id': folder_id,
+                'name': copy_name,
+                'description': self.copied_case_data.get('description', ''),
+                'environment_id': self.copied_case_data.get('environment_id'),
+                'global_vars': self.copied_case_data.get('global_vars', {}),
+                'enable_encryption': self.copied_case_data.get('enable_encryption', False),
+                'encrypt_url': self.copied_case_data.get('encrypt_url', ''),
+                'decrypt_url': self.copied_case_data.get('decrypt_url', ''),
+                'steps': self.copied_case_data.get('steps', [])  # 修复：使用正确的字段名 'steps' 而不是 'test_steps'
+            }
+            
+            # 创建新的测试用例
+            new_case_id = self.case_service.create_case(copy_data)
+            if new_case_id:
+                # 刷新用例树
+                self.load_case_tree()
+                self.data_changed.emit()
+            
+        except Exception as e:
+            pass
+
+    def paste_to_root(self):
+        """粘贴到根目录（如果没有选中文件夹，使用复制用例原本的文件夹ID）"""
+        try:
+            # 获取复制用例原本的文件夹ID
+            original_folder_id = self.copied_case_data.get('folder_id')
+            
+            # 生成唯一的副本名称
+            copy_name = self.generate_copy_name(self.copied_case_data['name'], original_folder_id)
+            
+            # 创建副本数据，包含所有必要的字段
+            copy_data = {
+                'project_id': self.current_project,
+                'folder_id': original_folder_id,  # 使用复制用例原本的文件夹ID
+                'name': copy_name,
+                'description': self.copied_case_data.get('description', ''),
+                'environment_id': self.copied_case_data.get('environment_id'),
+                'global_vars': self.copied_case_data.get('global_vars', {}),
+                'enable_encryption': self.copied_case_data.get('enable_encryption', False),
+                'encrypt_url': self.copied_case_data.get('encrypt_url', ''),
+                'decrypt_url': self.copied_case_data.get('decrypt_url', ''),
+                'steps': self.copied_case_data.get('steps', [])  # 修复：使用正确的字段名 'steps' 而不是 'test_steps'
+            }
+            
+            # 创建新的测试用例
+            new_case_id = self.case_service.create_case(copy_data)
+            if new_case_id:
+                # 刷新用例树
+                self.load_case_tree()
+                self.data_changed.emit()
+            
+        except Exception as e:
+            pass
+
+    def generate_copy_name(self, original_name: str, folder_id: int = None) -> str:
+        """生成唯一的副本名称"""
+        # 获取当前项目下的所有测试用例
+        cases = self.case_service.get_cases_by_project(self.current_project)
+        
+        # 如果指定了文件夹，只考虑该文件夹下的测试用例
+        if folder_id:
+            cases = [c for c in cases if c.get('folder_id') == folder_id]
+        
+        # 查找所有以原始名称开头的副本
+        copy_pattern = f"{original_name}_copy"
+        existing_copies = []
+        
+        for case in cases:
+            name = case['name']
+            if name.startswith(copy_pattern):
+                # 提取副本编号
+                suffix = name[len(copy_pattern):]
+                if suffix.isdigit():
+                    existing_copies.append(int(suffix))
+        
+        # 如果没有副本，从copy1开始
+        if not existing_copies:
+            return f"{original_name}_copy1"
+        
+        # 找到最大的副本编号并加1
+        max_copy = max(existing_copies)
+        return f"{original_name}_copy{max_copy + 1}"

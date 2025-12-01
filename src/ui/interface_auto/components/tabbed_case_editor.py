@@ -5,9 +5,9 @@ from PyQt5.QtCore import pyqtSignal, Qt, QDataStream, QIODevice, QSize, QThread,
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QLabel, 
     QLineEdit, QTextEdit, QComboBox, QPushButton, QMessageBox, QMenu,
-    QScrollArea, QDialog, QSizePolicy, QApplication, QCheckBox
+    QScrollArea, QDialog, QSizePolicy, QApplication, QCheckBox, QShortcut
 )
-from PyQt5.QtGui import QFont, QTextCursor, QIcon
+from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence
 from .flow_layout import FlowLayout
 from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.interface_step_card import InterfaceStepCard
@@ -1647,6 +1647,10 @@ class CaseTabWidget(QWidget):
         # 环境服务
         self.environment_service = EnvironmentService()
         
+        # 步骤卡片管理相关属性
+        self.current_selected_step_card = None  # 当前选中的步骤卡片
+        self.copied_step_data = None  # 复制的步骤数据
+        
         self.init_ui()
         
         # 如果是编辑模式，加载数据
@@ -2643,6 +2647,9 @@ class CaseTabWidget(QWidget):
         step_card.step_moved.connect(self.on_step_moved)
         step_card.api_template_clicked.connect(self.on_api_template_clicked)
         step_card.step_copied.connect(self.on_step_copied)
+        
+        # 添加鼠标点击事件来跟踪当前选中的步骤卡片
+        step_card.mousePressEvent = lambda event, card=step_card: self.on_step_card_clicked(event, card)
 
         # 添加到流式布局
         self.steps_layout.addWidget(step_card)
@@ -2788,6 +2795,114 @@ class CaseTabWidget(QWidget):
         """接口模板点击事件 - 跳转到对应接口模板编辑tab"""
         # 发送信号通知主窗口跳转到接口模板编辑tab
         self.api_template_edit_requested.emit(api_template_id)
+    
+    def on_step_card_clicked(self, event, step_card):
+        """步骤卡片点击事件 - 跟踪当前选中的步骤卡片"""
+        # 调用父类的鼠标点击事件处理
+        step_card.__class__.mousePressEvent(step_card, event)
+        
+        # 更新当前选中的步骤卡片
+        self.current_selected_step_card = step_card
+        
+        # 可以添加视觉反馈，比如改变边框颜色等
+        # 这里可以添加选中状态的样式变化
+    
+    def copy_current_step(self):
+        """复制当前选中的步骤卡片"""
+        if not self.current_selected_step_card:
+            from src.ui.widgets.toast_tips import Toast
+            Toast.warning(self, "警告", "请先选中一个步骤卡片")
+            return
+        
+        try:
+            # 获取当前选中步骤卡片的数据
+            step_data = self.current_selected_step_card.get_step_data()
+            
+            # 深拷贝步骤数据
+            import copy
+            copied_step_data = copy.deepcopy(step_data)
+            
+            # 生成新的UUID，避免ID冲突
+            import uuid
+            copied_step_data['id'] = str(uuid.uuid4())
+            
+            # 重置后端ID，确保是新步骤
+            copied_step_data['backend_id'] = None
+            
+            # 修改步骤名称，添加"(副本)"后缀
+            original_name = copied_step_data.get('name', '未命名步骤')
+            copied_step_data['name'] = f"{original_name}(副本)"
+            
+            # 存储复制的步骤数据
+            self.copied_step_data = copied_step_data
+            
+            # 显示复制成功提示
+            from src.ui.widgets.toast_tips import Toast
+            Toast.success(self, "步骤已复制到剪贴板")
+            
+        except Exception as e:
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"复制失败: {str(e)}")
+    
+    def paste_step(self):
+        """粘贴步骤卡片"""
+        if not self.copied_step_data:
+            from src.ui.widgets.toast_tips import Toast
+            Toast.warning(self, "警告", "剪贴板中没有可复制的步骤数据")
+            return
+        
+        try:
+            # 确定插入位置
+            insert_index = -1
+            if self.current_selected_step_card:
+                # 如果当前有选中的步骤卡片，找到其在布局中的位置
+                for i in range(self.steps_layout.count()):
+                    item = self.steps_layout.itemAt(i)
+                    if item and item.widget() == self.current_selected_step_card:
+                        insert_index = i + 1  # 插入到选中卡片后面
+                        break
+            
+            # 如果没找到选中卡片的位置，或者没有选中卡片，插入到末尾
+            if insert_index == -1:
+                insert_index = len(self.current_case.steps) if self.current_case else 0
+            
+            # 创建新的步骤对象
+            new_step = TestCaseStep.from_dict(self.copied_step_data)
+            
+            # 确保当前用例存在
+            if not self.current_case:
+                self.current_case = TestCase()
+                self.current_case.name = self.name_edit.text().strip() or "未命名用例"
+                self.current_case.description = self.description_edit.toPlainText().strip()
+                self.current_case.environment_id = self.env_combo.currentData()
+            
+            # 插入新步骤
+            if insert_index < len(self.current_case.steps):
+                self.current_case.steps.insert(insert_index, new_step)
+            else:
+                self.current_case.steps.append(new_step)
+            
+            # 重新生成所有步骤的ID（基于新的顺序）
+            self.regenerate_step_ids()
+            
+            # 更新所有步骤的序号
+            self.update_step_orders()
+            
+            # 重新加载步骤列表
+            self.load_steps()
+            
+            # 标记为已修改
+            if not self.modified:
+                self.modified = True
+                self.modified_signal.emit(True)
+            
+            # 显示粘贴成功提示
+            from src.ui.widgets.toast_tips import Toast
+            Toast.success(self, "步骤粘贴成功")
+            
+        except Exception as e:
+            from src.ui.widgets.toast_tips import Toast
+            Toast.error(self, f"粘贴失败: {str(e)}")
     
     def on_step_copied(self, step_id, copied_step_data):
         """步骤复制事件 - 支持动态ID重排"""
@@ -3411,6 +3526,56 @@ class TabbedCaseEditor(QWidget):
         self.tab_widget.customContextMenuRequested.connect(self.show_tab_context_menu)
         
         layout.addWidget(self.tab_widget)
+        
+        # 设置快捷键
+        self.setup_shortcuts()
+    
+    def setup_shortcuts(self):
+        """设置快捷键"""
+        # Ctrl+S 保存当前标签页
+        self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.save_shortcut.activated.connect(self.on_save_shortcut)
+        
+        # Ctrl+W 关闭当前标签页
+        self.close_shortcut = QShortcut(QKeySequence("Ctrl+W"), self)
+        self.close_shortcut.activated.connect(self.on_close_shortcut)
+        
+        # Ctrl+C 复制当前选中的步骤卡片 - 限制作用域避免与测试用例复制冲突
+        self.copy_shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        self.copy_shortcut.setContext(Qt.WidgetWithChildrenShortcut)  # 限制在编辑器及其子组件内有效
+        self.copy_shortcut.activated.connect(self.on_copy_shortcut)
+        
+        # Ctrl+V 粘贴步骤卡片 - 限制作用域避免与测试用例粘贴冲突
+        self.paste_shortcut = QShortcut(QKeySequence("Ctrl+V"), self)
+        self.paste_shortcut.setContext(Qt.WidgetWithChildrenShortcut)  # 限制在编辑器及其子组件内有效
+        self.paste_shortcut.activated.connect(self.on_paste_shortcut)
+    
+    def on_save_shortcut(self):
+        """Ctrl+S 快捷键处理 - 保存当前标签页"""
+        if self.current_tab_id and self.current_tab_id in self.tabs:
+            tab_widget = self.tabs[self.current_tab_id]['widget']
+            if hasattr(tab_widget, 'save_case'):
+                tab_widget.save_case()
+    
+    def on_close_shortcut(self):
+        """Ctrl+W 快捷键处理 - 关闭当前标签页"""
+        current_index = self.tab_widget.currentIndex()
+        if current_index >= 0:
+            self.close_tab(current_index, from_close_button=False)
+    
+    def on_copy_shortcut(self):
+        """Ctrl+C 快捷键处理 - 复制当前选中的步骤卡片"""
+        if self.current_tab_id and self.current_tab_id in self.tabs:
+            tab_widget = self.tabs[self.current_tab_id]['widget']
+            if hasattr(tab_widget, 'copy_current_step'):
+                tab_widget.copy_current_step()
+    
+    def on_paste_shortcut(self):
+        """Ctrl+V 快捷键处理 - 粘贴步骤卡片"""
+        if self.current_tab_id and self.current_tab_id in self.tabs:
+            tab_widget = self.tabs[self.current_tab_id]['widget']
+            if hasattr(tab_widget, 'paste_step'):
+                tab_widget.paste_step()
     
     def close_tab(self, index, from_close_button=True):
         """关闭标签页"""
@@ -3586,7 +3751,64 @@ class TabbedCaseEditor(QWidget):
         for i in range(tab_count - 1, -1, -1):
             self.close_tab(i, from_close_button=False)
     
+    def close_tab_by_case_id(self, case_id):
+        """根据用例ID关闭对应的标签页（删除用例时使用，不检查未保存修改）"""
+        tab_id = f"case_{case_id}"
+        
+        # 查找对应的标签页索引
+        for i in range(self.tab_widget.count()):
+            widget = self.tab_widget.widget(i)
+            
+            # 查找对应的标签页ID
+            for tid, tab_data in self.tabs.items():
+                if tab_data['widget'] == widget and tid == tab_id:
+                    # 直接关闭标签页，不检查未保存修改（因为用例已经被删除）
+                    self.tab_widget.removeTab(i)
+                    del self.tabs[tab_id]
+                    # 检查是否还有标签页，如果没有则发出关闭信号
+                    if self.tab_widget.count() == 0:
+                        self.tab_closed.emit()
+                    return True
+        
+        return False
 
+    def sync_case_data(self, case_id, updated_case_data):
+        """同步更新编辑页面中的用例数据（关键修复：确保拖拽后编辑页面数据同步）"""
+        try:
+            tab_id = f"case_{case_id}"
+            
+            # 查找对应的标签页
+            if tab_id in self.tabs:
+                tab_data = self.tabs[tab_id]
+                widget = tab_data['widget']
+                current_data = tab_data['data']
+                
+                # 检查是否是同一个用例
+                if 'id' in current_data and current_data['id'] == case_id:
+                    # 更新标签页数据
+                    tab_data['data'] = updated_case_data
+                    
+                    # 更新标签页widget的用例数据
+                    if hasattr(widget, 'case_data'):
+                        widget.case_data = updated_case_data
+                    
+                    # 标记为已修改状态，提示用户保存
+                    self.set_tab_modified(tab_id, True)
+                    if hasattr(widget, 'modified'):
+                        widget.modified = True
+                    if hasattr(widget, 'modified_signal'):
+                        widget.modified_signal.emit(True)
+                    
+                    # 显示提示信息
+                    print(f"[DEBUG] 已同步用例数据到编辑器标签页: case_id={case_id}")
+                    return True
+            
+            print(f"[DEBUG] 未找到对应的用例编辑标签页: case_id={case_id}")
+            return False
+                    
+        except Exception as e:
+            print(f"[DEBUG] 同步用例数据到编辑器失败: {e}")
+            return False
 
     def set_tab_modified(self, tab_id, modified):
         """设置标签页修改状态"""

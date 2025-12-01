@@ -17,10 +17,10 @@ class TestCaseService:
                     cursor.execute("""
                         SELECT id, project_id, folder_id, name, description, 
                                environment_id, global_vars, created_by, created_at, updated_at,
-                               enable_encryption, encrypt_url, decrypt_url
+                               enable_encryption, encrypt_url, decrypt_url, sort_order
                         FROM test_cases 
                         WHERE project_id = %s
-                        ORDER BY created_at DESC
+                        ORDER BY sort_order, created_at
                     """, (project_id,))
                     cases = cursor.fetchall()
 
@@ -162,10 +162,40 @@ class TestCaseService:
                     # 保存步骤数据
                     steps = data.get('steps', [])
                     print(f"[DEBUG] 开始插入步骤数据，共{len(steps)}个步骤")
-                    for i, step_data in enumerate(steps):
-                        print(f"[DEBUG] 处理第{i+1}个步骤: step_order={step_data.get('step_order')}, id={step_data.get('id')}")
-                        step_data['case_id'] = case_id
-                        self.create_case_step(step_data)
+                    
+                    if steps:
+                        # 使用批量插入，避免逐个插入导致的超时问题
+                        for i, step_data in enumerate(steps):
+                            print(f"[DEBUG] 处理第{i+1}个步骤: step_order={step_data.get('step_order')}, id={step_data.get('id')}")
+                            step_data['case_id'] = case_id
+                            step_data['step_order'] = i + 1
+                            
+                            # 处理JSON字段
+                            json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
+                            for field in json_fields:
+                                if field in step_data:
+                                    step_data[field] = json.dumps(step_data[field], ensure_ascii=False)
+                                else:
+                                    step_data[field] = '{}'
+                            
+                            # 直接插入步骤，避免递归调用
+                            cursor.execute("""
+                                INSERT INTO test_case_steps (case_id, api_template_id, step_order, name, 
+                                                           enabled, pre_processing, post_processing, assertions, variables,
+                                                           enable_encryption)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                step_data['case_id'],
+                                step_data.get('api_template_id'),
+                                step_data.get('step_order', 0),
+                                step_data.get('name', ''),
+                                step_data.get('enabled', True),
+                                step_data.get('pre_processing', '{}'),
+                                step_data.get('post_processing', '{}'),
+                                step_data.get('assertions', '{}'),
+                                step_data.get('variables', '{}'),
+                                step_data.get('enable_encryption', None)
+                            ))
                     
                     conn.commit()
                     print(f"[DEBUG] create_case执行完成，返回ID: {case_id}")
@@ -518,18 +548,20 @@ class TestCaseService:
                     if folder_id is None:
                         cursor.execute("""
                             SELECT id, project_id, folder_id, name, description, 
-                                   environment_id, global_vars, created_by, created_at, updated_at
+                                   environment_id, global_vars, created_by, created_at, updated_at,
+                                   sort_order
                             FROM test_cases 
                             WHERE project_id = %s AND folder_id IS NULL
-                            ORDER BY created_at
+                            ORDER BY sort_order, created_at
                         """, (project_id,))
                     else:
                         cursor.execute("""
                             SELECT id, project_id, folder_id, name, description, 
-                                   environment_id, global_vars, created_by, created_at, updated_at
+                                   environment_id, global_vars, created_by, created_at, updated_at,
+                                   sort_order
                             FROM test_cases 
                             WHERE project_id = %s AND folder_id = %s
-                            ORDER BY created_at
+                            ORDER BY sort_order, created_at
                         """, (project_id, folder_id))
                     
                     cases = cursor.fetchall()

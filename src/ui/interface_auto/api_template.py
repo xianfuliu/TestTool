@@ -575,7 +575,8 @@ class DraggableTreeWidget(QTreeWidget):
             # 发出拖拽信号，让父组件处理
             source_item = self.find_item_by_id(drag_id, drag_type)
             if source_item:
-                self.item_dragged.emit(source_item, None)
+                # 根节点拖拽时，传递源项本身作为目标项的占位符
+                self.item_dragged.emit(source_item, source_item)
 
     def handle_drop_to_folder(self, drag_type, drag_id, folder_id):
         """处理拖拽到文件夹"""
@@ -593,8 +594,8 @@ class DraggableTreeWidget(QTreeWidget):
             source_item = self.find_item_by_id(drag_id, drag_type)
             target_item = self.find_item_by_id(target_id, 'template')
             if source_item and target_item:
-                # 传递目标项和位置信息
-                self.item_dragged_with_position.emit(source_item, None, target_item, drop_position)
+                # 传递目标项和位置信息（根节点没有文件夹，所以传递目标项本身作为占位符）
+                self.item_dragged_with_position.emit(source_item, target_item, target_item, drop_position)
 
     def handle_drop_to_folder_with_position(self, drag_type, drag_id, folder_id, target_id, drop_position):
         """处理带位置的拖拽到文件夹"""

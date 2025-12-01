@@ -44,6 +44,8 @@ class TabbedTemplateEditor(QWidget):
         
         layout.addWidget(self.tab_widget)
         
+        # 设置快捷键
+        self.setup_shortcuts()
         
     def open_template(self, template_data=None, project_id=None, folder_id=None):
         """打开或创建模板编辑标签页"""
@@ -162,9 +164,22 @@ class TabbedTemplateEditor(QWidget):
             self.tab_widget.removeTab(index)
             del self.tabs[tab_id]
             # 检查是否还有标签页，如果没有则发出关闭信号
-            if self.tab_widget.count() == 0:
-                self.tab_closed.emit()
-    
+        if self.tab_widget.count() == 0:
+            self.tab_closed.emit()
+
+    def setup_shortcuts(self):
+        """设置快捷键"""
+        # Ctrl+W 关闭当前标签页 - 使用全局作用域确保在任何位置都能触发
+        self.close_shortcut = QShortcut(QKeySequence("Ctrl+W"), self)
+        self.close_shortcut.activated.connect(self.on_close_shortcut)
+        self.close_shortcut.setContext(Qt.ApplicationShortcut)  # 全局作用域
+
+    def on_close_shortcut(self):
+        """Ctrl+W 快捷键处理 - 关闭当前标签页"""
+        current_index = self.tab_widget.currentIndex()
+        if current_index >= 0:
+            self.close_tab(current_index, from_close_button=False)
+
     def show_tab_context_menu(self, pos):
         """显示tab右键菜单"""
         # 获取点击位置的tab索引
