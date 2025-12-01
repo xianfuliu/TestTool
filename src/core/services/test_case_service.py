@@ -145,7 +145,7 @@ class TestCaseService:
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         data['project_id'],
-                        data.get('folder_id'),
+                        data.get('folder_id'),  # 保持folder_id为None，表示根目录（NULL）
                         data['name'],
                         data.get('description', ''),
                         environment_id,  # 可能是None
@@ -520,24 +520,63 @@ class TestCaseService:
             return []
 
     def check_case_name_exists(self, project_id: int, name: str, folder_id: int = None, exclude_case_id: int = None) -> bool:
-        """检查测试用例名称是否已存在"""
+        """检查同一级目录下测试用例名称是否已存在
+        
+        Args:
+            project_id: 项目ID
+            name: 测试用例名称
+            folder_id: 文件夹ID（None表示根目录）
+            exclude_case_id: 排除的测试用例ID（用于编辑时排除自身）
+            
+        Returns:
+            如果名称已存在返回True，否则返回False
+        """
+        print(f"[DEBUG] TestCaseService.check_case_name_exists() - 开始检查名称重复")
+        print(f"[DEBUG] 项目ID: {project_id}")
+        print(f"[DEBUG] 用例名称: {name}")
+        print(f"[DEBUG] 文件夹ID: {folder_id}")
+        print(f"[DEBUG] 排除用例ID: {exclude_case_id}")
+        
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    if exclude_case_id:
-                        cursor.execute("""
+                    # 处理folder_id为None的情况
+                    if folder_id is None:
+                        query = """
                             SELECT id FROM test_cases 
-                            WHERE project_id = %s AND name = %s AND folder_id = %s AND id != %s
-                        """, (project_id, name, folder_id, exclude_case_id))
+                            WHERE project_id = %s AND name = %s AND folder_id IS NULL
+                        """
+                        params = [project_id, name]
+                        print(f"[DEBUG] 使用folder_id IS NULL查询: folder_id={folder_id}")
                     else:
-                        cursor.execute("""
+                        query = """
                             SELECT id FROM test_cases 
                             WHERE project_id = %s AND name = %s AND folder_id = %s
-                        """, (project_id, name, folder_id))
+                        """
+                        params = [project_id, name, folder_id]
+                        print(f"[DEBUG] 使用folder_id = {folder_id}查询")
                     
-                    return cursor.fetchone() is not None
+                    # 添加排除条件（用于编辑时）
+                    if exclude_case_id is not None:
+                        query += " AND id != %s"
+                        params.append(exclude_case_id)
+                        print(f"[DEBUG] 添加排除条件: exclude_case_id={exclude_case_id}")
+                    
+                    print(f"[DEBUG] 执行SQL查询: {query}")
+                    print(f"[DEBUG] SQL参数: {params}")
+                    
+                    cursor.execute(query, params)
+                    result = cursor.fetchone()
+                    exists = result is not None
+                    
+                    print(f"[DEBUG] 查询结果: {result}")
+                    print(f"[DEBUG] 名称是否存在: {exists}")
+                    
+                    return exists
         except Exception as e:
-            print(f"检查测试用例名称是否存在失败: {e}")
+            print(f"[ERROR] 检查测试用例名称是否存在失败: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def get_cases_by_folder(self, project_id: int, folder_id: int = None) -> List[Dict[str, Any]]:

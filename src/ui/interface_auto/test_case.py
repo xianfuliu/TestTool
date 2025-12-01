@@ -7,7 +7,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget,
                              QGroupBox, QFormLayout,QCheckBox, 
                              QListWidget, QListWidgetItem, QSplitter,QFrame, 
                              QListWidget, QAbstractItemView,
-                             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit)
+                             QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
+                             QStackedLayout)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QMimeData, QSize
 from PyQt5.QtGui import QIcon, QColor, QDrag, QPixmap, QKeySequence
 from PyQt5.QtWidgets import QShortcut
@@ -72,205 +73,7 @@ class ApiTemplateTreeWidget(QTreeWidget):
         drag.exec_(supported_actions)
 
 
-class TestCaseDialog(QDialog):
-    """测试用例编辑对话框"""
 
-    def __init__(self, parent=None, case_data=None, project_id=None, folder_id=None):
-        super().__init__(parent)
-        self.case_data = case_data or {}
-        self.project_id = project_id
-        self.folder_id = folder_id
-        self.is_edit = bool(case_data)
-        self.init_ui()
-
-    def init_ui(self):
-        self.setWindowTitle("编辑测试用例" if self.is_edit else "新增测试用例")
-        self.setMinimumSize(600, 500)
-
-        layout = QVBoxLayout(self)
-
-        # 创建Tab页
-        tab_widget = NoWheelTabWidget()
-
-        # 基本信息Tab
-        basic_tab = QWidget()
-        self.setup_basic_tab(basic_tab)
-
-        # 环境配置Tab
-        env_tab = QWidget()
-        self.setup_env_tab(env_tab)
-
-        # 变量配置Tab
-        vars_tab = QWidget()
-        self.setup_vars_tab(vars_tab)
-
-        tab_widget.addTab(basic_tab, "基本信息")
-        tab_widget.addTab(env_tab, "环境配置")
-        tab_widget.addTab(vars_tab, "变量配置")
-
-        # 按钮布局
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-
-        layout.addWidget(tab_widget)
-        layout.addWidget(button_box)
-
-        # 加载数据
-        if self.is_edit:
-            self.load_case_data()
-
-    def setup_basic_tab(self, parent):
-        layout = QVBoxLayout(parent)
-
-        # 基本信息表单
-        form_layout = QFormLayout()
-
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("请输入测试用例名称")
-
-        self.desc_edit = QTextEdit()
-        self.desc_edit.setMaximumHeight(100)
-        self.desc_edit.setPlaceholderText("请输入测试用例描述")
-
-        form_layout.addRow("用例名称:", self.name_edit)
-        form_layout.addRow("用例描述:", self.desc_edit)
-
-        layout.addLayout(form_layout)
-        layout.addStretch()
-
-    def setup_env_tab(self, parent):
-        layout = QVBoxLayout(parent)
-
-        # 环境选择
-        env_layout = QFormLayout()
-
-        self.env_combo = NoWheelComboBox()
-        self.env_combo.addItem("默认环境", 0)
-        # 这里可以从数据库加载环境列表
-        self.env_combo.addItem("开发环境", 1)
-        self.env_combo.addItem("测试环境", 2)
-        self.env_combo.addItem("生产环境", 3)
-
-        env_layout.addRow("测试环境:", self.env_combo)
-
-        # 加解密配置
-        self.encryption_checkbox = QCheckBox("加解密")
-        self.encryption_checkbox.toggled.connect(self.toggle_encryption_fields)
-        env_layout.addRow("", self.encryption_checkbox)
-
-        # 加密接口URL
-        self.encrypt_url_edit = QLineEdit()
-        self.encrypt_url_edit.setPlaceholderText("请输入加密接口URL")
-        self.encrypt_url_edit.setVisible(False)
-        env_layout.addRow("加密接口:", self.encrypt_url_edit)
-
-        # 解密接口URL
-        self.decrypt_url_edit = QLineEdit()
-        self.decrypt_url_edit.setPlaceholderText("请输入解密接口URL")
-        self.decrypt_url_edit.setVisible(False)
-        env_layout.addRow("解密接口:", self.decrypt_url_edit)
-
-        layout.addLayout(env_layout)
-        layout.addStretch()
-
-    def toggle_encryption_fields(self, checked):
-        """切换加解密字段的显示状态"""
-        self.encrypt_url_edit.setVisible(checked)
-        self.decrypt_url_edit.setVisible(checked)
-        
-        # 更新表单布局
-        parent_widget = self.encryption_checkbox.parent()
-        if parent_widget:
-            parent_widget.adjustSize()
-
-    def setup_vars_tab(self, parent):
-        layout = QVBoxLayout(parent)
-
-        # 全局变量配置
-        vars_group = QGroupBox("全局变量配置")
-        vars_layout = QVBoxLayout(vars_group)
-
-        self.vars_text = QTextEdit()
-        self.vars_text.setPlaceholderText(
-            '请输入JSON格式的全局变量，例如: {"base_url": "https://api.example.com", "token": "your_token"}')
-        self.vars_text.setMaximumHeight(200)
-
-        vars_layout.addWidget(QLabel("全局变量 (JSON格式):"))
-        vars_layout.addWidget(self.vars_text)
-
-        # 变量管理器按钮
-        vars_btn_layout = QHBoxLayout()
-        self.vars_manager_btn = QPushButton("打开变量管理器")
-        self.vars_manager_btn.clicked.connect(self.open_variable_manager)
-        vars_btn_layout.addWidget(self.vars_manager_btn)
-        vars_btn_layout.addStretch()
-
-        vars_layout.addLayout(vars_btn_layout)
-
-        layout.addWidget(vars_group)
-        layout.addStretch()
-
-    def load_case_data(self):
-        """加载用例数据到表单"""
-        if not self.case_data:
-            return
-
-        # 基本信息
-        self.name_edit.setText(self.case_data.get('name', ''))
-        self.desc_edit.setText(self.case_data.get('description', ''))
-
-        # 环境
-        env_id = self.case_data.get('environment_id')
-        if env_id:
-            index = self.env_combo.findData(env_id)
-            if index >= 0:
-                self.env_combo.setCurrentIndex(index)
-
-        # 加解密配置
-        enable_encryption = self.case_data.get('enable_encryption', False)
-        self.encryption_checkbox.setChecked(enable_encryption)
-        self.encrypt_url_edit.setText(self.case_data.get('encrypt_url', ''))
-        self.decrypt_url_edit.setText(self.case_data.get('decrypt_url', ''))
-        self.toggle_encryption_fields(enable_encryption)
-
-        # 全局变量
-        global_vars = self.case_data.get('global_vars', {})
-        if global_vars:
-            self.vars_text.setText(json.dumps(global_vars, indent=2, ensure_ascii=False))
-
-    def get_data(self):
-        """获取表单数据"""
-        # 基本信息
-        data = {
-            'name': self.name_edit.text().strip(),
-            'description': self.desc_edit.toPlainText().strip(),
-            'project_id': self.project_id or self.case_data.get('project_id'),
-            'folder_id': self.folder_id or self.case_data.get('folder_id'),
-            'environment_id': self.env_combo.currentData(),
-            'enable_encryption': self.encryption_checkbox.isChecked(),
-            'encrypt_url': self.encrypt_url_edit.text().strip(),
-            'decrypt_url': self.decrypt_url_edit.text().strip()
-        }
-
-        # 全局变量
-        vars_text = self.vars_text.toPlainText().strip()
-        if vars_text:
-            try:
-                data['global_vars'] = json.loads(vars_text)
-            except json.JSONDecodeError:
-                # 如果不是有效的JSON，作为字符串处理
-                data['global_vars'] = vars_text
-        else:
-            data['global_vars'] = {}
-
-        return data
-
-    def open_variable_manager(self):
-        """打开变量管理器"""
-        from src.ui.interface_auto.components.variable_editor import VariableManagerDialog
-        dialog = VariableManagerDialog(self, self.project_id)
-        dialog.exec_()
 
 
 class CaseFolderDialog(QDialog):
@@ -320,6 +123,38 @@ class CaseFolderDialog(QDialog):
             'project_id': self.project_id or self.folder_data.get('project_id'),
             'parent_id': self.parent_folder_id or self.folder_data.get('parent_id')
         }
+
+    def accept(self):
+        """重写accept方法，在保存前验证文件夹名称是否重复"""
+        data = self.get_data()
+        folder_name = data['name']
+        project_id = data['project_id']
+        parent_id = data['parent_id']
+        
+        # 检查文件夹名称是否为空
+        if not folder_name:
+            Toast.warning(self, "警告", "文件夹名称不能为空！")
+            return
+            
+        # 检查文件夹名称是否重复
+        try:
+            from src.core.services.case_folder_service import CaseFolderService
+            folder_service = CaseFolderService()
+            
+            # 如果是编辑模式，排除当前文件夹ID
+            exclude_id = self.folder_data.get('id') if self.is_edit else None
+            
+            if folder_service.check_folder_name_exists(project_id, parent_id, folder_name, exclude_id):
+                Toast.warning(self, "警告", f"同一级目录下已存在名为 '{folder_name}' 的文件夹！")
+                return
+                
+        except Exception as e:
+            print(f"检查文件夹名称重复时出错: {e}")
+            Toast.warning(self, "错误", "检查文件夹名称时发生错误，请稍后重试")
+            return
+            
+        # 名称验证通过，调用父类的accept方法
+        super().accept()
 
 
 class DraggableCaseTreeWidget(QTreeWidget):
@@ -809,6 +644,9 @@ class TestCaseManager(QWidget):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
 
+        # 使用堆叠布局管理标签页编辑器和提示信息
+        self.right_stack = QStackedLayout()
+        
         # 多标签页用例编辑器
         self.tabbed_case_editor = TabbedCaseEditor(self)
         self.tabbed_case_editor.tab_closed.connect(self.on_tab_closed)
@@ -816,7 +654,34 @@ class TestCaseManager(QWidget):
         self.tabbed_case_editor.saved.connect(self.on_case_saved)
         # 连接接口模板编辑请求信号
         self.tabbed_case_editor.api_template_edit_requested.connect(self.api_template_edit_requested.emit)
-        right_layout.addWidget(self.tabbed_case_editor)
+        
+        # 提示信息组件（当没有打开的测试用例时显示）
+        self.empty_prompt_widget = QWidget()
+        empty_layout = QVBoxLayout(self.empty_prompt_widget)
+        empty_layout.setAlignment(Qt.AlignCenter)
+        empty_layout.setSpacing(20)
+        
+        # 添加图标
+        empty_icon_label = QLabel()
+        empty_icon_label.setPixmap(self.get_icon("test_case.png").pixmap(64, 64))
+        empty_icon_label.setAlignment(Qt.AlignCenter)
+        empty_layout.addWidget(empty_icon_label)
+        
+        # 添加提示文字
+        empty_label = QLabel("请先在左侧新增测试用例或选择对应测试用例")
+        empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.setStyleSheet("font-size: 16px; color: #666; margin: 0;")
+        empty_layout.addWidget(empty_label)
+        
+        # 添加堆叠布局到右侧布局
+        right_layout.addLayout(self.right_stack)
+        
+        # 添加组件到堆叠布局
+        self.right_stack.addWidget(self.empty_prompt_widget)
+        self.right_stack.addWidget(self.tabbed_case_editor)
+        
+        # 初始显示提示信息
+        self.right_stack.setCurrentWidget(self.empty_prompt_widget)
 
         # 添加到分割器
         splitter.addWidget(left_widget)
@@ -911,7 +776,7 @@ class TestCaseManager(QWidget):
 
             if projects:
                 self.current_project = projects[0]['id']
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.load_api_templates()
 
         except Exception as e:
@@ -951,17 +816,20 @@ class TestCaseManager(QWidget):
                 index = self.project_combo.findData(current_project_id)
                 if index >= 0:
                     self.project_combo.setCurrentIndex(index)
+                    # 恢复选中项目后，重新加载用例树以保持展开状态
+                    self.load_case_tree(preserve_expanded_state=True)
+                    self.load_api_templates()
                 elif self.project_combo.count() > 0:
                     # 如果之前的项目不存在了，选择第一个项目
                     self.project_combo.setCurrentIndex(0)
                     self.current_project = self.project_combo.currentData()
-                    self.load_case_tree()
+                    self.load_case_tree(preserve_expanded_state=True)
                     self.load_api_templates()
             elif self.project_combo.count() > 0:
                 # 如果没有之前选中的项目，选择第一个
                 self.project_combo.setCurrentIndex(0)
                 self.current_project = self.project_combo.currentData()
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.load_api_templates()
 
         except Exception as e:
@@ -976,7 +844,7 @@ class TestCaseManager(QWidget):
             self.current_case = None
             self.current_case_data = None
             # 多标签页编辑器不需要清空
-            self.load_case_tree()
+            self.load_case_tree(preserve_expanded_state=True)
             self.load_api_templates()
             
             # 更新删除文件夹图标的启用状态
@@ -997,40 +865,140 @@ class TestCaseManager(QWidget):
 
             try:
                 self.folder_service.create_folder(data)
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 Toast.success(self, "文件夹创建成功")
             except Exception as e:
                 Toast.error(self, f"创建文件夹失败: {str(e)}")
 
-    def load_case_tree(self):
-        """加载用例树"""
+    def get_expanded_case_folder_ids(self):
+        """获取当前展开的文件夹ID集合"""
+        expanded_folder_ids = set()
+        self._collect_expanded_case_folder_ids(self.case_tree.invisibleRootItem(), expanded_folder_ids)
+        return expanded_folder_ids
+
+    def _collect_expanded_case_folder_ids(self, parent_item, expanded_folder_ids):
+        """递归收集展开的文件夹ID"""
+        for i in range(parent_item.childCount()):
+            item = parent_item.child(i)
+            data = item.data(0, Qt.UserRole)
+            if data and data.get('type') == 'folder':
+                folder_id = data['data']['id']
+                if item.isExpanded():
+                    expanded_folder_ids.add(folder_id)
+                # 递归处理子项
+                self._collect_expanded_case_folder_ids(item, expanded_folder_ids)
+
+    def restore_case_expanded_state(self, folder_map, expanded_folder_ids):
+        """恢复文件夹展开状态"""
+        for folder_id, folder_item in folder_map.items():
+            if folder_id in expanded_folder_ids:
+                folder_item.setExpanded(True)
+
+    def expand_case_root_folders(self):
+        """展开根级文件夹"""
+        root = self.case_tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            item = root.child(i)
+            data = item.data(0, Qt.UserRole)
+            if data and data.get('type') == 'folder':
+                item.setExpanded(True)
+
+    def get_expanded_api_folder_ids(self):
+        """获取当前展开的接口模板文件夹ID集合"""
+        expanded_folder_ids = set()
+        self._collect_expanded_api_folder_ids(self.api_tree.invisibleRootItem(), expanded_folder_ids)
+        return expanded_folder_ids
+
+    def _collect_expanded_api_folder_ids(self, parent_item, expanded_folder_ids):
+        """递归收集展开的接口模板文件夹ID"""
+        for i in range(parent_item.childCount()):
+            item = parent_item.child(i)
+            data = item.data(0, Qt.UserRole)
+            if data and data.get('type') == 'folder':
+                folder_id = data['data']['id']
+                if item.isExpanded():
+                    expanded_folder_ids.add(folder_id)
+                # 递归处理子项
+                self._collect_expanded_api_folder_ids(item, expanded_folder_ids)
+
+    def restore_api_expanded_state(self, folder_map, expanded_folder_ids):
+        """恢复接口模板文件夹展开状态"""
+        for folder_id, folder_item in folder_map.items():
+            if folder_id in expanded_folder_ids:
+                folder_item.setExpanded(True)
+
+    def expand_api_root_folders(self):
+        """展开接口模板根级文件夹"""
+        root = self.api_tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            item = root.child(i)
+            data = item.data(0, Qt.UserRole)
+            if data and data.get('type') == 'folder':
+                item.setExpanded(True)
+
+    def _expand_folder_by_id(self, folder_id):
+        """根据文件夹ID展开对应的文件夹项"""
+        def expand_folder_recursive(item):
+            """递归查找并展开文件夹"""
+            for i in range(item.childCount()):
+                child_item = item.child(i)
+                data = child_item.data(0, Qt.UserRole)
+                if data and data.get('type') == 'folder' and data['data']['id'] == folder_id:
+                    child_item.setExpanded(True)
+                    return True
+                # 递归查找子项
+                if expand_folder_recursive(child_item):
+                    return True
+            return False
+        
+        # 从根节点开始查找
+        root = self.case_tree.invisibleRootItem()
+        expand_folder_recursive(root)
+
+    def load_case_tree(self, preserve_expanded_state=True):
+        """加载用例树
+        
+        Args:
+            preserve_expanded_state: 是否保持之前的展开状态，默认为True
+        """
+        # 保存当前展开的文件夹ID
+        expanded_folder_ids = set()
+        if preserve_expanded_state:
+            expanded_folder_ids = self.get_expanded_case_folder_ids()
+        
         self.case_tree.clear()
 
         if not self.current_project:
             return
 
         try:
-            # 加载文件夹
+            # 加载文件夹（返回的是嵌套的树形结构）
             folders = self.folder_service.get_folders_by_project(self.current_project)
             folder_map = {}
 
-            # 先创建所有文件夹项
-            for folder in folders:
+            # 递归添加文件夹及其子文件夹到树中
+            def add_folder_to_tree(folder_data, parent_item=None):
+                """递归添加文件夹到树形结构"""
                 folder_item = QTreeWidgetItem()
-                folder_item.setText(0, folder['name'])
-                folder_item.setData(0, Qt.UserRole, {'type': 'folder', 'data': folder})
+                folder_item.setText(0, folder_data['name'])
+                folder_item.setData(0, Qt.UserRole, {'type': 'folder', 'data': folder_data})
                 folder_item.setIcon(0, self.get_icon("folder.png"))
 
-                folder_map[folder['id']] = folder_item
+                folder_map[folder_data['id']] = folder_item
 
-                # 如果是根文件夹，添加到树中
-                if not folder['parent_id']:
-                    self.case_tree.addTopLevelItem(folder_item)
+                # 添加到树中
+                if parent_item:
+                    parent_item.addChild(folder_item)
                 else:
-                    # 添加到父文件夹
-                    parent_item = folder_map.get(folder['parent_id'])
-                    if parent_item:
-                        parent_item.addChild(folder_item)
+                    self.case_tree.addTopLevelItem(folder_item)
+
+                # 递归添加子文件夹
+                for child_folder in folder_data.get('children', []):
+                    add_folder_to_tree(child_folder, folder_item)
+
+            # 添加所有根文件夹及其子文件夹
+            for folder in folders:
+                add_folder_to_tree(folder)
 
             # 加载测试用例
             cases = self.case_service.get_cases_by_project(self.current_project)
@@ -1048,14 +1016,29 @@ class TestCaseManager(QWidget):
                     # 添加到根节点
                     self.case_tree.addTopLevelItem(case_item)
 
-            # 展开所有文件夹
-            self.case_tree.expandAll()
+            # 恢复之前展开的文件夹状态
+            if preserve_expanded_state:
+                if expanded_folder_ids:
+                    self.restore_case_expanded_state(folder_map, expanded_folder_ids)
+                # 如果 expanded_folder_ids 为空，说明之前所有文件夹都是收起的，不展开任何文件夹
+            else:
+                # 默认情况下，只展开根级文件夹
+                self.expand_case_root_folders()
 
         except Exception as e:
                 Toast.error(self, f"加载用例树失败: {str(e)}")
 
-    def load_api_templates(self):
-        """加载接口模板树形结构"""
+    def load_api_templates(self, preserve_expanded_state=True):
+        """加载接口模板树形结构
+        
+        Args:
+            preserve_expanded_state: 是否保持之前的展开状态，默认为True
+        """
+        # 保存当前展开的文件夹ID
+        expanded_folder_ids = set()
+        if preserve_expanded_state:
+            expanded_folder_ids = self.get_expanded_api_folder_ids()
+        
         try:
             if not self.current_project:
                 return
@@ -1110,19 +1093,33 @@ class TestCaseManager(QWidget):
                     # 添加到根节点
                     self.api_tree.addTopLevelItem(template_item)
             
-            # 展开所有文件夹
-            self.api_tree.expandAll()
+            # 恢复之前展开的文件夹状态
+            if preserve_expanded_state:
+                if expanded_folder_ids:
+                    self.restore_api_expanded_state(folder_map, expanded_folder_ids)
+                # 如果 expanded_folder_ids 为空，说明之前所有文件夹都是收起的，不展开任何文件夹
+            else:
+                # 默认情况下，保持所有文件夹收起状态
+                # 不自动展开任何文件夹
+                pass
+                
 
         except Exception as e:
-                Toast.error(self, f"加载接口模板树形结构失败: {str(e)}")
+            Toast.error(self, f"加载接口模板树形结构失败: {str(e)}")        
 
     def filter_api_templates(self):
-        """过滤接口模板树形结构（仅对接口模板名称做搜索，保持文件夹层级关系）"""
+        """过滤接口模板树形结构
+        
+        搜索时如果有命中的结果，则自动展开匹配的层级，无命中则恢复原来的展开状态
+        """
         search_text = self.api_search_edit.text().lower()
         
-        # 如果没有搜索文本，显示所有内容
+        # 保存搜索前的展开状态
+        original_expanded_ids = self.get_expanded_api_folder_ids() if not search_text else set()
+        
+        # 如果没有搜索文本，显示所有内容并恢复原来的展开状态
         if not search_text:
-            self.load_api_templates()
+            self.load_api_templates(preserve_expanded_state=True)
             return
         
         # 重新加载数据并手动过滤
@@ -1163,6 +1160,7 @@ class TestCaseManager(QWidget):
                         parent_item.addChild(folder_item)
             
             # 添加匹配的接口模板到对应文件夹（仅对接口模板名称做模糊搜索）
+            matched_folder_ids = set()
             for template in templates:
                 # 仅对接口模板名称做模糊搜索
                 if search_text in template['name'].lower():
@@ -1178,12 +1176,31 @@ class TestCaseManager(QWidget):
                     folder_id = template.get('folder_id')
                     if folder_id and folder_id in folder_map:
                         folder_map[folder_id].addChild(template_item)
+                        matched_folder_ids.add(folder_id)
                     else:
                         # 添加到根节点
                         self.api_tree.addTopLevelItem(template_item)
             
-            # 展开所有文件夹
-            self.api_tree.expandAll()
+            # 如果有匹配结果，自动展开所有包含匹配项的文件夹及其父文件夹
+            if matched_folder_ids:
+                for folder_id in matched_folder_ids:
+                    if folder_id in folder_map:
+                        folder_map[folder_id].setExpanded(True)
+                        # 递归展开父文件夹
+                        folder = next((f for f in folders if f['id'] == folder_id), None)
+                        if folder and folder['parent_id']:
+                            parent_id = folder['parent_id']
+                            while parent_id:
+                                parent_folder = next((f for f in folders if f['id'] == parent_id), None)
+                                if parent_folder and parent_folder['id'] in folder_map:
+                                    folder_map[parent_folder['id']].setExpanded(True)
+                                    parent_id = parent_folder['parent_id']
+                                else:
+                                    break
+            else:
+                # 无匹配结果，恢复原来的展开状态
+                if original_expanded_ids:
+                    self.restore_api_expanded_state(folder_map, original_expanded_ids)
 
         except Exception as e:
             Toast.warn(self, f"搜索接口模板失败: {str(e)}")
@@ -1194,7 +1211,7 @@ class TestCaseManager(QWidget):
         
         # 如果没有搜索文本，显示所有内容
         if not search_text:
-            self.load_case_tree()
+            self.load_case_tree(preserve_expanded_state=True)
             return
         
         # 重新加载数据并手动过滤
@@ -1282,12 +1299,19 @@ class TestCaseManager(QWidget):
             full_case_data = self.case_service.get_case_with_steps(case_data['id'])
             self.current_case_data = full_case_data
             
+            # 调试信息：检查用例数据
+            print(f"[DEBUG open_case_for_editing] 传入的case_data: id={case_data.get('id')}, name={case_data.get('name')}")
+            print(f"[DEBUG open_case_for_editing] 获取的完整数据: id={full_case_data.get('id')}, name={full_case_data.get('name')}")
+            
             # 打开标签页进行编辑
             self.tabbed_case_editor.open_case(
                 case_data=full_case_data,
                 project_id=full_case_data.get('project_id'),
                 folder_id=full_case_data.get('folder_id')
             )
+            
+            # 打开用例后更新界面显示
+            self.update_editor_display()
 
         except Exception as e:
             Toast.warning(self, "错误", f"加载用例详情失败: {str(e)}")
@@ -1313,6 +1337,9 @@ class TestCaseManager(QWidget):
                 self.tabbed_case_editor.open_case(full_case_data, self.current_project, case_data.get('folder_id'))
             else:
                 Toast.warning(self, "错误", f"无效的用例数据格式: {type(case_data)}")
+            
+            # 打开用例后更新界面显示
+            self.update_editor_display()
 
         except Exception as e:
             Toast.warning(self, "错误", f"加载用例详情失败: {str(e)}")
@@ -1346,7 +1373,7 @@ class TestCaseManager(QWidget):
                 target_folder_id, 
                 source_case['id']
             ):
-                QMessageBox.warning(
+                Toast.warning(
                     self, 
                     "名称冲突", 
                     f"目标文件夹下已存在名为 '{source_case['name']}' 的测试用例，请先修改用例名称再进行拖拽操作。"
@@ -1370,8 +1397,8 @@ class TestCaseManager(QWidget):
             # 重新计算并更新排序顺序
             self.update_case_order(source_case['id'], target_folder_id)
             
-            # 刷新用例树
-            self.load_case_tree()
+            # 刷新用例树，保持展开状态
+            self.load_case_tree(preserve_expanded_state=True)
             self.data_changed.emit()
             
         except Exception as e:
@@ -1437,7 +1464,7 @@ class TestCaseManager(QWidget):
                 target_folder_id, 
                 source_case['id']
             ):
-                QMessageBox.warning(
+                Toast.warning(
                     self, 
                     "名称冲突", 
                     f"目标文件夹下已存在名为 '{source_case['name']}' 的测试用例，请先修改用例名称再进行拖拽操作。"
@@ -1466,9 +1493,9 @@ class TestCaseManager(QWidget):
             # 根据位置重新计算并更新排序顺序
             self.update_case_order_with_position(source_case['id'], target_folder_id, target_case['id'], drop_position)
             
-            # 刷新用例树
+            # 刷新用例树，保持展开状态
             print("[DEBUG] 开始刷新用例树...")
-            self.load_case_tree()
+            self.load_case_tree(preserve_expanded_state=True)
             print("[DEBUG] 用例树刷新完成")
             self.data_changed.emit()
             print("[DEBUG] 数据变更信号已发射")
@@ -1673,8 +1700,8 @@ class TestCaseManager(QWidget):
             # 恢复文件夹ID
             self.case_service.update_case_order(case_id, original_folder_id, original_sort_order)
             
-            # 刷新用例树
-            self.load_case_tree()
+            # 刷新用例树，保持展开状态
+            self.load_case_tree(preserve_expanded_state=True)
             self.data_changed.emit()
             
             print(f"已恢复用例 {case_id} 的原始状态")
@@ -1711,8 +1738,36 @@ class TestCaseManager(QWidget):
                 case_data['id'] = case_id
                 Toast.success(self, "测试用例已成功创建")
             
-            # 刷新用例树和数据
-            self.load_case_tree()
+            # 关键修复：通知标签页编辑器更新内部状态
+            # 查找当前活动的标签页ID
+            if hasattr(self, 'tabbed_case_editor') and hasattr(self.tabbed_case_editor, 'current_tab_id'):
+                current_tab_id = self.tabbed_case_editor.current_tab_id
+                if current_tab_id:
+                    # 直接更新标签页widget的状态，避免循环调用
+                    if current_tab_id in self.tabbed_case_editor.tabs:
+                        tab_data = self.tabbed_case_editor.tabs[current_tab_id]
+                        widget = tab_data['widget']
+                        
+                        # 直接更新widget的case_data和is_edit状态
+                        if hasattr(widget, 'case_data'):
+                            widget.case_data = case_data
+                        if hasattr(widget, 'is_edit'):
+                            widget.is_edit = True
+                        
+                        # 更新标签页数据
+                        tab_data['data'] = case_data
+                        
+                        print(f"=== DEBUG: 已直接更新标签页状态 - tab_id: {current_tab_id}, case_id: {case_data.get('id')} ===")
+            
+            # 刷新用例树和数据，保持展开状态
+            self.load_case_tree(preserve_expanded_state=True)
+            
+            # 自动展开测试用例所在的目录
+            folder_id = case_data.get('folder_id')
+            if folder_id:
+                # 展开测试用例所在的文件夹
+                self._expand_folder_by_id(folder_id)
+            
             self.data_changed.emit()
             
         except Exception as e:
@@ -1725,8 +1780,19 @@ class TestCaseManager(QWidget):
 
     def on_tab_closed(self):
         """标签页关闭事件"""
-        # 当所有标签页都关闭时，可以执行一些清理操作
-        pass
+        # 检查是否还有打开的标签页，更新界面显示
+        self.update_editor_display()
+    
+    def update_editor_display(self):
+        """根据标签页数量更新编辑器显示状态"""
+        if hasattr(self, 'tabbed_case_editor') and hasattr(self.tabbed_case_editor, 'tab_widget'):
+            tab_count = self.tabbed_case_editor.tab_widget.count()
+            if tab_count > 0:
+                # 有打开的标签页，显示标签页编辑器
+                self.right_stack.setCurrentWidget(self.tabbed_case_editor)
+            else:
+                # 没有打开的标签页，显示提示信息
+                self.right_stack.setCurrentWidget(self.empty_prompt_widget)
 
     def create_test_case(self):
         """创建测试用例（打开新的标签页）"""
@@ -1744,6 +1810,28 @@ class TestCaseManager(QWidget):
             project_id=self.current_project, 
             folder_id=folder_id
         )
+        
+        # 创建用例后更新界面显示
+        self.update_editor_display()
+
+    def create_test_case_in_folder(self, folder_data):
+        """在指定文件夹中创建测试用例"""
+        if not self.current_project:
+            Toast.warn(self, "请先选择项目")
+            return
+
+        # 设置当前文件夹
+        self.current_folder = folder_data
+        
+        # 打开新的标签页用于创建测试用例
+        self.tabbed_case_editor.open_case(
+            case_data=None, 
+            project_id=self.current_project, 
+            folder_id=folder_data['id']
+        )
+        
+        # 创建用例后更新界面显示
+        self.update_editor_display()
 
     def get_folder_level(self, folder_id):
         """获取文件夹的层级，根文件夹为0级"""
@@ -1795,64 +1883,66 @@ class TestCaseManager(QWidget):
 
             try:
                 self.folder_service.create_folder(data)
-                self.load_case_tree()
+                
+                # 保存当前展开状态，并确保父文件夹展开
+                expanded_folder_ids = self.get_expanded_case_folder_ids()
+                if parent_folder_id:
+                    expanded_folder_ids.add(parent_folder_id)
+                
+                # 重新加载树形结构，保持展开状态
+                self.load_case_tree(preserve_expanded_state=True)
+                
+                # 确保父文件夹展开
+                if parent_folder_id:
+                    self._expand_folder_by_id(parent_folder_id)
+                
                 self.data_changed.emit()
                 Toast.success(self, "文件夹创建成功")
             except Exception as e:
                 Toast.error(self, f"创建文件夹失败: {str(e)}")
 
-    def add_test_case(self):
-        """新增测试用例"""
+    def add_case_folder_with_parent(self, parent_folder_id):
+        """在指定父文件夹下新增用例文件夹"""
         if not self.current_project:
             Toast.warn(self, "请先选择项目")
             return
+            
+        # 检查文件夹层级，最多允许3级
+        if parent_folder_id:
+            # 获取当前文件夹的层级
+            current_level = self.get_folder_level(parent_folder_id)
+            if current_level >= 3:
+                Toast.warn(self, "文件夹层级最多为3级，无法在当前文件夹下创建子文件夹")
+                return
 
-        folder_id = None
-        if self.current_folder:
-            folder_id = self.current_folder['id']
-
-        dialog = TestCaseDialog(self, project_id=self.current_project, folder_id=folder_id)
+        dialog = CaseFolderDialog(self, project_id=self.current_project, parent_folder_id=parent_folder_id)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                Toast.warn(self, "用例名称不能为空")
+                Toast.warn(self, "文件夹名称不能为空")
                 return
 
             try:
-                case_id = self.case_service.create_case(data)
-                self.load_case_tree()
+                self.folder_service.create_folder(data)
+                
+                # 保存当前展开状态，并确保父文件夹展开
+                expanded_folder_ids = self.get_expanded_case_folder_ids()
+                if parent_folder_id:
+                    expanded_folder_ids.add(parent_folder_id)
+                
+                # 重新加载树形结构，保持展开状态
+                self.load_case_tree(preserve_expanded_state=True)
+                
+                # 确保父文件夹展开
+                if parent_folder_id:
+                    self._expand_folder_by_id(parent_folder_id)
+                
                 self.data_changed.emit()
-
-                # 加载新创建的用例
-                new_case = self.case_service.get_case_by_id(case_id)
-                self.load_case_details(new_case)
-
-                Toast.success(self, "测试用例创建成功")
+                Toast.success(self, "文件夹创建成功")
             except Exception as e:
-                Toast.error(self, f"创建测试用例失败: {str(e)}")
+                Toast.error(self, f"创建文件夹失败: {str(e)}")
 
-    def edit_test_case(self, case_data):
-        """编辑测试用例"""
-        dialog = TestCaseDialog(self, case_data=case_data)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            if not data['name']:
-                Toast.warn(self, "用例名称不能为空")
-                return
 
-            try:
-                self.case_service.update_case(case_data['id'], data)
-                self.load_case_tree()
-                self.data_changed.emit()
-
-                # 如果当前正在编辑这个用例，刷新详情
-                if self.current_case and self.current_case['id'] == case_data['id']:
-                    updated_case = self.case_service.get_case_by_id(case_data['id'])
-                    self.load_case_details(updated_case)
-
-                Toast.success(self, "测试用例更新成功")
-            except Exception as e:
-                Toast.error(self, f"更新测试用例失败: {str(e)}")
 
     def delete_test_case(self, case_data):
         """删除测试用例"""
@@ -1871,7 +1961,7 @@ class TestCaseManager(QWidget):
             try:
                 case_id = case_data['id']
                 self.case_service.delete_case(case_id)
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 
                 # 关闭对应的编辑标签页（如果存在）
@@ -1908,7 +1998,7 @@ class TestCaseManager(QWidget):
                     except Exception as e:
                         print(f"导入用例失败: {e}")
 
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 Toast.success(self, f"成功导入 {success_count} 个测试用例")
 
@@ -1971,12 +2061,17 @@ class TestCaseManager(QWidget):
 
         if data['type'] == 'folder':
             # 文件夹的右键菜单
-            add_folder_action = QAction("新建子文件夹", self)
-            add_folder_action.triggered.connect(self.add_case_folder)
-            menu.addAction(add_folder_action)
+            folder_id = data['data']['id']
+            current_level = self.get_folder_level(folder_id)
+            
+            # 只有当文件夹层级 < 2时才显示"新建子文件夹"按钮（根目录0级，最多到2级）
+            if current_level < 2:
+                add_folder_action = QAction("新建子文件夹", self)
+                add_folder_action.triggered.connect(lambda: self.add_case_folder_with_parent(folder_id))
+                menu.addAction(add_folder_action)
 
             add_case_action = QAction("新建用例", self)
-            add_case_action.triggered.connect(self.create_test_case)
+            add_case_action.triggered.connect(lambda: self.create_test_case_in_folder(data['data']))
             menu.addAction(add_case_action)
 
             menu.addSeparator()
@@ -1991,9 +2086,8 @@ class TestCaseManager(QWidget):
 
         else:
             # 测试用例的右键菜单
-            edit_action = QAction("编辑", self)
-            edit_action.triggered.connect(lambda: self.edit_test_case(data['data']))
-            menu.addAction(edit_action)
+            # edit_test_case方法已删除，使用TabbedCaseEditor进行编辑
+            pass
 
             run_action = QAction("执行", self)
             run_action.triggered.connect(lambda: self.run_test_case(data['data']))
@@ -2006,58 +2100,6 @@ class TestCaseManager(QWidget):
             menu.addAction(delete_action)
 
         menu.exec_(self.case_tree.mapToGlobal(position))
-
-    def show_api_context_menu(self, position):
-        """显示接口模板树形结构的右键菜单"""
-        item = self.api_tree.itemAt(position)
-        if not item:
-            return
-
-        data = item.data(0, Qt.UserRole)
-        if not data:
-            return
-
-        from PyQt5.QtWidgets import QMenu, QAction
-
-        menu = QMenu(self)
-
-        if data['type'] == 'folder':
-            # 文件夹的右键菜单
-            add_folder_action = QAction("新建子文件夹", self)
-            add_folder_action.triggered.connect(self.add_api_folder)
-            menu.addAction(add_folder_action)
-
-            add_template_action = QAction("新建接口模板", self)
-            add_template_action.triggered.connect(self.add_api_template)
-            menu.addAction(add_template_action)
-
-            menu.addSeparator()
-
-            edit_action = QAction("重命名", self)
-            edit_action.triggered.connect(lambda: self.edit_api_folder(data['data']))
-            menu.addAction(edit_action)
-
-            delete_action = QAction("删除", self)
-            delete_action.triggered.connect(lambda: self.delete_api_folder(data['data']))
-            menu.addAction(delete_action)
-
-        else:
-            # 接口模板的右键菜单
-            edit_action = QAction("编辑", self)
-            edit_action.triggered.connect(lambda: self.edit_api_template(data['data']))
-            menu.addAction(edit_action)
-
-            run_action = QAction("测试", self)
-            run_action.triggered.connect(lambda: self.test_api_template(data['data']))
-            menu.addAction(run_action)
-
-            menu.addSeparator()
-
-            delete_action = QAction("删除", self)
-            delete_action.triggered.connect(lambda: self.delete_api_template(data['data']))
-            menu.addAction(delete_action)
-
-        menu.exec_(self.api_tree.mapToGlobal(position))
 
     def add_api_folder(self):
         """新增接口文件夹"""
@@ -2122,71 +2164,6 @@ class TestCaseManager(QWidget):
             except Exception as e:
                 Toast.error(self, f"删除文件夹失败: {str(e)}")
 
-    def add_api_template(self):
-        """新增接口模板"""
-        if not self.current_project:
-            Toast.warn(self, "请先选择项目")
-            return
-
-        # 导入ApiTemplateDialog
-        from src.ui.interface_auto.components.api_template_dialog import ApiTemplateDialog
-        
-        dialog = ApiTemplateDialog(self, project_id=self.current_project)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            if not data['name']:
-                Toast.warn(self, "接口模板名称不能为空")
-                return
-
-            try:
-                self.api_service.create_template(data)
-                self.load_api_templates()
-                Toast.success(self, "接口模板创建成功")
-            except Exception as e:
-                Toast.error(self, f"创建接口模板失败: {str(e)}")
-
-    def edit_api_template(self, template_data):
-        """编辑接口模板"""
-        # 导入ApiTemplateDialog
-        from src.ui.interface_auto.components.api_template_dialog import ApiTemplateDialog
-        
-        dialog = ApiTemplateDialog(self, template_data=template_data)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            if not data['name']:
-                Toast.warn(self, "接口模板名称不能为空")
-                return
-
-            try:
-                self.api_service.update_template(template_data['id'], data)
-                self.load_api_templates()
-                Toast.success(self, "接口模板更新成功")
-            except Exception as e:
-                Toast.error(self, f"更新接口模板失败: {str(e)}")
-
-    def delete_api_template(self, template_data):
-        """删除接口模板"""
-        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
-                             f"确定要删除接口模板 '{template_data['name']}' 吗？")
-        confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
-        cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
-        msg_box.setDefaultButton(cancel_button)
-        msg_box.exec_()
-        reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
-
-        if reply == QMessageBox.Yes:
-            try:
-                self.api_service.delete_template(template_data['id'])
-                self.load_api_templates()
-                Toast.success(self, "接口模板删除成功")
-            except Exception as e:
-                Toast.error(self, f"删除接口模板失败: {str(e)}")
-
-    def test_api_template(self, template_data):
-        """测试接口模板"""
-        Toast.info(self, f"测试接口模板: {template_data['name']}")
-        # 这里可以添加实际的接口测试逻辑
-
     def on_api_tree_item_clicked(self, item, column):
         """处理接口模板树形结构项点击事件"""
         data = item.data(0, Qt.UserRole)
@@ -2214,7 +2191,7 @@ class TestCaseManager(QWidget):
 
             try:
                 self.folder_service.update_folder(folder_data['id'], data)
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 Toast.success(self, "文件夹更新成功")
             except Exception as e:
@@ -2234,7 +2211,7 @@ class TestCaseManager(QWidget):
         if reply == QMessageBox.Yes:
             try:
                 self.folder_service.delete_folder(folder_data['id'])
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 # 多标签页编辑器不需要清空
                 Toast.success(self, "文件夹删除成功")
@@ -2413,7 +2390,7 @@ class TestCaseManager(QWidget):
             new_case_id = self.case_service.create_case(copy_data)
             if new_case_id:
                 # 刷新用例树
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
             
         except Exception as e:
@@ -2446,7 +2423,7 @@ class TestCaseManager(QWidget):
             new_case_id = self.case_service.create_case(copy_data)
             if new_case_id:
                 # 刷新用例树
-                self.load_case_tree()
+                self.load_case_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
             
         except Exception as e:

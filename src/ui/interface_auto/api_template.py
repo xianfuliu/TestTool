@@ -1193,8 +1193,17 @@ class ApiTemplateManager(QWidget):
             if self.project_combo.count() > 0:
                 self.project_combo.setCurrentIndex(0)
 
-    def load_api_tree(self):
-        """加载接口树"""
+    def load_api_tree(self, preserve_expanded_state=True):
+        """加载接口树
+        
+        Args:
+            preserve_expanded_state: 是否保持之前的展开状态，默认为True
+        """
+        # 保存当前展开的文件夹ID
+        expanded_folder_ids = set()
+        if preserve_expanded_state:
+            expanded_folder_ids = self.get_expanded_folder_ids()
+        
         self.tree_widget.clear()
 
         if not self.current_project:
@@ -1243,12 +1252,57 @@ class ApiTemplateManager(QWidget):
                     # 添加到根节点
                     self.tree_widget.addTopLevelItem(template_item)
 
-            # 展开所有文件夹
-            self.tree_widget.expandAll()
+            # 恢复之前展开的文件夹状态
+            if preserve_expanded_state:
+                if expanded_folder_ids:
+                    self.restore_expanded_state(folder_map, expanded_folder_ids)
+                # 如果 expanded_folder_ids 为空，说明之前所有文件夹都是收起的，不展开任何文件夹
+            else:
+                # 默认情况下，只展开根级文件夹
+                self.expand_root_folders()
 
         except Exception as e:
             print(f"加载接口树失败: {str(e)}")
             # 静默处理，不显示弹窗
+
+    def get_expanded_folder_ids(self):
+        """获取当前展开的文件夹ID集合"""
+        expanded_ids = set()
+        
+        # 遍历所有顶级项目
+        for i in range(self.tree_widget.topLevelItemCount()):
+            top_item = self.tree_widget.topLevelItem(i)
+            self._collect_expanded_folder_ids(top_item, expanded_ids)
+        
+        return expanded_ids
+    
+    def _collect_expanded_folder_ids(self, item, expanded_ids):
+        """递归收集展开的文件夹ID"""
+        data = item.data(0, Qt.UserRole)
+        if data and data['type'] == 'folder':
+            folder_id = data['data']['id']
+            if item.isExpanded():
+                expanded_ids.add(folder_id)
+        
+        # 递归处理子项目
+        for i in range(item.childCount()):
+            child_item = item.child(i)
+            self._collect_expanded_folder_ids(child_item, expanded_ids)
+    
+    def restore_expanded_state(self, folder_map, expanded_folder_ids):
+        """恢复之前展开的文件夹状态"""
+        for folder_id in expanded_folder_ids:
+            folder_item = folder_map.get(folder_id)
+            if folder_item:
+                folder_item.setExpanded(True)
+    
+    def expand_root_folders(self):
+        """展开根级文件夹"""
+        for i in range(self.tree_widget.topLevelItemCount()):
+            item = self.tree_widget.topLevelItem(i)
+            data = item.data(0, Qt.UserRole)
+            if data and data['type'] == 'folder':
+                item.setExpanded(True)
 
     def on_tree_item_clicked(self, item):
         """树形项目点击事件"""
@@ -1378,8 +1432,8 @@ class ApiTemplateManager(QWidget):
             # 重新计算并更新排序顺序
             self.update_template_order(source_template['id'], target_folder_id)
             
-            # 刷新接口树
-            self.load_api_tree()
+            # 刷新接口树，保持之前的展开状态
+            self.load_api_tree(preserve_expanded_state=True)
             self.data_changed.emit()
             
             # 显示拖拽成功提示
@@ -1460,8 +1514,8 @@ class ApiTemplateManager(QWidget):
             # 根据位置重新计算并更新排序顺序
             self.update_template_order_with_position(source_template['id'], target_folder_id, target_template['id'], drop_position)
             
-            # 刷新接口树
-            self.load_api_tree()
+            # 刷新接口树，保持之前的展开状态
+            self.load_api_tree(preserve_expanded_state=True)
             self.data_changed.emit()
             
             # 同步编辑页面数据
@@ -2048,8 +2102,8 @@ class ApiTemplateManager(QWidget):
                     QMessageBox.critical(self, "错误", "接口模板创建失败")
             
             if save_success:
-                # 刷新接口树
-                self.load_api_tree()
+                # 刷新接口树，保持之前的展开状态
+                self.load_api_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 
                 # 标记标签页为已保存状态
@@ -2230,7 +2284,7 @@ class ApiTemplateManager(QWidget):
 
             try:
                 self.folder_service.update_folder(folder_data['id'], data)
-                self.load_api_tree()
+                self.load_api_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 Toast.success(self, "文件夹更新成功")
             except Exception as e:
@@ -2334,7 +2388,7 @@ class ApiTemplateManager(QWidget):
                 
                 # 创建新的模板
                 new_template = self.api_service.create_template(template_copy)
-                self.load_api_tree()
+                self.load_api_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 
                 # 自动打开编辑页面
@@ -2377,7 +2431,7 @@ class ApiTemplateManager(QWidget):
                 
                 # 创建新的模板
                 new_template = self.api_service.create_template(template_copy)
-                self.load_api_tree()
+                self.load_api_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 
                 # 自动打开编辑页面
@@ -2409,7 +2463,7 @@ class ApiTemplateManager(QWidget):
         if reply == QMessageBox.Yes:
             try:
                 self.folder_service.delete_folder(folder_data['id'])
-                self.load_api_tree()
+                self.load_api_tree(preserve_expanded_state=True)
                 self.data_changed.emit()
                 self.info_label.show()
                 # 删除后重置当前选中的文件夹

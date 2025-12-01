@@ -1632,7 +1632,8 @@ class CaseTabWidget(QWidget):
         self.case_data = case_data or {}
         self.project_id = project_id
         self.folder_id = folder_id
-        self.is_edit = bool(case_data)
+        # 修复：is_edit不仅基于case_data是否为空，还要基于case_data中是否有id字段
+        self.is_edit = bool(case_data) and ('id' in case_data and case_data['id'])
         self.modified = False
         
         # 测试用例相关属性
@@ -2021,9 +2022,11 @@ class CaseTabWidget(QWidget):
     
     def on_content_changed(self):
         """内容变化时标记为已修改"""
+        print(f"=== DEBUG: CaseTabWidget.on_content_changed() - 当前modified状态: {self.modified} ===")
         if not self.modified:
             self.modified = True
             self.modified_signal.emit(True)
+            print(f"=== DEBUG: CaseTabWidget.on_content_changed() - 修改后modified状态: {self.modified} ===")
     
     def toggle_encryption_config(self):
         """切换加解密配置区域的显示/隐藏"""
@@ -2253,8 +2256,10 @@ class CaseTabWidget(QWidget):
         self.load_steps()
         
         # 重置修改状态
+        print(f"=== DEBUG: CaseTabWidget.load_case_data() - 重置前modified状态: {self.modified} ===")
         self.modified = False
         self.modified_signal.emit(False)
+        print(f"=== DEBUG: CaseTabWidget.load_case_data() - 重置后modified状态: {self.modified} ===")
     
     def save_case(self):
         """保存用例 - 基于前端ID系统更新步骤顺序，并更新接口模板名称"""
@@ -2308,6 +2313,50 @@ class CaseTabWidget(QWidget):
             Toast.warning(self, "警告", "用例名称不能为空")
             return
         
+        # 验证测试用例名称是否重复
+        print(f"=== DEBUG: CaseTabWidget.save_case() - 开始验证测试用例名称重复 ===")
+        print(f"=== DEBUG: 项目ID: {self.project_id}, 文件夹ID: {self.folder_id}, 用例名称: {self.current_case.name} ===")
+        
+        from src.core.services.test_case_service import TestCaseService
+        case_service = TestCaseService()
+        
+        # 检查名称是否重复
+        exclude_id = None
+        # 修复：更健壮的exclude_id获取逻辑
+        print(f"=== DEBUG: save_case() - 开始检查名称重复 ===")
+        print(f"=== DEBUG: self.is_edit = {self.is_edit} ===")
+        print(f"=== DEBUG: self.case_data = {self.case_data} ===")
+        print(f"=== DEBUG: hasattr(self, 'current_case') = {hasattr(self, 'current_case')} ===")
+        
+        if self.is_edit:
+            # 优先从self.case_data获取ID
+            if 'id' in self.case_data and self.case_data['id']:
+                exclude_id = self.case_data['id']
+                print(f"=== DEBUG: 从self.case_data获取ID: {exclude_id} ===")
+            # 如果self.case_data中没有ID，尝试从current_case获取
+            elif hasattr(self, 'current_case') and self.current_case and hasattr(self.current_case, 'id') and self.current_case.id:
+                exclude_id = self.current_case.id
+                print(f"=== DEBUG: 从self.current_case获取ID: {exclude_id} ===")
+            else:
+                print(f"=== DEBUG: 无法获取到有效的用例ID ===")
+            
+            print(f"=== DEBUG: 编辑模式，最终排除当前用例ID: {exclude_id} ===")
+        else:
+            print(f"=== DEBUG: 新增模式，不排除任何用例ID ===")
+        
+        name_exists = case_service.check_case_name_exists(
+            self.project_id,
+            self.current_case.name, 
+            self.folder_id, 
+            exclude_id
+        )
+        
+        print(f"=== DEBUG: 名称重复检查结果: {name_exists} ===")
+        
+        if name_exists:
+            Toast.warning(self, "警告", f"测试用例名称 '{self.current_case.name}' 已存在，请使用其他名称")
+            return
+        
         # 校验加解密配置：如果启用了加解密，必须配置加解密URL
         if self.current_case.enable_encryption:
             if not self.current_case.encrypt_url or not self.current_case.decrypt_url:
@@ -2341,8 +2390,10 @@ class CaseTabWidget(QWidget):
         self.saved.emit(case_dict)
         
         # 标记为已保存
+        print(f"=== DEBUG: CaseTabWidget.save_case() - 保存前modified状态: {self.modified} ===")
         self.modified = False
         self.modified_signal.emit(False)
+        print(f"=== DEBUG: CaseTabWidget.save_case() - 保存后modified状态: {self.modified} ===")
     
     def cancel(self):
         """取消编辑"""
@@ -3658,12 +3709,48 @@ class TabbedCaseEditor(QWidget):
             self.tab_widget.setCurrentIndex(index)
             return tab_id
         
+        # 额外检查：如果用例有ID，尝试通过widget查找已存在的标签页
+        if case_data and 'id' in case_data and case_data['id']:
+            case_id = case_data['id']
+            
+            for existing_tab_id, tab_data in self.tabs.items():
+                widget = tab_data['widget']
+                if hasattr(widget, 'case_data') and widget.case_data and 'id' in widget.case_data and widget.case_data['id'] == case_id:
+                    index = self.tab_widget.indexOf(widget)
+                    self.tab_widget.setCurrentIndex(index)
+                    return existing_tab_id
+        
         # 创建新的标签页
         editor_widget = CaseTabWidget(case_data, project_id, folder_id)
         
-        # 连接信号
-        editor_widget.modified_signal.connect(lambda modified: self.set_tab_modified(tab_id, modified))
-        editor_widget.saved.connect(lambda data: self.case_saved(tab_id, data))
+        # 连接信号（使用弱引用避免循环引用）
+        from weakref import ref
+        
+        def create_modified_handler(widget_ref):
+            def handler(modified):
+                widget = widget_ref()
+                if widget is not None:
+                    # 动态查找对应的tab_id
+                    for tid, tab_data in self.tabs.items():
+                        if tab_data['widget'] == widget:
+                            self.set_tab_modified(tid, modified)
+                            break
+            return handler
+        
+        def create_saved_handler(widget_ref):
+            def handler(data):
+                widget = widget_ref()
+                if widget is not None:
+                    # 动态查找对应的tab_id
+                    for tid, tab_data in self.tabs.items():
+                        if tab_data['widget'] == widget:
+                            self.case_saved(tid, data)
+                            break
+            return handler
+        
+        widget_ref = ref(editor_widget)
+        editor_widget.modified_signal.connect(create_modified_handler(widget_ref))
+        editor_widget.saved.connect(create_saved_handler(widget_ref))
         editor_widget.api_template_edit_requested.connect(self.on_api_template_edit_requested)
         
         # 添加到标签页
@@ -3686,10 +3773,14 @@ class TabbedCaseEditor(QWidget):
     
     def generate_tab_id(self, case_data):
         """生成标签页唯一ID"""
-        if case_data and 'id' in case_data:
-            return f"case_{case_data['id']}"
+        if case_data and 'id' in case_data and case_data['id']:
+            tab_id = f"case_{case_data['id']}"
+            return tab_id
         else:
-            return f"new_case_{len(self.tabs)}"
+            # 使用计数器来确保新标签页ID的唯一性
+            new_case_count = sum(1 for tab_id in self.tabs.keys() if tab_id.startswith("new_case_"))
+            tab_id = f"new_case_{new_case_count}"
+            return tab_id
     
     def tab_changed(self, index):
         """标签页切换事件"""
@@ -3812,23 +3903,44 @@ class TabbedCaseEditor(QWidget):
 
     def set_tab_modified(self, tab_id, modified):
         """设置标签页修改状态"""
+        print(f"=== DEBUG: set_tab_modified() - tab_id: {tab_id}, modified: {modified} ===")
+        print(f"=== DEBUG: set_tab_modified() - tabs中存在: {tab_id in self.tabs} ===")
         if tab_id in self.tabs:
+            print(f"=== DEBUG: set_tab_modified() - 更新前modified状态: {self.tabs[tab_id]['modified']} ===")
             self.tabs[tab_id]['modified'] = modified
+            print(f"=== DEBUG: set_tab_modified() - 更新后modified状态: {self.tabs[tab_id]['modified']} ===")
             self.update_tab_title(tab_id)
+        else:
+            print(f"=== DEBUG: set_tab_modified() - 警告: 标签页 {tab_id} 不存在于tabs中 ===")
+            print(f"=== DEBUG: set_tab_modified() - 当前所有标签页: {list(self.tabs.keys())} ===")
 
     def update_tab_title(self, tab_id):
         """更新标签页标题"""
+        print(f"=== DEBUG: update_tab_title() - tab_id: {tab_id}, tabs中存在: {tab_id in self.tabs} ===")
         if tab_id in self.tabs:
             tab_data = self.tabs[tab_id]
             title = tab_data['tab_name']
             if tab_data['modified']:
                 title = f"*{title}"
             
+            print(f"=== DEBUG: update_tab_title() - 标题: {title}, modified状态: {tab_data['modified']} ===")
+            
             # 找到标签页索引
+            found_index = -1
             for i in range(self.tab_widget.count()):
-                if self.tab_widget.widget(i) == tab_data['widget']:
+                widget = self.tab_widget.widget(i)
+                if widget == tab_data['widget']:
+                    found_index = i
+                    print(f"=== DEBUG: update_tab_title() - 找到标签页索引: {i} ===")
                     self.tab_widget.setTabText(i, title)
                     break
+            
+            if found_index == -1:
+                print(f"=== DEBUG: update_tab_title() - 警告: 未找到对应的标签页索引 ===")
+                print(f"=== DEBUG: update_tab_title() - 当前标签页数量: {self.tab_widget.count()} ===")
+                for i in range(self.tab_widget.count()):
+                    widget = self.tab_widget.widget(i)
+                    print(f"=== DEBUG: update_tab_title() - 标签页{i}: widget={widget}, 目标widget={tab_data['widget']} ===")
 
     def show_execution_logs(self):
         """显示执行日志弹窗"""
@@ -3907,9 +4019,103 @@ class TabbedCaseEditor(QWidget):
     
     def case_saved(self, tab_id, case_data):
         """用例保存回调"""
+        print(f"=== DEBUG: case_saved() - 开始处理保存回调 ===")
+        print(f"=== DEBUG: tab_id = {tab_id} ===")
+        print(f"=== DEBUG: case_data = {case_data} ===")
+        print(f"=== DEBUG: 当前所有标签页: {list(self.tabs.keys())} ===")
+        
+        # 首先检查是否需要更新标签页ID（当用例从新增变为编辑时）
+        new_tab_id = self.generate_tab_id(case_data)
+        
+        # 如果标签页ID需要更新
+        if new_tab_id != tab_id:
+            print(f"=== DEBUG: 需要更新标签页ID: {tab_id} -> {new_tab_id} ===")
+            
+            # 检查旧的标签页是否存在
+            if tab_id in self.tabs:
+                # 保存当前标签页数据
+                tab_data = self.tabs[tab_id]
+                widget_index = self.tab_widget.indexOf(tab_data['widget'])
+                
+                # 删除旧的标签页记录
+                del self.tabs[tab_id]
+                
+                # 添加新的标签页记录
+                self.tabs[new_tab_id] = tab_data
+                
+                # 更新当前标签页ID
+                if self.current_tab_id == tab_id:
+                    self.current_tab_id = new_tab_id
+                
+                print(f"=== DEBUG: 标签页ID更新完成，当前标签页: {list(self.tabs.keys())} ===")
+                tab_id = new_tab_id  # 更新后续使用的tab_id
+            else:
+                print(f"=== DEBUG: 旧的标签页 {tab_id} 不存在，直接使用新ID {new_tab_id} ===")
+                tab_id = new_tab_id
+        
+        # 确保标签页存在于tabs中
+        if tab_id not in self.tabs:
+            print(f"=== DEBUG: 标签页 {tab_id} 不存在，尝试查找对应的widget ===")
+            
+            # 尝试通过widget查找标签页
+            for existing_tab_id, existing_tab_data in self.tabs.items():
+                if hasattr(existing_tab_data['widget'], 'case_data') and existing_tab_data['widget'].case_data == case_data:
+                    print(f"=== DEBUG: 通过widget找到对应的标签页: {existing_tab_id} ===")
+                    
+                    # 如果找到的标签页ID与需要的新ID不同，需要更新标签页记录
+                    if existing_tab_id != tab_id:
+                        print(f"=== DEBUG: 需要更新标签页记录: {existing_tab_id} -> {tab_id} ===")
+                        
+                        # 保存当前标签页数据
+                        tab_data = self.tabs[existing_tab_id]
+                        
+                        # 删除旧的标签页记录
+                        del self.tabs[existing_tab_id]
+                        
+                        # 添加新的标签页记录
+                        self.tabs[tab_id] = tab_data
+                        
+                        # 更新当前标签页ID
+                        if self.current_tab_id == existing_tab_id:
+                            self.current_tab_id = tab_id
+                        
+                        print(f"=== DEBUG: 标签页记录更新完成，当前标签页: {list(self.tabs.keys())} ===")
+                    else:
+                        print(f"=== DEBUG: 标签页ID相同，无需更新 ===")
+                    
+                    break
+            else:
+                print(f"=== DEBUG: 无法找到对应的标签页，创建新的标签页记录 ===")
+                # 创建新的标签页记录（这种情况应该很少发生）
+                self.tabs[tab_id] = {
+                    'widget': None,  # 这里需要从其他地方获取widget
+                    'data': case_data,
+                    'modified': False,
+                    'tab_name': case_data.get('name', '新增用例')
+                }
+        
+        # 更新标签页数据
         if tab_id in self.tabs:
-            # 更新标签页数据
             self.tabs[tab_id]['data'] = case_data
+            
+            # 更新CaseTabWidget实例的case_data属性（关键修复）
+            tab_widget = self.tabs[tab_id]['widget']
+            print(f"=== DEBUG: 找到tab_widget: {tab_widget} ===")
+            
+            if hasattr(tab_widget, 'case_data'):
+                print(f"=== DEBUG: 更新前tab_widget.case_data = {tab_widget.case_data} ===")
+                print(f"=== DEBUG: 更新前tab_widget.is_edit = {tab_widget.is_edit} ===")
+                
+                tab_widget.case_data = case_data
+                # 如果是编辑模式，确保is_edit标志正确设置
+                if 'id' in case_data and case_data['id']:
+                    tab_widget.is_edit = True
+                    print(f"=== DEBUG: 设置tab_widget.is_edit = True ===")
+                
+                print(f"=== DEBUG: 更新后tab_widget.case_data = {tab_widget.case_data} ===")
+                print(f"=== DEBUG: 更新后tab_widget.is_edit = {tab_widget.is_edit} ===")
+            else:
+                print(f"=== DEBUG: tab_widget没有case_data属性 ===")
             
             # 更新标签页名称
             tab_name = case_data.get('name', '新增用例')
@@ -3921,8 +4127,17 @@ class TabbedCaseEditor(QWidget):
                     self.tab_widget.setTabText(i, tab_name)
                     break
             
+            # 重置标签页修改状态为False（关键修复）
+            self.tabs[tab_id]['modified'] = False
+            print(f"=== DEBUG: 设置标签页 {tab_id} 的modified状态为False ===")
+            
+            # 更新标签页标题，移除未保存标识
+            self.update_tab_title(tab_id)
+            
             # 发出保存信号，让外部处理实际的保存逻辑
             self.saved.emit(case_data)
+        else:
+            print(f"=== DEBUG: 最终仍然未找到tab_id对应的标签页 ===")
     
     def on_api_template_edit_requested(self, api_template_id):
         """处理接口模板编辑请求"""
