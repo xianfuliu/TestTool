@@ -294,8 +294,8 @@ class ApiToolTab(QWidget):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(12)
-        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(8)  # 减小间距
+        main_layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
 
         # 顶部全局配置
         global_config_panel = self.create_global_config_panel()
@@ -322,7 +322,23 @@ class ApiToolTab(QWidget):
     def create_global_config_panel(self):
         """创建全局配置面板"""
         panel = QGroupBox()
+        # 设置面板样式：白色背景，圆角，减小边距
+        panel.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         main_vertical_layout = QVBoxLayout(panel)
+        main_vertical_layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
 
         # 第一行：水平布局，包含所有主要控件
         first_row_layout = QHBoxLayout()
@@ -403,14 +419,43 @@ class ApiToolTab(QWidget):
     def create_left_panel(self):
         """创建左侧面板 - 接口按钮和参数字段混合在一起，左对齐"""
         panel = QGroupBox()
+        # 设置面板样式：灰色背景，圆角，减小边距
+        panel.setStyleSheet("""
+            QGroupBox {
+                background-color: #f5f5f5;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 修改：面板布局左对齐
+        layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
 
         # 创建滚动区域，包含混合的接口和字段
         self.combined_scroll = QScrollArea()
+        # 设置滚动区域样式：灰色背景，无边框，最小边距
+        self.combined_scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: #f5f5f5;
+                border: none;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: #f5f5f5;
+            }
+        """)
         self.combined_widget = QWidget()
         self.combined_layout = QVBoxLayout(self.combined_widget)  # 修改：使用垂直布局
         self.combined_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 修改：滚动区域内容左对齐
+        # 设置最小边距
+        self.combined_layout.setContentsMargins(0, 0, 0, 0)
+        self.combined_layout.setSpacing(0)
         self.combined_scroll.setWidget(self.combined_widget)
         self.combined_scroll.setWidgetResizable(True)
         self.combined_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # 需要时显示水平滚动条
@@ -421,7 +466,23 @@ class ApiToolTab(QWidget):
 
     def create_right_panel(self):
         panel = QGroupBox()
+        # 设置面板样式：白色背景，圆角，减小边距
+        panel.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         layout = QVBoxLayout()
+        layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
 
         # URL 输入框
         url_layout = QHBoxLayout()

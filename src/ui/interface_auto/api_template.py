@@ -793,7 +793,7 @@ class ApiTemplateManager(QWidget):
         self.left_widget = QWidget()
         # 移除固定宽度限制，允许用户调整
         left_layout = QVBoxLayout(self.left_widget)
-        left_layout.setContentsMargins(11, 10, 5, 5)
+        left_layout.setContentsMargins(5, 0, 5, 0)
 
         # 项目选择和文件夹操作按钮
         project_layout = QHBoxLayout()
@@ -948,6 +948,8 @@ class ApiTemplateManager(QWidget):
         # 右侧：详情显示区域
         self.detail_widget = QWidget()
         detail_layout = QVBoxLayout(self.detail_widget)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+        detail_layout.setSpacing(0)
 
         # 直接创建提示信息标签，参考business_management.py的实现
         self.info_label = QLabel("请先在左侧新增接口或选择对应接口")

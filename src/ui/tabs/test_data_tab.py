@@ -40,15 +40,15 @@ class TestDataTab(QWidget):
 
         # 第一栏：参数配置
         config_panel = self.create_config_panel()
-        config_panel.setFixedWidth(450)  # 固定配置栏宽度
+        config_panel.setFixedWidth(400)  # 固定配置栏宽度
 
         # 第二栏：数据信息
         data_panel = self.create_data_panel()
-        data_panel.setFixedWidth(500)  # 固定信息栏宽度
+        data_panel.setFixedWidth(450)  # 固定信息栏宽度
 
         # 第三栏：图片预览
         preview_panel = self.create_preview_panel()
-        preview_panel.setFixedWidth(650)  # 固定预览图片栏宽度
+        preview_panel.setFixedWidth(500)  # 调整预览图片栏宽度，更紧凑
 
         # 添加到主布局
         main_layout.addWidget(config_panel, alignment=Qt.AlignLeft)
@@ -389,34 +389,62 @@ class TestDataTab(QWidget):
         """创建图片预览面板"""
         panel = QGroupBox()
         layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(15, 20, 15, 15)
+        layout.setSpacing(8)  # 减少间距，更紧凑
+        layout.setContentsMargins(10, 12, 10, 10)  # 减少边距
         layout.setAlignment(Qt.AlignTop)
 
         # 正面图片
         front_layout = QHBoxLayout()
+        front_layout.setSpacing(8)  # 减少水平间距
+        front_layout.setContentsMargins(0, 0, 0, 0)
+        
         front_label = QLabel("身份证正面")
-        front_label.setStyleSheet("font-weight: bold; font-size: 16px;")
+        front_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold; 
+                font-size: 14px;
+                color: #333;
+                padding: 4px 0;
+            }
+        """)
         front_layout.addWidget(front_label)
         front_layout.addStretch()
+        
         self.front_download_btn = DownloadButton(self)
+        # 设置下载按钮样式，使其更紧凑
+        self.front_download_btn.setFixedSize(24, 24)
+        self.front_download_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 4px;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
         self.front_download_btn.clicked.connect(lambda: self.download_single_image("front"))
         front_layout.addWidget(self.front_download_btn)
+        
         front_widget = QWidget()
         front_widget.setLayout(front_layout)
         layout.addWidget(front_widget)
 
         self.id_front_label = QLabel()
-        self.id_front_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self.id_front_label.setMinimumSize(400, 375)
+        self.id_front_label.setAlignment(Qt.AlignCenter)
+        self.id_front_label.setMinimumSize(380, 240)  # 设置最小尺寸
+        self.id_front_label.setMaximumSize(500, 315)  # 调整最大尺寸，保持身份证标准比例1.585:1
+        self.id_front_label.setScaledContents(True)  # 启用缩放内容，保持图片比例
         self.id_front_label.setText("身份证正面将显示在这里")
         self.id_front_label.setStyleSheet("""
             QLabel {
                 background-color: white;
-                border: 2px dashed #cccccc;
-                border-radius: 8px;
-                color: #666666;
-                font-size: 16px;
+                border: none;
+                border-radius: 0px;
+                color: #666;
+                font-size: 14px;
+                padding: 0px;
             }
         """)
         self.id_front_label.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -425,28 +453,56 @@ class TestDataTab(QWidget):
 
         # 反面图片
         back_layout = QHBoxLayout()
+        back_layout.setSpacing(8)  # 减少水平间距
+        back_layout.setContentsMargins(0, 0, 0, 0)
+        
         back_label = QLabel("身份证反面")
-        back_label.setStyleSheet("font-weight: bold; font-size: 16px;")
+        back_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold; 
+                font-size: 14px;
+                color: #333;
+                padding: 4px 0;
+            }
+        """)
         back_layout.addWidget(back_label)
         back_layout.addStretch()
+        
         self.back_download_btn = DownloadButton(self)
+        # 设置下载按钮样式，使其更紧凑
+        self.back_download_btn.setFixedSize(24, 24)
+        self.back_download_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background-color: transparent;
+                border-radius: 4px;
+                padding: 2px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
         self.back_download_btn.clicked.connect(lambda: self.download_single_image("back"))
         back_layout.addWidget(self.back_download_btn)
+        
         back_widget = QWidget()
         back_widget.setLayout(back_layout)
         layout.addWidget(back_widget)
 
         self.id_back_label = QLabel()
-        self.id_back_label.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self.id_back_label.setMinimumSize(400, 375)
-        self.id_back_label.setText("身份证反面将显示在这里")
+        self.id_back_label.setAlignment(Qt.AlignCenter)
+        self.id_back_label.setMinimumSize(380, 240)  # 调整最小尺寸以适应新容器宽度
+        self.id_back_label.setMaximumSize(500, 315)  # 调整最大尺寸，保持身份证标准比例1.585:1
+        self.id_back_label.setScaledContents(True)  # 启用缩放内容，保持图片比例
+        self.id_back_label.setText("身份证背面将显示在这里")
         self.id_back_label.setStyleSheet("""
             QLabel {
                 background-color: white;
-                border: 2px dashed #cccccc;
-                border-radius: 8px;
-                color: #666666;
-                font-size: 16px;
+                border: none;
+                border-radius: 0px;
+                color: #666;
+                font-size: 14px;
+                padding: 0px;
             }
         """)
         self.id_back_label.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -458,11 +514,18 @@ class TestDataTab(QWidget):
         download_all_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
-                font-size: 16px;
-                padding: 12px;
+                color: white;
+                font-size: 14px;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
             }
         """)
         download_all_btn.clicked.connect(self.download_id_card)
@@ -724,13 +787,9 @@ class TestDataTab(QWidget):
                 front_qimage = self.parent_app.pil_image_to_qimage(self.parent_app.front_image)
                 back_qimage = self.parent_app.pil_image_to_qimage(self.parent_app.back_image)
 
-                self.id_front_label.setPixmap(QPixmap.fromImage(front_qimage).scaled(
-                    600, 375, Qt.KeepAspectRatio, Qt.SmoothTransformation
-                ))
-
-                self.id_back_label.setPixmap(QPixmap.fromImage(back_qimage).scaled(
-                    600, 375, Qt.KeepAspectRatio, Qt.SmoothTransformation
-                ))
+                # 直接设置原始图片，让QLabel自动缩放保持宽高比
+                self.id_front_label.setPixmap(QPixmap.fromImage(front_qimage))
+                self.id_back_label.setPixmap(QPixmap.fromImage(back_qimage))
 
                 print("身份证图片生成成功")
 

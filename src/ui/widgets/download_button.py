@@ -12,7 +12,7 @@ class DownloadButton(QPushButton):
         self.download_icon_path = "src/resources/icons/download_icon.png"
 
         # 设置按钮样式
-        self.setFixedSize(32, 32)
+        self.setFixedSize(20, 20)  # 调整为更小的尺寸
         self.setIconSize(self.size())
 
         # 设置样式 - 透明背景

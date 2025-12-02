@@ -1,5 +1,5 @@
 import os
-from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox, QMenuBar, QMenu, QAction)
+from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox, QMenuBar, QMenu, QAction, QApplication)
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from PyQt5.QtCore import Qt, QTimer, QEvent
 
@@ -49,7 +49,12 @@ class MainWindow(QMainWindow):
 
 
         self.setWindowTitle("测试工具")
-        self.setGeometry(100, 100, 1720, 700)
+        # 设置更合适的初始窗口大小，避免全屏时界面元素显示不全
+        # 延迟到show之后再获取屏幕尺寸
+        self.initial_width = 1720
+        self.initial_height = 700
+        self.setMinimumSize(1200, 1000)  # 设置最小窗口尺寸
+        self.setGeometry(100, 100, self.initial_width, self.initial_height)
 
         # 设置窗口图标
         self.setWindowIcon(self.create_icon())
@@ -89,6 +94,30 @@ class MainWindow(QMainWindow):
         
         # 存储调度服务实例
         self.scheduler_service = None
+
+    def show_and_maximize(self):
+        """显示窗口并根据屏幕尺寸调整，确保在屏幕尺寸可用后调用"""
+        # 获取当前屏幕尺寸
+        screen_geometry = QApplication.desktop().screenGeometry()
+        screen_width = screen_geometry.width()
+        screen_height = screen_geometry.height()
+        
+        # 根据屏幕尺寸设置窗口大小
+        if screen_width >= 1920 and screen_height >= 1080:
+            # 大屏幕可以直接最大化
+            self.showMaximized()
+        else:
+            # 对于小屏幕，先设置合适尺寸再显示
+            window_width = min(self.initial_width, screen_width - 50)
+            window_height = min(self.initial_height, screen_height - 50)
+            
+            # 确保不低于最小尺寸
+            window_width = max(window_width, 1200)
+            window_height = max(window_height, 600)
+            
+            self.resize(window_width, window_height)
+            self.move((screen_width - window_width) // 2, (screen_height - window_height) // 2)
+            self.show()
 
     def init_ui(self):
         """初始化UI，确保只执行一次"""

@@ -31,6 +31,8 @@ class TabbedTemplateEditor(QWidget):
     def init_ui(self):
         """初始化界面"""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0，消除外层容器边距
+        layout.setSpacing(0)  # 设置间距为0，消除组件间距
         
         # 创建标签页控件
         self.tab_widget = NoWheelTabWidget()
@@ -67,6 +69,16 @@ class TabbedTemplateEditor(QWidget):
                 index = self.tab_widget.indexOf(self.tabs[template_id_str]['widget'])
                 self.tab_widget.setCurrentIndex(index)
                 return template_id_str
+            
+            # 进一步检查：通过遍历tabs字典，检查widget中的template_data是否匹配
+            # 这是为了处理某些边界情况，如数据更新但tab_id未变的情况
+            template_id = template_data['id']
+            for existing_tab_id, tab_data in self.tabs.items():
+                widget = tab_data['widget']
+                if hasattr(widget, 'template_data') and widget.template_data and 'id' in widget.template_data and widget.template_data['id'] == template_id:
+                    index = self.tab_widget.indexOf(widget)
+                    self.tab_widget.setCurrentIndex(index)
+                    return existing_tab_id
         
         # 创建新的标签页
         editor_widget = TemplateTabWidget(template_data, project_id, folder_id)
@@ -405,7 +417,8 @@ class TemplateTabWidget(QWidget):
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("请输入接口名称")
         self.name_edit.textChanged.connect(self.on_content_changed)
-        self.name_edit.setMinimumHeight(30)  # 设置最小高度
+        self.name_edit.setMinimumHeight(40)  # 增大最小高度到40px
+        self.name_edit.setMaximumHeight(50)  # 设置最大高度为50px
         # 设置字体大小
         font = self.name_edit.font()
         font.setPointSize(10)
@@ -418,8 +431,8 @@ class TemplateTabWidget(QWidget):
         desc_layout = QHBoxLayout()
         desc_layout.addWidget(QLabel("接口描述:"))
         self.description_edit = QTextEdit()
-        self.description_edit.setMaximumHeight(60)
-        self.description_edit.setMinimumHeight(30)  # 设置最小高度
+        self.description_edit.setMaximumHeight(40)  # 增大最大高度到100px
+        self.description_edit.setMinimumHeight(50)  # 增大最小高度到60px
         self.description_edit.setPlaceholderText("请输入接口描述")
         self.description_edit.textChanged.connect(self.on_content_changed)
         # 设置字体大小与接口名称保持一致
@@ -474,12 +487,12 @@ class TemplateTabWidget(QWidget):
         # 移除固定高度限制，使其自适应内容高度
         response_layout.addWidget(response_label)
         
-        # 响应体展示区域 - 可扩展高度，向上靠齐
+        # 响应体展示区域 - 减小高度，为功能标签页腾出更多空间
         self.response_body_edit = QTextEdit()
         self.response_body_edit.setReadOnly(True)
-        self.response_body_edit.setFont(QFont("Consolas", 10))  # 调大字体
-        self.response_body_edit.setMinimumHeight(400)  # 增加最小高度，确保有足够的显示空间
-        self.response_body_edit.setMaximumHeight(700)  # 增加最大高度，提供更多扩展空间
+        self.response_body_edit.setFont(QFont("Consolas", 10))
+        self.response_body_edit.setMinimumHeight(280)  # 减小最小高度到200px
+        self.response_body_edit.setMaximumHeight(350)  # 减小最大高度到350px
         self.response_body_edit.setPlaceholderText("调试响应将显示在这里...")
         
         # 添加滚动条支持
@@ -516,21 +529,22 @@ class TemplateTabWidget(QWidget):
         """设置功能子标签页"""
         # 创建子标签页控件
         self.function_tabs = NoWheelTabWidget()
-        self.function_tabs.setMinimumHeight(300)  # 减小标签页的最小高度，减少与响应区域的间隙
+        self.function_tabs.setMinimumHeight(350)  # 增大标签页的最小高度到400px
+        self.function_tabs.setMaximumHeight(350)  # 设置最大高度为600px
         
         # 设置标签页字体大小
         font = self.function_tabs.font()
-        font.setPointSize(11)  # 增大字体大小，提高可读性
+        font.setPointSize(11)  # 增大字体大小到11px
         self.function_tabs.setFont(font)
         
         # 调整tab的宽度和高度，使其更加协调
         self.function_tabs.setStyleSheet("""
             QTabBar::tab {
-                min-width: 60px;
-                max-width: 80px;
-                height: 20px;
-                font-size: 12px; 
-                padding: 5px 10px;
+                min-width: 70px;
+                max-width: 90px;
+                height: 25px;
+                font-size: 13px; 
+                padding: 6px 12px;
             }
         """)
         
@@ -620,7 +634,7 @@ class TemplateTabWidget(QWidget):
                 border: none;
             }
         """)
-        self.headers_table.setMinimumHeight(300)  # 增加表格最小高度
+        self.headers_table.setMinimumHeight(180)  # 增加表格最小高度
         self.headers_table.verticalHeader().setDefaultSectionSize(50)  # 进一步增加行高确保内容完全可见
         layout.addWidget(self.headers_table)
         
@@ -731,7 +745,7 @@ class TemplateTabWidget(QWidget):
                 border: none;
             }
         """)
-        self.params_table.setMinimumHeight(300)  # 增加表格最小高度
+        self.params_table.setMinimumHeight(180)  # 增加表格最小高度
         self.params_table.verticalHeader().setDefaultSectionSize(50)  # 进一步增加行高确保内容完全可见
         layout.addWidget(self.params_table)
         
@@ -796,13 +810,11 @@ class TemplateTabWidget(QWidget):
         # 主容器
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(10, 5, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
         
         # 操作按钮布局
         button_layout = QHBoxLayout()
-        
-        button_layout.addStretch()  # 将按钮推到右边
         
         # JSON美化图标按钮
         beautify_btn = QToolButton()
@@ -844,6 +856,7 @@ class TemplateTabWidget(QWidget):
         beautify_btn.setStyleSheet(button_style)
         
         button_layout.addWidget(beautify_btn)
+        button_layout.addStretch()  # 将按钮推到左边
         layout.addLayout(button_layout)
         
         # 请求体编辑器
@@ -865,7 +878,7 @@ class TemplateTabWidget(QWidget):
                 background-color: #ffffff;
             }
         """)
-        self.body_edit.setMinimumHeight(300)  # 增加编辑器最小高度
+        self.body_edit.setMinimumHeight(200)  # 增加编辑器最小高度
         layout.addWidget(self.body_edit)
         
         # 设置滚动区域

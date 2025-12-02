@@ -123,5 +123,6 @@ if __name__ == "__main__":
         print(f"启动统一调度服务失败: {e}")
 
     # 显示窗口（最大化模式）
-    window.showMaximized()
+    # 使用自定义方法处理窗口显示和最大化
+    window.show_and_maximize()
     sys.exit(app.exec_())
