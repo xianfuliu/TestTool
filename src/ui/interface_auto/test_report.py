@@ -21,6 +21,7 @@ from src.core.services.project_service import ProjectService
 from src.core.models.interface_models import TestReport, TestStepResult
 from src.utils.interface_utils.report_generator import HTMLReportGenerator
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
+from src.utils.css_utils import get_combobox_style, get_toolbar_combobox_style
 
 
 class ReportDetailDialog(QDialog):
@@ -443,89 +444,34 @@ class TestReportManager(QWidget):
         # 筛选工具栏
         filter_toolbar = QToolBar()
         filter_toolbar.setIconSize(QSize(16, 16))
-        filter_toolbar.setStyleSheet("""
-            QToolBar {
+        filter_toolbar.setStyleSheet(f"""
+            QToolBar {{
                 spacing: 15px;  /* 工具栏内控件间距 */
                 padding: 8px 12px;  /* 工具栏内边距 */
                 background-color: #f8f9fa;
                 border: 1px solid #e9ecef;
                 border-radius: 6px;
                 margin-bottom: 8px;
-            }
-            QToolBar QLabel {
+            }}
+            QToolBar QLabel {{
                 font-weight: bold;
                 color: #495057;
                 margin-right: 5px;
                 padding: 4px 0px;
-            }
-            QToolBar QComboBox, QToolBar QLineEdit {
+            }}
+            QToolBar QComboBox, QToolBar QLineEdit {{
                 margin-right: 15px;  /* 控件右侧间距 */
                 padding: 6px 8px;
                 border: 1px solid #ced4da;
                 border-radius: 4px;
                 background-color: white;
                 min-height: 28px;
-            }
-            QToolBar QComboBox:focus, QToolBar QLineEdit:focus {
+            }}
+            QToolBar QComboBox:focus, QToolBar QLineEdit:focus {{
                 border-color: #0078d4;
                 outline: none;
-            }
-            /* 优化下拉框样式 */
-            QToolBar QComboBox {
-                padding: 6px 30px 6px 8px;  /* 右侧留出下拉箭头空间 */
-                background-color: white;
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                color: #495057;
-                font-size: 13px;
-                min-height: 28px;
-            }
-            QToolBar QComboBox:hover {
-                border-color: #adb5bd;
-                background-color: #f8f9fa;
-            }
-            QToolBar QComboBox:focus {
-                border-color: #0078d4;
-                background-color: #fff;
-            }
-            QToolBar QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 24px;
-                border-left: 1px solid #ced4da;
-                border-top-right-radius: 4px;
-                border-bottom-right-radius: 4px;
-                background-color: #f8f9fa;
-            }
-            QToolBar QComboBox::down-arrow {
-                width: 12px;
-                height: 12px;
-                image: url(src/resources/icons/combobox.png);
-            }
-            QToolBar QComboBox::down-arrow:hover {
-                image: url(src/resources/icons/combobox.png);
-            }
-            QToolBar QComboBox QAbstractItemView {
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                background-color: white;
-                outline: none;
-                margin-top: 2px;
-                padding: 4px 0px;
-            }
-            QToolBar QComboBox QAbstractItemView::item {
-                padding: 8px 12px;
-                color: #495057;
-                background-color: transparent;
-            }
-            QToolBar QComboBox QAbstractItemView::item:hover {
-                background-color: #e9ecef;
-                color: #0078d4;
-            }
-            QToolBar QComboBox QAbstractItemView::item:selected {
-                background-color: #0078d4;
-                color: white;
-            }
+            }}
+            {get_toolbar_combobox_style()}
         """)
 
         # 项目筛选（移到最左边）
@@ -647,21 +593,6 @@ class TestReportManager(QWidget):
         self.scheduler_list_widget.setContextMenuPolicy(Qt.NoContextMenu)
         
         left_layout.addWidget(self.scheduler_list_widget)
-        
-        # 添加提示信息
-        tip_label = QLabel("点击调度任务查看对应的测试报告")
-        tip_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #6c757d;
-                padding: 8px 4px;
-                background-color: #f8f9fa;
-                border-radius: 4px;
-                margin-top: 8px;
-            }
-        """)
-        tip_label.setAlignment(Qt.AlignCenter)
-        left_layout.addWidget(tip_label)
         
         # 设置左侧宽度
         left_widget.setMaximumWidth(300)
@@ -796,10 +727,8 @@ class TestReportManager(QWidget):
         
         main_layout.addWidget(splitter, 1)  # 设置拉伸因子为1，让分割器占据主要空间
 
-        # 状态栏
+        # 状态栏（已移除状态标签）
         status_layout = QHBoxLayout()
-        self.status_label = QLabel("就绪")
-        status_layout.addWidget(self.status_label)
         status_layout.addStretch()
 
         main_layout.addLayout(status_layout)
@@ -927,22 +856,15 @@ class TestReportManager(QWidget):
             # 清空报告列表
             self.tree_widget.clear()
             
-            # 更新状态栏
-            if business_id:
-                self.status_label.setText(f"已切换到业务分组，正在加载对应项目...")
-            else:
-                self.status_label.setText("已切换到全部业务，正在加载所有项目...")
                 
         except Exception as e:
             print(f"处理业务切换事件失败: {e}")
-            self.status_label.setText("业务切换失败")
 
     def load_schedulers(self):
         """加载测试用例集列表"""
         # 检查服务对象是否已初始化
         if self.scheduler_service is None:
             print("调度服务未初始化，跳过加载测试用例集")
-            self.status_label.setText("调度服务未就绪")
             return
             
         try:
@@ -969,11 +891,6 @@ class TestReportManager(QWidget):
                 empty_item.setTextAlignment(Qt.AlignCenter)
                 self.scheduler_list_widget.addItem(empty_item)
                 
-                if project_id:
-                    project_name = self.project_combo.currentText()
-                    self.status_label.setText(f"项目 '{project_name}' 暂无测试用例集")
-                else:
-                    self.status_label.setText("暂无测试用例集")
                 return
                 
             # 添加测试用例集到列表
@@ -996,19 +913,13 @@ class TestReportManager(QWidget):
                 
                 self.scheduler_list_widget.addItem(item)
                 
-            # 更新状态栏显示
-            if project_id:
-                project_name = self.project_combo.currentText()
-                self.status_label.setText(f"项目 '{project_name}' 已加载 {len(schedulers)} 个测试用例集")
-            else:
-                self.status_label.setText(f"已加载 {len(schedulers)} 个测试用例集")
+            # 更新状态（已移除状态标签）
             
             # 如果有测试用例集，只加载列表，不自动选择
             # 用户手动选择调度后，切换项目时保持当前选择状态
             
         except Exception as e:
             print(f"加载测试用例集失败: {e}")
-            self.status_label.setText("加载测试用例集失败")
 
     def on_scheduler_item_clicked(self, item):
         """点击测试用例集项事件"""
@@ -1029,22 +940,17 @@ class TestReportManager(QWidget):
             # 获取测试用例集名称（直接获取文本）
             scheduler_name = item.text()
             
-            # 更新状态栏
-            self.status_label.setText(f"正在加载测试用例集 '{scheduler_name}' 的报告...")
-            
             # 加载该测试用例集的报告
             self.load_reports_by_scheduler(scheduler_id)
             
         except Exception as e:
             print(f"处理测试用例集点击事件失败: {e}")
-            self.status_label.setText("处理测试用例集点击事件失败")
 
     def load_reports_by_scheduler(self, scheduler_id):
         """根据测试用例集ID加载对应的测试报告"""
         # 检查服务对象是否已初始化
         if self.report_service is None:
             print("报告服务未初始化，跳过加载报告")
-            self.status_label.setText("报告服务未就绪")
             return
             
         try:
@@ -1084,7 +990,6 @@ class TestReportManager(QWidget):
                 # 设置更大的行高
                 empty_item.setSizeHint(0, QSize(0, 60))
                 
-                self.status_label.setText("该测试用例集暂无测试报告")
                 return
             
             # 按开始时间排序（最新的在前）
@@ -1185,7 +1090,7 @@ class TestReportManager(QWidget):
                 # 设置数据
                 item.setData(0, Qt.UserRole, report['id'])
             
-            self.status_label.setText(f"已加载 {len(reports)} 个测试报告")
+            # 已移除状态标签显示
             
         except Exception as e:
             print(f"加载测试用例集报告失败: {e}")
@@ -1231,7 +1136,6 @@ class TestReportManager(QWidget):
                 # 设置更大的行高
                 empty_item.setSizeHint(0, QSize(0, 60))
                 
-                self.status_label.setText("暂无测试报告")
                 return
             
             # 按开始时间排序（最新的在前）
@@ -1337,7 +1241,6 @@ class TestReportManager(QWidget):
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"加载测试报告失败: {str(e)}")
-            self.status_label.setText("加载失败")
 
     def get_filters(self):
         """获取筛选条件"""
