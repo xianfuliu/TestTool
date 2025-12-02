@@ -58,6 +58,16 @@ class TabbedTemplateEditor(QWidget):
             self.tab_widget.setCurrentIndex(index)
             return tab_id
         
+        # 额外检查：如果模板有ID，检查是否已存在相同模板ID的标签页
+        # 这可以防止因数据不一致导致的重复打开问题
+        if template_data and 'id' in template_data and template_data['id']:
+            template_id_str = f"template_{template_data['id']}"
+            if template_id_str in self.tabs:
+                # 如果存在相同模板ID的标签页，切换到该标签页
+                index = self.tab_widget.indexOf(self.tabs[template_id_str]['widget'])
+                self.tab_widget.setCurrentIndex(index)
+                return template_id_str
+        
         # 创建新的标签页
         editor_widget = TemplateTabWidget(template_data, project_id, folder_id)
         

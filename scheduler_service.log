@@ -1,4 +1,4 @@
-2025-12-01 18:00:04,272 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-01 18:00:04,304 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
-2025-12-01 18:00:05,593 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-01 18:00:05,639 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-02 14:31:58,632 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-02 14:31:58,887 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
+2025-12-02 14:32:01,383 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-02 14:32:01,603 - UnifiedSchedulerService - INFO - 服务组件初始化成功

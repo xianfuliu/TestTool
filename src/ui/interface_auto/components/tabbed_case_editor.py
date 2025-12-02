@@ -95,11 +95,6 @@ class CaseExecutionThread(QThread):
     def run(self):
         """执行测试用例"""
         try:
-            # [DEBUG] 终端打印 - 用例执行开始
-            print(self.format_debug_message("用例执行开始", "info"))
-            print(self.format_debug_message(f"用例名称: {self.case_data.get('name', '未命名')}", "info"))
-            print(self.format_debug_message(f"总步骤数: {len(self.case_data.get('steps', []))}", "info"))
-            
             # 记录关键信息，减少调试信息
             self.log_message.emit(self.format_debug_message(f"开始执行测试用例: {self.case_data['name']}", "info", -1), "info", -1)
             self.log_message.emit(self.format_debug_message(f"总步骤数: {len(self.case_data.get('steps', []))}", "info", -1), "info", -1)
@@ -128,20 +123,11 @@ class CaseExecutionThread(QThread):
             # 执行每个步骤
             steps = self.case_data.get('steps', [])
             
-            # 调试：检查线程接收到的步骤数据
-            print(f"[DEBUG] CaseExecutionThread接收到的步骤总数: {len(steps)}")
-            for i, step in enumerate(steps):
-                # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
-                step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名')
-                print(f"[DEBUG] 步骤{i+1}: {step_name}, enabled={step.get('enabled', True)}")
-            
             enabled_steps = [step for step in steps if step.get('enabled', True)]
             
             # 统计步骤执行结果
             total_steps = len(enabled_steps)
             success_steps = 0
-            
-            print(f"[DEBUG] 启用的步骤数量: {total_steps}")
 
             # 使用原始步骤序号，而不是重新编号
             original_step_order = 0
@@ -2022,11 +2008,9 @@ class CaseTabWidget(QWidget):
     
     def on_content_changed(self):
         """内容变化时标记为已修改"""
-        print(f"=== DEBUG: CaseTabWidget.on_content_changed() - 当前modified状态: {self.modified} ===")
         if not self.modified:
             self.modified = True
             self.modified_signal.emit(True)
-            print(f"=== DEBUG: CaseTabWidget.on_content_changed() - 修改后modified状态: {self.modified} ===")
     
     def toggle_encryption_config(self):
         """切换加解密配置区域的显示/隐藏"""
@@ -2067,10 +2051,6 @@ class CaseTabWidget(QWidget):
         if not self.current_case or not hasattr(self, 'steps_layout'):
             return
             
-        print("[DEBUG] 开始同步前端UI步骤数据到current_case.steps")
-        print(f"[DEBUG] 步骤卡片数量: {self.steps_layout.count()}")
-        print(f"[DEBUG] current_case.steps数量: {len(self.current_case.steps)}")
-            
         # 遍历所有步骤卡片，同步所有配置信息
         for i in range(self.steps_layout.count()):
             item = self.steps_layout.itemAt(i)
@@ -2080,13 +2060,6 @@ class CaseTabWidget(QWidget):
                 if hasattr(widget, 'step_id') and hasattr(widget, 'step_data'):
                     # 获取步骤卡片的完整数据
                     step_data = widget.step_data
-                    
-                    print(f"[DEBUG] 同步步骤{i+1}数据: {step_data.get('name', '未命名')}")
-                    print(f"[DEBUG]   - 启用状态: {step_data.get('enabled', True)}")
-                    print(f"[DEBUG]   - 加解密状态: {step_data.get('enable_encryption', None)}")
-                    print(f"[DEBUG]   - 前置处理: {len(step_data.get('pre_processing', {}))}")
-                    print(f"[DEBUG]   - 后置处理: {len(step_data.get('post_processing', {}))}")
-                    print(f"[DEBUG]   - 断言: {len(step_data.get('assertions', {}))}")
                     
                     # 同步到current_case.steps中对应的步骤
                     if i < len(self.current_case.steps):
@@ -2122,21 +2095,11 @@ class CaseTabWidget(QWidget):
                         step_dict = step.to_dict()
                         step_dict.update(step_data)
                         step.update_from_dict(step_dict)
-                        
-                        print(f"[DEBUG] 同步后步骤{i+1}状态: enabled={step.enabled}, enable_encryption={step.enable_encryption}")
-                    else:
-                        print(f"[DEBUG] 警告: 步骤索引{i}超出current_case.steps范围")
-        
-        print("[DEBUG] 前端UI步骤数据同步完成")
     
     def sync_step_data_to_temp_case(self, case_data):
         """同步前端UI步骤数据到临时用例数据，但不修改current_case对象"""
         if not case_data or not hasattr(self, 'steps_layout'):
             return
-            
-        print("[DEBUG] 开始同步前端UI步骤数据到临时用例数据")
-        print(f"[DEBUG] 步骤卡片数量: {self.steps_layout.count()}")
-        print(f"[DEBUG] 临时用例数据步骤数量: {len(case_data.get('steps', []))}")
             
         # 遍历所有步骤卡片，同步所有配置信息到临时用例数据
         for i in range(self.steps_layout.count()):
@@ -2147,10 +2110,6 @@ class CaseTabWidget(QWidget):
                 if hasattr(widget, 'step_id') and hasattr(widget, 'step_data'):
                     # 获取步骤卡片的完整数据
                     step_data = widget.step_data
-                    
-                    print(f"[DEBUG] 同步步骤{i+1}数据到临时用例数据: {step_data.get('name', '未命名')}")
-                    print(f"[DEBUG]   - 启用状态: {step_data.get('enabled', True)}")
-                    print(f"[DEBUG]   - 加解密状态: {step_data.get('enable_encryption', None)}")
                     
                     # 同步到临时用例数据中对应的步骤
                     if i < len(case_data.get('steps', [])):
@@ -2181,12 +2140,6 @@ class CaseTabWidget(QWidget):
                         
                         if 'step_order' in step_data:
                             temp_step['step_order'] = step_data['step_order']
-                        
-                        print(f"[DEBUG] 同步后临时步骤{i+1}状态: enabled={temp_step.get('enabled', True)}, enable_encryption={temp_step.get('enable_encryption', None)}")
-                    else:
-                        print(f"[DEBUG] 警告: 步骤索引{i}超出临时用例数据步骤范围")
-        
-        print("[DEBUG] 前端UI步骤数据同步到临时用例数据完成")
     
     def sync_step_enabled_status(self):
         """同步步骤卡片的启用状态到current_case.steps"""
@@ -2256,10 +2209,8 @@ class CaseTabWidget(QWidget):
         self.load_steps()
         
         # 重置修改状态
-        print(f"=== DEBUG: CaseTabWidget.load_case_data() - 重置前modified状态: {self.modified} ===")
         self.modified = False
         self.modified_signal.emit(False)
-        print(f"=== DEBUG: CaseTabWidget.load_case_data() - 重置后modified状态: {self.modified} ===")
     
     def save_case(self):
         """保存用例 - 基于前端ID系统更新步骤顺序，并更新接口模板名称"""
@@ -2314,35 +2265,19 @@ class CaseTabWidget(QWidget):
             return
         
         # 验证测试用例名称是否重复
-        print(f"=== DEBUG: CaseTabWidget.save_case() - 开始验证测试用例名称重复 ===")
-        print(f"=== DEBUG: 项目ID: {self.project_id}, 文件夹ID: {self.folder_id}, 用例名称: {self.current_case.name} ===")
-        
         from src.core.services.test_case_service import TestCaseService
         case_service = TestCaseService()
         
         # 检查名称是否重复
         exclude_id = None
-        # 修复：更健壮的exclude_id获取逻辑
-        print(f"=== DEBUG: save_case() - 开始检查名称重复 ===")
-        print(f"=== DEBUG: self.is_edit = {self.is_edit} ===")
-        print(f"=== DEBUG: self.case_data = {self.case_data} ===")
-        print(f"=== DEBUG: hasattr(self, 'current_case') = {hasattr(self, 'current_case')} ===")
         
         if self.is_edit:
             # 优先从self.case_data获取ID
             if 'id' in self.case_data and self.case_data['id']:
                 exclude_id = self.case_data['id']
-                print(f"=== DEBUG: 从self.case_data获取ID: {exclude_id} ===")
             # 如果self.case_data中没有ID，尝试从current_case获取
             elif hasattr(self, 'current_case') and self.current_case and hasattr(self.current_case, 'id') and self.current_case.id:
                 exclude_id = self.current_case.id
-                print(f"=== DEBUG: 从self.current_case获取ID: {exclude_id} ===")
-            else:
-                print(f"=== DEBUG: 无法获取到有效的用例ID ===")
-            
-            print(f"=== DEBUG: 编辑模式，最终排除当前用例ID: {exclude_id} ===")
-        else:
-            print(f"=== DEBUG: 新增模式，不排除任何用例ID ===")
         
         name_exists = case_service.check_case_name_exists(
             self.project_id,
@@ -2350,8 +2285,6 @@ class CaseTabWidget(QWidget):
             self.folder_id, 
             exclude_id
         )
-        
-        print(f"=== DEBUG: 名称重复检查结果: {name_exists} ===")
         
         if name_exists:
             Toast.warning(self, "警告", f"测试用例名称 '{self.current_case.name}' 已存在，请使用其他名称")
@@ -2390,10 +2323,8 @@ class CaseTabWidget(QWidget):
         self.saved.emit(case_dict)
         
         # 标记为已保存
-        print(f"=== DEBUG: CaseTabWidget.save_case() - 保存前modified状态: {self.modified} ===")
         self.modified = False
         self.modified_signal.emit(False)
-        print(f"=== DEBUG: CaseTabWidget.save_case() - 保存后modified状态: {self.modified} ===")
     
     def cancel(self):
         """取消编辑"""
@@ -3107,19 +3038,10 @@ class CaseTabWidget(QWidget):
         # self.sync_all_step_cards_encryption_status(self.current_case.enable_encryption)
         
         # 获取最新的用例数据（不修改current_case对象，避免触发修改状态）
-        print("[DEBUG] 调用current_case.to_dict()获取用例数据")
         case_data = self.current_case.to_dict()
         
         # 同步前端UI步骤数据到临时用例数据，但不修改current_case对象
-        print("[DEBUG] 同步前端UI步骤数据到临时用例数据")
         self.sync_step_data_to_temp_case(case_data)
-        
-        # 调试：检查获取的用例数据中的步骤信息
-        print(f"[DEBUG] 用例数据步骤数量: {len(case_data.get('steps', []))}")
-        for i, step in enumerate(case_data.get('steps', [])):
-            # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
-            step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名')
-            print(f"[DEBUG] 步骤{i+1}: {step_name}, enabled={step.get('enabled', True)}")
         
         # 创建执行线程，使用临时用例数据避免触发修改状态
         self.execution_thread = CaseExecutionThread(
@@ -3230,7 +3152,6 @@ class CaseTabWidget(QWidget):
             
             # 等待线程安全停止，增加等待时间
             if self.execution_thread.isRunning():
-                print("[DEBUG] 等待线程安全停止...")
                 if not self.execution_thread.wait(5000):  # 等待5秒
                     print("[WARNING] 线程未在5秒内正常停止，尝试强制终止")
                     self.execution_thread.terminate()
@@ -3277,16 +3198,11 @@ class CaseTabWidget(QWidget):
 
     def on_case_finished(self, case_result):
         """用例执行完成 - 修复版本（避免重复清理线程）"""
-        # 记录执行完成时的日志状态
-        print(f"[DEBUG] on_case_finished开始，当前日志数量: {len(self.execution_logs)}")
-        
         # 确保执行状态正确设置
         self.is_executing = False
         
         # 安全地清理线程资源（仅在stop_execution未调用时清理）
         if self.execution_thread and self.execution_thread.isRunning():
-            print("[DEBUG] 线程仍在运行，等待安全退出...")
-            
             # 等待线程完全退出
             if not self.execution_thread.wait(3000):  # 等待3秒
                 print("[WARNING] 线程未在3秒内正常退出")
@@ -3305,7 +3221,6 @@ class CaseTabWidget(QWidget):
             self.execution_thread = None
         elif self.execution_thread:
             # 线程已停止但对象未清理，确保清理
-            print("[DEBUG] 线程已停止，清理残留对象")
             try:
                 self.execution_thread.deleteLater()
             except:
@@ -3321,9 +3236,6 @@ class CaseTabWidget(QWidget):
         status = "成功" if success_count == total_count else "失败"
         
         print(f"[INFO] 用例执行完成: {status} (成功: {success_count}/{total_count})")
-        
-        # 记录执行完成后的日志状态
-        print(f"[DEBUG] on_case_finished结束，当前日志数量: {len(self.execution_logs)}")
 
     def log_message(self, message, level="info"):
         """记录日志消息（无步骤信息）"""
@@ -3401,14 +3313,8 @@ class CaseTabWidget(QWidget):
             'step_name': step_name  # 保存步骤名称
         })
         
-        # 调试信息：显示日志发射详情
-        step_info = "通用信息" if step_index == -1 else f"步骤 {step_index + 1}"
-        print(f"[DEBUG] 日志发射 - {step_info}: {message[:50]}... (level: {level}, 时间: {timestamp})")
-        print(f"[DEBUG] 当前日志列表数量: {len(self.execution_logs)}")
-        
         # 如果执行日志弹窗已打开，则直接添加日志到弹窗
         if hasattr(self, 'execution_logs_dialog') and self.execution_logs_dialog:
-            print(f"[DEBUG] 弹窗存在，正在添加日志到弹窗")
             try:
                 # 获取步骤名称（如果步骤索引有效）
                 step_name = None
@@ -3430,17 +3336,12 @@ class CaseTabWidget(QWidget):
                 self.execution_logs_dialog.add_log_with_step(message, level, step_index, step_name)
             except RuntimeError:
                 # 弹窗已被删除，忽略错误
-                print("[DEBUG] 弹窗已被删除，忽略错误")
                 pass
-        else:
-            print(f"[DEBUG] 弹窗不存在，日志已保存到列表")
 
     def clear_logs(self):
         """清空日志"""
         # 清空执行日志列表，确保每次执行都是全新的开始
-        print(f"[DEBUG] clear_logs被调用，当前日志数量: {len(self.execution_logs)}")
         self.execution_logs = []
-        print(f"[DEBUG] clear_logs已完成，日志列表已清空")
 
     def clear_steps(self):
         """清空步骤列表"""
@@ -3464,19 +3365,16 @@ class CaseTabWidget(QWidget):
                         # 检查widget是否仍然有效（没有被删除）
                         if widget and hasattr(widget, 'isVisible'):
                             widget.deleteLater()
-                    except RuntimeError as e:
+                    except RuntimeError:
                         # 如果widget已经被删除，忽略错误
-                        print(f"[DEBUG] clear_steps: 忽略已删除的widget: {e}")
                         pass
 
         # 显示占位符（如果存在且有效）
         if hasattr(self, 'steps_placeholder') and self.steps_placeholder:
             try:
                 self.steps_placeholder.show()
-                print("[DEBUG] clear_steps: 显示占位符")
             except RuntimeError:
                 # 如果占位符已被删除，忽略错误
-                print("[DEBUG] clear_steps: 占位符已被删除，忽略错误")
                 pass
 
     def load_steps(self):
@@ -3493,10 +3391,8 @@ class CaseTabWidget(QWidget):
                 # 检查占位符是否仍然有效
                 if hasattr(self.steps_placeholder, 'isVisible'):
                     self.steps_placeholder.hide()
-                    print("[DEBUG] load_steps: 隐藏占位符")
             except RuntimeError:
                 # 如果占位符已被删除，忽略错误
-                print("[DEBUG] load_steps: 占位符已被删除，忽略错误")
                 pass
 
         # 添加步骤卡片
@@ -3842,6 +3738,10 @@ class TabbedCaseEditor(QWidget):
         for i in range(tab_count - 1, -1, -1):
             self.close_tab(i, from_close_button=False)
     
+    def has_open_tabs(self):
+        """检查是否有打开的标签页"""
+        return self.tab_widget.count() > 0
+    
     def close_tab_by_case_id(self, case_id):
         """根据用例ID关闭对应的标签页（删除用例时使用，不检查未保存修改）"""
         tab_id = f"case_{case_id}"
@@ -3890,87 +3790,50 @@ class TabbedCaseEditor(QWidget):
                     if hasattr(widget, 'modified_signal'):
                         widget.modified_signal.emit(True)
                     
-                    # 显示提示信息
-                    print(f"[DEBUG] 已同步用例数据到编辑器标签页: case_id={case_id}")
                     return True
             
-            print(f"[DEBUG] 未找到对应的用例编辑标签页: case_id={case_id}")
             return False
                     
-        except Exception as e:
-            print(f"[DEBUG] 同步用例数据到编辑器失败: {e}")
+        except Exception:
             return False
 
     def set_tab_modified(self, tab_id, modified):
         """设置标签页修改状态"""
-        print(f"=== DEBUG: set_tab_modified() - tab_id: {tab_id}, modified: {modified} ===")
-        print(f"=== DEBUG: set_tab_modified() - tabs中存在: {tab_id in self.tabs} ===")
         if tab_id in self.tabs:
-            print(f"=== DEBUG: set_tab_modified() - 更新前modified状态: {self.tabs[tab_id]['modified']} ===")
             self.tabs[tab_id]['modified'] = modified
-            print(f"=== DEBUG: set_tab_modified() - 更新后modified状态: {self.tabs[tab_id]['modified']} ===")
             self.update_tab_title(tab_id)
-        else:
-            print(f"=== DEBUG: set_tab_modified() - 警告: 标签页 {tab_id} 不存在于tabs中 ===")
-            print(f"=== DEBUG: set_tab_modified() - 当前所有标签页: {list(self.tabs.keys())} ===")
 
     def update_tab_title(self, tab_id):
         """更新标签页标题"""
-        print(f"=== DEBUG: update_tab_title() - tab_id: {tab_id}, tabs中存在: {tab_id in self.tabs} ===")
         if tab_id in self.tabs:
             tab_data = self.tabs[tab_id]
             title = tab_data['tab_name']
             if tab_data['modified']:
                 title = f"*{title}"
             
-            print(f"=== DEBUG: update_tab_title() - 标题: {title}, modified状态: {tab_data['modified']} ===")
-            
             # 找到标签页索引
-            found_index = -1
             for i in range(self.tab_widget.count()):
                 widget = self.tab_widget.widget(i)
                 if widget == tab_data['widget']:
-                    found_index = i
-                    print(f"=== DEBUG: update_tab_title() - 找到标签页索引: {i} ===")
                     self.tab_widget.setTabText(i, title)
                     break
-            
-            if found_index == -1:
-                print(f"=== DEBUG: update_tab_title() - 警告: 未找到对应的标签页索引 ===")
-                print(f"=== DEBUG: update_tab_title() - 当前标签页数量: {self.tab_widget.count()} ===")
-                for i in range(self.tab_widget.count()):
-                    widget = self.tab_widget.widget(i)
-                    print(f"=== DEBUG: update_tab_title() - 标签页{i}: widget={widget}, 目标widget={tab_data['widget']} ===")
 
     def show_execution_logs(self):
         """显示执行日志弹窗"""
-        # 调试信息：追踪日志列表状态
-        print(f"[DEBUG] === 开始显示执行日志弹窗 ===")
-        print(f"[DEBUG] 当前标签页对象ID: {id(self)}")
-        
         # 获取当前活动标签页的日志列表
         current_logs = []
         if self.current_tab_id and self.current_tab_id in self.tabs:
             current_tab_widget = self.tabs[self.current_tab_id]['widget']
             if hasattr(current_tab_widget, 'execution_logs'):
                 current_logs = current_tab_widget.execution_logs
-                print(f"[DEBUG] 当前标签页日志列表对象ID: {id(current_logs)}")
-                print(f"[DEBUG] 当前标签页日志列表数量: {len(current_logs)}")
-            else:
-                print("[DEBUG] 当前标签页没有execution_logs属性")
-        else:
-            print("[DEBUG] 没有当前活动标签页")
         
         # 创建执行日志弹窗
         self.execution_logs_dialog = ExecutionLogsDialog(self)
         
         # 如果测试正在执行，将已记录的日志添加到弹窗中
         if current_logs:
-            print(f"[DEBUG] 弹窗创建时加载已记录日志，共 {len(current_logs)} 条")
             for log_entry in current_logs:
                 step_index = log_entry.get('step_index', -1)
-                step_info = "通用信息" if step_index == -1 else f"步骤 {step_index + 1}"
-                print(f"[DEBUG] 加载日志 - {step_info}: {log_entry['message'][:50]}...")
                 
                 # 获取步骤名称（如果步骤索引有效）
                 step_name = log_entry.get('step_name')  # 尝试从日志条目获取步骤名称
@@ -3992,17 +3855,13 @@ class TabbedCaseEditor(QWidget):
                     step_index,
                     step_name
                 )
-            print(f"[DEBUG] 所有日志已加载到弹窗")
         else:
             # 添加一些示例日志
-            print("[DEBUG] 没有已记录日志，添加示例日志")
             self.execution_logs_dialog.add_log("执行日志弹窗已打开", "info")
             self.execution_logs_dialog.add_log("可以查看测试用例的执行日志", "success")
         
         # 显示弹窗
         self.execution_logs_dialog.show()
-        print("[DEBUG] 日志弹窗已显示")
-        print(f"[DEBUG] === 显示执行日志弹窗完成 ===")
 
     def add_execution_log(self, message, level="info"):
         """添加执行日志"""
@@ -4019,18 +3878,11 @@ class TabbedCaseEditor(QWidget):
     
     def case_saved(self, tab_id, case_data):
         """用例保存回调"""
-        print(f"=== DEBUG: case_saved() - 开始处理保存回调 ===")
-        print(f"=== DEBUG: tab_id = {tab_id} ===")
-        print(f"=== DEBUG: case_data = {case_data} ===")
-        print(f"=== DEBUG: 当前所有标签页: {list(self.tabs.keys())} ===")
-        
         # 首先检查是否需要更新标签页ID（当用例从新增变为编辑时）
         new_tab_id = self.generate_tab_id(case_data)
         
         # 如果标签页ID需要更新
         if new_tab_id != tab_id:
-            print(f"=== DEBUG: 需要更新标签页ID: {tab_id} -> {new_tab_id} ===")
-            
             # 检查旧的标签页是否存在
             if tab_id in self.tabs:
                 # 保存当前标签页数据
@@ -4047,25 +3899,17 @@ class TabbedCaseEditor(QWidget):
                 if self.current_tab_id == tab_id:
                     self.current_tab_id = new_tab_id
                 
-                print(f"=== DEBUG: 标签页ID更新完成，当前标签页: {list(self.tabs.keys())} ===")
                 tab_id = new_tab_id  # 更新后续使用的tab_id
             else:
-                print(f"=== DEBUG: 旧的标签页 {tab_id} 不存在，直接使用新ID {new_tab_id} ===")
                 tab_id = new_tab_id
         
         # 确保标签页存在于tabs中
         if tab_id not in self.tabs:
-            print(f"=== DEBUG: 标签页 {tab_id} 不存在，尝试查找对应的widget ===")
-            
             # 尝试通过widget查找标签页
             for existing_tab_id, existing_tab_data in self.tabs.items():
                 if hasattr(existing_tab_data['widget'], 'case_data') and existing_tab_data['widget'].case_data == case_data:
-                    print(f"=== DEBUG: 通过widget找到对应的标签页: {existing_tab_id} ===")
-                    
                     # 如果找到的标签页ID与需要的新ID不同，需要更新标签页记录
                     if existing_tab_id != tab_id:
-                        print(f"=== DEBUG: 需要更新标签页记录: {existing_tab_id} -> {tab_id} ===")
-                        
                         # 保存当前标签页数据
                         tab_data = self.tabs[existing_tab_id]
                         
@@ -4078,14 +3922,9 @@ class TabbedCaseEditor(QWidget):
                         # 更新当前标签页ID
                         if self.current_tab_id == existing_tab_id:
                             self.current_tab_id = tab_id
-                        
-                        print(f"=== DEBUG: 标签页记录更新完成，当前标签页: {list(self.tabs.keys())} ===")
-                    else:
-                        print(f"=== DEBUG: 标签页ID相同，无需更新 ===")
                     
                     break
             else:
-                print(f"=== DEBUG: 无法找到对应的标签页，创建新的标签页记录 ===")
                 # 创建新的标签页记录（这种情况应该很少发生）
                 self.tabs[tab_id] = {
                     'widget': None,  # 这里需要从其他地方获取widget
@@ -4100,22 +3939,12 @@ class TabbedCaseEditor(QWidget):
             
             # 更新CaseTabWidget实例的case_data属性（关键修复）
             tab_widget = self.tabs[tab_id]['widget']
-            print(f"=== DEBUG: 找到tab_widget: {tab_widget} ===")
             
             if hasattr(tab_widget, 'case_data'):
-                print(f"=== DEBUG: 更新前tab_widget.case_data = {tab_widget.case_data} ===")
-                print(f"=== DEBUG: 更新前tab_widget.is_edit = {tab_widget.is_edit} ===")
-                
                 tab_widget.case_data = case_data
                 # 如果是编辑模式，确保is_edit标志正确设置
                 if 'id' in case_data and case_data['id']:
                     tab_widget.is_edit = True
-                    print(f"=== DEBUG: 设置tab_widget.is_edit = True ===")
-                
-                print(f"=== DEBUG: 更新后tab_widget.case_data = {tab_widget.case_data} ===")
-                print(f"=== DEBUG: 更新后tab_widget.is_edit = {tab_widget.is_edit} ===")
-            else:
-                print(f"=== DEBUG: tab_widget没有case_data属性 ===")
             
             # 更新标签页名称
             tab_name = case_data.get('name', '新增用例')
@@ -4129,15 +3958,12 @@ class TabbedCaseEditor(QWidget):
             
             # 重置标签页修改状态为False（关键修复）
             self.tabs[tab_id]['modified'] = False
-            print(f"=== DEBUG: 设置标签页 {tab_id} 的modified状态为False ===")
             
             # 更新标签页标题，移除未保存标识
             self.update_tab_title(tab_id)
             
             # 发出保存信号，让外部处理实际的保存逻辑
             self.saved.emit(case_data)
-        else:
-            print(f"=== DEBUG: 最终仍然未找到tab_id对应的标签页 ===")
     
     def on_api_template_edit_requested(self, api_template_id):
         """处理接口模板编辑请求"""

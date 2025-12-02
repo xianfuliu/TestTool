@@ -80,3 +80,71 @@ class ApiFolderService:
         except Exception as e:
             print(f"删除文件夹失败: {e}")
             raise e
+
+    def check_folder_name_exists(self, project_id: int, parent_id: int, name: str, exclude_folder_id: int = None) -> bool:
+        """检查同一级目录下文件夹名称是否已存在
+        
+        Args:
+            project_id: 项目ID
+            parent_id: 父文件夹ID（None表示根目录）
+            name: 文件夹名称
+            exclude_folder_id: 排除的文件夹ID（用于编辑时排除自身）
+            
+        Returns:
+            如果名称已存在返回True，否则返回False
+        """
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 处理parent_id为None的情况
+                    if parent_id is None:
+                        query = """
+                            SELECT COUNT(*) as count 
+                            FROM api_folders 
+                            WHERE project_id = %s AND parent_id IS NULL AND name = %s
+                        """
+                        params = [project_id, name]
+                    else:
+                        query = """
+                            SELECT COUNT(*) as count 
+                            FROM api_folders 
+                            WHERE project_id = %s AND parent_id = %s AND name = %s
+                        """
+                        params = [project_id, parent_id, name]
+                    
+                    # 添加排除条件（用于编辑时）
+                    if exclude_folder_id is not None:
+                        query += " AND id != %s"
+                        params.append(exclude_folder_id)
+                    
+                    cursor.execute(query, params)
+                    result = cursor.fetchone()
+                    
+                    return result['count'] > 0
+        except Exception as e:
+            print(f"检查文件夹名称是否存在失败: {e}")
+            return False
+
+    def get_folder_by_id(self, folder_id: int) -> Dict[str, Any]:
+        """根据文件夹ID获取文件夹信息
+        
+        Args:
+            folder_id: 文件夹ID
+            
+        Returns:
+            文件夹信息字典，如果不存在返回None
+        """
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT id, project_id, parent_id, name, description, sort_order, 
+                               created_at, updated_at
+                        FROM api_folders 
+                        WHERE id = %s
+                    """, (folder_id,))
+                    result = cursor.fetchone()
+                    return result if result else None
+        except Exception as e:
+            print(f"获取文件夹信息失败: {e}")
+            return None

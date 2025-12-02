@@ -59,10 +59,14 @@ class InterfaceAutoTab(QWidget):
         self.business_management.data_changed.connect(self.test_case.refresh_project_list)
         
         # 当业务切换时，刷新接口模板页面的项目列表（根据业务分组ID过滤）
-        self.business_management.business_changed.connect(self.api_template.refresh_project_list)
+        self.business_management.business_changed.connect(
+            lambda business_group_id: self.api_template.refresh_project_list(business_group_id, show_toast=False)
+        )
         
         # 当业务切换时，刷新测试用例管理页面的项目列表（根据业务分组ID过滤）
-        self.business_management.business_changed.connect(self.test_case.refresh_project_list)
+        self.business_management.business_changed.connect(
+            lambda business_group_id: self.test_case.refresh_project_list(business_group_id, show_toast=False)
+        )
         
         # 当业务切换时，刷新定时调度页面的项目列表（根据业务分组ID过滤）
         self.business_management.business_changed.connect(self.scheduler.on_business_changed)

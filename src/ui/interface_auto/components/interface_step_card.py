@@ -698,22 +698,16 @@ class InterfaceStepCard(QFrame):
         try:
             # 通过父组件链查找包含case_data的组件（CaseTabWidget或TabbedCaseEditor）
             parent = self.parent()
-            print(f"[DEBUG] 开始查找父组件，初始父组件: {parent}")
             
             while parent:
-                print(f"[DEBUG] 当前父组件: {parent}, 类型: {type(parent)}")
                 # 检查是否包含case_data属性
                 if hasattr(parent, 'case_data'):
-                    print(f"[DEBUG] 找到包含case_data的组件: {parent}")
-                    print(f"[DEBUG] case_data内容: {parent.case_data}")
                     # 从case_data中获取全局加解密配置状态
                     global_enable_encryption = parent.case_data.get('enable_encryption', False)
-                    print(f"[DEBUG] 获取到的全局加解密状态: {global_enable_encryption}")
                     return global_enable_encryption
                 parent = parent.parent()
             
             # 如果找不到父组件，返回False
-            print("[DEBUG] 未找到包含case_data的父组件")
             return False
         except Exception as e:
             print(f"获取全局加解密配置状态失败: {str(e)}")
@@ -2956,16 +2950,11 @@ class InterfaceStepCard(QFrame):
         if event.button() == Qt.LeftButton:
             # 检查点击位置是否在允许拖动的区域
             is_allowed = self._is_drag_allowed_position(event.pos())
-            print(f"[DEBUG] mousePressEvent: 左键按下，位置: {event.pos()}, 允许拖动: {is_allowed}")
             if is_allowed:
                 self.drag_start_position = event.pos()
-                print(f"[DEBUG] mousePressEvent: 设置拖动起始位置: {self.drag_start_position}")
             else:
                 # 在tab容器内部等禁止拖动区域，不设置拖动起始位置
                 self.drag_start_position = None
-                print(f"[DEBUG] mousePressEvent: 禁止拖动区域，重置拖动起始位置")
-        else:
-            print(f"[DEBUG] mousePressEvent: 非左键按下，按钮: {event.button()}")
         super().mousePressEvent(event)
     
     def _is_drag_allowed_position(self, pos):
@@ -2977,7 +2966,6 @@ class InterfaceStepCard(QFrame):
             tab_rect = self.tab_widget.geometry()
             if tab_rect.contains(pos):
                 # 在tab容器内部，禁止拖动
-                print(f"[DEBUG] _is_drag_allowed_position: 点击在tab容器内部，禁止拖动")
                 return False
         
         # 2. 检查是否点击在工具条区域（禁止拖动区域）
@@ -2989,19 +2977,16 @@ class InterfaceStepCard(QFrame):
             # 头部区域允许拖动
             header_rect = self.header_layout.geometry()
             if header_rect.contains(pos):
-                print(f"[DEBUG] _is_drag_allowed_position: 点击在头部区域，允许拖动")
                 return True
         
         # 检查是否在接口展示区域
         if hasattr(self, 'interface_frame') and self.interface_frame:
             interface_rect = self.interface_frame.geometry()
             if interface_rect.contains(pos):
-                print(f"[DEBUG] _is_drag_allowed_position: 点击在接口展示区域，允许拖动")
                 return True
         
         # 放宽限制：只要不在明确的禁止区域，就允许拖动
         # 这样可以提高拖拽的可用性
-        print(f"[DEBUG] _is_drag_allowed_position: 默认区域，允许拖动")
         return True
 
     def mouseMoveEvent(self, event):
@@ -3011,29 +2996,22 @@ class InterfaceStepCard(QFrame):
         from PyQt5.QtWidgets import QApplication
         
         if not (event.buttons() & Qt.LeftButton):
-            print(f"[DEBUG] mouseMoveEvent: 不是左键拖动，忽略")
             return
             
         if self.drag_start_position is None:
-            print(f"[DEBUG] mouseMoveEvent: 没有拖动起始位置，忽略")
             return
             
         # 检查是否移动了足够的距离才开始拖拽
         drag_distance = (event.pos() - self.drag_start_position).manhattanLength()
-        print(f"[DEBUG] mouseMoveEvent: 拖动距离: {drag_distance}")
         if drag_distance < 10:
-            print(f"[DEBUG] mouseMoveEvent: 拖动距离不足，忽略")
             return
             
         # 检查当前鼠标位置是否在允许拖动的区域
         if not self._is_drag_allowed_position(event.pos()):
             # 如果在禁止拖动区域，重置拖动状态并返回
-            print(f"[DEBUG] mouseMoveEvent: 当前位置不允许拖动，重置拖动状态")
             self.drag_start_position = None
             return
             
-        print(f"[DEBUG] mouseMoveEvent: 开始拖拽，步骤ID: {self.step_id}")
-        
         # 设置拖拽光标为箭头，而不是默认的手掌形状
         QApplication.setOverrideCursor(Qt.ArrowCursor)
         
@@ -3050,7 +3028,6 @@ class InterfaceStepCard(QFrame):
         
         # 将数据转换为JSON格式
         json_data = json.dumps(drag_data)
-        print(f"[DEBUG] mouseMoveEvent: 拖拽数据: {json_data}")
         
         # 设置MIME数据
         mime_data.setData('application/x-dnd-step-card', json_data.encode('utf-8'))
@@ -3062,9 +3039,7 @@ class InterfaceStepCard(QFrame):
         drag.setHotSpot(event.pos())
         
         # 开始拖拽
-        print(f"[DEBUG] mouseMoveEvent: 执行拖拽操作")
         drag.exec_(Qt.MoveAction)
-        print(f"[DEBUG] mouseMoveEvent: 拖拽操作完成")
         
         # 清理拖拽状态
         self.drag_start_position = None
@@ -3078,58 +3053,44 @@ class InterfaceStepCard(QFrame):
 
     def dragEnterEvent(self, event):
         """拖拽进入事件"""
-        print(f"[DEBUG] dragEnterEvent: 接收到拖拽事件，MIME类型: {event.mimeData().formats()}")
         if event.mimeData().hasFormat('application/x-dnd-step-card'):
-            print(f"[DEBUG] dragEnterEvent: 检测到步骤卡片拖拽，接受动作")
             event.acceptProposedAction()
             # 添加拖拽进入时的视觉反馈
             self._add_drag_visual_feedback()
         else:
-            print(f"[DEBUG] dragEnterEvent: 未检测到步骤卡片拖拽，忽略事件")
             event.ignore()
 
     def dragMoveEvent(self, event):
         """拖拽移动事件 - 计算目标位置"""
-        print(f"[DEBUG] dragMoveEvent: 拖拽移动，位置: {event.pos()}")
         if event.mimeData().hasFormat('application/x-dnd-step-card'):
-            print(f"[DEBUG] dragMoveEvent: 检测到步骤卡片拖拽，计算目标位置")
             event.acceptProposedAction()
             # 计算目标位置（不显示光标指示器）
             self._calculate_drop_position(event.pos())
         else:
-            print(f"[DEBUG] dragMoveEvent: 未检测到步骤卡片拖拽，忽略事件")
             event.ignore()
 
     def dragLeaveEvent(self, event):
         """拖拽离开事件 - 清理状态"""
-        print(f"[DEBUG] dragLeaveEvent: 拖拽离开卡片")
         # 清理拖拽状态
         self._remove_drag_visual_feedback()
-        print(f"[DEBUG] dragLeaveEvent: 清理状态完成")
         event.accept()
 
     def dropEvent(self, event):
         """放置事件 - 使用前端ID系统进行动态排序和ID重排"""
-        print(f"[DEBUG] dropEvent: 开始处理放置事件")
         if event.mimeData().hasFormat('application/x-dnd-step-card'):
-            print(f"[DEBUG] dropEvent: 检测到步骤卡片拖拽数据")
             # 解析拖拽数据
             data = event.mimeData().data('application/x-dnd-step-card')
             json_data = data.data().decode('utf-8')
-            print(f"[DEBUG] dropEvent: 原始拖拽数据: {json_data}")
             
             try:
                 drag_data = json.loads(json_data)
-                print(f"[DEBUG] dropEvent: 解析后的拖拽数据: {drag_data}")
                 if drag_data.get('type') == 'step_card':
                     # 获取拖拽的步骤ID
                     dragged_step_id = drag_data.get('step_id')
-                    print(f"[DEBUG] dropEvent: 拖拽的步骤ID: {dragged_step_id}, 当前卡片步骤ID: {self.step_id}")
                     
                     # 获取当前卡片在布局中的位置
                     parent_layout = self.parent().layout()
                     if parent_layout:
-                        print(f"[DEBUG] dropEvent: 父布局存在，布局项数量: {parent_layout.count()}")
                         # 找到拖拽步骤在布局中的位置
                         dragged_index = -1
                         for i in range(parent_layout.count()):
@@ -3137,19 +3098,16 @@ class InterfaceStepCard(QFrame):
                             if widget and hasattr(widget, 'step_id'):
                                 if widget.step_id == dragged_step_id:
                                     dragged_index = i
-                                    print(f"[DEBUG] dropEvent: 找到拖拽步骤在布局中的位置: {dragged_index}")
                                     break
                         
                         # 如果拖拽的步骤ID与当前步骤ID相同，说明是拖拽到自身位置，不处理
                         if dragged_step_id == self.step_id:
-                            print(f"[DEBUG] dropEvent: 拖拽到自身位置，忽略")
                             event.ignore()
                             return
                         
                         # 使用新的位置计算逻辑
                         if hasattr(self, 'step_drag_insert_index'):
                             target_index = self.step_drag_insert_index
-                            print(f"[DEBUG] dropEvent: 使用新的位置计算逻辑，插入位置: {target_index}")
                         else:
                             # 如果没有计算位置，使用当前卡片位置作为默认
                             target_index = -1
@@ -3158,16 +3116,13 @@ class InterfaceStepCard(QFrame):
                                 if widget == self:
                                     target_index = i
                                     break
-                            print(f"[DEBUG] dropEvent: 使用当前卡片位置作为默认: {target_index}")
                         
                         # 如果找到了有效的位置，发送移动信号
                         if dragged_index >= 0 and target_index >= 0:
                             # 如果拖拽到相同位置，不执行移动但也不显示错误
                             if dragged_index == target_index:
-                                print(f"[DEBUG] dropEvent: 拖拽到相同位置，无需移动: dragged_index={dragged_index}, target_index={target_index}")
                                 # 清理拖拽状态
                                 self._remove_drag_visual_feedback()
-                                print(f"[DEBUG] dropEvent: 放置完成，清理状态")
                                 # 接受事件但忽略动作
                                 event.ignore()
                                 return
@@ -3177,32 +3132,24 @@ class InterfaceStepCard(QFrame):
                                     # 如果拖拽的卡片在目标位置之前，放在目标位置后面时，索引需要减1
                                     if hasattr(self, 'step_drag_insert_before') and not self.step_drag_insert_before:
                                         target_index = target_index - 1
-                                        print(f"[DEBUG] dropEvent: 修正插入位置，从 {target_index + 1} 调整为 {target_index}")
                                 
                                 # 发送新的移动信号，包含前端ID信息
-                                print(f"[DEBUG] dropEvent: 发送step_moved信号: dragged_step_id={dragged_step_id}, target_step_id={self.step_id}, from_index={dragged_index}, to_index={target_index}")
                                 self.step_moved.emit(dragged_step_id, self.step_id, dragged_index, target_index)
                                 event.acceptProposedAction()
                                 # 清理拖拽状态
                                 self._remove_drag_visual_feedback()
-                                print(f"[DEBUG] dropEvent: 放置成功，清理状态")
                                 return
                         else:
-                            print(f"[DEBUG] dropEvent: 无效的拖拽位置: dragged_index={dragged_index}, target_index={target_index}, dragged_step_id={dragged_step_id}, current_step_id={self.step_id}")
                             # 清理拖拽状态
                             self._remove_drag_visual_feedback()
                             event.ignore()
-                            print(f"[DEBUG] dropEvent: 放置失败，清理状态并忽略事件")
                             return
             except Exception as e:
-                print(f"[DEBUG] dropEvent: 解析拖拽数据失败: {e}")
-        else:
-            print(f"[DEBUG] dropEvent: 未检测到步骤卡片拖拽数据")
+                print(f"解析拖拽数据失败: {e}")
         
         # 清理拖拽状态
         self._remove_drag_visual_feedback()
         event.ignore()
-        print(f"[DEBUG] dropEvent: 放置失败，清理状态并忽略事件")
 
     def _cleanup_drag_state(self):
         """清理拖拽状态"""
@@ -3247,18 +3194,15 @@ class InterfaceStepCard(QFrame):
                     if parent_pos.x() < middle_x:
                         # 左侧50% - 放在当前卡片前面
                         insert_before = True
-                        print(f"[DEBUG] _calculate_drop_position: 鼠标在卡片{i}左侧50%，放在前面")
                     else:
                         # 右侧50% - 放在当前卡片后面
                         insert_before = False
-                        print(f"[DEBUG] _calculate_drop_position: 鼠标在卡片{i}右侧50%，放在后面")
                     break
         
         # 如果没找到目标卡片，放在最后
         if target_index == -1:
             target_index = parent_layout.count()
             insert_before = False  # 放在最后面
-            print(f"[DEBUG] _calculate_drop_position: 未找到目标卡片，放在最后")
         
         # 计算最终插入位置
         if insert_before:
@@ -3272,8 +3216,6 @@ class InterfaceStepCard(QFrame):
         self.step_drag_insert_index = final_insert_index
         self.step_drag_target_index = target_index
         self.step_drag_insert_before = insert_before
-        
-        print(f"[DEBUG] _calculate_drop_position: 目标卡片索引={target_index}, 插入位置={final_insert_index}, 插入方式={'前面' if insert_before else '后面'}")
 
     def _add_drag_visual_feedback(self):
         """添加拖拽视觉反馈 - 让卡片有挪开的效果"""

@@ -72,6 +72,10 @@ class VariableEditorDialog(QDialog):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        
+        # 修改按钮文本
+        button_box.button(QDialogButtonBox.Ok).setText("确认")
+        button_box.button(QDialogButtonBox.Cancel).setText("取消")
 
         layout.addLayout(form_layout)
         layout.addWidget(button_box)

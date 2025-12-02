@@ -76,6 +76,10 @@ class ApiTemplateDialog(QDialog):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        
+        # 修改按钮文本
+        button_box.button(QDialogButtonBox.Ok).setText("确认")
+        button_box.button(QDialogButtonBox.Cancel).setText("取消")
 
         layout.addWidget(tab_widget)
         layout.addWidget(button_box)
@@ -384,6 +388,7 @@ class ApiFolderDialog(QDialog):
         self.project_id = project_id
         self.parent_folder_id = parent_folder_id
         self.is_edit = bool(folder_data)
+        self.folder_service = ApiFolderService()
         self.init_ui()
 
     def init_ui(self):
@@ -409,8 +414,12 @@ class ApiFolderDialog(QDialog):
         form_layout.addRow("文件夹描述:", self.desc_edit)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
+        button_box.accepted.connect(self.validate_and_accept)
         button_box.rejected.connect(self.reject)
+        
+        # 修改按钮文本
+        button_box.button(QDialogButtonBox.Ok).setText("确认")
+        button_box.button(QDialogButtonBox.Cancel).setText("取消")
 
         layout.addLayout(form_layout)
         layout.addWidget(button_box)
@@ -423,6 +432,36 @@ class ApiFolderDialog(QDialog):
             'parent_id': self.parent_folder_id or self.folder_data.get('parent_id')
         }
 
+    def validate_and_accept(self):
+        """验证文件夹名称并接受对话框"""
+        folder_name = self.name_edit.text().strip()
+        
+        # 检查文件夹名称是否为空
+        if not folder_name:
+            Toast.warning(self, "输入错误", "文件夹名称不能为空！")
+            self.name_edit.setFocus()
+            return
+        
+        # 获取项目ID和父文件夹ID
+        project_id = self.project_id or self.folder_data.get('project_id')
+        parent_id = self.parent_folder_id or self.folder_data.get('parent_id')
+        
+        if not project_id:
+            Toast.warning(self, "输入错误", "请选择项目！")
+            return
+        
+        # 检查文件夹名称是否重复
+        exclude_folder_id = self.folder_data.get('id') if self.is_edit else None
+        
+        if self.folder_service.check_folder_name_exists(project_id, parent_id, folder_name, exclude_folder_id):
+            Toast.warning(self, "名称重复", f"当前目录下已存在名为 '{folder_name}' 的文件夹，请使用其他名称！")
+            self.name_edit.setFocus()
+            self.name_edit.selectAll()
+            return
+        
+        # 所有验证通过，接受对话框
+        self.accept()
+
 
 class DraggableTreeWidget(QTreeWidget):
     """可拖拽的树形控件"""
@@ -431,6 +470,7 @@ class DraggableTreeWidget(QTreeWidget):
     item_copy_requested = pyqtSignal(QTreeWidgetItem)  # 复制请求信号
     item_rename_requested = pyqtSignal(QTreeWidgetItem)  # 重命名请求信号
     item_delete_requested = pyqtSignal(QTreeWidgetItem)  # 删除请求信号
+    blank_area_clicked = pyqtSignal()  # 空白区域点击信号
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -438,6 +478,18 @@ class DraggableTreeWidget(QTreeWidget):
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
         self.setDragDropMode(QTreeWidget.InternalMove)
+
+    def mousePressEvent(self, event):
+        """鼠标点击事件处理"""
+        # 检查是否点击在空白区域
+        item = self.itemAt(event.pos())
+        if not item:
+            # 点击空白区域，清除选中状态并发出信号
+            self.clearSelection()
+            self.blank_area_clicked.emit()
+        
+        # 调用父类的处理
+        super().mousePressEvent(event)
 
     def startDrag(self, supportedActions):
         """开始拖拽"""
@@ -661,11 +713,12 @@ class ApiTemplateManager(QWidget):
             print(f"初始化服务失败: {e}")
             # 静默处理，不显示弹窗
 
-    def refresh_project_list(self, business_group_id=None):
+    def refresh_project_list(self, business_group_id=None, show_toast=True):
         """刷新项目下拉列表
         
         Args:
             business_group_id: 业务分组ID，如果提供则只显示该业务分组下的项目
+            show_toast: 是否显示Toast提示，默认为True
         """
         # 检查服务对象是否已初始化
         if self.project_service is None:
@@ -703,6 +756,10 @@ class ApiTemplateManager(QWidget):
                 self.project_combo.setCurrentIndex(0)
                 self.current_project = self.project_combo.currentData()
                 self.load_api_tree()
+
+            # 只在需要时显示刷新成功提示
+            if show_toast:
+                Toast.success(self, "项目列表刷新成功")
 
         except Exception as e:
             print(f"刷新项目列表失败: {str(e)}")
@@ -860,6 +917,9 @@ class ApiTemplateManager(QWidget):
         # 连接拖拽信号
         self.tree_widget.item_dragged.connect(self.on_item_dragged)
         self.tree_widget.item_dragged_with_position.connect(self.on_item_dragged_with_position)
+        
+        # 连接空白区域点击信号
+        self.tree_widget.blank_area_clicked.connect(self.on_blank_area_clicked)
 
         left_layout.addWidget(self.tree_widget)
         
@@ -1004,25 +1064,8 @@ class ApiTemplateManager(QWidget):
         if not folder_data or 'id' not in folder_data or 'name' not in folder_data:
             return
             
-        original_name = self.copied_template_data['name']
-        
-        # 执行粘贴操作：直接创建模板副本
-        try:
-            # 创建模板副本数据
-            template_copy = self.copied_template_data.copy()
-            template_copy.pop('id', None)  # 移除原始ID
-            
-            # 生成新的副本名称
-            template_copy['name'] = self.generate_copy_name(original_name, folder_data['id'])
-            template_copy['project_id'] = self.current_project  # 确保项目ID正确
-            template_copy['folder_id'] = folder_data['id']  # 设置目标文件夹ID
-            
-            # 创建新的模板
-            self.api_service.create_template(template_copy)
-            self.load_api_tree()
-            self.data_changed.emit()
-        except Exception as e:
-            pass
+        # 使用 paste_with_edit 方法进行粘贴，确保自动展开功能正常工作
+        self.paste_with_edit({'type': 'folder', 'data': folder_data})
 
     def paste_to_root(self):
         """粘贴到根目录（如果没有选中文件夹，使用复制接口原本的文件夹ID）"""
@@ -1030,27 +1073,8 @@ class ApiTemplateManager(QWidget):
         if not hasattr(self, 'copied_template_data') or not self.copied_template_data:
             return
             
-        # 获取复制接口原本的文件夹ID
-        original_folder_id = self.copied_template_data.get('folder_id')
-        original_name = self.copied_template_data['name']
-        
-        # 执行粘贴操作：直接创建模板副本
-        try:
-            # 创建模板副本数据
-            template_copy = self.copied_template_data.copy()
-            template_copy.pop('id', None)  # 移除原始ID
-            
-            # 生成新的副本名称
-            template_copy['name'] = self.generate_copy_name(original_name, original_folder_id)
-            template_copy['project_id'] = self.current_project  # 确保项目ID正确
-            template_copy['folder_id'] = original_folder_id  # 使用复制接口原本的文件夹ID
-            
-            # 创建新的模板
-            self.api_service.create_template(template_copy)
-            self.load_api_tree()
-            self.data_changed.emit()
-        except Exception as e:
-            pass
+        # 使用 paste_with_edit 方法进行粘贴，确保自动展开功能正常工作
+        self.paste_with_edit({'type': 'root', 'data': None})
 
     def get_icon(self, icon_name):
         """获取图标"""
@@ -1193,30 +1217,42 @@ class ApiTemplateManager(QWidget):
             if self.project_combo.count() > 0:
                 self.project_combo.setCurrentIndex(0)
 
-    def load_api_tree(self, preserve_expanded_state=True):
+    def load_api_tree(self, preserve_expanded_state=True, additional_expanded_ids=None):
         """加载接口树
         
         Args:
             preserve_expanded_state: 是否保持之前的展开状态，默认为True
+            additional_expanded_ids: 额外需要展开的文件夹ID集合
         """
+        print(f"load_api_tree调用：preserve_expanded_state={preserve_expanded_state}, additional_expanded_ids={additional_expanded_ids}")
+        
         # 保存当前展开的文件夹ID
         expanded_folder_ids = set()
         if preserve_expanded_state:
             expanded_folder_ids = self.get_expanded_folder_ids()
+            print(f"当前展开的文件夹ID集合: {expanded_folder_ids}")
+        
+        # 添加额外需要展开的文件夹ID
+        if additional_expanded_ids:
+            expanded_folder_ids.update(additional_expanded_ids)
+            print(f"合并后的展开文件夹ID集合: {expanded_folder_ids}")
         
         self.tree_widget.clear()
 
         if not self.current_project:
+            print("load_api_tree：当前项目为空")
             return
 
         # 检查服务对象是否已初始化
         if self.folder_service is None or self.api_service is None:
+            print("load_api_tree：服务对象未初始化")
             return
 
         try:
             # 加载文件夹
             folders = self.folder_service.get_folders_by_project(self.current_project)
             folder_map = {}
+            print(f"加载到文件夹数量: {len(folders)}")
 
             # 先创建所有文件夹项
             for folder in folders:
@@ -1238,6 +1274,7 @@ class ApiTemplateManager(QWidget):
 
             # 加载接口模板
             templates = self.api_service.get_templates_by_project(self.current_project)
+            print(f"加载到接口模板数量: {len(templates)}")
             for template in templates:
                 template_item = QTreeWidgetItem()
                 template_item.setText(0, template['name'])
@@ -1255,10 +1292,14 @@ class ApiTemplateManager(QWidget):
             # 恢复之前展开的文件夹状态
             if preserve_expanded_state:
                 if expanded_folder_ids:
+                    print(f"开始恢复展开状态，文件夹ID集合: {expanded_folder_ids}")
                     self.restore_expanded_state(folder_map, expanded_folder_ids)
+                else:
+                    print("展开文件夹ID集合为空，不进行展开")
                 # 如果 expanded_folder_ids 为空，说明之前所有文件夹都是收起的，不展开任何文件夹
             else:
                 # 默认情况下，只展开根级文件夹
+                print("不保持展开状态，只展开根级文件夹")
                 self.expand_root_folders()
 
         except Exception as e:
@@ -1291,10 +1332,50 @@ class ApiTemplateManager(QWidget):
     
     def restore_expanded_state(self, folder_map, expanded_folder_ids):
         """恢复之前展开的文件夹状态"""
+        print(f"restore_expanded_state调用：folder_map大小={len(folder_map)}, expanded_folder_ids={expanded_folder_ids}")
+        
+        if not expanded_folder_ids:
+            print("restore_expanded_state：展开文件夹ID集合为空，直接返回")
+            return
+            
+        # 创建一个查找函数来递归查找文件夹项
+        def find_folder_item(item, target_folder_id):
+            """递归查找指定文件夹ID的树项"""
+            data = item.data(0, Qt.UserRole)
+            if data and data['type'] == 'folder' and data['data']['id'] == target_folder_id:
+                print(f"递归查找：找到文件夹ID={target_folder_id}")
+                return item
+            
+            # 递归查找子项
+            for i in range(item.childCount()):
+                child_item = item.child(i)
+                found_item = find_folder_item(child_item, target_folder_id)
+                if found_item:
+                    return found_item
+            return None
+        
+        # 首先尝试使用folder_map快速查找
         for folder_id in expanded_folder_ids:
             folder_item = folder_map.get(folder_id)
             if folder_item:
+                print(f"快速查找：找到文件夹ID={folder_id}，设置展开状态")
                 folder_item.setExpanded(True)
+            else:
+                print(f"快速查找：未找到文件夹ID={folder_id}，开始递归查找")
+                # 如果folder_map中没有找到，递归遍历整个树来查找
+                found = False
+                for i in range(self.tree_widget.topLevelItemCount()):
+                    top_item = self.tree_widget.topLevelItem(i)
+                    found_item = find_folder_item(top_item, folder_id)
+                    if found_item:
+                        found_item.setExpanded(True)
+                        found = True
+                        print(f"递归查找：成功设置文件夹ID={folder_id}展开状态")
+                        break
+                if not found:
+                    print(f"递归查找：未找到文件夹ID={folder_id}")
+        
+        print("restore_expanded_state执行完成")
     
     def expand_root_folders(self):
         """展开根级文件夹"""
@@ -1303,6 +1384,23 @@ class ApiTemplateManager(QWidget):
             data = item.data(0, Qt.UserRole)
             if data and data['type'] == 'folder':
                 item.setExpanded(True)
+
+    def on_blank_area_clicked(self):
+        """空白区域点击事件 - 取消选中所有项目"""
+        # 清除树形控件的选中状态
+        self.tree_widget.clearSelection()
+        
+        # 清除当前选中的文件夹和模板
+        self.current_folder = None
+        self.current_template = None
+        
+        # 禁用删除按钮
+        self.delete_folder_btn.setEnabled(False)
+        
+        # 如果没有打开的标签页，显示提示信息
+        if hasattr(self, 'tabbed_editor') and self.tabbed_editor and self.tabbed_editor.tab_widget.count() == 0:
+            self.info_label.show()
+            self.tabbed_editor_container.hide()
 
     def on_tree_item_clicked(self, item):
         """树形项目点击事件"""
@@ -1327,6 +1425,21 @@ class ApiTemplateManager(QWidget):
         else:
             self.current_template = item_data
             self.current_folder = None
+            
+            # 关键修复：确保使用最新的模板数据
+            # 如果模板有ID，从数据库获取最新数据，避免使用过期的缓存数据
+            if 'id' in item_data and item_data['id']:
+                try:
+                    latest_template_data = self.api_service.get_template_by_id(item_data['id'])
+                    if latest_template_data:
+                        item_data = latest_template_data
+                        # 更新树形控件中的数据
+                        data['data'] = latest_template_data
+                        item.setData(0, Qt.UserRole, data)
+                except Exception as e:
+                    print(f"获取最新模板数据失败: {e}")
+                    # 如果获取失败，继续使用原有数据
+            
             # 点击接口使用多标签页编辑器打开
             self.tabbed_editor.open_template(item_data)
             
@@ -1418,7 +1531,7 @@ class ApiTemplateManager(QWidget):
                 source_template['name'], 
                 source_template['id']
             ):
-                QMessageBox.warning(
+                Toast.warning(
                     self, 
                     "名称冲突", 
                     f"目标文件夹下已存在名为 '{source_template['name']}' 的接口，请先修改接口名称再进行拖拽操作。"
@@ -1432,8 +1545,15 @@ class ApiTemplateManager(QWidget):
             # 重新计算并更新排序顺序
             self.update_template_order(source_template['id'], target_folder_id)
             
-            # 刷新接口树，保持之前的展开状态
-            self.load_api_tree(preserve_expanded_state=True)
+            # 构建需要展开的文件夹ID集合
+            expanded_folder_ids = set()
+            
+            # 展开目标文件夹（拖拽的目标目录）
+            if target_folder_id:
+                expanded_folder_ids.add(target_folder_id)
+            
+            # 刷新接口树，保持之前的展开状态并展开目标目录
+            self.load_api_tree(preserve_expanded_state=True, additional_expanded_ids=expanded_folder_ids)
             self.data_changed.emit()
             
             # 显示拖拽成功提示
@@ -1443,7 +1563,7 @@ class ApiTemplateManager(QWidget):
             self.sync_template_data_in_editor(source_template['id'])
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"拖拽操作失败: {str(e)}")
+            Toast.critical(self, "错误", f"拖拽操作失败: {str(e)}")
 
     def on_item_dragged_with_position(self, source_item, folder_item, target_item, drop_position):
         """处理带位置的拖拽事件（优化版）"""
@@ -1495,7 +1615,7 @@ class ApiTemplateManager(QWidget):
                 source_template['name'], 
                 source_template['id']
             ):
-                QMessageBox.warning(
+                Toast.warning(
                     self, 
                     "名称冲突", 
                     f"目标文件夹下已存在名为 '{source_template['name']}' 的接口，请先修改接口名称再进行拖拽操作。"
@@ -1514,8 +1634,15 @@ class ApiTemplateManager(QWidget):
             # 根据位置重新计算并更新排序顺序
             self.update_template_order_with_position(source_template['id'], target_folder_id, target_template['id'], drop_position)
             
-            # 刷新接口树，保持之前的展开状态
-            self.load_api_tree(preserve_expanded_state=True)
+            # 构建需要展开的文件夹ID集合
+            expanded_folder_ids = set()
+            
+            # 展开目标文件夹（拖拽的目标目录）
+            if target_folder_id:
+                expanded_folder_ids.add(target_folder_id)
+            
+            # 刷新接口树，保持之前的展开状态并展开目标目录
+            self.load_api_tree(preserve_expanded_state=True, additional_expanded_ids=expanded_folder_ids)
             self.data_changed.emit()
             
             # 同步编辑页面数据
@@ -1529,7 +1656,7 @@ class ApiTemplateManager(QWidget):
             
         except Exception as e:
             error_msg = f"带位置拖拽操作失败: {str(e)}"
-            QMessageBox.critical(self, "错误", error_msg)
+            Toast.critical(self, "错误", error_msg)
             print(f"拖动失败：{error_msg}")
             
             # 尝试恢复原始状态
@@ -1614,7 +1741,7 @@ class ApiTemplateManager(QWidget):
         except Exception as e:
             print(f"根据位置更新模板顺序失败: {e}")
             # 提供用户友好的错误提示
-            QMessageBox.warning(self, "拖动失败", f"拖动操作失败，请重试。错误信息: {str(e)}")
+            Toast.warning(self, "拖动失败", f"拖动操作失败，请重试。错误信息: {str(e)}")
     
     def _recalculate_sort_order(self, templates, target_index, position):
         """重新计算排序顺序（当间距不足时使用）"""
@@ -1797,7 +1924,7 @@ class ApiTemplateManager(QWidget):
             self.tree_widget.expandAll()
 
         except Exception as e:
-            QMessageBox.warning(self, "搜索失败", f"搜索接口模板失败: {str(e)}")
+            Toast.warning(self, "搜索失败", f"搜索接口模板失败: {str(e)}")
 
     def update_template_order(self, template_id, folder_id):
         """更新模板的排序顺序"""
@@ -1839,24 +1966,53 @@ class ApiTemplateManager(QWidget):
 
 
     def add_api_folder(self):
-        """新增接口文件夹（默认创建一级文件夹）"""
+        """新增接口文件夹（根据当前选中的文件夹创建子文件夹）"""
         if not self.current_project:
-            QMessageBox.warning(self, "提示", "请先选择项目")
+            Toast.warning(self, "提示", "请先选择项目")
             return
 
-        # 默认创建一级文件夹（父文件夹ID为None）
-        dialog = ApiFolderDialog(self, project_id=self.current_project, parent_folder_id=None)
+        # 使用当前选中的文件夹作为父文件夹
+        parent_folder_id = None
+        folder_type = "子"  # 默认类型为子文件夹
+        
+        if self.current_folder:
+            parent_folder_id = self.current_folder['id']
+            folder_type = "子"
+            
+            # 检查当前文件夹的层级深度，如果已经是三级或以上，不允许创建子文件夹
+            current_depth = self.get_folder_depth(parent_folder_id)
+            if current_depth >= 3:
+                Toast.warning(self, "提示", "文件夹层级最多允许三级，无法继续创建子文件夹")
+                return
+        else:
+            # 如果没有选中文件夹，创建一级文件夹
+            folder_type = "一级"
+
+        dialog = ApiFolderDialog(self, project_id=self.current_project, parent_folder_id=parent_folder_id)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                QMessageBox.warning(self, "输入错误", "文件夹名称不能为空")
+                Toast.warning(self, "输入错误", "文件夹名称不能为空")
                 return
 
             try:
-                self.folder_service.create_folder(data)
-                self.load_api_tree()
+                # 创建新文件夹
+                new_folder_id = self.folder_service.create_folder(data)
+                
+                # 获取新创建的文件夹数据
+                new_folder = self.folder_service.get_folder_by_id(new_folder_id)
+                
+                # 构建需要展开的文件夹ID集合
+                expanded_folder_ids = set()
+                
+                # 如果新文件夹有父文件夹，需要展开父文件夹
+                if new_folder.get('parent_id'):
+                    expanded_folder_ids.add(new_folder['parent_id'])
+                
+                # 加载接口树，并展开相关文件夹
+                self.load_api_tree(preserve_expanded_state=True, additional_expanded_ids=expanded_folder_ids)
                 self.data_changed.emit()
-                Toast.success(self, "一级文件夹创建成功")
+                Toast.success(self, f"{folder_type}文件夹创建成功")
             except Exception as e:
                 Toast.error(self, f"创建文件夹失败: {str(e)}")
 
@@ -1906,33 +2062,56 @@ class ApiTemplateManager(QWidget):
         max_copy = max(existing_copies)
         return f"{original_name}_copy{max_copy + 1}"
 
-    def add_subfolder(self):
-        """新增子文件夹（用于右键菜单）"""
+    def add_subfolder(self, parent_folder_data=None):
+        """新增子文件夹（用于右键菜单）
+        
+        Args:
+            parent_folder_data: 父文件夹数据，如果为None则使用当前选中的文件夹
+        """
         if not self.current_project:
-            QMessageBox.warning(self, "提示", "请先选择项目")
+            Toast.warning(self, "提示", "请先选择项目")
             return
 
-        # 使用当前选中的文件夹作为父文件夹
+        # 确定父文件夹ID
         parent_folder_id = None
-        if self.current_folder:
+        
+        # 优先使用传入的父文件夹数据
+        if parent_folder_data:
+            parent_folder_id = parent_folder_data['id']
+        # 如果没有传入数据，则使用当前选中的文件夹
+        elif self.current_folder:
             parent_folder_id = self.current_folder['id']
-            
-            # 检查当前文件夹的层级深度，如果已经是三级或以上，不允许创建子文件夹
+
+        # 检查文件夹层级深度
+        if parent_folder_id:
             current_depth = self.get_folder_depth(parent_folder_id)
             if current_depth >= 3:
-                QMessageBox.warning(self, "提示", "文件夹层级最多允许三级，无法继续创建子文件夹")
+                Toast.warning(self, "提示", "文件夹层级最多允许三级，无法继续创建子文件夹")
                 return
 
         dialog = ApiFolderDialog(self, project_id=self.current_project, parent_folder_id=parent_folder_id)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                QMessageBox.warning(self, "输入错误", "文件夹名称不能为空")
+                Toast.warning(self, "输入错误", "文件夹名称不能为空")
                 return
 
             try:
-                self.folder_service.create_folder(data)
-                self.load_api_tree()
+                # 创建新子文件夹
+                new_folder_id = self.folder_service.create_folder(data)
+                
+                # 获取新创建的文件夹数据
+                new_folder = self.folder_service.get_folder_by_id(new_folder_id)
+                
+                # 构建需要展开的文件夹ID集合
+                expanded_folder_ids = set()
+                
+                # 展开父文件夹（新子文件夹所在的目录）
+                if parent_folder_id:
+                    expanded_folder_ids.add(parent_folder_id)
+                
+                # 加载接口树，并展开相关文件夹
+                self.load_api_tree(preserve_expanded_state=True, additional_expanded_ids=expanded_folder_ids)
                 self.data_changed.emit()
                 Toast.success(self, "子文件夹创建成功")
             except Exception as e:
@@ -1941,7 +2120,7 @@ class ApiTemplateManager(QWidget):
     def add_api_template(self):
         """新增接口模板"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            Toast.warning(self, "警告", "请先选择项目")
             return
             
         # 创建空模板数据
@@ -1967,7 +2146,7 @@ class ApiTemplateManager(QWidget):
     def add_api_template_to_folder(self, folder_data):
         """在指定文件夹中新增接口模板"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            Toast.warning(self, "警告", "请先选择项目")
             return
             
         # 创建空模板数据
@@ -2040,14 +2219,14 @@ class ApiTemplateManager(QWidget):
             template_name = template_data.get('name')
             
             if not template_name:
-                QMessageBox.warning(self, "输入错误", "接口名称不能为空")
+                Toast.warning(self, "输入错误", "接口名称不能为空")
                 return False  # 保存失败
                 
             # 检查同一目录下是否存在相同名称的接口模板
             template_id = template_data.get('id')
             project_id = template_data.get('project_id')
             if self.api_service.check_template_name_exists(project_id, folder_id, template_name, template_id):
-                QMessageBox.warning(self, "名称重复", f"当前目录下已存在名为 '{template_name}' 的接口模板，请使用不同的名称")
+                Toast.warning(self, "名称重复", f"当前目录下已存在名为 '{template_name}' 的接口模板，请使用不同的名称")
                 return False  # 保存失败
             
             save_success = False
@@ -2099,11 +2278,20 @@ class ApiTemplateManager(QWidget):
                             widget.template_data = template_data
                             widget.is_edit = True
                 else:
-                    QMessageBox.critical(self, "错误", "接口模板创建失败")
+                    Toast.critical(self, "错误", "接口模板创建失败")
             
             if save_success:
-                # 刷新接口树，保持之前的展开状态
-                self.load_api_tree(preserve_expanded_state=True)
+                # 构建需要展开的文件夹ID集合
+                expanded_folder_ids = set()
+                
+                # 如果新创建的模板有文件夹ID，需要展开该文件夹
+                if 'id' in template_data and 'folder_id' in template_data:
+                    folder_id = template_data['folder_id']
+                    if folder_id:
+                        expanded_folder_ids.add(folder_id)
+                
+                # 刷新接口树，保持之前的展开状态，并展开新模板所在的文件夹
+                self.load_api_tree(preserve_expanded_state=True, additional_expanded_ids=expanded_folder_ids)
                 self.data_changed.emit()
                 
                 # 标记标签页为已保存状态
@@ -2146,7 +2334,7 @@ class ApiTemplateManager(QWidget):
             return save_success
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存接口模板失败: {str(e)}")
+            Toast.critical(self, "错误", f"保存接口模板失败: {str(e)}")
             
             # 异常情况下也保持标签页的修改状态
             current_index = self.tabbed_editor.tab_widget.currentIndex()
@@ -2207,7 +2395,7 @@ class ApiTemplateManager(QWidget):
                 # 使用Toast提示替代QMessageBox，避免二次点击
                 Toast.success(self, "接口模板删除成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除接口模板失败: {str(e)}")
+                Toast.critical(self, "错误", f"删除接口模板失败: {str(e)}")
 
 
 
@@ -2230,7 +2418,8 @@ class ApiTemplateManager(QWidget):
                     folder_depth = self.get_folder_depth(data['data']['id'])
                     if folder_depth < 3:
                         add_folder_action = QAction("新增子文件夹", self)
-                        add_folder_action.triggered.connect(self.add_subfolder)
+                        # 传递当前悬停的文件夹数据给add_subfolder方法
+                        add_folder_action.triggered.connect(lambda: self.add_subfolder(data['data']))
                         menu.addAction(add_folder_action)
 
                     add_template_action = QAction("新增接口", self)
@@ -2279,7 +2468,7 @@ class ApiTemplateManager(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
-                QMessageBox.warning(self, "输入错误", "文件夹名称不能为空")
+                Toast.warning(self, "输入错误", "文件夹名称不能为空")
                 return
 
             try:
@@ -2346,8 +2535,11 @@ class ApiTemplateManager(QWidget):
         """粘贴接口模板并自动进入编辑页面"""
         # 检查是否已复制模板数据
         if not hasattr(self, 'copied_template_data') or not self.copied_template_data:
+            print("粘贴操作：没有可用的模板数据")
             return
             
+        print(f"粘贴操作开始：目标类型={target_data['type']}")
+        
         # 根据目标数据类型决定粘贴位置
         if target_data['type'] == 'folder':
             # 粘贴到文件夹
@@ -2355,7 +2547,10 @@ class ApiTemplateManager(QWidget):
             
             # 检查文件夹数据是否有效
             if not folder_data or 'id' not in folder_data or 'name' not in folder_data:
+                print("粘贴操作：文件夹数据无效")
                 return
+                
+            print(f"粘贴到文件夹：{folder_data['name']} (ID: {folder_data['id']})")
                 
             # 检查目标文件夹下是否存在同名接口
             original_name = self.copied_template_data['name']
@@ -2371,8 +2566,10 @@ class ApiTemplateManager(QWidget):
                     msg_box.exec_()
                     reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
                     if reply == QMessageBox.No:
+                        print("粘贴操作：用户取消同名接口粘贴")
                         return
             except Exception as e:
+                print(f"粘贴操作：检查同名接口失败: {str(e)}")
                 return
                 
             # 执行粘贴操作：创建模板副本
@@ -2387,8 +2584,27 @@ class ApiTemplateManager(QWidget):
                 template_copy['folder_id'] = folder_data['id']  # 设置目标文件夹ID
                 
                 # 创建新的模板
-                new_template = self.api_service.create_template(template_copy)
-                self.load_api_tree(preserve_expanded_state=True)
+                new_template_id = self.api_service.create_template(template_copy)
+                print(f"粘贴操作：模板创建成功，新模板ID={new_template_id}")
+                
+                # 根据模板ID获取完整的模板数据
+                new_template = self.api_service.get_template_by_id(new_template_id)
+                print(f"粘贴操作：获取完整模板数据，模板名称='{new_template.get('name') if new_template else 'None'}'")
+                
+                if not new_template:
+                    print("粘贴操作：获取模板数据失败")
+                    return
+                
+                # 构建需要展开的文件夹ID集合
+                expanded_folder_ids = set()
+                
+                # 展开目标文件夹（粘贴的模板所在的目录）
+                if folder_data['id']:
+                    expanded_folder_ids.add(folder_data['id'])
+                
+                print(f"粘贴操作：需要展开的文件夹ID集合={expanded_folder_ids}")
+                
+                self.load_api_tree(preserve_expanded_state=True, additional_expanded_ids=expanded_folder_ids)
                 self.data_changed.emit()
                 
                 # 自动打开编辑页面
@@ -2396,15 +2612,25 @@ class ApiTemplateManager(QWidget):
                 self.info_label.hide()
                 self.tabbed_editor_container.show()
                 
+                print("粘贴操作完成")
+                
             except Exception as e:
+                print(f"粘贴操作失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 pass
         else:
             # 粘贴到根目录
+            print("粘贴操作：目标类型=根目录")
+            
             # 检查根目录下是否存在同名接口
             original_name = self.copied_template_data['name']
+            print(f"粘贴操作：检查根目录下是否存在同名接口 '{original_name}'")
+            
             try:
                 if self.api_service.check_template_name_exists(self.current_project, None, original_name):
                     # 存在同名接口，提示用户
+                    print("粘贴操作：根目录下存在同名接口，提示用户")
                     from PyQt5.QtWidgets import QMessageBox
                     msg_box = QMessageBox(QMessageBox.Question, "同名接口", 
                                         f"根目录下已存在名为 '{original_name}' 的接口。\n是否继续粘贴？")
@@ -2414,38 +2640,72 @@ class ApiTemplateManager(QWidget):
                     msg_box.exec_()
                     reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
                     if reply == QMessageBox.No:
+                        print("粘贴操作：用户取消根目录粘贴")
                         return
             except Exception as e:
+                print(f"粘贴操作：检查根目录同名接口失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 return
                 
             # 执行粘贴操作：创建模板副本
             try:
+                print("粘贴操作：开始创建模板副本")
+                
                 # 创建模板副本数据
                 template_copy = self.copied_template_data.copy()
                 template_copy.pop('id', None)  # 移除原始ID
+                print(f"粘贴操作：模板副本数据创建完成，原始名称='{original_name}'")
                 
                 # 生成新的副本名称
-                template_copy['name'] = self.generate_copy_name(original_name, None)
+                print("粘贴操作：调用generate_copy_name生成副本名称")
+                copy_name = self.generate_copy_name(original_name, None)
+                print(f"粘贴操作：生成的副本名称='{copy_name}'")
+                template_copy['name'] = copy_name
                 template_copy['project_id'] = self.current_project  # 确保项目ID正确
                 template_copy['folder_id'] = None  # 设置为根目录
                 
+                print(f"粘贴操作：准备创建模板，项目ID={self.current_project}, 文件夹ID=None")
+                
                 # 创建新的模板
-                new_template = self.api_service.create_template(template_copy)
-                self.load_api_tree(preserve_expanded_state=True)
+                new_template_id = self.api_service.create_template(template_copy)
+                print(f"粘贴操作：模板创建成功，新模板ID={new_template_id}")
+                
+                # 根据模板ID获取完整的模板数据
+                new_template = self.api_service.get_template_by_id(new_template_id)
+                print(f"粘贴操作：获取完整模板数据，模板名称='{new_template.get('name') if new_template else 'None'}'")
+                
+                if not new_template:
+                    print("粘贴操作：获取模板数据失败")
+                    return
+                
+                # 构建需要展开的文件夹ID集合
+                expanded_folder_ids = set()
+                print(f"粘贴操作：构建展开文件夹ID集合={expanded_folder_ids}")
+                # 对于根目录，不需要展开特定文件夹，但保持现有展开状态
+                
+                print("粘贴操作：调用load_api_tree刷新界面")
+                self.load_api_tree(preserve_expanded_state=True, additional_expanded_ids=expanded_folder_ids)
                 self.data_changed.emit()
                 
                 # 自动打开编辑页面
+                print("粘贴操作：自动打开编辑页面")
                 self.tabbed_editor.open_template(new_template)
                 self.info_label.hide()
                 self.tabbed_editor_container.show()
                 
+                print("粘贴操作：根目录粘贴完成")
+                
             except Exception as e:
+                print(f"粘贴操作失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 pass
 
     def delete_selected_folder(self):
         """删除选中的文件夹"""
         if not self.current_folder:
-            QMessageBox.warning(self, "提示", "请先选择一个文件夹")
+            Toast.warning(self, "提示", "请先选择一个文件夹")
             return
             
         self.delete_api_folder(self.current_folder)

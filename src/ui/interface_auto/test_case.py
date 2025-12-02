@@ -112,6 +112,10 @@ class CaseFolderDialog(QDialog):
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+        
+        # 修改按钮文本为中文
+        button_box.button(QDialogButtonBox.Ok).setText("确认")
+        button_box.button(QDialogButtonBox.Cancel).setText("取消")
 
         layout.addLayout(form_layout)
         layout.addWidget(button_box)
@@ -161,6 +165,7 @@ class DraggableCaseTreeWidget(QTreeWidget):
     """可拖拽的测试用例树控件（完全复用api_template.py的拖拽功能）"""
     item_dragged = pyqtSignal(QTreeWidgetItem, QTreeWidgetItem)  # 拖拽信号
     item_dragged_with_position = pyqtSignal(QTreeWidgetItem, QTreeWidgetItem, QTreeWidgetItem, str)  # 带位置的拖拽信号
+    blank_area_clicked = pyqtSignal()  # 空白区域点击信号
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -168,6 +173,18 @@ class DraggableCaseTreeWidget(QTreeWidget):
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
         self.setDragDropMode(QTreeWidget.InternalMove)
+
+    def mousePressEvent(self, event):
+        """鼠标点击事件处理"""
+        # 调用父类方法处理正常点击
+        super().mousePressEvent(event)
+        
+        # 检查是否点击在空白区域
+        item = self.itemAt(event.pos())
+        if not item:
+            # 点击空白区域，清除选中状态并发出信号
+            self.clearSelection()
+            self.blank_area_clicked.emit()
 
     def startDrag(self, supportedActions):
         """开始拖拽"""
@@ -605,6 +622,7 @@ class TestCaseManager(QWidget):
         self.case_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.case_tree.item_dragged.connect(self.on_case_dragged)
         self.case_tree.item_dragged_with_position.connect(self.on_case_dragged_with_position)
+        self.case_tree.blank_area_clicked.connect(self.on_blank_area_clicked)
         self.case_tree.customContextMenuRequested.connect(self.show_tree_context_menu)
         self.case_tree.itemClicked.connect(self.on_tree_item_clicked)
         left_layout.addWidget(self.case_tree)
@@ -777,17 +795,18 @@ class TestCaseManager(QWidget):
             if projects:
                 self.current_project = projects[0]['id']
                 self.load_case_tree(preserve_expanded_state=True)
-                self.load_api_templates()
+                self.load_api_templates(preserve_expanded_state=True)
 
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"加载项目列表失败: {str(e)}")
 
-    def refresh_project_list(self, business_group_id=None):
+    def refresh_project_list(self, business_group_id=None, show_toast=True):
         """刷新项目下拉列表
         
         Args:
             business_group_id: 业务分组ID，如果提供则只显示该业务分组下的项目
+            show_toast: 是否显示Toast提示，默认为True
         """
         # 检查服务对象是否已初始化
         if self.project_service is None:
@@ -797,6 +816,9 @@ class TestCaseManager(QWidget):
         try:
             # 保存当前选中的项目
             current_project_id = self.current_project
+
+            # 暂时断开信号连接，避免在清空和重新填充项目列表时触发on_project_changed
+            self.project_combo.currentIndexChanged.disconnect(self.on_project_changed)
 
             # 重新加载项目列表
             if business_group_id:
@@ -818,23 +840,32 @@ class TestCaseManager(QWidget):
                     self.project_combo.setCurrentIndex(index)
                     # 恢复选中项目后，重新加载用例树以保持展开状态
                     self.load_case_tree(preserve_expanded_state=True)
-                    self.load_api_templates()
+                    self.load_api_templates(preserve_expanded_state=True)
                 elif self.project_combo.count() > 0:
                     # 如果之前的项目不存在了，选择第一个项目
                     self.project_combo.setCurrentIndex(0)
                     self.current_project = self.project_combo.currentData()
                     self.load_case_tree(preserve_expanded_state=True)
-                    self.load_api_templates()
+                    self.load_api_templates(preserve_expanded_state=True)
             elif self.project_combo.count() > 0:
                 # 如果没有之前选中的项目，选择第一个
                 self.project_combo.setCurrentIndex(0)
                 self.current_project = self.project_combo.currentData()
                 self.load_case_tree(preserve_expanded_state=True)
-                self.load_api_templates()
+                self.load_api_templates(preserve_expanded_state=True)
+
+            # 重新连接信号
+            self.project_combo.currentIndexChanged.connect(self.on_project_changed)
+            
+            # 只在需要时显示刷新成功提示
+            if show_toast:
+                Toast.success(self, "刷新成功")
 
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"刷新项目列表失败: {str(e)}")
+            # 确保在异常情况下也重新连接信号
+            self.project_combo.currentIndexChanged.connect(self.on_project_changed)
 
     def on_project_changed(self, index):
         """项目选择变化"""
@@ -845,7 +876,7 @@ class TestCaseManager(QWidget):
             self.current_case_data = None
             # 多标签页编辑器不需要清空
             self.load_case_tree(preserve_expanded_state=True)
-            self.load_api_templates()
+            self.load_api_templates(preserve_expanded_state=True)
             
             # 更新删除文件夹图标的启用状态
             self.update_delete_folder_icon_state()
@@ -856,7 +887,12 @@ class TestCaseManager(QWidget):
             Toast.warn(self, "请先选择项目")
             return
 
-        dialog = CaseFolderDialog(self, project_id=self.current_project, parent_folder_id=None)
+        # 根据当前选中的文件夹决定父文件夹ID
+        # 如果选中了文件夹，则在选中目录下创建子文件夹
+        # 如果没有选中文件夹，则在根目录创建文件夹
+        parent_folder_id = self.current_folder['id'] if self.current_folder else None
+        
+        dialog = CaseFolderDialog(self, project_id=self.current_project, parent_folder_id=parent_folder_id)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data['name']:
@@ -890,8 +926,29 @@ class TestCaseManager(QWidget):
 
     def restore_case_expanded_state(self, folder_map, expanded_folder_ids):
         """恢复文件夹展开状态"""
-        for folder_id, folder_item in folder_map.items():
-            if folder_id in expanded_folder_ids:
+        # 需要展开的文件夹ID集合
+        folders_to_expand = set(expanded_folder_ids)
+        
+        # 递归展开所有父文件夹，确保展开的文件夹可见
+        for folder_id in expanded_folder_ids:
+            # 获取文件夹数据
+            folder_item = folder_map.get(folder_id)
+            if folder_item:
+                # 递归展开所有父文件夹
+                parent = folder_item.parent()
+                while parent:
+                    parent_data = parent.data(0, Qt.UserRole)
+                    if parent_data and parent_data.get('type') == 'folder':
+                        parent_folder_id = parent_data['data']['id']
+                        folders_to_expand.add(parent_folder_id)
+                        parent = parent.parent()
+                    else:
+                        break
+        
+        # 展开所有需要展开的文件夹
+        for folder_id in folders_to_expand:
+            folder_item = folder_map.get(folder_id)
+            if folder_item:
                 folder_item.setExpanded(True)
 
     def expand_case_root_folders(self):
@@ -923,8 +980,29 @@ class TestCaseManager(QWidget):
 
     def restore_api_expanded_state(self, folder_map, expanded_folder_ids):
         """恢复接口模板文件夹展开状态"""
-        for folder_id, folder_item in folder_map.items():
-            if folder_id in expanded_folder_ids:
+        # 需要展开的文件夹ID集合
+        folders_to_expand = set(expanded_folder_ids)
+        
+        # 递归展开所有父文件夹，确保展开的文件夹可见
+        for folder_id in expanded_folder_ids:
+            # 获取文件夹数据
+            folder_item = folder_map.get(folder_id)
+            if folder_item:
+                # 递归展开所有父文件夹
+                parent = folder_item.parent()
+                while parent:
+                    parent_data = parent.data(0, Qt.UserRole)
+                    if parent_data and parent_data.get('type') == 'folder':
+                        parent_folder_id = parent_data['data']['id']
+                        folders_to_expand.add(parent_folder_id)
+                        parent = parent.parent()
+                    else:
+                        break
+        
+        # 展开所有需要展开的文件夹
+        for folder_id in folders_to_expand:
+            folder_item = folder_map.get(folder_id)
+            if folder_item:
                 folder_item.setExpanded(True)
 
     def expand_api_root_folders(self):
@@ -1269,6 +1347,20 @@ class TestCaseManager(QWidget):
 
         except Exception as e:
             Toast.warn(self, f"搜索测试用例失败: {str(e)}")
+
+    def on_blank_area_clicked(self):
+        """空白区域点击事件处理"""
+        # 清除选中状态
+        self.current_folder = None
+        self.current_case = None
+        self.current_case_data = None
+        
+        # 更新删除文件夹图标的启用状态
+        self.update_delete_folder_icon_state()
+        
+        # 如果没有标签页打开，显示提示信息
+        if not self.tabbed_case_editor.has_open_tabs():
+            self.right_stack.setCurrentWidget(self.empty_prompt_widget)
 
     def on_tree_item_clicked(self, item):
         """树形项目点击事件"""
@@ -2119,7 +2211,7 @@ class TestCaseManager(QWidget):
 
             try:
                 self.api_folder_service.create_folder(data)
-                self.load_api_templates()
+                self.load_api_templates(preserve_expanded_state=True)
                 Toast.success(self, "文件夹创建成功")
             except Exception as e:
                 Toast.error(self, f"创建文件夹失败: {str(e)}")
@@ -2138,7 +2230,7 @@ class TestCaseManager(QWidget):
 
             try:
                 self.api_folder_service.update_folder(folder_data['id'], data)
-                self.load_api_templates()
+                self.load_api_templates(preserve_expanded_state=True)
                 Toast.success(self, "文件夹更新成功")
             except Exception as e:
                 Toast.error(self, f"更新文件夹失败: {str(e)}")
@@ -2159,7 +2251,7 @@ class TestCaseManager(QWidget):
         if msg_box.clickedButton() == confirm_btn:
             try:
                 self.api_folder_service.delete_folder(folder_data['id'])
-                self.load_api_templates()
+                self.load_api_templates(preserve_expanded_state=True)
                 Toast.success(self, "文件夹删除成功")
             except Exception as e:
                 Toast.error(self, f"删除文件夹失败: {str(e)}")
