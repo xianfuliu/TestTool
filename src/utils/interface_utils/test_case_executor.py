@@ -28,8 +28,6 @@ from src.core.services.api_template_service import ApiTemplateService
 from src.utils.sql_worker import SQLWorker
 from PyQt5.QtCore import QEventLoop
 
-# 配置日志
-logger = logging.getLogger("TestCaseExecutor")
 
 
 class TestCaseExecutor:
@@ -400,7 +398,7 @@ class TestCaseExecutor:
             result = self.db.fetch_one(query, (api_template_id,))
             return result if result else None
         except Exception as e:
-            self._log_message(f"获取API模板失败: {str(e)}", "error")
+            self._log_message('ERROR', f"获取API模板失败: {str(e)}")
             return None
     
     def _prepare_request_data(self, api_template: Dict[str, Any], 
@@ -469,8 +467,8 @@ class TestCaseExecutor:
             if enabled:
                 tool_count += 1
         
-        logger.info(f"执行步骤 {step_index+1} 的前置处理")
-        logger.info(f"前置处理工具数量: {tool_count}")
+        self._log_message('INFO', f"执行步骤 {step_index+1} 的前置处理")
+        self._log_message('INFO', f"前置处理工具数量: {tool_count}")
         
         # 执行前置处理器中的工具
         for tool_id, tool_config in pre_processing.items():
@@ -492,7 +490,7 @@ class TestCaseExecutor:
                 
             try:
                 # 记录前置处理工具情况
-                logger.info(f"执行前置处理工具: {tool_type}")
+                self._log_message('INFO', f"执行前置处理工具: {tool_type}")
                 
                 # 执行前置处理工具
                 tool_result = self._execute_pre_processing_tool(tool_type, tool_config, step_index)
@@ -509,16 +507,16 @@ class TestCaseExecutor:
             except Exception as e:
                 error_msg = f"执行前置处理工具 {tool_id} 失败: {str(e)}"
                 result['errors'].append(error_msg)
-                logger.error(error_msg)
+                self._log_message('ERROR', error_msg)
         
         # 处理前置处理器中的变量设置
         variables = pre_processing.get('variables', {})
         if variables:
             self.variable_manager.set_local_variables(variables)
             result['variables_set'].update(variables)
-            logger.info(f"设置局部变量: {len(variables)} 个")
+            self._log_message('INFO', f"设置局部变量: {len(variables)} 个")
         
-        logger.info(f"前置处理完成，共执行 {executed_tool_count} 个工具")
+        self._log_message('INFO', f"前置处理完成，共执行 {executed_tool_count} 个工具")
         
         return result
     
@@ -534,14 +532,14 @@ class TestCaseExecutor:
         
         if tool_type == 'http_request':
             # HTTP请求工具
-            logger.info(f"执行HTTP请求工具")
+            self._log_message('INFO', f"执行HTTP请求工具")
             return self._execute_http_request_tool(config, step_index)
         elif tool_type == 'sql_tool':
             # SQL工具
-            logger.info(f"执行SQL工具")
+            self._log_message('INFO', f"执行SQL工具")
             return self._execute_sql_tool(config, step_index)
         else:
-            logger.warning(f"未知的前置处理工具类型: {tool_type}")
+            self._log_message('WARNING', f"未知的前置处理工具类型: {tool_type}")
             result['success'] = False
             result['error'] = f"未知的前置处理工具类型: {tool_type}"
         
@@ -563,7 +561,7 @@ class TestCaseExecutor:
             
             api_template = self._get_api_template(step)
             if not api_template:
-                logger.error(f"接口模板不存在: {api_template_id}")
+                self._log_message('ERROR', f"接口模板不存在: {api_template_id}")
                 return {
                     'success': False,
                     'error': f'接口模板不存在: {api_template_id}',
@@ -575,8 +573,8 @@ class TestCaseExecutor:
             request_data = self._prepare_request_data(api_template, step_variables, step_index)
 
             # 记录请求日志
-            logger.info(f"发送请求: {request_data['method']} {request_data['url']}")
-            logger.debug(f"请求体: {json.dumps(request_data['body'], ensure_ascii=False, indent=2)}")
+            self._log_message('INFO', f"发送请求: {request_data['method']} {request_data['url']}")
+            self._log_message('DEBUG', f"请求体: {json.dumps(request_data['body'], ensure_ascii=False, indent=2)}")
             
             try:
                 # 构建符合 execute_request 方法要求的 API 数据格式
@@ -602,18 +600,18 @@ class TestCaseExecutor:
                 
                 if use_encryption:
                     # 步骤启用加解密且全局配置完整
-                    logger.info("步骤启用加解密功能，使用RequestEngine处理")
+                    self._log_message('INFO', "步骤启用加解密功能，使用RequestEngine处理")
                 else:
                     # 不使用加解密的情况
                     if enable_encryption and not (global_encrypt_url and global_decrypt_url):
                         # 步骤启用但全局配置不完整
-                        logger.warning("步骤启用加解密但全局配置不完整，使用普通请求")
+                        self._log_message('WARNING', "步骤启用加解密但全局配置不完整，使用普通请求")
                     elif enable_encryption and not global_enable_encryption:
                         # 步骤启用但全局未启用
-                        logger.warning("步骤启用加解密但全局未启用，使用普通请求")
+                        self._log_message('WARNING', "步骤启用加解密但全局未启用，使用普通请求")
                     else:
                         # 步骤关闭加解密
-                        logger.info("步骤关闭加解密功能，使用普通请求")
+                        self._log_message('INFO', "步骤关闭加解密功能，使用普通请求")
                 
                 # 最终判断是否使用加解密
                 if use_encryption:
@@ -639,57 +637,57 @@ class TestCaseExecutor:
                         try:
                             # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串
                             decrypted_json = json.loads(response.get('decrypted_body', ''))
-                            logger.debug(f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}")
+                            self._log_message('DEBUG', f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}")
                         except:
                             # 如果解析失败，直接打印原始字符串
-                            logger.debug(f"解密后的响应体:{response.get('decrypted_body', '')}")
+                            self._log_message('DEBUG', f"解密后的响应体:{response.get('decrypted_body', '')}")
                     else:
                         # 非加解密请求，尝试将响应体格式化为JSON
                         response_text = response.get('response_text', response.get('text', ''))
                         try:
                             # 尝试解析为JSON并重新格式化
                             response_json = json.loads(response_text)
-                            logger.debug(f"响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
+                            self._log_message('DEBUG', f"响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
                         except:
                             # 如果解析失败，直接打印原始文本
-                            logger.debug(f"响应体: {response_text}")
+                            self._log_message('DEBUG', f"响应体: {response_text}")
                 else:
                     # 记录失败请求的详细信息到日志
-                    logger.error(f"请求失败: {json.dumps({'error': response.get('error', '未知错误'), 'status_code': response.get('status_code', 0)}, ensure_ascii=False, indent=2)}")
+                    self._log_message('ERROR', f"请求失败: {json.dumps({'error': response.get('error', '未知错误'), 'status_code': response.get('status_code', 0)}, ensure_ascii=False, indent=2)}")
                     
                     # 检查是否为加解密请求，优先打印解密后的响应体
                     if response.get('decrypted_body'):
                         try:
                             # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串
                             decrypted_json = json.loads(response.get('decrypted_body', ''))
-                            logger.debug(f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}")
+                            self._log_message('DEBUG', f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}")
                         except:
                             # 如果解析失败，直接打印原始字符串
-                            logger.debug(f"解密后的响应体:{response.get('decrypted_body', '')}")
+                            self._log_message('DEBUG', f"解密后的响应体:{response.get('decrypted_body', '')}")
                     else:
                         # 非加解密请求，尝试将响应体格式化为JSON
                         response_text = response.get('response_text', response.get('text', ''))
                         try:
                             # 尝试解析为JSON并重新格式化
                             response_json = json.loads(response_text)
-                            logger.debug(f"失败响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
+                            self._log_message('DEBUG', f"失败响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
                         except:
                             # 如果解析失败，直接打印原始文本
-                            logger.debug(f"失败响应体: {response_text}")
+                            self._log_message('DEBUG', f"失败响应体: {response_text}")
 
                 return response
 
             except Exception as e:
-                logger.error(f"HTTP请求异常: {str(e)}")
-                logger.error(f"异常堆栈: {traceback.format_exc()}")
+                self._log_message('ERROR', f"HTTP请求异常: {str(e)}")
+                self._log_message('ERROR', f"异常堆栈: {traceback.format_exc()}")
                 return {
                     'success': False,
                     'error': str(e),
                     'status': 'error'
                 }
         except Exception as e:
-            logger.error(f"执行接口请求外层异常: {str(e)}")
-            logger.error(f"外层异常堆栈: {traceback.format_exc()}")
+            self._log_message('ERROR', f"执行接口请求外层异常: {str(e)}")
+            self._log_message('ERROR', f"外层异常堆栈: {traceback.format_exc()}")
             return {
                 'success': False,
                 'error': str(e),
@@ -713,13 +711,13 @@ class TestCaseExecutor:
             # 优先从variables字段读取变量提取器，如果没有则从extractors字段读取
             extractors = config.get('variables', config.get('extractors', {}))
             
-            logger.info(f"HTTP请求配置 - 方法: {method}, URL: {url}, 超时: {timeout}")
-            logger.debug(f"HTTP请求配置 - 请求体: {body}")
-            logger.debug(f"HTTP请求配置 - 提取器: {extractors}")
+            self._log_message('INFO', f"HTTP请求配置 - 方法: {method}, URL: {url}, 超时: {timeout}")
+            self._log_message('DEBUG', f"HTTP请求配置 - 请求体: {body}")
+            self._log_message('DEBUG', f"HTTP请求配置 - 提取器: {extractors}")
             
             if not url:
                 error_msg = "HTTP请求工具配置错误: URL不能为空"
-                logger.error(error_msg)
+                self._log_message('ERROR', error_msg)
                 result['success'] = False
                 result['error'] = error_msg
                 return result
@@ -727,19 +725,19 @@ class TestCaseExecutor:
             # 替换变量
             all_variables = self.variable_manager.get_all_variables()
             
-            logger.debug(f"变量替换前 - URL: {url}")
-            logger.debug(f"可用变量: {all_variables}")
+            self._log_message('DEBUG', f"变量替换前 - URL: {url}")
+            self._log_message('DEBUG', f"可用变量: {all_variables}")
             
             url = self.variable_manager.replace_variables(url, all_variables)
             headers = self.variable_manager.replace_variables_in_dict(headers, all_variables)
             body = self.variable_manager.replace_variables_in_dict(body, all_variables)
             
-            logger.info(f"变量替换后 - URL: {url}")
-            logger.debug(f"变量替换后 - 请求头: {headers}")
-            logger.debug(f"变量替换后 - 请求体: {body}")
+            self._log_message('INFO', f"变量替换后 - URL: {url}")
+            self._log_message('DEBUG', f"变量替换后 - 请求头: {headers}")
+            self._log_message('DEBUG', f"变量替换后 - 请求体: {body}")
             
             # 记录请求日志
-            logger.info(f"前置处理器HTTP请求: {method} {url}")
+            self._log_message('INFO', f"前置处理器HTTP请求: {method} {url}")
             
             # 执行请求
             request_data = {
@@ -750,56 +748,56 @@ class TestCaseExecutor:
                 'timeout': timeout
             }
             
-            logger.debug(f"发送请求数据: {request_data}")
+            self._log_message('DEBUG', f"发送请求数据: {request_data}")
             
             response = self.request_engine.execute_request(request_data)
             
-            logger.debug(f"请求响应: {response}")
+            self._log_message('DEBUG', f"请求响应: {response}")
             
             if response.get('success'):
                 # 请求成功，处理响应
                 response_data = response.get('response_data', response.get('body', {}))
                 status_code = response.get('status_code', 0)
                 
-                logger.info(f"前置处理器HTTP请求成功: 状态码 {status_code}")
-                logger.debug(f"响应数据: {response_data}")
+                self._log_message('INFO', f"前置处理器HTTP请求成功: 状态码 {status_code}")
+                self._log_message('DEBUG', f"响应数据: {response_data}")
                 
                 # 提取变量
                 if extractors:
-                    logger.info(f"开始提取变量，提取器数量: {len(extractors)}")
+                    self._log_message('INFO', f"开始提取变量，提取器数量: {len(extractors)}")
                     for var_name, json_path in extractors.items():
                         try:
-                            logger.info(f"提取变量 {var_name}，JSON路径: {json_path}")
+                            self._log_message('INFO', f"提取变量 {var_name}，JSON路径: {json_path}")
                             # 从响应中提取数据
                             value = self._simple_json_path_extract(response_data, json_path)
                             if value is not None:
                                 # 将提取的变量保存到变量管理器
                                 result['variables_set'][var_name] = value
-                                logger.info(f"提取变量成功: {var_name} = {value}")
+                                self._log_message('INFO', f"提取变量成功: {var_name} = {value}")
                                 
                                 # 调试模式下打印详细的变量管理器状态
                                 if self.debug_mode:
-                                    logger.debug(f"变量管理器状态 - 局部变量: {self.variable_manager.local_variables}")
-                                    logger.debug(f"变量管理器状态 - 全局变量: {self.variable_manager.global_variables}")
-                                    logger.debug(f"变量 {var_name} 已保存到变量管理器，可在后续步骤中使用")
+                                    self._log_message('DEBUG', f"变量管理器状态 - 局部变量: {self.variable_manager.local_variables}")
+                                    self._log_message('DEBUG', f"变量管理器状态 - 全局变量: {self.variable_manager.global_variables}")
+                                    self._log_message('DEBUG', f"变量 {var_name} 已保存到变量管理器，可在后续步骤中使用")
                             else:
-                                logger.warning(f"提取变量失败: {var_name}，JSON路径 {json_path} 未找到数据")
+                                self._log_message('WARNING', f"提取变量失败: {var_name}，JSON路径 {json_path} 未找到数据")
                                 # 调试：检查响应数据结构
-                                logger.debug(f"响应数据结构: {response_data}")
-                                logger.debug(f"尝试提取路径 {json_path} 失败，检查响应数据格式")
+                                self._log_message('DEBUG', f"响应数据结构: {response_data}")
+                                self._log_message('DEBUG', f"尝试提取路径 {json_path} 失败，检查响应数据格式")
                         except Exception as e:
-                            logger.error(f"提取变量异常: {var_name}，错误: {str(e)}")
+                            self._log_message('ERROR', f"提取变量异常: {var_name}，错误: {str(e)}")
                 else:
-                    logger.debug("无变量需要提取")
+                    self._log_message('DEBUG', "无变量需要提取")
             else:
                 # 请求失败
                 error_msg = response.get('error', '未知错误')
-                logger.error(f"前置处理器HTTP请求失败: {error_msg}")
+                self._log_message('ERROR', f"前置处理器HTTP请求失败: {error_msg}")
                 result['success'] = False
                 result['error'] = error_msg
                 
         except Exception as e:
-            logger.error(f"执行HTTP请求工具失败: {str(e)}")
+            self._log_message('ERROR', f"执行HTTP请求工具失败: {str(e)}")
             result['success'] = False
             result['error'] = str(e)
         
@@ -819,21 +817,21 @@ class TestCaseExecutor:
             sql = config.get('sql', '')
             output_fields = config.get('output_fields', [])
             
-            logger.info(f"SQL工具配置 - 名称: {name}")
-            logger.debug(f"SQL工具配置 - 数据库: {database_config}")
-            logger.debug(f"SQL工具配置 - SQL语句: {sql}")
-            logger.debug(f"SQL工具配置 - 输出字段: {output_fields}")
+            self._log_message('INFO', f"SQL工具配置 - 名称: {name}")
+            self._log_message('DEBUG', f"SQL工具配置 - 数据库: {database_config}")
+            self._log_message('DEBUG', f"SQL工具配置 - SQL语句: {sql}")
+            self._log_message('DEBUG', f"SQL工具配置 - 输出字段: {output_fields}")
             
             if not sql:
                 error_msg = "SQL工具配置错误: SQL语句不能为空"
-                logger.error(error_msg)
+                self._log_message('ERROR', error_msg)
                 result['success'] = False
                 result['error'] = error_msg
                 return result
             
             if not database_config:
                 error_msg = "SQL工具配置错误: 数据库配置不能为空"
-                logger.error(error_msg)
+                self._log_message('ERROR', error_msg)
                 result['success'] = False
                 result['error'] = error_msg
                 return result
@@ -841,8 +839,8 @@ class TestCaseExecutor:
             # 获取变量池
             all_variables = self.variable_manager.get_all_variables()
             
-            logger.debug(f"变量替换前 - SQL: {sql}")
-            logger.debug(f"可用变量: {all_variables}")
+            self._log_message('DEBUG', f"变量替换前 - SQL: {sql}")
+            self._log_message('DEBUG', f"可用变量: {all_variables}")
             
             # 预处理SQL：移除变量周围的引号，并将${variable}格式转换为{variable}格式
             def convert_and_remove_quotes(match):
@@ -852,10 +850,10 @@ class TestCaseExecutor:
             # 移除变量周围的单引号并转换格式
             processed_sql = re.sub(r"'\$\{(\w+)\}'", convert_and_remove_quotes, sql)
             
-            logger.debug(f"预处理后 - SQL: {processed_sql}")
+            self._log_message('DEBUG', f"预处理后 - SQL: {processed_sql}")
             
             # 记录SQL执行日志
-            logger.info(f"前置处理器SQL执行: {processed_sql}")
+            self._log_message('INFO', f"前置处理器SQL执行: {processed_sql}")
             
             # 执行SQL查询
             loop = QEventLoop()
@@ -887,11 +885,11 @@ class TestCaseExecutor:
             if sql_result['success']:
                 # SQL执行成功
                 data = sql_result.get('data', [])
-                logger.info(f"前置处理器SQL执行成功: 返回 {len(data)} 行数据")
+                self._log_message('INFO', f"前置处理器SQL执行成功: 返回 {len(data)} 行数据")
                 
                 # 提取变量到变量管理器
                 if output_fields and data:
-                    logger.info(f"开始提取变量，输出字段数量: {len(output_fields)}")
+                    self._log_message('INFO', f"开始提取变量，输出字段数量: {len(output_fields)}")
                     
                     # 获取第一行数据（假设只取第一行结果）
                     first_row = data[0] if data else {}
@@ -902,20 +900,20 @@ class TestCaseExecutor:
                             value = first_row[field_name]
                             # 将提取的变量保存到变量管理器
                             result['variables_set'][field_name] = value
-                            logger.info(f"提取变量成功: {field_name} = {value}")
+                            self._log_message('INFO', f"提取变量成功: {field_name} = {value}")
                         else:
-                            logger.warning(f"提取变量失败: 字段 {field_name} 不存在或为空")
+                            self._log_message('WARNING', f"提取变量失败: 字段 {field_name} 不存在或为空")
                 else:
-                    logger.debug("无输出字段或查询结果为空，跳过变量提取")
+                    self._log_message('DEBUG', "无输出字段或查询结果为空，跳过变量提取")
             else:
                 # SQL执行失败
                 error_msg = sql_result.get('error', '未知错误')
-                logger.error(f"前置处理器SQL执行失败: {error_msg}")
+                self._log_message('ERROR', f"前置处理器SQL执行失败: {error_msg}")
                 result['success'] = False
                 result['error'] = error_msg
                 
         except Exception as e:
-            logger.error(f"执行SQL工具失败: {str(e)}")
+            self._log_message('ERROR', f"执行SQL工具失败: {str(e)}")
             result['success'] = False
             result['error'] = str(e)
         
@@ -933,7 +931,7 @@ class TestCaseExecutor:
         if not post_processing:
             return result
             
-        logger.info(f"执行步骤 {step_index+1} 的后置处理")
+        self._log_message('INFO', f"执行步骤 {step_index+1} 的后置处理")
         
         # 执行后置处理器中的工具
         for tool_id, tool_config in post_processing.items():
@@ -960,7 +958,7 @@ class TestCaseExecutor:
             except Exception as e:
                 error_msg = f"执行后置处理工具 {tool_id} 失败: {str(e)}"
                 result['errors'].append(error_msg)
-                logger.error(error_msg)
+                self._log_message('ERROR', error_msg)
         
         return result
     
@@ -976,14 +974,14 @@ class TestCaseExecutor:
         
         if tool_type == 'parameter_extraction':
             # 参数提取器（与tabbed_case_editor.py保持一致）
-            logger.info(f"执行参数提取器")
+            self._log_message('INFO', f"执行参数提取器")
             return self._execute_parameter_extraction(config, response_data, step_index)
         elif tool_type == 'parameter_extractor':
             # 兼容性支持（旧版本工具类型）
-            logger.info(f"执行参数提取器（兼容模式）")
+            self._log_message('INFO', f"执行参数提取器（兼容模式）")
             return self._execute_parameter_extractor(config, response_data, step_index)
         else:
-            logger.warning(f"未知的后置处理工具类型: {tool_type}")
+            self._log_message('WARNING', f"未知的后置处理工具类型: {tool_type}")
             result['success'] = False
             result['error'] = f"未知的后置处理工具类型: {tool_type}"
         
@@ -1002,10 +1000,10 @@ class TestCaseExecutor:
             extractions = config.get('extractions', [])
             
             if not extractions:
-                logger.warning("参数提取器配置为空")
+                self._log_message('WARNING', "参数提取器配置为空")
                 return result
             
-            logger.info(f"开始提取参数，提取器数量: {len(extractions)}")
+            self._log_message('INFO', f"开始提取参数，提取器数量: {len(extractions)}")
             
             # 处理每个提取器
             for extraction in extractions:
@@ -1014,10 +1012,10 @@ class TestCaseExecutor:
                     json_path = extraction.get('json_path')
                     
                     if not variable_name or not json_path:
-                        logger.warning("参数提取器配置不完整，跳过")
+                        self._log_message('WARNING', "参数提取器配置不完整，跳过")
                         continue
                     
-                    logger.info(f"提取参数 {variable_name}，JSON路径: {json_path}")
+                    self._log_message('INFO', f"提取参数 {variable_name}，JSON路径: {json_path}")
                     
                     # 从响应体中提取数据
                     value = self._simple_json_path_extract(response_data, json_path)
@@ -1025,15 +1023,15 @@ class TestCaseExecutor:
                     if value is not None:
                         # 将提取的变量保存到变量管理器
                         result['variables_set'][variable_name] = value
-                        logger.info(f"提取参数成功: {variable_name} = {value}")
+                        self._log_message('INFO', f"提取参数成功: {variable_name} = {value}")
                     else:
-                        logger.warning(f"提取参数失败: {variable_name}，JSON路径 {json_path} 未找到数据")
+                        self._log_message('WARNING', f"提取参数失败: {variable_name}，JSON路径 {json_path} 未找到数据")
                         
                 except Exception as e:
-                    logger.error(f"提取参数异常: {variable_name}，错误: {str(e)}")
+                    self._log_message('ERROR', f"提取参数异常: {variable_name}，错误: {str(e)}")
                     
         except Exception as e:
-            logger.error(f"执行参数提取器失败: {str(e)}")
+            self._log_message('ERROR', f"执行参数提取器失败: {str(e)}")
             result['success'] = False
             result['error'] = str(e)
         
@@ -1052,10 +1050,10 @@ class TestCaseExecutor:
             extractors = config.get('extractors', {})
             
             if not extractors:
-                logger.warning("参数提取器配置为空")
+                self._log_message('WARNING', "参数提取器配置为空")
                 return result
             
-            logger.info(f"开始提取参数，提取器数量: {len(extractors)}")
+            self._log_message('INFO', f"开始提取参数，提取器数量: {len(extractors)}")
             
             # 处理每个提取器
             for var_name, extractor_config in extractors.items():
@@ -1063,7 +1061,7 @@ class TestCaseExecutor:
                     source = extractor_config.get('source', 'body')
                     json_path = extractor_config.get('json_path', '')
                     
-                    logger.info(f"提取参数 {var_name}，来源: {source}，JSON路径: {json_path}")
+                    self._log_message('INFO', f"提取参数 {var_name}，来源: {source}，JSON路径: {json_path}")
                     
                     if source == 'body':
                         # 从响应体提取
@@ -1080,21 +1078,21 @@ class TestCaseExecutor:
                         # 提取状态码
                         value = response_data.get('status_code')
                     else:
-                        logger.warning(f"未知的提取来源: {source}")
+                        self._log_message('WARNING', f"未知的提取来源: {source}")
                         continue
                     
                     if value is not None:
                         # 将提取的变量保存到变量管理器
                         result['variables_set'][var_name] = value
-                        logger.info(f"提取参数成功: {var_name} = {value}")
+                        self._log_message('INFO', f"提取参数成功: {var_name} = {value}")
                     else:
-                        logger.warning(f"提取参数失败: {var_name}，未找到数据")
+                        self._log_message('WARNING', f"提取参数失败: {var_name}，未找到数据")
                         
                 except Exception as e:
-                    logger.error(f"提取参数异常: {var_name}，错误: {str(e)}")
+                    self._log_message('ERROR', f"提取参数异常: {var_name}，错误: {str(e)}")
                     
         except Exception as e:
-            logger.error(f"执行参数提取器失败: {str(e)}")
+            self._log_message('ERROR', f"执行参数提取器失败: {str(e)}")
             result['success'] = False
             result['error'] = str(e)
         
@@ -1113,15 +1111,15 @@ class TestCaseExecutor:
             variables = config.get('variables', {})
             
             if not variables:
-                logger.warning("响应数据提取器配置为空")
+                self._log_message('WARNING', "响应数据提取器配置为空")
                 return result
             
-            logger.info(f"开始提取响应数据，变量数量: {len(variables)}")
+            self._log_message('INFO', f"开始提取响应数据，变量数量: {len(variables)}")
             
             # 处理每个变量提取
             for var_name, json_path in variables.items():
                 try:
-                    logger.info(f"提取变量 {var_name}，JSON路径: {json_path}")
+                    self._log_message('INFO', f"提取变量 {var_name}，JSON路径: {json_path}")
                     
                     # 从响应数据中提取值
                     value = self._simple_json_path_extract(response_data, json_path)
@@ -1129,15 +1127,15 @@ class TestCaseExecutor:
                     if value is not None:
                         # 将提取的变量保存到变量管理器
                         result['variables_set'][var_name] = value
-                        logger.info(f"提取变量成功: {var_name} = {value}")
+                        self._log_message('INFO', f"提取变量成功: {var_name} = {value}")
                     else:
-                        logger.warning(f"提取变量失败: {var_name}，JSON路径 {json_path} 未找到数据")
+                        self._log_message('WARNING', f"提取变量失败: {var_name}，JSON路径 {json_path} 未找到数据")
                         
                 except Exception as e:
-                    logger.error(f"提取变量异常: {var_name}，错误: {str(e)}")
+                    self._log_message('ERROR', f"提取变量异常: {var_name}，错误: {str(e)}")
                     
         except Exception as e:
-            logger.error(f"执行响应数据提取器失败: {str(e)}")
+            self._log_message('ERROR', f"执行响应数据提取器失败: {str(e)}")
             result['success'] = False
             result['error'] = str(e)
         
@@ -1147,11 +1145,11 @@ class TestCaseExecutor:
                            response_data: Dict[str, Any], step_index: int) -> Dict[str, Any]:
         """执行断言（与tabbed_case_editor.py保持一致）"""
         if not assertions:
-            logger.debug(f"步骤 {step_index+1}: 断言: 无配置")
+            self._log_message('DEBUG', f"步骤 {step_index+1}: 断言: 无配置")
             return {}
             
-        logger.info(f"执行步骤 {step_index+1} 的断言")
-        logger.info(f"断言数量: {len(assertions)}")
+        self._log_message('INFO', f"执行步骤 {step_index+1} 的断言")
+        self._log_message('INFO', f"断言数量: {len(assertions)}")
         
         results = {}
         
@@ -1195,7 +1193,7 @@ class TestCaseExecutor:
                     
                     # 检查断言是否启用
                     if not config.get('enabled', True):
-                        logger.debug(f"断言 {assertion_name}: 已禁用，跳过执行")
+                        self._log_message('DEBUG', f"断言 {assertion_name}: 已禁用，跳过执行")
                         results[assertion_name] = True  # 禁用的断言视为通过
                         continue
                 else:
@@ -1238,19 +1236,19 @@ class TestCaseExecutor:
                 
                 # 记录详细的断言结果日志
                 log_level = "info" if assertion_result else "error"
-                logger.log(logging.INFO if assertion_result else logging.ERROR, 
+                self._log_message(log_level.upper(), 
                           f"断言 {assertion_name}: 执行结果 {'通过' if assertion_result else '失败'}")
                 
             except Exception as e:
                 results[assertion_name] = False
-                logger.error(f"断言 {assertion_name} 执行错误: {str(e)}")
+                self._log_message('ERROR', f"断言 {assertion_name} 执行错误: {str(e)}")
 
         # 检查所有断言是否通过
         passed_count = sum(1 for result in results.values() if result)
         all_passed = all(results.values())
         
-        logger.info(f"断言结果: {passed_count}/{len(assertions)} 通过")
-        logger.info("断言执行结束")
+        self._log_message('INFO', f"断言结果: {passed_count}/{len(assertions)} 通过")
+        self._log_message('INFO', "断言执行结束")
         
         return {
             'passed': all_passed,
@@ -1290,7 +1288,7 @@ class TestCaseExecutor:
             # 记录详细的断言结果日志
             expected_display = expected if expected is not None else "None"
             actual_display = actual if actual is not None else "None"
-            logger.info(f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'==' if result else '!='}")
+            self._log_message('INFO', f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'==' if result else '!='}")
             
             return result
                 
@@ -1310,7 +1308,7 @@ class TestCaseExecutor:
             # 记录详细的断言结果日志
             expected_display = expected if expected is not None else "None"
             actual_display = actual if actual is not None else "None"
-            logger.info(f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'!=' if result else '=='}")
+            self._log_message('INFO', f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'!=' if result else '=='}")
             
             return result
                 
@@ -1330,7 +1328,7 @@ class TestCaseExecutor:
             # 记录详细的断言结果日志
             expected_display = expected if expected is not None else "None"
             actual_display = actual if actual is not None else "None"
-            logger.info(f"断言 {assertion_name}: 期望包含='{expected_display}' 实际响应='{actual_display}' 结果:{result}")
+            self._log_message('INFO', f"断言 {assertion_name}: 期望包含='{expected_display}' 实际响应='{actual_display}' 结果:{result}")
             
             return result
                 
@@ -1350,7 +1348,7 @@ class TestCaseExecutor:
             # 记录详细的断言结果日志
             expected_display = expected if expected is not None else "None"
             actual_display = actual if actual is not None else "None"
-            logger.info(f"断言 {assertion_name}: 期望不包含='{expected_display}' 实际响应='{actual_display}' 结果:{result}")
+            self._log_message('INFO', f"断言 {assertion_name}: 期望不包含='{expected_display}' 实际响应='{actual_display}' 结果:{result}")
             
             return result
                 
@@ -1369,11 +1367,11 @@ class TestCaseExecutor:
                 result = match is not None
                 
                 # 记录详细的断言结果日志
-                logger.info(f"断言 {assertion_name}: 正则匹配 '{pattern}' -> {result}")
+                self._log_message('INFO', f"断言 {assertion_name}: 正则匹配 '{pattern}' -> {result}")
                 
                 return result
             except Exception as e:
-                logger.error(f"断言 {assertion_name}: 正则表达式错误: {str(e)}")
+                self._log_message('ERROR', f"断言 {assertion_name}: 正则表达式错误: {str(e)}")
                 return False
                 
         elif assertion_type == 'status_code':
@@ -1387,7 +1385,7 @@ class TestCaseExecutor:
             # 记录详细的断言结果日志
             expected_display = expected if expected is not None else "None"
             actual_display = actual if actual is not None else "None"
-            logger.info(f"断言 {assertion_name}: 状态码 {actual_display} {'==' if result else '!='} {expected_display}")
+            self._log_message('INFO', f"断言 {assertion_name}: 状态码 {actual_display} {'==' if result else '!='} {expected_display}")
             
             return result
             
@@ -1403,7 +1401,7 @@ class TestCaseExecutor:
             # 记录详细的断言结果日志
             expected_display = expected if expected is not None else "None"
             actual_display = actual if actual is not None else "None"
-            logger.info(f"断言 {assertion_name}: {path} = {actual_display} {'==' if result else '!='} {expected_display}")
+            self._log_message('INFO', f"断言 {assertion_name}: {path} = {actual_display} {'==' if result else '!='} {expected_display}")
             
             return result
             
@@ -1430,7 +1428,7 @@ class TestCaseExecutor:
             # 记录详细的断言结果日志
             comparison_symbol = {'less': '<', 'equal': '==', 'greater': '>'}[comparison]
             expected_display = expected_value if expected_value is not None else "None"
-            logger.info(f"断言 {assertion_name}: 响应时间 {actual:.3f}s {comparison_symbol} {expected_display}s -> {result}")
+            self._log_message('INFO', f"断言 {assertion_name}: 响应时间 {actual:.3f}s {comparison_symbol} {expected_display}s -> {result}")
             
             return result
                 
@@ -1443,7 +1441,7 @@ class TestCaseExecutor:
             result = header_name.lower() in actual_headers
             
             # 记录详细的断言结果日志
-            logger.info(f"断言 {assertion_name}: 响应头包含 '{header_name}' -> {result}")
+            self._log_message('INFO', f"断言 {assertion_name}: 响应头包含 '{header_name}' -> {result}")
             
             return result
             
@@ -1454,7 +1452,7 @@ class TestCaseExecutor:
             result = True  # 暂时返回True
             
             # 记录详细的断言结果日志
-            logger.info(f"断言 {assertion_name}: JSON Schema验证 -> {result}")
+            self._log_message('INFO', f"断言 {assertion_name}: JSON Schema验证 -> {result}")
             
             return result
             
@@ -1464,7 +1462,7 @@ class TestCaseExecutor:
             
             # 检查断言是否启用
             if not config.get('enabled', True):
-                logger.info(f"断言 {assertion_name}: 断言已禁用，视为通过")
+                self._log_message('INFO', f"断言 {assertion_name}: 断言已禁用，视为通过")
                 return True  # 禁用的断言视为通过
             
             # 执行所有断言行
@@ -1488,11 +1486,11 @@ class TestCaseExecutor:
                 # 记录详细的断言结果日志
                 expected_display = expected if expected is not None else "None"
                 actual_display = actual if actual is not None else "None"
-                logger.info(f"断言 {assertion_name} 第{i+1}行: {field} {symbol} {expected_display} -> {result} (实际值: {actual_display})")
+                self._log_message('INFO', f"断言 {assertion_name} 第{i+1}行: {field} {symbol} {expected_display} -> {result} (实际值: {actual_display})")
             
             # 所有断言行都必须通过
             final_result = all(assertion_results)
-            logger.info(f"断言 {assertion_name}: 所有断言行执行完成，最终结果: {final_result}")
+            self._log_message('INFO', f"断言 {assertion_name}: 所有断言行执行完成，最终结果: {final_result}")
             
             return final_result
             
@@ -1532,16 +1530,16 @@ class TestCaseExecutor:
                 # 记录详细的断言结果日志
                 expected_display = expected if expected is not None else "None"
                 actual_display = actual if actual is not None else "None"
-                logger.info(f"断言 {assertion_name}: {field_name} {assertion_type} {expected_display} -> {result} (实际值: {actual_display})")
+                self._log_message('INFO', f"断言 {assertion_name}: {field_name} {assertion_type} {expected_display} -> {result} (实际值: {actual_display})")
                 
                 return result
                     
             except (ValueError, TypeError) as e:
-                logger.error(f"断言 {assertion_name}: 数值转换错误 - 期望值: {expected}, 实际值: {actual}")
+                self._log_message('ERROR', f"断言 {assertion_name}: 数值转换错误 - 期望值: {expected}, 实际值: {actual}")
                 return False
 
         else:
-            logger.warning(f"未知断言类型: {assertion_type}")
+            self._log_message('WARNING', f"未知断言类型: {assertion_type}")
             return False
     
     def _execute_single_assertion(self, assertion_config: Dict[str, Any], 
@@ -1756,7 +1754,7 @@ class TestCaseExecutor:
             
             return current
         except Exception as e:
-            logger.warning(f"JSON路径提取失败: {json_path}, 错误: {str(e)}")
+            self._log_message('WARNING', f"JSON路径提取失败: {json_path}, 错误: {str(e)}")
             return None
     
     def replace_variables(self, text: str, step_result: Dict[str, Any]) -> str:
@@ -1767,14 +1765,14 @@ class TestCaseExecutor:
         import re
         
         # 调试：记录替换前的文本
-        logger.debug(f"[DEBUG] replace_variables: 替换前文本 = {text}")
+        self._log_message('DEBUG', f"[DEBUG] replace_variables: 替换前文本 = {text}")
         
         # 匹配${变量名}格式
         pattern = r'\$\{([^}]+)\}'
         matches = re.findall(pattern, text)
         
         # 调试：记录匹配到的变量
-        logger.debug(f"[DEBUG] replace_variables: 匹配到的变量 = {matches}")
+        self._log_message('DEBUG', f"[DEBUG] replace_variables: 匹配到的变量 = {matches}")
         
         for var_name in matches:
             var_value = ''
@@ -1782,22 +1780,22 @@ class TestCaseExecutor:
             # 首先尝试从变量管理器中获取变量（前置处理器提取的变量）
             if hasattr(self, 'variable_manager'):
                 # 调试：检查变量管理器状态
-                logger.debug(f"[DEBUG] replace_variables: 变量管理器状态 - 局部变量: {self.variable_manager.local_variables}")
-                logger.debug(f"[DEBUG] replace_variables: 变量管理器状态 - 全局变量: {self.variable_manager.global_variables}")
+                self._log_message('DEBUG', f"[DEBUG] replace_variables: 变量管理器状态 - 局部变量: {self.variable_manager.local_variables}")
+                self._log_message('DEBUG', f"[DEBUG] replace_variables: 变量管理器状态 - 全局变量: {self.variable_manager.global_variables}")
                 
                 # 尝试从局部变量中获取
                 if var_name in self.variable_manager.local_variables:
                     var_value = self.variable_manager.local_variables[var_name]
-                    logger.debug(f"[DEBUG] replace_variables: 从局部变量获取 {var_name} = {var_value}")
+                    self._log_message('DEBUG', f"[DEBUG] replace_variables: 从局部变量获取 {var_name} = {var_value}")
                 # 尝试从全局变量中获取
                 elif var_name in self.variable_manager.global_variables:
                     var_value = self.variable_manager.global_variables[var_name]
-                    logger.debug(f"[DEBUG] replace_variables: 从全局变量获取 {var_name} = {var_value}")
+                    self._log_message('DEBUG', f"[DEBUG] replace_variables: 从全局变量获取 {var_name} = {var_value}")
             
             # 如果变量管理器中没找到，再从步骤结果中获取
             if not var_value and step_result:
                 var_value = step_result.get(var_name, '')
-                logger.debug(f"[DEBUG] replace_variables: 从步骤结果获取 {var_name} = {var_value}")
+                self._log_message('DEBUG', f"[DEBUG] replace_variables: 从步骤结果获取 {var_name} = {var_value}")
                 
                 # 如果变量名是特殊字段，使用_extract_field_value提取
                 if var_name in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
@@ -1811,13 +1809,13 @@ class TestCaseExecutor:
                     var_value = self._extract_field_value(step_result, var_name)
             
             # 记录变量替换的调试信息
-            logger.debug(f"变量替换: ${{{var_name}}} -> {var_value}")
+            self._log_message('DEBUG', f"[DEBUG] replace_variables: 变量替换: ${{{var_name}}} -> {var_value}")
             
             # 替换变量
             text = text.replace(f'${{{var_name}}}', str(var_value))
         
         # 调试：记录替换后的文本
-        logger.debug(f"[DEBUG] replace_variables: 替换后文本 = {text}")
+        self._log_message('DEBUG', f"[DEBUG] replace_variables: 替换后文本 = {text}")
         
         return text
 
