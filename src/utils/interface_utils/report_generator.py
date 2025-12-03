@@ -18,13 +18,13 @@ class HTMLReportGenerator:
         end_time = report_data.get('end_time')
         duration = report_data.get('duration', 0)
 
-        total_steps = report_data.get('total_steps', 0)
-        passed_steps = report_data.get('passed_steps', 0)
-        failed_steps = report_data.get('failed_steps', 0)
-        error_steps = report_data.get('error_steps', 0)
+        total_cases = report_data.get('total_cases', 0)
+        passed_cases = report_data.get('passed_cases', 0)
+        failed_cases = report_data.get('failed_cases', 0)
+        error_cases = report_data.get('error_cases', 0)
 
-        if total_steps > 0:
-            success_rate = (passed_steps / total_steps) * 100
+        if total_cases > 0:
+            success_rate = (passed_cases / total_cases) * 100
         else:
             success_rate = 0
 
@@ -176,19 +176,19 @@ class HTMLReportGenerator:
 
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-number">{total_steps}</div>
-                        <div class="stat-label">总步骤</div>
+                        <div class="stat-number">{total_cases}</div>
+                        <div class="stat-label">总用例</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number" style="color: #4CAF50;">{passed_steps}</div>
+                        <div class="stat-number" style="color: #4CAF50;">{passed_cases}</div>
                         <div class="stat-label">通过</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number" style="color: #F44336;">{failed_steps}</div>
+                        <div class="stat-number" style="color: #F44336;">{failed_cases}</div>
                         <div class="stat-label">失败</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number" style="color: #FF9800;">{error_steps}</div>
+                        <div class="stat-number" style="color: #FF9800;">{error_cases}</div>
                         <div class="stat-label">错误</div>
                     </div>
                     <div class="stat-card">

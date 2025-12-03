@@ -619,10 +619,10 @@ class TestReport:
     case_id: int = 0
     report_name: str = ""
     status: str = "running"  # success, failure, error, running
-    total_steps: int = 0
-    passed_steps: int = 0
-    failed_steps: int = 0
-    error_steps: int = 0
+    total_cases: int = 0
+    passed_cases: int = 0
+    failed_cases: int = 0
+    error_cases: int = 0
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     duration: float = 0.0
@@ -669,10 +669,10 @@ class TestReport:
             case_id=data.get('case_id', 0),
             report_name=data.get('report_name', ''),
             status=data.get('status', 'running'),
-            total_steps=data.get('total_steps', 0),
-            passed_steps=data.get('passed_steps', 0),
-            failed_steps=data.get('failed_steps', 0),
-            error_steps=data.get('error_steps', 0),
+            total_cases=data.get('total_cases', 0),
+            passed_cases=data.get('passed_cases', 0),
+            failed_cases=data.get('failed_cases', 0),
+            error_cases=data.get('error_cases', 0),
             start_time=start_time,
             end_time=end_time,
             duration=data.get('duration', 0.0),
@@ -695,10 +695,10 @@ class TestReport:
             'case_id': self.case_id,
             'report_name': self.report_name,
             'status': self.status,
-            'total_steps': self.total_steps,
-            'passed_steps': self.passed_steps,
-            'failed_steps': self.failed_steps,
-            'error_steps': self.error_steps,
+            'total_cases': self.total_cases,
+            'passed_cases': self.passed_cases,
+            'failed_cases': self.failed_cases,
+            'error_cases': self.error_cases,
             'start_time': self.start_time,
             'end_time': self.end_time,
             'duration': self.duration,
@@ -722,14 +722,14 @@ class TestReport:
         if self.status not in ['success', 'failure', 'error', 'running']:
             return False, f"无效的状态: {self.status}"
 
-        if self.total_steps < 0:
-            return False, "总步骤数不能为负数"
+        if self.total_cases < 0:
+            return False, "总用例数不能为负数"
 
-        if self.passed_steps < 0 or self.failed_steps < 0 or self.error_steps < 0:
-            return False, "步骤统计数不能为负数"
+        if self.passed_cases < 0 or self.failed_cases < 0 or self.error_cases < 0:
+            return False, "用例统计数不能为负数"
 
-        if self.total_steps != (self.passed_steps + self.failed_steps + self.error_steps):
-            return False, "步骤统计数不匹配"
+        if self.total_cases != (self.passed_cases + self.failed_cases + self.error_cases):
+            return False, "用例统计数不匹配"
 
         if self.duration < 0:
             return False, "执行时长不能为负数"
@@ -748,9 +748,9 @@ class TestReport:
 
     def get_success_rate(self) -> float:
         """计算通过率"""
-        if self.total_steps == 0:
+        if self.total_cases == 0:
             return 0.0
-        return (self.passed_steps / self.total_steps) * 100
+        return (self.passed_cases / self.total_cases) * 100
 
     def is_completed(self) -> bool:
         """检查是否已完成"""
@@ -773,17 +773,24 @@ class TestReport:
 
     def _update_stats(self):
         """更新统计信息"""
-        self.total_steps = len(self.steps)
-        self.passed_steps = len([s for s in self.steps if s.status == 'success'])
-        self.failed_steps = len([s for s in self.steps if s.status == 'failure'])
-        self.error_steps = len([s for s in self.steps if s.status == 'error'])
+        # 注意：现在统计的是用例，而不是步骤
+        # 这个方法需要根据实际用例统计逻辑来更新
+        # 目前保持为空，由外部服务来设置用例统计信息
+        pass
+
+    def update_case_stats(self, total_cases: int, passed_cases: int, failed_cases: int, error_cases: int):
+        """更新用例统计信息"""
+        self.total_cases = total_cases
+        self.passed_cases = passed_cases
+        self.failed_cases = failed_cases
+        self.error_cases = error_cases
 
         # 更新总体状态
-        if self.error_steps > 0:
+        if self.error_cases > 0:
             self.status = 'error'
-        elif self.failed_steps > 0:
+        elif self.failed_cases > 0:
             self.status = 'failure'
-        elif self.passed_steps == self.total_steps:
+        elif self.passed_cases == self.total_cases:
             self.status = 'success'
         else:
             self.status = 'running'

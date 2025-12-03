@@ -12,7 +12,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
                              QFormLayout, QHeaderView, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QToolBar, QAction,
-                             QSizePolicy, QTabWidget, QRadioButton, QTreeWidget, QTreeWidgetItem)
+                             QSizePolicy, QTabWidget, QRadioButton, QTreeWidget, 
+                             QTreeWidgetItem, QGroupBox)
 from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
@@ -1067,35 +1068,132 @@ class SchedulerDialog(QDialog):
         layout.setAlignment(Qt.AlignLeft)  # 设置整体靠左对齐
 
         # 邮件通知配置
-        email_layout = QFormLayout()
-        email_layout.setLabelAlignment(Qt.AlignLeft)  # 设置标签靠左对齐
-        email_layout.setFormAlignment(Qt.AlignLeft)   # 设置表单靠左对齐
+        email_group = QGroupBox("邮件通知配置")
+        email_layout = QVBoxLayout(email_group)
         
+        # 启用邮件通知
         self.email_enabled_check = QCheckBox("启用邮件通知")
-        email_layout.addRow("邮件通知:", self.email_enabled_check)
-
+        email_layout.addWidget(self.email_enabled_check)
+        
+        # SMTP服务器配置
+        smtp_layout = QFormLayout()
+        smtp_layout.setLabelAlignment(Qt.AlignLeft)
+        smtp_layout.setFormAlignment(Qt.AlignLeft)
+        
+        self.smtp_server_edit = QLineEdit()
+        self.smtp_server_edit.setPlaceholderText("例如：smtp.qq.com")
+        self.smtp_server_edit.setFixedWidth(300)
+        smtp_layout.addRow("SMTP服务器:", self.smtp_server_edit)
+        
+        self.smtp_port_edit = QSpinBox()
+        self.smtp_port_edit.setRange(1, 65535)
+        self.smtp_port_edit.setValue(587)
+        self.smtp_port_edit.setFixedWidth(100)
+        smtp_layout.addRow("SMTP端口:", self.smtp_port_edit)
+        
+        self.smtp_ssl_check = QCheckBox("使用SSL/TLS")
+        smtp_layout.addRow("安全连接:", self.smtp_ssl_check)
+        
+        self.sender_email_edit = QLineEdit()
+        self.sender_email_edit.setPlaceholderText("发件人邮箱地址")
+        self.sender_email_edit.setFixedWidth(300)
+        smtp_layout.addRow("发件人邮箱:", self.sender_email_edit)
+        
+        self.sender_password_edit = QLineEdit()
+        self.sender_password_edit.setPlaceholderText("发件人邮箱密码或授权码")
+        self.sender_password_edit.setEchoMode(QLineEdit.Password)
+        self.sender_password_edit.setFixedWidth(300)
+        smtp_layout.addRow("邮箱密码:", self.sender_password_edit)
+        
+        email_layout.addLayout(smtp_layout)
+        
+        # 收件人配置
+        recipient_layout = QFormLayout()
+        recipient_layout.setLabelAlignment(Qt.AlignLeft)
+        recipient_layout.setFormAlignment(Qt.AlignLeft)
+        
         self.email_recipient_edit = QLineEdit()
         self.email_recipient_edit.setPlaceholderText("多个邮箱用逗号分隔")
-        self.email_recipient_edit.setFixedWidth(400)  # 设置固定宽度
-        email_layout.addRow("收件人:", self.email_recipient_edit)
+        self.email_recipient_edit.setFixedWidth(400)
+        recipient_layout.addRow("收件人:", self.email_recipient_edit)
+        
+        email_layout.addLayout(recipient_layout)
+        
+        # 测试连接按钮
+        test_button_layout = QHBoxLayout()
+        self.test_email_connection_btn = QPushButton("测试邮件连接")
+        self.test_email_connection_btn.setFixedWidth(120)
+        test_button_layout.addWidget(self.test_email_connection_btn)
+        test_button_layout.addStretch()
+        email_layout.addLayout(test_button_layout)
 
         # 企业微信通知配置
-        wechat_layout = QFormLayout()
-        wechat_layout.setLabelAlignment(Qt.AlignLeft)  # 设置标签靠左对齐
-        wechat_layout.setFormAlignment(Qt.AlignLeft)   # 设置表单靠左对齐
+        wechat_group = QGroupBox("企业微信通知配置")
+        wechat_layout = QVBoxLayout(wechat_group)
         
         self.wechat_enabled_check = QCheckBox("启用企业微信通知")
-        wechat_layout.addRow("企业微信:", self.wechat_enabled_check)
-
+        wechat_layout.addWidget(self.wechat_enabled_check)
+        
+        wechat_form_layout = QFormLayout()
+        wechat_form_layout.setLabelAlignment(Qt.AlignLeft)
+        wechat_form_layout.setFormAlignment(Qt.AlignLeft)
+        
         self.wechat_webhook_edit = QLineEdit()
         self.wechat_webhook_edit.setPlaceholderText("输入企业微信机器人Webhook URL")
-        self.wechat_webhook_edit.setFixedWidth(400)  # 设置固定宽度
-        wechat_layout.addRow("Webhook URL:", self.wechat_webhook_edit)
+        self.wechat_webhook_edit.setFixedWidth(400)
+        wechat_form_layout.addRow("Webhook URL:", self.wechat_webhook_edit)
+        
+        wechat_layout.addLayout(wechat_form_layout)
 
         # 添加布局到主布局
-        layout.addLayout(email_layout)
-        layout.addLayout(wechat_layout)
+        layout.addWidget(email_group)
+        layout.addWidget(wechat_group)
         layout.addStretch()
+        
+        # 连接信号
+        self.test_email_connection_btn.clicked.connect(self.test_email_connection)
+
+    def test_email_connection(self):
+        """测试邮件连接配置"""
+        try:
+            # 检查是否填写了必要的配置
+            if not self.smtp_server_edit.text().strip():
+                QMessageBox.warning(self, "警告", "请输入SMTP服务器地址")
+                return
+            
+            if not self.sender_email_edit.text().strip():
+                QMessageBox.warning(self, "警告", "请输入发件人邮箱地址")
+                return
+            
+            if not self.sender_password_edit.text().strip():
+                QMessageBox.warning(self, "警告", "请输入邮箱密码或授权码")
+                return
+            
+            # 导入邮件配置服务和模型
+            from src.core.services.email_config_service import EmailConfigService
+            from src.core.models.email_config_model import EmailConfig
+            
+            # 创建邮件配置对象
+            email_config = EmailConfig(
+                smtp_server=self.smtp_server_edit.text().strip(),
+                smtp_port=self.smtp_port_edit.value(),
+                smtp_username=self.sender_email_edit.text().strip(),  # 使用邮箱地址作为用户名
+                smtp_password=self.sender_password_edit.text().strip(),
+                use_tls=True,  # 默认使用TLS
+                sender_email=self.sender_email_edit.text().strip()
+            )
+            
+            # 测试连接
+            email_service = EmailConfigService()
+            success = email_service.test_email_connection(email_config)
+            
+            if success:
+                QMessageBox.information(self, "测试成功", "邮件连接测试成功！")
+            else:
+                QMessageBox.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"测试邮件连接时发生错误：{str(e)}")
 
     def delayed_load_data(self):
         """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
@@ -1325,6 +1423,14 @@ class SchedulerDialog(QDialog):
         notify_emails = self.scheduler_data.get('notify_emails', [])
         self.email_recipient_edit.setText(','.join(notify_emails))
 
+        # 邮件服务器配置
+        email_config = self.scheduler_data.get('email_config', {})
+        self.smtp_server_edit.setText(email_config.get('smtp_server', ''))
+        self.smtp_port_edit.setValue(email_config.get('smtp_port', 587))
+        self.smtp_ssl_check.setChecked(email_config.get('use_ssl', True))
+        self.sender_email_edit.setText(email_config.get('sender_email', ''))
+        self.sender_password_edit.setText(email_config.get('sender_password', ''))
+
         notify_wechat = self.scheduler_data.get('notify_wechat', {})
         # 处理notify_wechat可能是列表的情况
         if isinstance(notify_wechat, list):
@@ -1406,6 +1512,20 @@ class SchedulerDialog(QDialog):
             data['notify_emails'] = [email.strip() for email in email_recipients.split(',')]
         else:
             data['notify_emails'] = []
+
+        # 邮件服务器配置
+        if (self.smtp_server_edit.text().strip() or 
+            self.sender_email_edit.text().strip() or 
+            self.sender_password_edit.text().strip()):
+            data['email_config'] = {
+                'smtp_server': self.smtp_server_edit.text().strip(),
+                'smtp_port': self.smtp_port_edit.value(),
+                'use_ssl': self.smtp_ssl_check.isChecked(),
+                'sender_email': self.sender_email_edit.text().strip(),
+                'sender_password': self.sender_password_edit.text().strip()
+            }
+        else:
+            data['email_config'] = {}
 
         wechat_webhook = self.wechat_webhook_edit.text().strip()
         if wechat_webhook:
@@ -2418,6 +2538,7 @@ class SchedulerDialog(QDialog):
 class SchedulerManager(QWidget):
     """调度管理页面"""
     data_changed = pyqtSignal()  # 数据变化信号
+    report_detail_requested = pyqtSignal(dict)  # 报告详情请求信号，传递报告数据
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -3172,6 +3293,12 @@ class SchedulerManager(QWidget):
             success_count = 0
             total_count = len(case_ids)
             
+            # 记录执行开始时间
+            execution_start_time = datetime.now()
+            
+            # 存储每个用例的执行结果
+            case_results = []
+            
             for i, case_id in enumerate(case_ids):
                 try:
                     # 获取测试用例数据
@@ -3180,6 +3307,8 @@ class SchedulerManager(QWidget):
                         Toast.warn(self, f"测试用例ID {case_id} 不存在，跳过执行")
                         continue
 
+                    case_name = case_data.get('name', '未知用例')
+                    
                     # 创建执行线程
                     execution_thread = CaseExecutionThread(
                         case_data=case_data,
@@ -3200,10 +3329,34 @@ class SchedulerManager(QWidget):
                     # 检查执行结果 - 线程正常结束表示执行成功
                     if not execution_thread.isRunning():
                         success_count += 1
+                        case_results.append({
+                            'case_id': case_id,
+                            'case_name': case_name,
+                            'success': True,
+                            'execution_time': datetime.now()
+                        })
+                    else:
+                        case_results.append({
+                            'case_id': case_id,
+                            'case_name': case_name,
+                            'success': False,
+                            'execution_time': datetime.now()
+                        })
                     
                 except Exception as e:
                     Toast.error(self, f"执行测试用例ID {case_id} 失败: {str(e)}")
+                    case_results.append({
+                        'case_id': case_id,
+                        'case_name': '未知用例',
+                        'success': False,
+                        'error': str(e),
+                        'execution_time': datetime.now()
+                    })
 
+            # 记录执行结束时间
+            execution_end_time = datetime.now()
+            execution_duration = (execution_end_time - execution_start_time).total_seconds()
+            
             # 更新上次执行时间
             self.scheduler_service.update_last_run(scheduler_data['id'])
             
@@ -3212,6 +3365,30 @@ class SchedulerManager(QWidget):
                 Toast.success(self, f"调度执行完成: 成功 {success_count}/{total_count} 个测试用例")
             else:
                 Toast.warn(self, f"调度执行完成: 成功 {success_count}/{total_count} 个测试用例")
+            
+            # 发送邮件通知（如果配置了收件人）
+            notify_emails = scheduler_data.get('notify_emails', [])
+            if notify_emails:
+                try:
+                    # 导入邮件服务
+                    from src.core.services.email_service import EmailService
+                    email_service = EmailService()
+                    
+                    # 生成邮件报告数据
+                    scheduler_name = scheduler_data['name']
+                    
+                    # 发送邮件
+                    email_service.send_test_report_email(
+                        notify_emails,
+                        case_results,
+                        scheduler_name,
+                        execution_duration
+                    )
+                    
+                    Toast.info(self, f"测试报告邮件已发送至: {', '.join(notify_emails)}")
+                    
+                except Exception as e:
+                    Toast.error(self, f"发送测试报告邮件失败: {str(e)}")
             
             # 刷新调度列表
             self.load_schedulers(self.project_combo.currentData())
@@ -3302,6 +3479,9 @@ class SchedulerManager(QWidget):
     def show_execution_logs(self, scheduler_id):
         """显示调度执行记录日志"""
         try:
+            # 保存当前调度ID，用于报告详情跳转
+            self.current_scheduler_id = scheduler_id
+            
             # 获取调度数据
             scheduler_data = self.get_scheduler_data_by_id(scheduler_id)
             if not scheduler_data:
@@ -3395,7 +3575,7 @@ class SchedulerManager(QWidget):
             Toast.error(self, f"显示执行记录失败: {str(e)}")
 
     def _view_report_detail(self, table_widget, parent_dialog):
-        """查看报告详情"""
+        """查看报告详情 - 跳转到测试报告tab并自动进入详情页"""
         try:
             selected_items = table_widget.selectedItems()
             if not selected_items:
@@ -3406,24 +3586,88 @@ class SchedulerManager(QWidget):
             row = selected_items[0].row()
             report_name = table_widget.item(row, 0).text()
             
-            # 获取报告ID（这里需要从数据中获取，暂时显示基本信息）
+            # 获取报告ID（从数据中获取）
             from src.core.services.test_report_service import TestReportService
             report_service = TestReportService()
             
-            # 显示报告详情对话框
-            from src.ui.interface_auto.test_report import ReportDetailDialog
+            # 根据报告名称和调度ID获取完整的报告数据
+            scheduler_id = self.current_scheduler_id if hasattr(self, 'current_scheduler_id') else None
+            reports = report_service.get_reports_by_scheduler_id(scheduler_id) if scheduler_id else []
             
-            # 创建报告数据（这里需要根据实际情况获取完整报告数据）
-            report_data = {
-                'report_name': report_name,
-                'status': table_widget.item(row, 2).text(),
-                'start_time': table_widget.item(row, 3).text(),
-                'end_time': table_widget.item(row, 4).text(),
-                'duration': table_widget.item(row, 5).text()
-            }
+            selected_report = None
+            for report in reports:
+                if report.get('report_name') == report_name:
+                    selected_report = report
+                    break
             
-            detail_dialog = ReportDetailDialog(parent_dialog, report_data)
-            detail_dialog.exec_()
+            if not selected_report:
+                Toast.warn(parent_dialog, "未找到对应的报告数据")
+                return
+            
+            # 关闭当前对话框
+            parent_dialog.accept()
+            
+            # 发送信号，通知主窗口跳转到测试报告tab并显示详情
+            if hasattr(self, 'report_detail_requested'):
+                self.report_detail_requested.emit(selected_report)
+            else:
+                # 如果信号不存在，使用备用方式
+                self._open_report_detail_fallback(selected_report)
 
         except Exception as e:
             Toast.error(parent_dialog, f"查看报告详情失败: {str(e)}")
+    
+    def _open_report_detail_fallback(self, report_data):
+        """备用方式打开报告详情"""
+        try:
+            from src.ui.interface_auto.test_report import ReportDetailDialog
+            detail_dialog = ReportDetailDialog(self, report_data)
+            detail_dialog.exec_()
+        except Exception as e:
+            Toast.error(self, f"打开报告详情失败: {str(e)}")
+
+    def test_email_connection(self):
+        """测试邮件连接配置"""
+        try:
+            # 检查是否填写了必要的配置
+            if not self.smtp_server_edit.text().strip():
+                QMessageBox.warning(self, "警告", "请输入SMTP服务器地址")
+                return
+            
+            if not self.sender_email_edit.text().strip():
+                QMessageBox.warning(self, "警告", "请输入发件人邮箱地址")
+                return
+            
+            if not self.sender_password_edit.text().strip():
+                QMessageBox.warning(self, "警告", "请输入邮箱密码或授权码")
+                return
+            
+            # 导入邮件配置服务和模型
+            from src.core.services.email_config_service import EmailConfigService
+            from src.core.models.email_config_model import EmailConfig
+            
+            # 创建邮件配置对象（正确处理编码）
+            email_config = EmailConfig(
+                smtp_server=self.smtp_server_edit.text().strip(),
+                smtp_port=self.smtp_port_edit.value(),
+                use_tls=self.smtp_ssl_check.isChecked(),  # 注意：这里应该是use_tls而不是use_ssl
+                smtp_username=self.sender_email_edit.text().strip(),  # 使用邮箱作为用户名
+                smtp_password=self.sender_password_edit.text().strip(),
+                sender_email=self.sender_email_edit.text().strip()
+            )
+            
+            # 测试连接
+            email_service = EmailConfigService()
+            success = email_service.test_email_connection(email_config)
+            
+            if success:
+                QMessageBox.information(self, "测试成功", "邮件连接测试成功！")
+            else:
+                QMessageBox.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
+                
+        except Exception as e:
+            # 处理编码错误
+            error_msg = str(e)
+            if "utf-8" in error_msg and "codec" in error_msg:
+                error_msg = "邮件连接测试失败：编码错误，请检查输入内容是否包含特殊字符"
+            QMessageBox.critical(self, "错误", f"测试邮件连接时发生错误：{error_msg}")

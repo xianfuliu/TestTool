@@ -18,7 +18,6 @@ from config.database import Database
 from src.utils.interface_utils.cron_parser import CronParser
 from src.core.services.test_case_service import TestCaseService
 from src.core.services.test_report_service import TestReportService
-from src.utils.interface_utils.execute_test_case import ExecuteTestCase
 from src.utils.interface_utils.report_generator import HTMLReportGenerator
 
 # 配置日志
@@ -65,8 +64,11 @@ class UnifiedSchedulerService:
             self.test_case_service = TestCaseService()
             self.test_report_service = TestReportService()
             
-            # 初始化测试执行和报告生成工具
+            # 延迟导入测试执行工具以避免循环导入
+            from src.utils.interface_utils.execute_test_case import ExecuteTestCase
             self.execute_test_case = ExecuteTestCase()
+            
+            # 初始化报告生成工具
             self.report_generator = HTMLReportGenerator()
             
             logger.info("服务组件初始化成功")
@@ -344,47 +346,81 @@ class UnifiedSchedulerService:
             scheduler_id = scheduler_data['id']
             scheduler_name = scheduler_data['name']
             
-            logger.info(f"开始执行调度: {scheduler_name} (ID: {scheduler_id})")
+            # 添加与执行日志弹窗一致的调试信息
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(f"{current_time} [INFO] 🔍 开始执行调度: {scheduler_name} (ID: {scheduler_id})")
             
             # 获取调度中配置的测试用例ID列表
             case_ids = scheduler_data.get('case_ids', [])
             if not case_ids:
-                logger.warning(f"调度 '{scheduler_name}' 中没有配置测试用例")
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                logger.warning(f"{current_time} [WARN] ⚠️ 调度 '{scheduler_name}' 中没有配置测试用例")
                 return
             
-            logger.info(f"调度 {scheduler_name} 包含 {len(case_ids)} 个测试用例")
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(f"{current_time} [INFO] 📋 调度 {scheduler_name} 包含 {len(case_ids)} 个测试用例")
+            
+            # 记录执行开始时间
+            execution_start_time = datetime.now()
+            
+            # 创建唯一的测试报告
+            report_data = {
+                'scheduler_id': scheduler_id,
+                'case_id': None,  # 调度执行，case_id设为None
+                'project_id': scheduler_data.get('project_id'),
+                'report_name': f"{scheduler_name}_执行报告",
+                'status': 'running',
+                'start_time': execution_start_time,
+                'total_cases': len(case_ids),  # 总用例数
+                'passed_cases': 0,  # 通过用例数
+                'failed_cases': 0,  # 失败用例数
+                'error_cases': 0   # 错误用例数
+            }
+            
+            # 创建测试报告
+            report_id = self.test_report_service.create_report(report_data)
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(f"{current_time} [INFO] 📄 创建测试报告成功，报告ID: {report_id}")
             
             # 执行测试用例
             success_count = 0
             total_count = len(case_ids)
             
-            # 记录执行开始时间
-            execution_start_time = datetime.now()
-            
             # 存储每个用例的执行结果
             case_results = []
+            
+            # 存储所有步骤结果
+            all_step_results = []
             
             for i, case_id in enumerate(case_ids):
                 try:
                     # 获取测试用例数据
                     case_data = self.test_case_service.get_case_with_steps(case_id)
                     if not case_data:
-                        logger.warning(f"测试用例ID {case_id} 不存在，跳过执行")
+                        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        logger.warning(f"{current_time} [WARN] ⚠️ 测试用例ID {case_id} 不存在，跳过执行")
                         continue
                     
                     case_name = case_data.get('name', '未知用例')
-                    logger.info(f"执行测试用例 [{i+1}/{total_count}]: {case_name} (ID: {case_id})")
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    logger.info(f"{current_time} [INFO] 🚀 执行测试用例 [{i+1}/{total_count}]: {case_name} (ID: {case_id})")
                     
-                    # 使用ExecuteTestCase工具类执行测试用例并生成测试报告
+                    # 使用ExecuteTestCase工具类执行测试用例，不生成独立报告
                     execution_result = self.execute_test_case.execute_test_case_unified(
                         case_data, 
-                        generate_report=True, 
-                        scheduler_id=scheduler_id
+                        generate_report=False,  # 不生成独立报告
+                        scheduler_id=scheduler_id,
+                        parent_report_id=report_id  # 指定父报告ID，将步骤结果关联到统一报告
                     )
+                    
+                    # 收集步骤结果
+                    if execution_result.get('step_results'):
+                        all_step_results.extend(execution_result['step_results'])
                     
                     if execution_result.get('success'):
                         success_count += 1
-                        logger.info(f"测试用例 {case_name} (ID: {case_id}) 执行成功")
+                        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        logger.info(f"{current_time} [SUCCESS] ✅ 测试用例 {case_name} (ID: {case_id}) 执行成功")
                         case_results.append({
                             'case_id': case_id,
                             'case_name': case_name,
@@ -392,7 +428,8 @@ class UnifiedSchedulerService:
                             'execution_time': datetime.now()
                         })
                     else:
-                        logger.warning(f"测试用例 {case_name} (ID: {case_id}) 执行失败")
+                        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        logger.warning(f"{current_time} [FAILURE] ❌ 测试用例 {case_name} (ID: {case_id}) 执行失败")
                         case_results.append({
                             'case_id': case_id,
                             'case_name': case_name,
@@ -401,7 +438,8 @@ class UnifiedSchedulerService:
                         })
                     
                 except Exception as e:
-                    logger.error(f"执行测试用例ID {case_id} 失败: {str(e)}")
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    logger.error(f"{current_time} [ERROR] 💥 执行测试用例ID {case_id} 失败: {str(e)}")
                     case_results.append({
                         'case_id': case_id,
                         'case_name': '未知用例',
@@ -414,15 +452,60 @@ class UnifiedSchedulerService:
             execution_end_time = datetime.now()
             execution_duration = (execution_end_time - execution_start_time).total_seconds()
             
-            logger.info(f"调度 {scheduler_name} 执行完成 - 成功: {success_count}/{total_count}, 耗时: {execution_duration:.2f}秒")
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            if success_count == total_count:
+                logger.info(f"{current_time} [SUCCESS] 🎉 调度 {scheduler_name} 执行完成 - 成功: {success_count}/{total_count}, 耗时: {execution_duration:.2f}秒")
+            else:
+                logger.warning(f"{current_time} [FAILURE] ⚠️ 调度 {scheduler_name} 执行完成 - 成功: {success_count}/{total_count}, 耗时: {execution_duration:.2f}秒")
+            
+            # 更新测试报告的统计信息
+            try:
+                # 统计用例结果
+                total_cases = total_count
+                passed_cases = success_count
+                failed_cases = total_count - success_count
+                error_cases = 0  # 目前没有错误用例的概念，可以后续扩展
+                
+                # 更新测试报告
+                update_data = {
+                    'status': 'success' if success_count == total_count else 'failure',
+                    'end_time': execution_end_time,
+                    'duration': execution_duration,
+                    'total_cases': total_cases,
+                    'passed_cases': passed_cases,
+                    'failed_cases': failed_cases,
+                    'error_cases': error_cases
+                }
+                
+                # 更新报告
+                self.test_report_service.update_report(report_id, update_data)
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                logger.info(f"{current_time} [INFO] 📊 测试报告已更新，统计信息: 用例{passed_cases}/{total_cases}通过")
+                
+            except Exception as e:
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                logger.error(f"{current_time} [ERROR] 💥 更新测试报告失败: {str(e)}")
             
             # 更新调度执行时间
             try:
                 self._update_last_run(scheduler_id)
                 self._update_next_run(scheduler_id)
-                logger.info(f"调度 {scheduler_name} 执行时间已更新")
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                logger.info(f"{current_time} [INFO] ⏰ 调度 {scheduler_name} 执行时间已更新")
             except Exception as e:
-                logger.error(f"更新调度执行时间失败: {str(e)}")
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                logger.error(f"{current_time} [ERROR] 💥 更新调度执行时间失败: {str(e)}")
+            
+            # 发送邮件通知（如果配置了收件人）
+            notify_emails = scheduler_data.get('notify_emails', [])
+            if notify_emails:
+                try:
+                    self._send_test_report_email(notify_emails, case_results, scheduler_name, execution_duration)
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    logger.info(f"{current_time} [INFO] 📧 测试报告邮件发送成功，收件人: {', '.join(notify_emails)}")
+                except Exception as e:
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    logger.error(f"{current_time} [ERROR] 💥 发送测试报告邮件失败: {str(e)}")
             
         except Exception as e:
             logger.error(f"执行调度失败: {str(e)}")
@@ -730,6 +813,78 @@ class UnifiedSchedulerService:
             logger.error(f"获取调度列表失败: {e}")
             return []
 
+    def _send_test_report_email(self, recipients: list, case_results: list, 
+                              scheduler_name: str, execution_duration: float) -> bool:
+        """
+        发送测试报告邮件
+        
+        Args:
+            recipients: 收件人列表
+            case_results: 用例执行结果列表
+            scheduler_name: 调度任务名称
+            execution_duration: 执行时长（秒）
+            
+        Returns:
+            bool: 发送是否成功
+        """
+        try:
+            # 获取邮件配置（这里需要从配置文件中读取）
+            email_config = self._get_email_config()
+            if not email_config:
+                logger.warning("邮件配置未设置，跳过邮件发送")
+                return False
+            
+            # 创建邮件服务
+            from src.core.services.email_service import EmailService
+            email_service = EmailService(email_config)
+            
+            # 生成测试报告数据
+            report_data = self._generate_email_report_data(case_results, scheduler_name, execution_duration)
+            
+            # 发送邮件
+            return email_service.send_test_report_email(recipients, report_data, 0, scheduler_name)
+            
+        except Exception as e:
+            logger.error(f"发送测试报告邮件失败: {str(e)}")
+            return False
+    
+    def _get_email_config(self):
+        """获取邮件配置"""
+        try:
+            from src.core.services.email_config_service import EmailConfigService
+            email_config_service = EmailConfigService()
+            return email_config_service.get_email_config()
+        except Exception as e:
+            logger.warning(f"获取邮件配置失败: {str(e)}")
+            return None
+    
+    def _generate_email_report_data(self, case_results: list, scheduler_name: str, 
+                                   execution_duration: float) -> dict:
+        """生成邮件报告数据"""
+        total_cases = len(case_results)
+        success_cases = sum(1 for result in case_results if result.get('success', False))
+        failed_cases = total_cases - success_cases
+        
+        # 确定整体状态
+        if failed_cases == 0:
+            status = 'success'
+        elif success_cases == 0:
+            status = 'error'
+        else:
+            status = 'failure'
+        
+        return {
+            'status': status,
+            'case_name': f"调度任务: {scheduler_name}",
+            'start_time': datetime.now(),
+            'end_time': datetime.now(),
+            'duration': execution_duration,
+            'total_cases': total_cases,
+            'passed_cases': success_cases,
+            'failed_cases': failed_cases,
+            'error_cases': 0
+        }
+    
     def _update_last_run(self, scheduler_id):
         """更新上次执行时间"""
         try:
@@ -737,12 +892,12 @@ class UnifiedSchedulerService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         UPDATE test_schedulers 
-                        SET last_run_at = NOW() 
+                        SET last_run_at = NOW(), updated_at = NOW() 
                         WHERE id = %s
                     """, (scheduler_id,))
                     conn.commit()
         except Exception as e:
-            logger.error(f"更新上次执行时间失败: {e}")
+            logger.error(f"更新调度 {scheduler_id} 上次执行时间失败: {e}")
             raise
 
     def _acquire_distributed_lock(self):

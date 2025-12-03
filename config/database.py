@@ -240,10 +240,10 @@ DB_TABLES = {
             project_id INT,
             report_name VARCHAR(200) NOT NULL,
             status ENUM('success', 'failure', 'error', 'running') DEFAULT 'running',
-            total_steps INT DEFAULT 0,
-            passed_steps INT DEFAULT 0,
-            failed_steps INT DEFAULT 0,
-            error_steps INT DEFAULT 0,
+            total_cases INT DEFAULT 0,
+            passed_cases INT DEFAULT 0,
+            failed_cases INT DEFAULT 0,
+            error_cases INT DEFAULT 0,
             start_time TIMESTAMP NULL,
             end_time TIMESTAMP NULL,
             duration FLOAT DEFAULT 0 COMMENT '执行时长(秒)',
@@ -263,21 +263,25 @@ DB_TABLES = {
     'test_step_results': '''
         CREATE TABLE IF NOT EXISTS test_step_results (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            scheduler_id INT COMMENT '调度任务ID',
             report_id INT NOT NULL,
+            case_id INT NOT NULL COMMENT '测试用例ID',
             step_id INT NOT NULL,
             step_order INT NOT NULL,
             status ENUM('success', 'failure', 'error', 'skipped') DEFAULT 'skipped',
             request_data JSON COMMENT '请求数据',
             response_data JSON COMMENT '响应数据',
-            assertions_result JSON COMMENT '断言结果',
-            variables_snapshot JSON COMMENT '变量快照',
+            execution_logs JSON COMMENT '执行日志信息',
             error_message TEXT,
             start_time TIMESTAMP NULL,
             end_time TIMESTAMP NULL,
             duration FLOAT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (report_id) REFERENCES test_reports(id) ON DELETE CASCADE,
+            FOREIGN KEY (case_id) REFERENCES test_cases(id) ON DELETE CASCADE,
+            INDEX idx_scheduler_id (scheduler_id),
             INDEX idx_report_id (report_id),
+            INDEX idx_case_id (case_id),
             INDEX idx_step_id (step_id),
             INDEX idx_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -366,6 +370,19 @@ DB_TABLES = {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
+    'system_config': '''
+        CREATE TABLE IF NOT EXISTS system_config (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            config_key VARCHAR(100) NOT NULL UNIQUE COMMENT '配置键名',
+            config_value JSON COMMENT '配置值',
+            description TEXT COMMENT '配置描述',
+            created_by VARCHAR(50) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_config_key (config_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
+
     'distributed_locks': '''
         CREATE TABLE IF NOT EXISTS distributed_locks (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -378,7 +395,9 @@ DB_TABLES = {
             INDEX idx_expires_at (expires_at),
             INDEX idx_instance_id (instance_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    '''
+    ''',
+
+
 }
 
 # 初始化数据
@@ -607,10 +626,10 @@ class TestReport(DataModel):
         self.case_id: int = 0
         self.report_name: str = ""
         self.status: str = "running"  # success, failure, error, running
-        self.total_steps: int = 0
-        self.passed_steps: int = 0
-        self.failed_steps: int = 0
-        self.error_steps: int = 0
+        self.total_cases: int = 0
+        self.passed_cases: int = 0
+        self.failed_cases: int = 0
+        self.error_cases: int = 0
         self.start_time: Optional[datetime] = None
         self.end_time: Optional[datetime] = None
         self.duration: float = 0.0

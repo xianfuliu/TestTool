@@ -78,6 +78,35 @@ def update_test_reports_table():
         'idx_project_id'
     )
 
+def update_test_step_results_table():
+    """更新test_step_results表，添加scheduler_id、case_id和execution_logs字段"""
+    success = True
+    
+    # 添加scheduler_id字段
+    success = check_and_add_column(
+        'test_step_results', 
+        'scheduler_id', 
+        'INT COMMENT \'调度任务ID\' AFTER id',
+        'idx_scheduler_id'
+    ) and success
+    
+    # 添加case_id字段
+    success = check_and_add_column(
+        'test_step_results', 
+        'case_id', 
+        'INT NOT NULL COMMENT \'测试用例ID\' AFTER scheduler_id',
+        'idx_case_id'
+    ) and success
+    
+    # 添加execution_logs字段
+    success = check_and_add_column(
+        'test_step_results', 
+        'execution_logs', 
+        'JSON COMMENT \'执行日志信息\' AFTER variables_snapshot'
+    ) and success
+    
+    return success
+
 def main():
     """主函数"""
     print("开始更新数据库表结构...")
@@ -87,6 +116,7 @@ def main():
     success = update_global_variables_table() and success
     success = update_test_schedulers_table() and success
     success = update_test_reports_table() and success
+    success = update_test_step_results_table() and success
     
     if success:
         print("数据库表结构更新完成！")

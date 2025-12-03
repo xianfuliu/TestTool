@@ -111,33 +111,52 @@ class TestReportService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT sr.*, at.name as api_name
-                        FROM test_step_results sr
-                        LEFT JOIN test_case_steps scs ON sr.step_id = scs.id
-                        LEFT JOIN api_templates at ON scs.api_template_id = at.id
-                        WHERE sr.report_id = %s
-                        ORDER BY sr.step_order
+                        SELECT 
+                            tsr.id, tsr.scheduler_id, tsr.report_id, tsr.case_id, tsr.step_id, tsr.step_order, tsr.status,
+                            tsr.request_data, tsr.response_data,
+                            tsr.execution_logs, tsr.error_message, tsr.start_time, tsr.end_time, tsr.duration,
+                            tcs.name, tcs.pre_processing, tcs.post_processing
+                        FROM test_step_results tsr
+                        LEFT JOIN test_case_steps tcs ON tsr.step_id = tcs.id
+                        WHERE tsr.report_id = %s
+                        ORDER BY tsr.step_order ASC
                     """, (report_id,))
-                    steps = cursor.fetchall()
-
-                    # 处理JSON字段
-                    for step in steps:
-                        for field in ['request_data', 'response_data', 'assertions_result', 'variables_snapshot']:
-                            if step.get(field):
-                                try:
-                                    step[field] = json.loads(step[field])
-                                except (json.JSONDecodeError, TypeError):
-                                    step[field] = {}
-
+                    results = cursor.fetchall()
+                    
+                    step_results = []
+                    for row in results:
+                        step_result = {
+                            'id': row[0],
+                            'scheduler_id': row[1],
+                            'report_id': row[2],
+                            'case_id': row[3],
+                            'step_id': row[4],
+                            'step_order': row[5],
+                            'status': row[6],
+                            'request_data': json.loads(row[7]) if row[7] else {},
+                            'response_data': json.loads(row[8]) if row[8] else {},
+                            'execution_logs': json.loads(row[9]) if row[9] else [],
+                            'error_message': row[10],
+                            'start_time': row[11],
+                            'end_time': row[12],
+                            'duration': row[13],
+                            'step_name': row[14],
+                            'pre_processing': json.loads(row[15]) if row[15] else {},
+                            'post_processing': json.loads(row[16]) if row[16] else {}
+                        }
+                        
                         # 处理时间字段
-                        for field in ['start_time', 'end_time', 'created_at']:
-                            if step.get(field) and isinstance(step[field], str):
+                        for field in ['start_time', 'end_time']:
+                            if step_result.get(field) and isinstance(step_result[field], str):
                                 try:
-                                    step[field] = datetime.fromisoformat(step[field].replace('Z', '+00:00'))
+                                    step_result[field] = datetime.datetime.fromisoformat(step_result[field].replace('Z', '+00:00'))
                                 except (ValueError, AttributeError):
-                                    step[field] = None
-
-                    return steps
+                                    step_result[field] = None
+                        
+                        step_results.append(step_result)
+                    
+                    return step_results
+                    
         except Exception as e:
             print(f"获取步骤结果失败: {e}")
             return []
@@ -238,21 +257,26 @@ class TestReportService:
                     sql = """
                         INSERT INTO test_reports (
                             scheduler_id, case_id, project_id, report_name, status, 
-                            total_steps, passed_steps, failed_steps, error_steps,
+                            total_cases, passed_cases, failed_cases, error_cases,
                             start_time, end_time, duration, log_path
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
+                    # 对于调度级别的报告，case_id 应该为 NULL
+                    case_id = report_data.get('case_id')
+                    if case_id == 0 or (case_id is None and report_data.get('scheduler_id')):
+                        case_id = None
+                    
                     params = (
                         report_data.get('scheduler_id'),
-                        report_data.get('case_id', 0),
+                        case_id,
                         report_data.get('project_id'),
                         report_data.get('report_name', report_name),
                         report_data.get('status', 'running'),
-                        report_data.get('total_steps', 0),
-                        report_data.get('passed_steps', 0),
-                        report_data.get('failed_steps', 0),
-                        report_data.get('error_steps', 0),
+                        report_data.get('total_cases', 0),
+                        report_data.get('passed_cases', 0),
+                        report_data.get('failed_cases', 0),
+                        report_data.get('error_cases', 0),
                         report_data.get('start_time'),
                         report_data.get('end_time'),
                         report_data.get('duration', 0.0),
@@ -268,3 +292,86 @@ class TestReportService:
         except Exception as e:
             print(f"创建测试报告失败: {e}")
             raise e
+
+    def save_step_result(self, report_id: int, step_result: Dict[str, Any]) -> bool:
+        """保存步骤执行结果"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    sql = """
+                        INSERT INTO test_step_results (
+                            scheduler_id, report_id, case_id, step_id, step_order, status, request_data, 
+                            response_data, execution_logs, error_message,
+                            start_time, end_time, duration
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    # 准备数据
+                    request_data = json.dumps(step_result.get('request_data', {}), ensure_ascii=False)
+                    response_data = json.dumps(step_result.get('response_data', {}), ensure_ascii=False)
+                    execution_logs = json.dumps(step_result.get('execution_logs', []), ensure_ascii=False)
+                    
+                    params = (
+                        step_result.get('scheduler_id'),
+                        report_id,
+                        step_result.get('case_id', 0),
+                        step_result.get('step_id', 0),
+                        step_result.get('step_order', 0),
+                        step_result.get('status', 'error'),
+                        request_data,
+                        response_data,
+                        execution_logs,
+                        step_result.get('error_message', ''),
+                        step_result.get('start_time'),
+                        step_result.get('end_time'),
+                        step_result.get('execution_time', 0.0)
+                    )
+                    
+                    cursor.execute(sql, params)
+                    conn.commit()
+                    return True
+                    
+        except Exception as e:
+            print(f"保存步骤结果失败: {e}")
+            return False
+
+    def update_report(self, report_id: int, update_data: Dict[str, Any]) -> bool:
+        """更新测试报告"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 构建更新语句
+                    set_clauses = []
+                    params = []
+                    
+                    # 可更新的字段
+                    updatable_fields = [
+                        'status', 'total_cases', 'passed_cases', 'failed_cases', 'error_cases',
+                        'end_time', 'duration', 'log_path'
+                    ]
+                    
+                    for field in updatable_fields:
+                        if field in update_data:
+                            set_clauses.append(f"{field} = %s")
+                            params.append(update_data[field])
+                    
+                    if not set_clauses:
+                        return False  # 没有需要更新的字段
+                    
+                    # 添加报告ID参数
+                    params.append(report_id)
+                    
+                    sql = f"""
+                        UPDATE test_reports 
+                        SET {', '.join(set_clauses)}
+                        WHERE id = %s
+                    """
+                    
+                    cursor.execute(sql, params)
+                    conn.commit()
+                    
+                    return cursor.rowcount > 0
+                    
+        except Exception as e:
+            print(f"更新测试报告失败: {e}")
+            return False

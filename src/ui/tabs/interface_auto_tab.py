@@ -79,6 +79,9 @@ class InterfaceAutoTab(QWidget):
         
         # 当测试用例管理页面请求编辑接口模板时，跳转到接口模板标签页并打开对应模板
         self.test_case.api_template_edit_requested.connect(self.on_api_template_edit_requested)
+        
+        # 当定时调度页面请求查看报告详情时，跳转到测试报告标签页并打开对应报告
+        self.scheduler.report_detail_requested.connect(self.on_report_detail_requested)
 
     def delayed_init(self):
         """延迟初始化数据库连接和实际UI"""
@@ -310,6 +313,35 @@ class InterfaceAutoTab(QWidget):
                 
         except Exception as e:
             print(f"跳转到接口模板编辑页面失败: {str(e)}")
+    
+    def on_report_detail_requested(self, report_data):
+        """处理报告详情请求，跳转到测试报告标签页并打开对应报告
+        
+        Args:
+            report_data: 报告数据字典，包含报告ID等信息
+        """
+        try:
+            print(f"收到报告详情请求，报告数据: {report_data}")
+            
+            # 跳转到测试报告标签页（索引为4）
+            self.left_nav.setCurrentRow(4)
+            
+            # 检查test_report对象是否有view_report_detail_by_id方法
+            if hasattr(self.test_report, 'view_report_detail_by_id'):
+                # 从报告数据中获取报告ID
+                report_id = report_data.get('id')
+                if report_id:
+                    # 调用view_report_detail_by_id方法打开对应报告
+                    self.test_report.view_report_detail_by_id(report_id)
+                    print(f"成功跳转到测试报告详情页面，报告ID: {report_id}")
+                else:
+                    print("报告数据中没有找到ID字段")
+            else:
+                print("TestReportManager类中没有view_report_detail_by_id方法")
+                
+        except Exception as e:
+            print(f"跳转到测试报告详情页面失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"打开报告详情失败: {str(e)}")
     
     def trigger_initial_business_change(self):
         """在所有页面创建和信号连接完成后，手动触发初始业务切换"""
