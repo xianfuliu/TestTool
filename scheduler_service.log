@@ -1,4 +1,671 @@
-2025-12-03 17:05:44,188 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-03 17:05:44,226 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
-2025-12-03 17:05:45,590 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-03 17:05:45,660 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-04 15:44:07,252 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-04 15:44:07,326 - UnifiedSchedulerService - INFO - 成功获取分布式锁
+2025-12-04 15:44:07,326 - UnifiedSchedulerService - INFO - 统一调度服务已启动，检查间隔: 5秒
+2025-12-04 15:44:07,326 - UnifiedSchedulerService - INFO - 服务启动时间: 2025-12-04 15:44:07.326188
+2025-12-04 15:44:07,326 - UnifiedSchedulerService - INFO - 当前实例持有调度锁
+2025-12-04 15:44:07,327 - UnifiedSchedulerService - INFO - 服务主循环开始运行
+2025-12-04 15:44:07,327 - UnifiedSchedulerService - INFO - 当前时间: 2025-12-04 15:44:07.327554, 等待 53 秒到整分钟再开始运行...
+2025-12-04 15:44:08,937 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-04 15:44:09,036 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-04 15:44:17,787 - UnifiedSchedulerService - INFO - 等待倒计时: 43秒
+2025-12-04 15:44:27,858 - UnifiedSchedulerService - INFO - 等待倒计时: 33秒
+2025-12-04 15:44:37,921 - UnifiedSchedulerService - INFO - 等待倒计时: 23秒
+2025-12-04 15:44:47,970 - UnifiedSchedulerService - INFO - 等待倒计时: 13秒
+2025-12-04 15:44:56,029 - UnifiedSchedulerService - INFO - 等待倒计时: 5秒
+2025-12-04 15:44:57,034 - UnifiedSchedulerService - INFO - 等待倒计时: 4秒
+2025-12-04 15:44:58,036 - UnifiedSchedulerService - INFO - 等待倒计时: 3秒
+2025-12-04 15:44:59,045 - UnifiedSchedulerService - INFO - 等待倒计时: 2秒
+2025-12-04 15:45:00,052 - UnifiedSchedulerService - INFO - 等待倒计时: 1秒
+2025-12-04 15:45:01,013 - UnifiedSchedulerService - INFO - 长时间等待期间检查续期逻辑...
+2025-12-04 15:45:01,013 - UnifiedSchedulerService - INFO - 等待期间续期检查 - 服务启动时间: 54秒, 需要: 120秒
+2025-12-04 15:45:01,013 - UnifiedSchedulerService - INFO - 整分钟启动时间: 2025-12-04 15:45:01.013984
+2025-12-04 15:45:01,015 - UnifiedSchedulerService - INFO - === 第 1 次检查 ===
+2025-12-04 15:45:01,036 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:01.036952, 启用的调度数量: 0
+2025-12-04 15:45:01,036 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:01,036 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 1, 错误次数: 0, 运行时长: 54秒
+2025-12-04 15:45:01,036 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:06,078 - UnifiedSchedulerService - INFO - === 第 2 次检查 ===
+2025-12-04 15:45:06,103 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:06.103602, 启用的调度数量: 0
+2025-12-04 15:45:06,104 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:06,104 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 2, 错误次数: 0, 运行时长: 59秒
+2025-12-04 15:45:06,104 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:11,130 - UnifiedSchedulerService - INFO - === 第 3 次检查 ===
+2025-12-04 15:45:11,157 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:11.157545, 启用的调度数量: 0
+2025-12-04 15:45:11,158 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:11,158 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 3, 错误次数: 0, 运行时长: 64秒
+2025-12-04 15:45:11,158 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:16,190 - UnifiedSchedulerService - INFO - === 第 4 次检查 ===
+2025-12-04 15:45:16,216 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:16.216265, 启用的调度数量: 0
+2025-12-04 15:45:16,219 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:16,219 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 4, 错误次数: 0, 运行时长: 69秒
+2025-12-04 15:45:16,219 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:21,265 - UnifiedSchedulerService - INFO - === 第 5 次检查 ===
+2025-12-04 15:45:21,289 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:21.288951, 启用的调度数量: 0
+2025-12-04 15:45:21,290 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:21,290 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 5, 错误次数: 0, 运行时长: 74秒
+2025-12-04 15:45:21,290 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:26,311 - UnifiedSchedulerService - INFO - === 第 6 次检查 ===
+2025-12-04 15:45:26,345 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:26.345620, 启用的调度数量: 0
+2025-12-04 15:45:26,345 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:26,345 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 6, 错误次数: 0, 运行时长: 79秒
+2025-12-04 15:45:26,345 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 6, 距离上次续期: 25秒, 需要: 120秒
+2025-12-04 15:45:26,345 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:31,393 - UnifiedSchedulerService - INFO - === 第 7 次检查 ===
+2025-12-04 15:45:31,431 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:31.431770, 启用的调度数量: 0
+2025-12-04 15:45:31,432 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:31,432 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 7, 错误次数: 0, 运行时长: 84秒
+2025-12-04 15:45:31,432 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:36,461 - UnifiedSchedulerService - INFO - === 第 8 次检查 ===
+2025-12-04 15:45:36,524 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:36.524483, 启用的调度数量: 0
+2025-12-04 15:45:36,524 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:36,524 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 8, 错误次数: 0, 运行时长: 89秒
+2025-12-04 15:45:36,525 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:41,554 - UnifiedSchedulerService - INFO - === 第 9 次检查 ===
+2025-12-04 15:45:41,588 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:41.588231, 启用的调度数量: 0
+2025-12-04 15:45:41,589 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:41,589 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 9, 错误次数: 0, 运行时长: 94秒
+2025-12-04 15:45:41,589 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:46,636 - UnifiedSchedulerService - INFO - === 第 10 次检查 ===
+2025-12-04 15:45:46,677 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:46.677811, 启用的调度数量: 0
+2025-12-04 15:45:46,679 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:46,679 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 10, 错误次数: 0, 运行时长: 99秒
+2025-12-04 15:45:46,679 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:51,702 - UnifiedSchedulerService - INFO - === 第 11 次检查 ===
+2025-12-04 15:45:51,735 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:51.735921, 启用的调度数量: 0
+2025-12-04 15:45:51,735 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:51,735 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 11, 错误次数: 0, 运行时长: 104秒
+2025-12-04 15:45:51,735 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:45:56,769 - UnifiedSchedulerService - INFO - === 第 12 次检查 ===
+2025-12-04 15:45:56,802 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:45:56.802141, 启用的调度数量: 0
+2025-12-04 15:45:56,802 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:45:56,802 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 12, 错误次数: 0, 运行时长: 109秒
+2025-12-04 15:45:56,803 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 12, 距离上次续期: 56秒, 需要: 120秒
+2025-12-04 15:45:56,803 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:01,843 - UnifiedSchedulerService - INFO - === 第 13 次检查 ===
+2025-12-04 15:46:01,867 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:01.867769, 启用的调度数量: 0
+2025-12-04 15:46:01,867 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:01,867 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 13, 错误次数: 0, 运行时长: 115秒
+2025-12-04 15:46:01,872 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:06,910 - UnifiedSchedulerService - INFO - === 第 14 次检查 ===
+2025-12-04 15:46:06,930 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:06.930263, 启用的调度数量: 0
+2025-12-04 15:46:06,930 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:06,930 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 14, 错误次数: 0, 运行时长: 120秒
+2025-12-04 15:46:06,930 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:11,958 - UnifiedSchedulerService - INFO - === 第 15 次检查 ===
+2025-12-04 15:46:11,981 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:11.981108, 启用的调度数量: 0
+2025-12-04 15:46:11,981 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:11,981 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 15, 错误次数: 0, 运行时长: 125秒
+2025-12-04 15:46:11,981 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:17,017 - UnifiedSchedulerService - INFO - === 第 16 次检查 ===
+2025-12-04 15:46:17,053 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:17.053686, 启用的调度数量: 0
+2025-12-04 15:46:17,055 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:17,055 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 16, 错误次数: 0, 运行时长: 130秒
+2025-12-04 15:46:17,056 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:22,080 - UnifiedSchedulerService - INFO - === 第 17 次检查 ===
+2025-12-04 15:46:22,108 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:22.108787, 启用的调度数量: 0
+2025-12-04 15:46:22,108 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:22,108 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 17, 错误次数: 0, 运行时长: 135秒
+2025-12-04 15:46:22,108 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:27,148 - UnifiedSchedulerService - INFO - === 第 18 次检查 ===
+2025-12-04 15:46:27,177 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:27.177646, 启用的调度数量: 0
+2025-12-04 15:46:27,177 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:27,177 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 18, 错误次数: 0, 运行时长: 140秒
+2025-12-04 15:46:27,178 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 18, 距离上次续期: 86秒, 需要: 120秒
+2025-12-04 15:46:27,178 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:32,210 - UnifiedSchedulerService - INFO - === 第 19 次检查 ===
+2025-12-04 15:46:32,257 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:32.257212, 启用的调度数量: 0
+2025-12-04 15:46:32,257 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:32,258 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 19, 错误次数: 0, 运行时长: 145秒
+2025-12-04 15:46:32,258 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:37,302 - UnifiedSchedulerService - INFO - === 第 20 次检查 ===
+2025-12-04 15:46:37,334 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:37.334475, 启用的调度数量: 0
+2025-12-04 15:46:37,334 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:37,335 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 20, 错误次数: 0, 运行时长: 150秒
+2025-12-04 15:46:37,335 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:42,380 - UnifiedSchedulerService - INFO - === 第 21 次检查 ===
+2025-12-04 15:46:42,416 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:42.416013, 启用的调度数量: 0
+2025-12-04 15:46:42,416 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:42,416 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 21, 错误次数: 0, 运行时长: 155秒
+2025-12-04 15:46:42,416 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:47,455 - UnifiedSchedulerService - INFO - === 第 22 次检查 ===
+2025-12-04 15:46:47,482 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:47.482756, 启用的调度数量: 0
+2025-12-04 15:46:47,482 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:47,484 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 22, 错误次数: 0, 运行时长: 160秒
+2025-12-04 15:46:47,484 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:52,531 - UnifiedSchedulerService - INFO - === 第 23 次检查 ===
+2025-12-04 15:46:52,575 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:52.575406, 启用的调度数量: 0
+2025-12-04 15:46:52,575 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:52,575 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 23, 错误次数: 0, 运行时长: 165秒
+2025-12-04 15:46:52,575 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:46:57,604 - UnifiedSchedulerService - INFO - === 第 24 次检查 ===
+2025-12-04 15:46:57,624 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:46:57.624839, 启用的调度数量: 0
+2025-12-04 15:46:57,624 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:46:57,624 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 24, 错误次数: 0, 运行时长: 170秒
+2025-12-04 15:46:57,624 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 24, 距离上次续期: 117秒, 需要: 120秒
+2025-12-04 15:46:57,625 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:02,670 - UnifiedSchedulerService - INFO - === 第 25 次检查 ===
+2025-12-04 15:47:02,709 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:02.709520, 启用的调度数量: 0
+2025-12-04 15:47:02,709 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:02,709 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 25, 错误次数: 0, 运行时长: 175秒
+2025-12-04 15:47:02,709 - UnifiedSchedulerService - INFO - 触发分布式锁续期 - 距离上次续期: 122秒
+2025-12-04 15:47:02,771 - UnifiedSchedulerService - INFO - 分布式锁续期成功
+2025-12-04 15:47:02,771 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:07,821 - UnifiedSchedulerService - INFO - === 第 26 次检查 ===
+2025-12-04 15:47:07,838 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:07.838002, 启用的调度数量: 0
+2025-12-04 15:47:07,838 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:07,838 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 26, 错误次数: 0, 运行时长: 181秒
+2025-12-04 15:47:07,839 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:12,875 - UnifiedSchedulerService - INFO - === 第 27 次检查 ===
+2025-12-04 15:47:12,909 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:12.909200, 启用的调度数量: 0
+2025-12-04 15:47:12,909 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:12,909 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 27, 错误次数: 0, 运行时长: 186秒
+2025-12-04 15:47:12,909 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:17,948 - UnifiedSchedulerService - INFO - === 第 28 次检查 ===
+2025-12-04 15:47:18,042 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:18.042007, 启用的调度数量: 0
+2025-12-04 15:47:18,042 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:18,042 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 28, 错误次数: 0, 运行时长: 191秒
+2025-12-04 15:47:18,042 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:23,077 - UnifiedSchedulerService - INFO - === 第 29 次检查 ===
+2025-12-04 15:47:23,104 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:23.104223, 启用的调度数量: 0
+2025-12-04 15:47:23,105 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:23,105 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 29, 错误次数: 0, 运行时长: 196秒
+2025-12-04 15:47:23,105 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:28,152 - UnifiedSchedulerService - INFO - === 第 30 次检查 ===
+2025-12-04 15:47:28,167 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:28.167177, 启用的调度数量: 0
+2025-12-04 15:47:28,168 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:28,168 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 30, 错误次数: 0, 运行时长: 201秒
+2025-12-04 15:47:28,168 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 30, 距离上次续期: 25秒, 需要: 120秒
+2025-12-04 15:47:28,168 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:33,190 - UnifiedSchedulerService - INFO - === 第 31 次检查 ===
+2025-12-04 15:47:33,210 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:33.210356, 启用的调度数量: 0
+2025-12-04 15:47:33,210 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:33,210 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 31, 错误次数: 0, 运行时长: 206秒
+2025-12-04 15:47:33,210 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:38,265 - UnifiedSchedulerService - INFO - === 第 32 次检查 ===
+2025-12-04 15:47:38,288 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:38.288829, 启用的调度数量: 0
+2025-12-04 15:47:38,289 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:38,289 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 32, 错误次数: 0, 运行时长: 211秒
+2025-12-04 15:47:38,289 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:43,342 - UnifiedSchedulerService - INFO - === 第 33 次检查 ===
+2025-12-04 15:47:43,376 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:43.376692, 启用的调度数量: 0
+2025-12-04 15:47:43,376 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:43,376 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 33, 错误次数: 0, 运行时长: 216秒
+2025-12-04 15:47:43,376 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:48,431 - UnifiedSchedulerService - INFO - === 第 34 次检查 ===
+2025-12-04 15:47:48,449 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:48.449976, 启用的调度数量: 0
+2025-12-04 15:47:48,449 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:48,450 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 34, 错误次数: 0, 运行时长: 221秒
+2025-12-04 15:47:48,450 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:53,467 - UnifiedSchedulerService - INFO - === 第 35 次检查 ===
+2025-12-04 15:47:53,498 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:53.498152, 启用的调度数量: 0
+2025-12-04 15:47:53,498 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:53,499 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 35, 错误次数: 0, 运行时长: 226秒
+2025-12-04 15:47:53,499 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:47:58,542 - UnifiedSchedulerService - INFO - === 第 36 次检查 ===
+2025-12-04 15:47:58,575 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:47:58.575006, 启用的调度数量: 0
+2025-12-04 15:47:58,575 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:47:58,575 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 36, 错误次数: 0, 运行时长: 231秒
+2025-12-04 15:47:58,576 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 36, 距离上次续期: 56秒, 需要: 120秒
+2025-12-04 15:47:58,576 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:03,605 - UnifiedSchedulerService - INFO - === 第 37 次检查 ===
+2025-12-04 15:48:03,640 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:03.640399, 启用的调度数量: 0
+2025-12-04 15:48:03,645 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:03,645 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 37, 错误次数: 0, 运行时长: 236秒
+2025-12-04 15:48:03,645 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:08,680 - UnifiedSchedulerService - INFO - === 第 38 次检查 ===
+2025-12-04 15:48:08,703 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:08.703973, 启用的调度数量: 0
+2025-12-04 15:48:08,703 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:08,703 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 38, 错误次数: 0, 运行时长: 241秒
+2025-12-04 15:48:08,704 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:13,752 - UnifiedSchedulerService - INFO - === 第 39 次检查 ===
+2025-12-04 15:48:13,789 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:13.789467, 启用的调度数量: 0
+2025-12-04 15:48:13,789 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:13,789 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 39, 错误次数: 0, 运行时长: 246秒
+2025-12-04 15:48:13,789 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:18,825 - UnifiedSchedulerService - INFO - === 第 40 次检查 ===
+2025-12-04 15:48:18,846 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:18.846878, 启用的调度数量: 0
+2025-12-04 15:48:18,847 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:18,847 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 40, 错误次数: 0, 运行时长: 252秒
+2025-12-04 15:48:18,847 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:23,875 - UnifiedSchedulerService - INFO - === 第 41 次检查 ===
+2025-12-04 15:48:23,892 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:23.892195, 启用的调度数量: 0
+2025-12-04 15:48:23,892 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:23,892 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 41, 错误次数: 0, 运行时长: 257秒
+2025-12-04 15:48:23,892 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:28,935 - UnifiedSchedulerService - INFO - === 第 42 次检查 ===
+2025-12-04 15:48:28,961 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:28.961563, 启用的调度数量: 0
+2025-12-04 15:48:28,966 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:28,967 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 42, 错误次数: 0, 运行时长: 262秒
+2025-12-04 15:48:28,967 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 42, 距离上次续期: 86秒, 需要: 120秒
+2025-12-04 15:48:28,967 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:34,017 - UnifiedSchedulerService - INFO - === 第 43 次检查 ===
+2025-12-04 15:48:34,040 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:34.040538, 启用的调度数量: 0
+2025-12-04 15:48:34,040 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:34,041 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 43, 错误次数: 0, 运行时长: 267秒
+2025-12-04 15:48:34,041 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:39,098 - UnifiedSchedulerService - INFO - === 第 44 次检查 ===
+2025-12-04 15:48:39,140 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:39.140056, 启用的调度数量: 0
+2025-12-04 15:48:39,141 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:39,141 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 44, 错误次数: 0, 运行时长: 272秒
+2025-12-04 15:48:39,141 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:44,162 - UnifiedSchedulerService - INFO - === 第 45 次检查 ===
+2025-12-04 15:48:44,240 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:44.240526, 启用的调度数量: 0
+2025-12-04 15:48:44,241 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:44,241 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 45, 错误次数: 0, 运行时长: 277秒
+2025-12-04 15:48:44,241 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:49,284 - UnifiedSchedulerService - INFO - === 第 46 次检查 ===
+2025-12-04 15:48:49,321 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:49.321288, 启用的调度数量: 0
+2025-12-04 15:48:49,322 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:49,322 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 46, 错误次数: 0, 运行时长: 282秒
+2025-12-04 15:48:49,322 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:54,364 - UnifiedSchedulerService - INFO - === 第 47 次检查 ===
+2025-12-04 15:48:54,403 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:54.403598, 启用的调度数量: 0
+2025-12-04 15:48:54,403 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:54,403 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 47, 错误次数: 0, 运行时长: 287秒
+2025-12-04 15:48:54,405 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:48:59,443 - UnifiedSchedulerService - INFO - === 第 48 次检查 ===
+2025-12-04 15:48:59,489 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:48:59.489635, 启用的调度数量: 0
+2025-12-04 15:48:59,489 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:48:59,489 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 48, 错误次数: 0, 运行时长: 292秒
+2025-12-04 15:48:59,489 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 48, 距离上次续期: 117秒, 需要: 120秒
+2025-12-04 15:48:59,489 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:04,523 - UnifiedSchedulerService - INFO - === 第 49 次检查 ===
+2025-12-04 15:49:04,554 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:04.554595, 启用的调度数量: 0
+2025-12-04 15:49:04,554 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:04,555 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 49, 错误次数: 0, 运行时长: 297秒
+2025-12-04 15:49:04,555 - UnifiedSchedulerService - INFO - 触发分布式锁续期 - 距离上次续期: 122秒
+2025-12-04 15:49:04,595 - UnifiedSchedulerService - INFO - 分布式锁续期成功
+2025-12-04 15:49:04,595 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:09,626 - UnifiedSchedulerService - INFO - === 第 50 次检查 ===
+2025-12-04 15:49:09,710 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:09.710934, 启用的调度数量: 0
+2025-12-04 15:49:09,710 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:09,710 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 50, 错误次数: 0, 运行时长: 302秒
+2025-12-04 15:49:09,710 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:14,745 - UnifiedSchedulerService - INFO - === 第 51 次检查 ===
+2025-12-04 15:49:14,777 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:14.777924, 启用的调度数量: 0
+2025-12-04 15:49:14,777 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:14,778 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 51, 错误次数: 0, 运行时长: 307秒
+2025-12-04 15:49:14,778 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:19,829 - UnifiedSchedulerService - INFO - === 第 52 次检查 ===
+2025-12-04 15:49:19,891 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:19.891377, 启用的调度数量: 0
+2025-12-04 15:49:19,891 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:19,892 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 52, 错误次数: 0, 运行时长: 313秒
+2025-12-04 15:49:19,892 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:24,929 - UnifiedSchedulerService - INFO - === 第 53 次检查 ===
+2025-12-04 15:49:25,008 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:25.008388, 启用的调度数量: 0
+2025-12-04 15:49:25,008 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:25,009 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 53, 错误次数: 0, 运行时长: 318秒
+2025-12-04 15:49:25,009 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:30,042 - UnifiedSchedulerService - INFO - === 第 54 次检查 ===
+2025-12-04 15:49:30,075 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:30.075876, 启用的调度数量: 0
+2025-12-04 15:49:30,075 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:30,075 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 54, 错误次数: 0, 运行时长: 323秒
+2025-12-04 15:49:30,075 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 54, 距离上次续期: 26秒, 需要: 120秒
+2025-12-04 15:49:30,075 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:35,130 - UnifiedSchedulerService - INFO - === 第 55 次检查 ===
+2025-12-04 15:49:35,203 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:35.203492, 启用的调度数量: 0
+2025-12-04 15:49:35,204 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:35,204 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 55, 错误次数: 0, 运行时长: 328秒
+2025-12-04 15:49:35,205 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:40,240 - UnifiedSchedulerService - INFO - === 第 56 次检查 ===
+2025-12-04 15:49:40,277 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:40.277273, 启用的调度数量: 0
+2025-12-04 15:49:40,277 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:40,277 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 56, 错误次数: 0, 运行时长: 333秒
+2025-12-04 15:49:40,277 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:45,319 - UnifiedSchedulerService - INFO - === 第 57 次检查 ===
+2025-12-04 15:49:45,371 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:45.371288, 启用的调度数量: 0
+2025-12-04 15:49:45,372 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:45,372 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 57, 错误次数: 0, 运行时长: 338秒
+2025-12-04 15:49:45,372 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:50,394 - UnifiedSchedulerService - INFO - === 第 58 次检查 ===
+2025-12-04 15:49:50,430 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:50.430497, 启用的调度数量: 0
+2025-12-04 15:49:50,431 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:50,431 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 58, 错误次数: 0, 运行时长: 343秒
+2025-12-04 15:49:50,431 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:49:55,471 - UnifiedSchedulerService - INFO - === 第 59 次检查 ===
+2025-12-04 15:49:55,505 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:49:55.505132, 启用的调度数量: 0
+2025-12-04 15:49:55,505 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:49:55,506 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 59, 错误次数: 0, 运行时长: 348秒
+2025-12-04 15:49:55,506 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:00,551 - UnifiedSchedulerService - INFO - === 第 60 次检查 ===
+2025-12-04 15:50:00,607 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:00.607736, 启用的调度数量: 0
+2025-12-04 15:50:00,607 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:00,607 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 60, 错误次数: 0, 运行时长: 353秒
+2025-12-04 15:50:00,607 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 60, 距离上次续期: 56秒, 需要: 120秒
+2025-12-04 15:50:00,607 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:05,649 - UnifiedSchedulerService - INFO - === 第 61 次检查 ===
+2025-12-04 15:50:05,659 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:05.659480, 启用的调度数量: 0
+2025-12-04 15:50:05,659 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:05,659 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 61, 错误次数: 0, 运行时长: 358秒
+2025-12-04 15:50:05,659 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:10,700 - UnifiedSchedulerService - INFO - === 第 62 次检查 ===
+2025-12-04 15:50:10,724 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:10.724148, 启用的调度数量: 0
+2025-12-04 15:50:10,724 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:10,724 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 62, 错误次数: 0, 运行时长: 363秒
+2025-12-04 15:50:10,724 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:15,765 - UnifiedSchedulerService - INFO - === 第 63 次检查 ===
+2025-12-04 15:50:15,801 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:15.801460, 启用的调度数量: 0
+2025-12-04 15:50:15,801 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:15,802 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 63, 错误次数: 0, 运行时长: 368秒
+2025-12-04 15:50:15,802 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:20,847 - UnifiedSchedulerService - INFO - === 第 64 次检查 ===
+2025-12-04 15:50:20,863 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:20.863649, 启用的调度数量: 0
+2025-12-04 15:50:20,864 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:20,864 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 64, 错误次数: 0, 运行时长: 374秒
+2025-12-04 15:50:20,864 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:25,923 - UnifiedSchedulerService - INFO - === 第 65 次检查 ===
+2025-12-04 15:50:25,955 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:25.955209, 启用的调度数量: 0
+2025-12-04 15:50:25,955 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:25,955 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 65, 错误次数: 0, 运行时长: 379秒
+2025-12-04 15:50:25,955 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:31,014 - UnifiedSchedulerService - INFO - === 第 66 次检查 ===
+2025-12-04 15:50:31,042 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:31.042781, 启用的调度数量: 0
+2025-12-04 15:50:31,043 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:31,043 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 66, 错误次数: 0, 运行时长: 384秒
+2025-12-04 15:50:31,043 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 66, 距离上次续期: 86秒, 需要: 120秒
+2025-12-04 15:50:31,043 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:36,082 - UnifiedSchedulerService - INFO - === 第 67 次检查 ===
+2025-12-04 15:50:36,112 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:36.112087, 启用的调度数量: 0
+2025-12-04 15:50:36,112 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:36,112 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 67, 错误次数: 0, 运行时长: 389秒
+2025-12-04 15:50:36,113 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:41,152 - UnifiedSchedulerService - INFO - === 第 68 次检查 ===
+2025-12-04 15:50:41,179 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:41.179222, 启用的调度数量: 0
+2025-12-04 15:50:41,179 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:41,179 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 68, 错误次数: 0, 运行时长: 394秒
+2025-12-04 15:50:41,179 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:46,229 - UnifiedSchedulerService - INFO - === 第 69 次检查 ===
+2025-12-04 15:50:46,267 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:46.267653, 启用的调度数量: 0
+2025-12-04 15:50:46,268 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:46,268 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 69, 错误次数: 0, 运行时长: 399秒
+2025-12-04 15:50:46,269 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:51,311 - UnifiedSchedulerService - INFO - === 第 70 次检查 ===
+2025-12-04 15:50:51,334 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:51.334296, 启用的调度数量: 0
+2025-12-04 15:50:51,335 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:51,335 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 70, 错误次数: 0, 运行时长: 404秒
+2025-12-04 15:50:51,335 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:50:56,366 - UnifiedSchedulerService - INFO - === 第 71 次检查 ===
+2025-12-04 15:50:56,402 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:50:56.402651, 启用的调度数量: 0
+2025-12-04 15:50:56,403 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:50:56,404 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 71, 错误次数: 0, 运行时长: 409秒
+2025-12-04 15:50:56,404 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:01,446 - UnifiedSchedulerService - INFO - === 第 72 次检查 ===
+2025-12-04 15:51:01,466 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:01.466436, 启用的调度数量: 0
+2025-12-04 15:51:01,466 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:01,466 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 72, 错误次数: 0, 运行时长: 414秒
+2025-12-04 15:51:01,466 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 72, 距离上次续期: 117秒, 需要: 120秒
+2025-12-04 15:51:01,466 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:06,499 - UnifiedSchedulerService - INFO - === 第 73 次检查 ===
+2025-12-04 15:51:06,510 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:06.510657, 启用的调度数量: 0
+2025-12-04 15:51:06,510 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:06,510 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 73, 错误次数: 0, 运行时长: 419秒
+2025-12-04 15:51:06,510 - UnifiedSchedulerService - INFO - 触发分布式锁续期 - 距离上次续期: 122秒
+2025-12-04 15:51:06,594 - UnifiedSchedulerService - INFO - 分布式锁续期成功
+2025-12-04 15:51:06,594 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:11,626 - UnifiedSchedulerService - INFO - === 第 74 次检查 ===
+2025-12-04 15:51:11,658 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:11.658476, 启用的调度数量: 0
+2025-12-04 15:51:11,658 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:11,658 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 74, 错误次数: 0, 运行时长: 424秒
+2025-12-04 15:51:11,659 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:16,690 - UnifiedSchedulerService - INFO - === 第 75 次检查 ===
+2025-12-04 15:51:16,720 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:16.720700, 启用的调度数量: 0
+2025-12-04 15:51:16,721 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:16,721 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 75, 错误次数: 0, 运行时长: 429秒
+2025-12-04 15:51:16,721 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:21,771 - UnifiedSchedulerService - INFO - === 第 76 次检查 ===
+2025-12-04 15:51:21,814 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:21.814048, 启用的调度数量: 0
+2025-12-04 15:51:21,814 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:21,814 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 76, 错误次数: 0, 运行时长: 434秒
+2025-12-04 15:51:21,814 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:26,859 - UnifiedSchedulerService - INFO - === 第 77 次检查 ===
+2025-12-04 15:51:26,904 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:26.903244, 启用的调度数量: 0
+2025-12-04 15:51:26,904 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:26,904 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 77, 错误次数: 0, 运行时长: 440秒
+2025-12-04 15:51:26,904 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:31,937 - UnifiedSchedulerService - INFO - === 第 78 次检查 ===
+2025-12-04 15:51:32,012 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:32.012249, 启用的调度数量: 0
+2025-12-04 15:51:32,013 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:32,013 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 78, 错误次数: 0, 运行时长: 445秒
+2025-12-04 15:51:32,013 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 78, 距离上次续期: 26秒, 需要: 120秒
+2025-12-04 15:51:32,013 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:37,057 - UnifiedSchedulerService - INFO - === 第 79 次检查 ===
+2025-12-04 15:51:37,090 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:37.090293, 启用的调度数量: 0
+2025-12-04 15:51:37,090 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:37,090 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 79, 错误次数: 0, 运行时长: 450秒
+2025-12-04 15:51:37,090 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:42,142 - UnifiedSchedulerService - INFO - === 第 80 次检查 ===
+2025-12-04 15:51:42,168 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:42.168611, 启用的调度数量: 0
+2025-12-04 15:51:42,168 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:42,169 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 80, 错误次数: 0, 运行时长: 455秒
+2025-12-04 15:51:42,169 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:47,212 - UnifiedSchedulerService - INFO - === 第 81 次检查 ===
+2025-12-04 15:51:47,234 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:47.234765, 启用的调度数量: 0
+2025-12-04 15:51:47,234 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:47,236 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 81, 错误次数: 0, 运行时长: 460秒
+2025-12-04 15:51:47,236 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:52,290 - UnifiedSchedulerService - INFO - === 第 82 次检查 ===
+2025-12-04 15:51:52,314 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:52.314332, 启用的调度数量: 0
+2025-12-04 15:51:52,315 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:52,315 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 82, 错误次数: 0, 运行时长: 465秒
+2025-12-04 15:51:52,315 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:51:57,361 - UnifiedSchedulerService - INFO - === 第 83 次检查 ===
+2025-12-04 15:51:57,383 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:51:57.383723, 启用的调度数量: 0
+2025-12-04 15:51:57,383 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:51:57,384 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 83, 错误次数: 0, 运行时长: 470秒
+2025-12-04 15:51:57,384 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:02,420 - UnifiedSchedulerService - INFO - === 第 84 次检查 ===
+2025-12-04 15:52:02,455 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:02.455062, 启用的调度数量: 0
+2025-12-04 15:52:02,455 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:02,455 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 84, 错误次数: 0, 运行时长: 475秒
+2025-12-04 15:52:02,455 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 84, 距离上次续期: 56秒, 需要: 120秒
+2025-12-04 15:52:02,455 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:07,520 - UnifiedSchedulerService - INFO - === 第 85 次检查 ===
+2025-12-04 15:52:07,575 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:07.575323, 启用的调度数量: 0
+2025-12-04 15:52:07,576 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:07,576 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 85, 错误次数: 0, 运行时长: 480秒
+2025-12-04 15:52:07,576 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:12,621 - UnifiedSchedulerService - INFO - === 第 86 次检查 ===
+2025-12-04 15:52:12,657 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:12.654563, 启用的调度数量: 0
+2025-12-04 15:52:12,657 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:12,657 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 86, 错误次数: 0, 运行时长: 485秒
+2025-12-04 15:52:12,657 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:17,688 - UnifiedSchedulerService - INFO - === 第 87 次检查 ===
+2025-12-04 15:52:17,735 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:17.735144, 启用的调度数量: 0
+2025-12-04 15:52:17,735 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:17,736 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 87, 错误次数: 0, 运行时长: 490秒
+2025-12-04 15:52:17,736 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:22,768 - UnifiedSchedulerService - INFO - === 第 88 次检查 ===
+2025-12-04 15:52:22,821 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:22.821596, 启用的调度数量: 0
+2025-12-04 15:52:22,822 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:22,822 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 88, 错误次数: 0, 运行时长: 495秒
+2025-12-04 15:52:22,822 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:27,864 - UnifiedSchedulerService - INFO - === 第 89 次检查 ===
+2025-12-04 15:52:27,894 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:27.894093, 启用的调度数量: 0
+2025-12-04 15:52:27,894 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:27,894 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 89, 错误次数: 0, 运行时长: 501秒
+2025-12-04 15:52:27,894 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:32,952 - UnifiedSchedulerService - INFO - === 第 90 次检查 ===
+2025-12-04 15:52:33,004 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:33.004970, 启用的调度数量: 0
+2025-12-04 15:52:33,004 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:33,004 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 90, 错误次数: 0, 运行时长: 506秒
+2025-12-04 15:52:33,005 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 90, 距离上次续期: 86秒, 需要: 120秒
+2025-12-04 15:52:33,005 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:38,056 - UnifiedSchedulerService - INFO - === 第 91 次检查 ===
+2025-12-04 15:52:38,068 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:38.068661, 启用的调度数量: 0
+2025-12-04 15:52:38,069 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:38,070 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 91, 错误次数: 0, 运行时长: 511秒
+2025-12-04 15:52:38,070 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:43,117 - UnifiedSchedulerService - INFO - === 第 92 次检查 ===
+2025-12-04 15:52:43,150 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:43.150681, 启用的调度数量: 0
+2025-12-04 15:52:43,150 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:43,150 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 92, 错误次数: 0, 运行时长: 516秒
+2025-12-04 15:52:43,150 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:48,182 - UnifiedSchedulerService - INFO - === 第 93 次检查 ===
+2025-12-04 15:52:48,205 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:48.205395, 启用的调度数量: 0
+2025-12-04 15:52:48,205 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:48,205 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 93, 错误次数: 0, 运行时长: 521秒
+2025-12-04 15:52:48,206 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:53,241 - UnifiedSchedulerService - INFO - === 第 94 次检查 ===
+2025-12-04 15:52:53,259 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:53.259177, 启用的调度数量: 0
+2025-12-04 15:52:53,263 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:53,263 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 94, 错误次数: 0, 运行时长: 526秒
+2025-12-04 15:52:53,263 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:52:58,311 - UnifiedSchedulerService - INFO - === 第 95 次检查 ===
+2025-12-04 15:52:58,347 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:52:58.347032, 启用的调度数量: 0
+2025-12-04 15:52:58,348 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:52:58,348 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 95, 错误次数: 0, 运行时长: 531秒
+2025-12-04 15:52:58,348 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:03,379 - UnifiedSchedulerService - INFO - === 第 96 次检查 ===
+2025-12-04 15:53:03,397 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:03.397685, 启用的调度数量: 0
+2025-12-04 15:53:03,397 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:03,397 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 96, 错误次数: 0, 运行时长: 536秒
+2025-12-04 15:53:03,397 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 96, 距离上次续期: 117秒, 需要: 120秒
+2025-12-04 15:53:03,397 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:08,439 - UnifiedSchedulerService - INFO - === 第 97 次检查 ===
+2025-12-04 15:53:08,469 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:08.469688, 启用的调度数量: 0
+2025-12-04 15:53:08,469 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:08,469 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 97, 错误次数: 0, 运行时长: 541秒
+2025-12-04 15:53:08,469 - UnifiedSchedulerService - INFO - 触发分布式锁续期 - 距离上次续期: 122秒
+2025-12-04 15:53:08,527 - UnifiedSchedulerService - INFO - 分布式锁续期成功
+2025-12-04 15:53:08,528 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:13,565 - UnifiedSchedulerService - INFO - === 第 98 次检查 ===
+2025-12-04 15:53:13,614 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:13.614582, 启用的调度数量: 0
+2025-12-04 15:53:13,614 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:13,614 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 98, 错误次数: 0, 运行时长: 546秒
+2025-12-04 15:53:13,614 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:18,676 - UnifiedSchedulerService - INFO - === 第 99 次检查 ===
+2025-12-04 15:53:18,695 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:18.695887, 启用的调度数量: 0
+2025-12-04 15:53:18,695 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:18,695 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 99, 错误次数: 0, 运行时长: 551秒
+2025-12-04 15:53:18,695 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:23,725 - UnifiedSchedulerService - INFO - === 第 100 次检查 ===
+2025-12-04 15:53:23,780 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:23.780040, 启用的调度数量: 0
+2025-12-04 15:53:23,780 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:23,781 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 100, 错误次数: 0, 运行时长: 556秒
+2025-12-04 15:53:23,781 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:28,821 - UnifiedSchedulerService - INFO - === 第 101 次检查 ===
+2025-12-04 15:53:28,842 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:28.842862, 启用的调度数量: 0
+2025-12-04 15:53:28,842 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:28,842 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 101, 错误次数: 0, 运行时长: 562秒
+2025-12-04 15:53:28,843 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:33,886 - UnifiedSchedulerService - INFO - === 第 102 次检查 ===
+2025-12-04 15:53:33,932 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:33.932843, 启用的调度数量: 0
+2025-12-04 15:53:33,932 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:33,932 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 102, 错误次数: 0, 运行时长: 567秒
+2025-12-04 15:53:33,932 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 102, 距离上次续期: 25秒, 需要: 120秒
+2025-12-04 15:53:33,932 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:38,974 - UnifiedSchedulerService - INFO - === 第 103 次检查 ===
+2025-12-04 15:53:38,997 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:38.997614, 启用的调度数量: 0
+2025-12-04 15:53:38,997 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:39,002 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 103, 错误次数: 0, 运行时长: 572秒
+2025-12-04 15:53:39,002 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:44,048 - UnifiedSchedulerService - INFO - === 第 104 次检查 ===
+2025-12-04 15:53:44,196 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:44.196065, 启用的调度数量: 0
+2025-12-04 15:53:44,196 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:44,196 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 104, 错误次数: 0, 运行时长: 577秒
+2025-12-04 15:53:44,196 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:49,230 - UnifiedSchedulerService - INFO - === 第 105 次检查 ===
+2025-12-04 15:53:49,269 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:49.269188, 启用的调度数量: 0
+2025-12-04 15:53:49,269 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:49,274 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 105, 错误次数: 0, 运行时长: 582秒
+2025-12-04 15:53:49,274 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:54,314 - UnifiedSchedulerService - INFO - === 第 106 次检查 ===
+2025-12-04 15:53:54,331 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:54.330371, 启用的调度数量: 0
+2025-12-04 15:53:54,331 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:54,331 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 106, 错误次数: 0, 运行时长: 587秒
+2025-12-04 15:53:54,331 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:53:59,377 - UnifiedSchedulerService - INFO - === 第 107 次检查 ===
+2025-12-04 15:53:59,399 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:53:59.399309, 启用的调度数量: 0
+2025-12-04 15:53:59,399 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:53:59,399 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 107, 错误次数: 0, 运行时长: 592秒
+2025-12-04 15:53:59,400 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:04,440 - UnifiedSchedulerService - INFO - === 第 108 次检查 ===
+2025-12-04 15:54:04,495 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:04.495277, 启用的调度数量: 0
+2025-12-04 15:54:04,495 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:04,496 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 108, 错误次数: 0, 运行时长: 597秒
+2025-12-04 15:54:04,496 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 108, 距离上次续期: 56秒, 需要: 120秒
+2025-12-04 15:54:04,496 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:09,555 - UnifiedSchedulerService - INFO - === 第 109 次检查 ===
+2025-12-04 15:54:09,585 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:09.585757, 启用的调度数量: 0
+2025-12-04 15:54:09,585 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:09,585 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 109, 错误次数: 0, 运行时长: 602秒
+2025-12-04 15:54:09,586 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:14,631 - UnifiedSchedulerService - INFO - === 第 110 次检查 ===
+2025-12-04 15:54:14,662 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:14.662384, 启用的调度数量: 0
+2025-12-04 15:54:14,663 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:14,663 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 110, 错误次数: 0, 运行时长: 607秒
+2025-12-04 15:54:14,664 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:19,713 - UnifiedSchedulerService - INFO - === 第 111 次检查 ===
+2025-12-04 15:54:19,729 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:19.729477, 启用的调度数量: 0
+2025-12-04 15:54:19,729 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:19,729 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 111, 错误次数: 0, 运行时长: 612秒
+2025-12-04 15:54:19,729 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:24,873 - UnifiedSchedulerService - INFO - === 第 112 次检查 ===
+2025-12-04 15:54:24,913 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:24.913623, 启用的调度数量: 0
+2025-12-04 15:54:24,942 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:24,960 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 112, 错误次数: 0, 运行时长: 618秒
+2025-12-04 15:54:24,977 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:30,122 - UnifiedSchedulerService - INFO - === 第 113 次检查 ===
+2025-12-04 15:54:30,180 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:30.180312, 启用的调度数量: 0
+2025-12-04 15:54:30,206 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:30,209 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 113, 错误次数: 0, 运行时长: 623秒
+2025-12-04 15:54:30,209 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:35,377 - UnifiedSchedulerService - INFO - === 第 114 次检查 ===
+2025-12-04 15:54:35,489 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:35.489580, 启用的调度数量: 0
+2025-12-04 15:54:35,618 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:35,619 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 114, 错误次数: 0, 运行时长: 628秒
+2025-12-04 15:54:35,623 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 114, 距离上次续期: 87秒, 需要: 120秒
+2025-12-04 15:54:35,623 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:41,092 - UnifiedSchedulerService - INFO - === 第 115 次检查 ===
+2025-12-04 15:54:41,534 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:41.534897, 启用的调度数量: 0
+2025-12-04 15:54:41,824 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:41,824 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 115, 错误次数: 0, 运行时长: 634秒
+2025-12-04 15:54:41,831 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:47,083 - UnifiedSchedulerService - INFO - === 第 116 次检查 ===
+2025-12-04 15:54:47,164 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:47.164093, 启用的调度数量: 0
+2025-12-04 15:54:47,164 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:47,167 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 116, 错误次数: 0, 运行时长: 640秒
+2025-12-04 15:54:47,167 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:52,212 - UnifiedSchedulerService - INFO - === 第 117 次检查 ===
+2025-12-04 15:54:52,279 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:52.279236, 启用的调度数量: 0
+2025-12-04 15:54:52,279 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:52,280 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 117, 错误次数: 0, 运行时长: 645秒
+2025-12-04 15:54:52,280 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:54:57,338 - UnifiedSchedulerService - INFO - === 第 118 次检查 ===
+2025-12-04 15:54:57,375 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:54:57.375163, 启用的调度数量: 0
+2025-12-04 15:54:57,375 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:54:57,375 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 118, 错误次数: 0, 运行时长: 650秒
+2025-12-04 15:54:57,376 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:55:02,895 - UnifiedSchedulerService - INFO - === 第 119 次检查 ===
+2025-12-04 15:55:03,078 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:55:03.078331, 启用的调度数量: 0
+2025-12-04 15:55:03,086 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:55:03,091 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 119, 错误次数: 0, 运行时长: 656秒
+2025-12-04 15:55:03,094 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:55:08,247 - UnifiedSchedulerService - INFO - === 第 120 次检查 ===
+2025-12-04 15:55:08,507 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:55:08.506401, 启用的调度数量: 0
+2025-12-04 15:55:08,507 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:55:08,508 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 120, 错误次数: 0, 运行时长: 661秒
+2025-12-04 15:55:08,508 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 120, 距离上次续期: 120秒, 需要: 120秒
+2025-12-04 15:55:08,509 - UnifiedSchedulerService - INFO - 触发分布式锁续期 - 距离上次续期: 120秒
+2025-12-04 15:55:09,002 - UnifiedSchedulerService - INFO - 分布式锁续期成功
+2025-12-04 15:55:09,028 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:55:14,075 - UnifiedSchedulerService - INFO - === 第 121 次检查 ===
+2025-12-04 15:55:14,094 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:55:14.094442, 启用的调度数量: 0
+2025-12-04 15:55:14,095 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:55:14,095 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 121, 错误次数: 0, 运行时长: 667秒
+2025-12-04 15:55:14,095 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:55:19,129 - UnifiedSchedulerService - INFO - === 第 122 次检查 ===
+2025-12-04 15:55:19,149 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:55:19.149948, 启用的调度数量: 0
+2025-12-04 15:55:19,150 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:55:19,150 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 122, 错误次数: 0, 运行时长: 672秒
+2025-12-04 15:55:19,150 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:55:24,189 - UnifiedSchedulerService - INFO - === 第 123 次检查 ===
+2025-12-04 15:55:24,305 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:55:24.305133, 启用的调度数量: 0
+2025-12-04 15:55:24,306 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:55:24,306 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 123, 错误次数: 0, 运行时长: 677秒
+2025-12-04 15:55:24,306 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...
+2025-12-04 15:55:29,359 - UnifiedSchedulerService - INFO - === 第 124 次检查 ===
+2025-12-04 15:55:29,392 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-04 15:55:29.392833, 启用的调度数量: 0
+2025-12-04 15:55:29,393 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-04 15:55:29,393 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 124, 错误次数: 0, 运行时长: 682秒
+2025-12-04 15:55:29,393 - UnifiedSchedulerService - INFO - 等待 5 秒后再次检查...

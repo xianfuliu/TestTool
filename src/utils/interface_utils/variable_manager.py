@@ -59,6 +59,16 @@ class VariableManager:
         self.local_variables.update(variables)
         self._record_variable_change('local', variables)
 
+    def set_local_variable(self, name: str, value: Any):
+        """设置单个局部变量
+        
+        Args:
+            name: 变量名
+            value: 变量值
+        """
+        self.local_variables[name] = value
+        self._record_variable_change('local', {name: value})
+
     def get_variable(self, name: str) -> Any:
         """获取变量值"""
         # 移除变量标识符

@@ -438,14 +438,21 @@ class ExecuteTestCase:
             if case_data.get('global_vars'):
                 variables.update(case_data.get('global_vars', {}))
             
+            # 获取接口模板名称
+            api_template_name = "未知接口"
+            if api_template_id:
+                api_template_data = self._get_api_template_data(api_template_id)
+                if api_template_data and api_template_data.get('name'):
+                    api_template_name = api_template_data.get('name')
+            
             # 执行请求
             current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             execution_logs.append({
                 'timestamp': datetime.now().isoformat(),
                 'level': 'info',
-                'message': f"🌐 执行HTTP请求: {api_data.get('method', 'GET')} {api_data.get('url_path', '')}"
+                'message': f"🌐 执行步骤 {step_name} 的HTTP请求 [{api_template_name}]: {api_data.get('method', 'GET')} {api_data.get('url_path', '')}"
             })
-            logger.info(f"{current_time} [INFO] 🌐 执行HTTP请求: {api_data.get('method', 'GET')} {api_data.get('url_path', '')}")
+            logger.info(f"{current_time} [INFO] 🌐 执行步骤 {step_name} 的HTTP请求 [{api_template_name}]: {api_data.get('method', 'GET')} {api_data.get('url_path', '')}")
             response_data = request_engine.execute_request(api_data, variables)
             
             # 执行后置处理

@@ -19,6 +19,7 @@ from src.core.services.test_case_service import TestCaseService
 from src.core.services.global_variable_service import get_global_variable_service
 from src.utils.interface_utils.variable_manager import get_global_variable_manager
 from src.utils.interface_utils.request_engine import RequestEngine
+from src.utils.interface_utils.test_case_executor import TestCaseExecutor
 
 
 class CaseExecutionThread(QThread):
@@ -77,101 +78,93 @@ class CaseExecutionThread(QThread):
         else:
             prefix = f"[{timestamp}] [用例]"
             
-        # 根据日志级别添加颜色标记
+        # 将大写的日志等级转换为小写（TestCaseExecutor传递的是大写）
+        original_level = level  # 保存原始级别
+        level = level.lower()
+            
+        # 根据日志级别添加颜色标记和HTML颜色标签
         level_markers = {
             "debug": "🔍",
             "info": "ℹ️",
             "warning": "⚠️",
-            "error": "❌"
+            "error": "❌",
+            "success": "✅"
+        }
+        
+        # 根据日志级别设置颜色
+        level_colors = {
+            "debug": "<font color='gray'>",
+            "info": "<font color='black'>",
+            "warning": "<font color='orange'>",
+            "error": "<font color='red'>",
+            "success": "<font color='green'>"
         }
         
         marker = level_markers.get(level, "ℹ️")
+        color = level_colors.get(level, "<font color='blue'>")
         
-        # 格式化消息内容
-        formatted_message = f"{prefix} {marker} {message}"
+        # 格式化消息内容，添加颜色标签和原始级别信息
+        # 在消息末尾添加原始级别信息，供后续解析使用
+        formatted_message = f"{color}{prefix} {marker} {message}</font>"
         
         return formatted_message
 
     def run(self):
         """执行测试用例"""
         try:
-            # 记录关键信息，减少调试信息
-            self.log_message.emit(self.format_debug_message(f"开始执行测试用例: {self.case_data['name']}", "info", -1), "info", -1)
-            self.log_message.emit(self.format_debug_message(f"总步骤数: {len(self.case_data.get('steps', []))}", "info", -1), "info", -1)
-
-            # 初始化变量管理器
-            self.variable_manager.clear_local_variables()
+            # 创建测试用例执行器
+            executor = TestCaseExecutor(
+                project_id=self.project_id,
+                environment_config=self.environment_config
+            )
             
-            # 加载指定项目的全局变量
-            try:
-                from src.core.services.global_variable_service import get_global_variable_service
-                service = get_global_variable_service()
-                service.sync_to_variable_manager(self.variable_manager, self.project_id)
-                self.log_message.emit(self.format_debug_message(f"已加载项目 {self.project_id} 的全局变量", "info", -1), "info", -1)
-            except Exception as e:
-                self.log_message.emit(self.format_debug_message(f"加载项目 {self.project_id} 的全局变量失败: {str(e)}", "error", -1), "error", -1)
+            # 设置执行来源为调试模式
+            executor.set_execution_source('debug')
             
-            # 获取变量管理器中的全局变量
-            global_vars = self.variable_manager.global_variables
+            # 设置日志回调函数，确保日志格式与原有系统一致
+            def log_callback(message, level, step_index):
+                # 使用原有的日志格式化方法
+                formatted_message = self.format_debug_message(message, level, step_index)
+                # 确保step_index为有效值，None转换为-1（通用信息）
+                if step_index is None:
+                    step_index = -1
+                # 同时传递格式化后的消息和原始级别信息
+                self.log_message.emit(formatted_message, level, step_index)
             
-            # 记录变量情况
-            self.log_message.emit(self.format_debug_message(f"全局变量数量: {len(global_vars)}", "info", -1), "info", -1)
-            if global_vars:
-                for var_name, var_value in global_vars.items():
-                    self.log_message.emit(self.format_debug_message(f"全局变量: {var_name} = {var_value}", "debug", -1), "debug", -1)
-
-            # 执行每个步骤
-            steps = self.case_data.get('steps', [])
+            executor.set_log_callback(log_callback)
             
-            enabled_steps = [step for step in steps if step.get('enabled', True)]
+            # 设置步骤开始回调函数，确保信号传递与原有系统一致
+            def step_started_callback(step_name, step_index):
+                # 发射步骤开始信号
+                self.step_started.emit(step_name, step_index)
             
-            # 统计步骤执行结果
-            total_steps = len(enabled_steps)
-            success_steps = 0
-
-            # 使用原始步骤序号，而不是重新编号
-            original_step_order = 0
-            for step in steps:
-                if not self.is_running:
-                    self.log_message.emit(self.format_debug_message("执行被中断", "info", original_step_order), "info", original_step_order)
-                    break
-                
-                # 检查步骤是否启用
-                if not step.get('enabled', True):
-                    original_step_order += 1
-                    continue
-                
-                # 记录步骤开始执行的信息（使用原始步骤序号）
-                step_order = step.get('step_order', original_step_order + 1)
-                
-                # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
-                step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名步骤')
-                
-                self.log_message.emit(self.format_debug_message(f"开始执行步骤 {step_order}: {step_name}", "info", step_order - 1), "info", step_order - 1)
-                
-                self.step_started.emit(step_name, step_order - 1)
-                result = self.execute_step(step, step_order - 1)
-                self.step_finished.emit(result)
-                
-                # 统计成功步骤数量
-                if result.get('success', False):
-                    success_steps += 1
-                
-                # 如果步骤执行失败，停止执行后续步骤
-                if not result.get('success', False):
-                    self.log_message.emit(self.format_debug_message("步骤执行失败，停止执行后续步骤", "warning", step_index), "warning", step_index)
-                    break
-
-            # 记录用例执行完成信息
-            self.log_message.emit(self.format_debug_message("用例执行完成", "info", -1), "info", -1)
-            self.log_message.emit(self.format_debug_message(f"步骤统计: 成功 {success_steps}/{total_steps}", "info", -1), "info", -1)
+            executor.set_step_started_callback(step_started_callback)
             
-            self.case_finished.emit({
-                'success': True,
-                'message': '用例执行完成',
-                'success_count': success_steps,
-                'total_count': total_steps
-            })
+            # 设置步骤完成回调函数，确保信号传递与原有系统一致
+            def step_finished_callback(step_result):
+                # 发射步骤完成信号
+                self.step_finished.emit(step_result)
+            
+            executor.set_step_finished_callback(step_finished_callback)
+            
+            # 执行测试用例
+            result = executor.execute_case(self.case_data, stop_on_failure=True)
+            
+            # 根据执行结果发送相应的信号
+            if result.get('success'):
+                self.case_finished.emit({
+                    'success': True,
+                    'message': result.get('message', '用例执行完成'),
+                    'success_count': result.get('success_count', 0),
+                    'total_count': result.get('total_count', 0)
+                })
+            else:
+                self.case_finished.emit({
+                    'success': False,
+                    'error': result.get('error', '用例执行失败'),
+                    'success_count': result.get('success_count', 0),
+                    'total_count': result.get('total_count', 0)
+                })
 
         except Exception as e:
             # 记录用例执行异常信息
@@ -179,714 +172,11 @@ class CaseExecutionThread(QThread):
             self.case_finished.emit({
                 'success': False,
                 'error': str(e),
-                'success_count': success_steps if 'success_steps' in locals() else 0,
-                'total_count': total_steps if 'total_steps' in locals() else 0
+                'success_count': 0,
+                'total_count': 0
             })
 
-    def execute_step(self, step, step_index):
-        """执行单个步骤"""
-        try:
-            step_start_time = datetime.now()
-
-            # 记录步骤开始执行的信息（使用原始步骤序号）
-            step_order = step_index + 1  # step_index是从0开始的，需要+1得到实际步骤序号
-            
-            # 获取步骤标题：优先使用api_name，如果没有则使用api_template.name，最后使用name字段
-            step_name = step.get('api_name') or step.get('api_template', {}).get('name') or step.get('name', '未命名步骤')
-            
-            self.log_message.emit(self.format_debug_message(f"执行步骤 {step_order}: {step_name}", "info", step_index), "info", step_index)
-
-            # 执行前置处理
-            pre_processing = step.get('pre_processing', {})
-            if pre_processing:
-                self.log_message.emit(self.format_debug_message("执行前置处理", "debug", step_index), "debug", step_index)
-            self.execute_pre_processing(pre_processing, step_index)
-
-            # 执行接口请求
-            api_template_id = step.get('api_template_id')
-            if api_template_id:
-                self.log_message.emit(self.format_debug_message("执行接口请求", "debug", step_index), "debug", step_index)
-                try:
-                    result = self.execute_api_request(step, step_index)
-                except Exception as e:
-                    self.log_message.emit(self.format_debug_message(f"接口请求执行异常: {str(e)}", "error", step_index), "error", step_index)
-                    result = {
-                        'success': False,
-                        'error': str(e),
-                        'status': 'error',
-                        'duration': 0
-                    }
-            else:
-                self.log_message.emit(self.format_debug_message("跳过接口执行（无接口模板）", "info", step_index), "info", step_index)
-                result = {
-                    'success': True,
-                    'message': '跳过接口执行（无接口模板）',
-                    'status': 'skipped'
-                }
-
-            # 执行后置处理
-            if result.get('success'):
-                post_processing = step.get('post_processing', {})
-                if post_processing:
-                    self.log_message.emit(self.format_debug_message("执行后置处理", "debug", step_index), "debug", step_index)
-                self.execute_post_processing(post_processing, result, step_index)
-
-            # 执行断言
-            if result.get('success'):
-                assertions = step.get('assertions', {})
-                if assertions:
-                    self.log_message.emit(self.format_debug_message("执行断言", "debug", step_index), "debug", step_index)
-                assertion_result = self.execute_assertions(assertions, result, step_index)
-                result['assertions_result'] = assertion_result
-
-            # 计算执行时长
-            step_end_time = datetime.now()
-            duration = (step_end_time - step_start_time).total_seconds()
-            result['duration'] = duration
-
-            # 记录步骤执行完成信息
-            status = result.get('status', 'success' if result.get('success') else 'failure')
-            
-            # 记录完成日志（使用原始步骤序号）
-            step_order = step_index + 1  # step_index是从0开始的，需要+1得到实际步骤序号
-            log_level = "info" if status == "success" else "warning"
-            self.log_message.emit(self.format_debug_message(f"步骤 {step_order} 执行完成: {status}, 耗时: {duration:.2f}秒", log_level, step_index), log_level, step_index)
-
-            return result
-
-        except Exception as e:
-            step_order = step_index + 1  # step_index是从0开始的，需要+1得到实际步骤序号
-            self.log_message.emit(self.format_debug_message(f"步骤 {step_order} 执行错误: {str(e)}", "error", step_index), "error", step_index)
-            self.log_message.emit(self.format_debug_message(f"错误详情: {traceback.format_exc()}", "debug", step_index), "debug", step_index)
-            return {
-                'success': False,
-                'error': str(e),
-                'status': 'error',
-                'duration': 0
-            }
-
-    def execute_pre_processing(self, pre_processing, step_index):
-        """执行前置处理"""
-        if not pre_processing:
-            return
-            
-        # 计算前置处理工具数量 - 基于实际工具配置统计
-        tool_count = 0
-        executed_tool_count = 0
-        
-        # 遍历所有配置项，但只处理有效的工具配置
-        for tool_id, tool_config in pre_processing.items():
-            # 跳过空配置或无效配置
-            if tool_config is None:
-                continue
-                
-            if not isinstance(tool_config, dict):
-                continue
-                
-            # 检查是否为工具配置：必须有type字段
-            tool_type = tool_config.get('type')
-            if not tool_type:
-                continue
-                
-            enabled = tool_config.get('enabled', True)
-            
-            # 统计工具数量
-            if enabled:
-                tool_count += 1
-        
-        self.log_message.emit(self.format_debug_message("开始执行前置处理", "debug", step_index), "debug", step_index)
-        self.log_message.emit(self.format_debug_message(f"前置处理工具数量: {tool_count}", "debug", step_index), "debug", step_index)
-        
-        # 执行前置处理器中的工具
-        for tool_id, tool_config in pre_processing.items():
-            # 跳过空配置或无效配置
-            if tool_config is None:
-                continue
-                
-            if not isinstance(tool_config, dict):
-                continue
-                
-            # 检查是否为工具配置：必须有type字段
-            tool_type = tool_config.get('type')
-            if not tool_type:
-                continue
-                
-            enabled = tool_config.get('enabled', True)
-            if not enabled:
-                continue
-                
-            config = tool_config.get('config', {})
-            
-            # 记录前置处理工具情况
-            self.log_message.emit(self.format_debug_message(f"执行前置处理工具: {tool_type}", "debug", step_index), "debug", step_index)
-            
-            if tool_type == 'http_request':
-                self.log_message.emit(self.format_debug_message("执行HTTP请求工具", "debug", step_index), "debug", step_index)
-                self.execute_http_request_tool(config, step_index)
-            elif tool_type == 'sql_tool':
-                self.log_message.emit(self.format_debug_message("执行SQL工具", "debug", step_index), "debug", step_index)
-                self.execute_sql_tool(config, step_index)
-            else:
-                self.log_message.emit(self.format_debug_message(f"未知的前置处理工具类型: {tool_type}", "warning", step_index), "warning", step_index)
-            
-            executed_tool_count += 1
-        
-        # 这里可以执行变量设置、脚本执行等前置操作
-        variables = pre_processing.get('variables', {})
-        
-        if variables:
-            self.variable_manager.set_local_variables(variables)
-            self.log_message.emit(self.format_debug_message(f"设置局部变量: {len(variables)} 个", "info", step_index), "info", step_index)
-        
-        self.log_message.emit(self.format_debug_message(f"前置处理完成，共执行 {executed_tool_count} 个工具", "debug", step_index), "debug", step_index)
-
-    def execute_http_request_tool(self, config, step_index=-1):
-        """执行HTTP请求工具"""
-        self.log_message.emit(self.format_debug_message(f"开始执行HTTP请求工具，配置: {config}", "debug", step_index), "debug", step_index)
-        
-        try:
-            # 获取请求配置
-            method = config.get('method', 'GET')
-            url = config.get('url', '')
-            headers = config.get('headers', {})
-            body = config.get('body', {})
-            timeout = config.get('timeout', 30)
-            # 优先从variables字段读取变量提取器，如果没有则从extractors字段读取
-            extractors = config.get('variables', config.get('extractors', {}))
-            
-            self.log_message.emit(self.format_debug_message(f"HTTP请求配置 - 方法: {method}, URL: {url}, 超时: {timeout}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"HTTP请求配置 - 请求体: {body}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"HTTP请求配置 - 提取器: {extractors}", "debug", step_index), "debug", step_index)
-            
-            if not url:
-                self.log_message.emit(self.format_debug_message("HTTP请求工具配置错误: URL不能为空", "error", step_index), "error", step_index)
-                return
-            
-            # 替换变量
-            all_variables = {}
-            all_variables.update(self.variable_manager.global_variables)
-            all_variables.update(self.variable_manager.local_variables)
-            
-            self.log_message.emit(self.format_debug_message(f"变量替换前 - URL: {url}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"可用变量: {all_variables}", "debug", step_index), "debug", step_index)
-            
-            url = self.variable_manager.replace_variables(url, all_variables)
-            headers = self.variable_manager.replace_variables_in_dict(headers, all_variables)
-            body = self.variable_manager.replace_variables_in_dict(body, all_variables)
-            
-            self.log_message.emit(self.format_debug_message(f"变量替换后 - URL: {url}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"变量替换后 - 请求头: {headers}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"变量替换后 - 请求体: {body}", "debug", step_index), "debug", step_index)
-            
-            # 记录请求日志
-            self.log_message.emit(self.format_debug_message(f"前置处理器HTTP请求: {method} {url}", "info", step_index), "info", step_index)
-            
-            # 执行请求
-            request_data = {
-                'method': method,
-                'url': url,
-                'headers': headers,
-                'body': body,
-                'timeout': timeout
-            }
-            
-            self.log_message.emit(self.format_debug_message(f"发送请求数据: {request_data}", "debug", step_index), "debug", step_index)
-            
-            response = self.request_engine.execute_request(request_data)
-            self.log_message.emit(self.format_debug_message(f"请求响应: {response}", "debug", step_index), "debug", step_index)
-            
-            if response.get('success'):
-                # 请求成功，处理响应
-                response_data = response.get('response_data', response.get('body', {}))
-                status_code = response.get('status_code', 0)
-                
-                self.log_message.emit(self.format_debug_message(f"前置处理器HTTP请求成功: 状态码 {status_code}", "info", step_index), "info", step_index)
-                self.log_message.emit(self.format_debug_message(f"响应数据: {response_data}", "debug", step_index), "debug", step_index)
-                
-                # 提取变量
-                if extractors:
-                    self.log_message.emit(self.format_debug_message(f"开始提取变量，提取器数量: {len(extractors)}", "debug", step_index), "debug", step_index)
-                    for var_name, json_path in extractors.items():
-                        try:
-                            self.log_message.emit(self.format_debug_message(f"提取变量 {var_name}，JSON路径: {json_path}", "debug", step_index), "debug", step_index)
-                            # 从响应中提取数据 - 直接使用simple_json_path_extract支持点分隔路径
-                            value = self.simple_json_path_extract(response_data, json_path)
-                            if value is not None:
-                                # 将提取的变量保存到变量管理器
-                                self.variable_manager.set_local_variables({var_name: value})
-                                self.log_message.emit(self.format_debug_message(f"提取变量成功: {var_name} = {value}", "info", step_index), "info", step_index)
-                                
-                                # 调试模式下打印详细的变量管理器状态
-                                if hasattr(self, 'debug_mode') and self.debug_mode:
-                                    self.log_message.emit(self.format_debug_message(f"变量管理器状态 - 局部变量: {self.variable_manager.local_variables}", "debug", step_index), "debug", step_index)
-                                    self.log_message.emit(self.format_debug_message(f"变量管理器状态 - 全局变量: {self.variable_manager.global_variables}", "debug", step_index), "debug", step_index)
-                                    self.log_message.emit(self.format_debug_message(f"变量 {var_name} 已保存到变量管理器，可在后续步骤中使用", "debug", step_index), "debug", step_index)
-                            else:
-                                self.log_message.emit(self.format_debug_message(f"提取变量失败: {var_name}，JSON路径 {json_path} 未找到数据", "warning", step_index), "warning", step_index)
-                                # 调试：检查响应数据结构
-                                self.log_message.emit(self.format_debug_message(f"响应数据结构: {response_data}", "debug", step_index), "debug", step_index)
-                                self.log_message.emit(self.format_debug_message(f"尝试提取路径 {json_path} 失败，检查响应数据格式", "debug", step_index), "debug", step_index)
-                        except Exception as e:
-                            self.log_message.emit(self.format_debug_message(f"提取变量异常: {var_name}，错误: {str(e)}", "error", step_index), "error", step_index)
-                else:
-                    self.log_message.emit(self.format_debug_message("无变量需要提取", "debug", step_index), "debug", step_index)
-            else:
-                # 请求失败
-                error_msg = response.get('error', '未知错误')
-                self.log_message.emit(self.format_debug_message(f"前置处理器HTTP请求失败: {error_msg}", "error", step_index), "error", step_index)
-                
-        except Exception as e:
-            self.log_message.emit(self.format_debug_message(f"执行HTTP请求工具失败: {str(e)}", "error", step_index), "error", step_index)
-        
-        self.log_message.emit(self.format_debug_message("HTTP请求工具执行结束", "debug", step_index), "debug", step_index)
-
-    def execute_sql_tool(self, config, step_index=-1):
-        """执行SQL工具"""
-        self.log_message.emit(self.format_debug_message(f"开始执行SQL工具，配置: {config}", "debug", step_index), "debug", step_index)
-        
-        try:
-            # 获取SQL工具配置
-            name = config.get('name', 'SQL工具')
-            database_config = config.get('database', {})
-            sql = config.get('sql', '')
-            output_fields = config.get('output_fields', [])
-            
-            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - 名称: {name}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - 数据库: {database_config}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - SQL语句: {sql}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"SQL工具配置 - 输出字段: {output_fields}", "debug", step_index), "debug", step_index)
-            
-            if not sql:
-                self.log_message.emit(self.format_debug_message("SQL工具配置错误: SQL语句不能为空", "error", step_index), "error", step_index)
-                return
-            
-            if not database_config:
-                self.log_message.emit(self.format_debug_message("SQL工具配置错误: 数据库配置不能为空", "error", step_index), "error", step_index)
-                return
-            
-            # 获取变量池
-            all_variables = {}
-            all_variables.update(self.variable_manager.global_variables)
-            all_variables.update(self.variable_manager.local_variables)
-            
-            self.log_message.emit(self.format_debug_message(f"变量替换前 - SQL: {sql}", "debug", step_index), "debug", step_index)
-            self.log_message.emit(self.format_debug_message(f"可用变量: {all_variables}", "debug", step_index), "debug", step_index)
-            
-            # 预处理SQL：移除变量周围的引号，并将${variable}格式转换为{variable}格式
-            import re
-            def convert_and_remove_quotes(match):
-                var_name = match.group(1)  # 变量名
-                return f"{{{var_name}}}"  # 返回{variable}格式的变量占位符
-            
-            # 移除变量周围的单引号并转换格式
-            processed_sql = re.sub(r"'\$\{(\w+)\}'", convert_and_remove_quotes, sql)
-            self.log_message.emit(self.format_debug_message(f"预处理后 - SQL: {processed_sql}", "debug", step_index), "debug", step_index)
-            
-            # 记录SQL执行日志
-            self.log_message.emit(self.format_debug_message(f"前置处理器SQL执行: {processed_sql}", "info", step_index), "info", step_index)
-            
-            # 执行SQL查询
-            from src.utils.sql_worker import SQLWorker
-            from PyQt5.QtCore import QEventLoop
-            
-            # 创建事件循环等待SQL执行完成
-            loop = QEventLoop()
-            result = {'success': False, 'error': '未执行'}
-            
-            def on_finished(query_name, message, result_data):
-                nonlocal result
-                result = {'success': True, 'message': message, 'data': result_data}
-                loop.quit()
-            
-            def on_error(query_name, error_message):
-                nonlocal result
-                result = {'success': False, 'error': error_message}
-                loop.quit()
-            
-            # 创建SQLWorker并执行
-            sql_worker = SQLWorker("pre_processing_sql", database_config, processed_sql, all_variables)
-            sql_worker.finished.connect(on_finished)
-            sql_worker.error.connect(on_error)
-            sql_worker.start()
-            
-            # 等待信号完成
-            loop.exec_()
-            
-            # 断开信号连接
-            sql_worker.finished.disconnect(on_finished)
-            sql_worker.error.disconnect(on_error)
-            
-            if result['success']:
-                # SQL执行成功
-                data = result.get('data', [])
-                self.log_message.emit(self.format_debug_message(f"前置处理器SQL执行成功: 返回 {len(data)} 行数据", "info", step_index), "info", step_index)
-                
-                # 提取变量到变量管理器
-                if output_fields and data:
-                    self.log_message.emit(self.format_debug_message(f"开始提取变量，输出字段数量: {len(output_fields)}", "debug", step_index), "debug", step_index)
-                    
-                    # 获取第一行数据（假设只取第一行结果）
-                    first_row = data[0] if data else {}
-                    
-                    for field_config in output_fields:
-                        field_name = field_config.get('field', '')
-                        if field_name and field_name in first_row:
-                            value = first_row[field_name]
-                            # 将提取的变量保存到变量管理器
-                            self.variable_manager.set_local_variables({field_name: value})
-                            self.log_message.emit(self.format_debug_message(f"提取变量成功: {field_name} = {value}", "info", step_index), "info", step_index)
-                        else:
-                            self.log_message.emit(self.format_debug_message(f"提取变量失败: 字段 {field_name} 不存在或为空", "warning", step_index), "warning", step_index)
-                else:
-                    self.log_message.emit(self.format_debug_message("无输出字段或查询结果为空，跳过变量提取", "debug", step_index), "debug", step_index)
-            else:
-                # SQL执行失败
-                error_msg = result.get('error', '未知错误')
-                self.log_message.emit(self.format_debug_message(f"前置处理器SQL执行失败: {error_msg}", "error", step_index), "error", step_index)
-                
-        except Exception as e:
-            self.log_message.emit(self.format_debug_message(f"执行SQL工具失败: {str(e)}", "error", step_index), "error", step_index)
-        
-        self.log_message.emit(self.format_debug_message("SQL工具执行结束", "debug", step_index), "debug", step_index)
-
-    def execute_post_processing(self, post_processing, step_result, step_index):
-        """执行后置处理"""
-        if not post_processing:
-            return
-            
-        # 计算后置处理工具数量
-        tool_count = 0
-        total_extractors = 0
-        
-        # 遍历所有后置处理工具
-        for tool_id, tool_config in post_processing.items():
-            if isinstance(tool_config, dict):
-                tool_type = tool_config.get('type')
-                enabled = tool_config.get('enabled', True)
-                
-                # 只统计启用的工具
-                if enabled:
-                    tool_count += 1
-                    
-                    # 如果是参数提取工具，统计其中的提取器数量
-                    if tool_type == 'parameter_extraction':
-                        config = tool_config.get('config', {})
-                        extractions = config.get('extractions', [])
-                        total_extractors += len(extractions)
-        
-        self.log_message.emit(self.format_debug_message("开始执行后置处理", "debug", step_index), "debug", step_index)
-        self.log_message.emit(self.format_debug_message(f"后置处理工具数量: {tool_count}", "debug", step_index), "debug", step_index)
-        self.log_message.emit(self.format_debug_message(f"参数提取器总数: {total_extractors}", "debug", step_index), "debug", step_index)
-        
-        # 执行后置处理工具
-        extracted_count = 0
-        for tool_id, tool_config in post_processing.items():
-            if not isinstance(tool_config, dict):
-                continue
-                
-            tool_type = tool_config.get('type')
-            enabled = tool_config.get('enabled', True)
-            
-            # 只执行启用的工具
-            if not enabled:
-                continue
-                
-            # 执行参数提取工具
-            if tool_type == 'parameter_extraction':
-                config = tool_config.get('config', {})
-                extractions = config.get('extractions', [])
-                
-                # 优先使用解密后的响应体（对于加解密请求）
-                decrypted_body = step_result.get('decrypted_body', '')
-                if decrypted_body:
-                    # 如果有解密后的响应体，优先使用它
-                    try:
-                        import json
-                        response_data = json.loads(decrypted_body)
-                    except:
-                        # 如果解析失败，使用原始响应数据
-                        response_data = step_result.get('response_data', {})
-                else:
-                    # 如果没有解密后的响应体，使用原始响应数据
-                    response_data = step_result.get('response_data', {})
-                
-                # 执行所有的参数提取
-                for extraction in extractions:
-                    try:
-                        variable_name = extraction.get('variable_name')
-                        json_path = extraction.get('json_path')
-                        
-                        if not variable_name or not json_path:
-                            continue
-                            
-                        # 从响应中提取数据
-                        value = self.simple_json_path_extract(response_data, json_path)
-                        self.variable_manager.set_local_variables({variable_name: value})
-                        self.log_message.emit(self.format_debug_message(f"提取变量 {variable_name} = {value}", "info", step_index), "info", step_index)
-                        extracted_count += 1
-                    except Exception as e:
-                        self.log_message.emit(self.format_debug_message(f"提取变量失败: {str(e)}", "error", step_index), "error", step_index)
-        
-        if extracted_count > 0:
-            self.log_message.emit(self.format_debug_message(f"后置处理完成，共提取 {extracted_count} 个变量", "info", step_index), "info", step_index)
-
-    def extract_value(self, response_data, extractor):
-        """从响应数据中提取值"""
-        # 简化实现，实际应该支持JSONPath、XPath等
-        if isinstance(extractor, str):
-            # 直接使用字段名
-            return response_data.get(extractor)
-        elif isinstance(extractor, dict):
-            # 支持更复杂的提取规则
-            extract_type = extractor.get('type', 'json_path')
-            if extract_type == 'json_path':
-                # 使用JSONPath提取
-                path = extractor.get('path', '')
-                # 简化实现，实际应该使用jsonpath库
-                return self.simple_json_path_extract(response_data, path)
-        return None
-
-    def simple_json_path_extract(self, data, path):
-        """简单的JSON路径提取"""
-        # 简化实现，只支持简单的点分隔路径
-        if not path:
-            return data
-
-        keys = path.split('.')
-        current = data
-        for key in keys:
-            if isinstance(current, dict) and key in current:
-                current = current[key]
-            else:
-                return None
-        return current
-
-    def execute_api_worker_request(self, api_worker):
-        """执行ApiWorker请求（使用信号机制）"""
-        try:
-            self.log_message.emit(self.format_debug_message("开始执行ApiWorker请求", "debug", -1), "debug", -1)
-            
-            # 创建事件循环来处理异步信号
-            loop = QEventLoop()
-            result = None
-            
-            # 连接信号
-            def on_finished(response):
-                nonlocal result
-                # ApiWorker.finished信号发射的是包含status_code、headers、body等字段的字典
-                if isinstance(response, dict):
-                    result = response
-                else:
-                    # 如果响应不是字典格式，转换为错误格式
-                    result = {
-                        'success': False,
-                        'error': f'ApiWorker返回了无效的响应格式: {type(response)}'
-                    }
-                loop.quit()
-            
-            def on_error(error_msg):
-                nonlocal result
-                result = {'success': False, 'error': error_msg}
-                loop.quit()
-            
-            api_worker.finished.connect(on_finished)
-            api_worker.error.connect(on_error)
-            
-            # 启动工作线程
-            api_worker.start()
-            
-            # 等待信号完成
-            loop.exec_()
-            
-            # 断开信号连接
-            api_worker.finished.disconnect(on_finished)
-            api_worker.error.disconnect(on_error)
-            
-            self.log_message.emit(self.format_debug_message(f"ApiWorker请求执行完成，结果: {result}", "debug", -1), "debug", -1)
-            return result
-            
-        except Exception as e:
-            self.log_message.emit(self.format_debug_message(f"ApiWorker请求执行异常: {str(e)}", "error", -1), "error", -1)
-            return {
-                'success': False,
-                'error': str(e)
-            }
-
-    def execute_api_request(self, step, step_index):
-        """执行接口请求"""
-        try:
-            # 获取接口模板数据
-            api_service = ApiTemplateService()
-            api_template_id = step.get('api_template_id')
-            
-            api_template = api_service.get_template_by_id(api_template_id)
-            if not api_template:
-                self.log_message.emit(self.format_debug_message(f"接口模板不存在: {api_template_id}", "error", step_index), "error", step_index)
-                return {
-                    'success': False,
-                    'error': f'接口模板不存在: {api_template_id}',
-                    'status': 'error'
-                }
-
-            # 准备请求数据
-            request_data = self.prepare_request_data(api_template, step.get('variables', {}), step_index)
-
-            # 记录请求日志
-            self.log_message.emit(self.format_debug_message(f"发送请求: {request_data['method']} {request_data['url']}", "info", step_index), "info", step_index)
-            self.log_message.emit(self.format_debug_message(f"请求体: {json.dumps(request_data['body'], ensure_ascii=False, indent=2)}", "debug", step_index), "debug", step_index)
-            
-            try:
-                # 构建符合 execute_request 方法要求的 API 数据格式
-                api_data = {
-                    'method': request_data['method'],
-                    'url': request_data['url'],
-                    'headers': request_data['headers'],
-                    'params': request_data['params'],
-                    'body': request_data['body']
-                }
-                
-                # 检查是否启用加解密功能
-                enable_encryption = step.get('enable_encryption', False)
-                
-                # 简化逻辑：步骤卡片开启加解密时，直接使用全局的加解密配置
-                # 步骤卡片只控制是否启用加解密，具体的加解密URL使用测试用例的全局配置
-                global_enable_encryption = self.case_data.get('enable_encryption', False)
-                global_encrypt_url = self.case_data.get('encrypt_url', '')
-                global_decrypt_url = self.case_data.get('decrypt_url', '')
-                
-                # 判断是否使用加解密：步骤开启且全局配置完整
-                use_encryption = enable_encryption and global_enable_encryption and global_encrypt_url and global_decrypt_url
-                
-                if use_encryption:
-                    # 步骤启用加解密且全局配置完整
-                    self.log_message.emit(self.format_debug_message("步骤启用加解密功能，使用RequestEngine处理", "info", step_index), "info", step_index)
-                else:
-                    # 不使用加解密的情况
-                    if enable_encryption and not (global_encrypt_url and global_decrypt_url):
-                        # 步骤启用但全局配置不完整
-                        self.log_message.emit(self.format_debug_message("步骤启用加解密但全局配置不完整，使用普通请求", "warning", step_index), "warning", step_index)
-                    elif enable_encryption and not global_enable_encryption:
-                        # 步骤启用但全局未启用
-                        self.log_message.emit(self.format_debug_message("步骤启用加解密但全局未启用，使用普通请求", "warning", step_index), "warning", step_index)
-                    else:
-                        # 步骤关闭加解密
-                        self.log_message.emit(self.format_debug_message("步骤关闭加解密功能，使用普通请求", "info", step_index), "info", step_index)
-                
-                # 最终判断是否使用加解密
-                if use_encryption:
-                    # 使用RequestEngine的加解密功能
-                    
-                    # 准备请求数据（用于调试信息）
-                    request_data = self.prepare_request_data(api_template, step.get('variables', {}), step_index)
-                    
-                    # 使用RequestEngine的加解密方法，使用全局的加解密URL配置
-                    response = self.request_engine.execute_request_with_encryption(
-                        api_data=api_data,
-                        encrypt_url=global_encrypt_url,
-                        decrypt_url=global_decrypt_url,
-                        variables=step.get('variables', {})
-                    )
-                else:
-                    # 使用普通的RequestEngine
-                    response = self.request_engine.execute_request(api_data, step.get('variables', {}))
-                
-                if response['success']:                    
-                    # 检查是否为加解密请求，优先打印解密后的响应体
-                    if response.get('decrypted_body'):
-                        try:
-                            # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串
-                            decrypted_json = json.loads(response.get('decrypted_body', ''))
-                            self.log_message.emit(self.format_debug_message(f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}", "debug", step_index), "debug", step_index)
-                        except:
-                            # 如果解析失败，直接打印原始字符串
-                            self.log_message.emit(self.format_debug_message(f"解密后的响应体:{response.get('decrypted_body', '')}", "debug", step_index), "debug", step_index)
-                    else:
-                        # 非加解密请求，尝试将响应体格式化为JSON
-                        response_text = response.get('response_text', response.get('text', ''))
-                        try:
-                            # 尝试解析为JSON并重新格式化
-                            response_json = json.loads(response_text)
-                            self.log_message.emit(self.format_debug_message(f"响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}", "debug", step_index), "debug", step_index)
-                        except:
-                            # 如果解析失败，直接打印原始文本
-                            self.log_message.emit(self.format_debug_message(f"响应体: {response_text}", "debug", step_index), "debug", step_index)        
-                else:
-                    # 记录失败请求的详细信息到日志弹窗
-                    self.log_message.emit(self.format_debug_message(f"请求失败: {json.dumps({'error': response.get('error', '未知错误'), 'status_code': response.get('status_code', 0)}, ensure_ascii=False, indent=2)}", "error", step_index), "error", step_index)
-                    
-                    # 检查是否为加解密请求，优先打印解密后的响应体
-                    if response.get('decrypted_body'):
-                        try:
-                            # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串
-                            decrypted_json = json.loads(response.get('decrypted_body', ''))
-                            self.log_message.emit(self.format_debug_message(f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}", "debug", step_index), "debug", step_index)
-                        except:
-                            # 如果解析失败，直接打印原始字符串
-                            self.log_message.emit(self.format_debug_message(f"解密后的响应体:{response.get('decrypted_body', '')}", "debug", step_index), "debug", step_index)
-                    else:
-                        # 非加解密请求，尝试将响应体格式化为JSON
-                        response_text = response.get('response_text', response.get('text', ''))
-                        try:
-                            # 尝试解析为JSON并重新格式化
-                            response_json = json.loads(response_text)
-                            self.log_message.emit(self.format_debug_message(f"失败响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}", "debug", step_index), "debug", step_index)
-                        except:
-                            # 如果解析失败，直接打印原始文本
-                            self.log_message.emit(self.format_debug_message(f"失败响应体: {response_text}", "debug", step_index), "debug", step_index)
-
-                return response
-
-            except Exception as e:
-                self.log_message.emit(self.format_debug_message(f"HTTP请求异常: {str(e)}", "error", step_index), "error", step_index)
-                import traceback
-                self.log_message.emit(self.format_debug_message(f"异常堆栈: {traceback.format_exc()}", "error", step_index), "error", step_index)
-                return {
-                    'success': False,
-                    'error': str(e),
-                    'status': 'error'
-                }
-        except Exception as e:
-            self.log_message.emit(self.format_debug_message(f"执行接口请求外层异常: {str(e)}", "error", step_index), "error", step_index)
-            import traceback
-            self.log_message.emit(self.format_debug_message(f"外层异常堆栈: {traceback.format_exc()}", "error", step_index), "error", step_index)
-            return {
-                'success': False,
-                'error': str(e),
-                'status': 'error'
-            }
-
-    def prepare_request_data(self, api_template, step_variables, step_index=None):
-        """准备请求数据"""
-        # 合并变量
-        all_variables = {}
-        all_variables.update(self.variable_manager.global_variables)
-        all_variables.update(self.variable_manager.local_variables)
-        all_variables.update(step_variables)
-
-        # 替换变量
-        url = self.variable_manager.replace_variables(api_template['url_path'], all_variables)
-        headers = self.variable_manager.replace_variables_in_dict(api_template.get('headers', {}), all_variables)
-        params = self.variable_manager.replace_variables_in_dict(api_template.get('params', {}), all_variables)
-        body = self.variable_manager.replace_variables_in_dict(api_template.get('body', {}), all_variables)
-
-        # 构建完整URL
-        base_url = self.environment_config.get('base_url', '')
-        if base_url:
-            full_url = base_url.rstrip('/') + '/' + url.lstrip('/')
-        else:
-            full_url = url
-
-        result = {
-            'method': api_template['method'],
-            'url': full_url,
-            'headers': headers,
-            'params': params,
-            'body': body,
-            'timeout': api_template.get('timeout', 30)
-        }
-        
-        return result
-
+    
     def extract_field_value(self, step_result, field_name):
         """从步骤结果中提取指定字段的值"""
         # 优先使用解密后的响应体（对于加解密请求）
@@ -952,654 +242,6 @@ class CaseExecutionThread(QThread):
         else:
             # 默认返回响应文本
             return response_text
-
-    def extract_field_value_from_response(self, step_result, field_path):
-        """从响应体中提取字段路径的实际值，支持复杂路径如 name[0].libai"""
-        # 如果字段路径为空，返回空字符串
-        if not field_path:
-            return ''
-        
-        # 检查字段路径是否为变量格式（如${msg}），如果是则从变量管理器中获取
-        if field_path.startswith('${') and field_path.endswith('}'):
-            var_name = field_path[2:-1]  # 提取变量名
-            
-            # 首先尝试从变量管理器中获取变量
-            if hasattr(self, 'variable_manager'):
-                # 尝试从局部变量中获取
-                if var_name in self.variable_manager.local_variables:
-                    var_value = self.variable_manager.local_variables[var_name]
-                    return str(var_value) if var_value is not None else None
-                # 尝试从全局变量中获取
-                elif var_name in self.variable_manager.global_variables:
-                    var_value = self.variable_manager.global_variables[var_name]
-                    return str(var_value) if var_value is not None else None
-            
-            # 如果变量管理器中没找到，再从步骤结果中获取
-            if step_result:
-                var_value = step_result.get(var_name, None)
-                return str(var_value) if var_value is not None else None
-            
-            return None  # 变量不存在
-        
-        # 优先使用解密后的响应体（对于加解密请求）
-        decrypted_body = step_result.get('decrypted_body', '')
-        
-        if decrypted_body:
-            # 如果有解密后的响应体，优先使用它
-            try:
-                import json
-                response_data = json.loads(decrypted_body)
-                response_text = decrypted_body
-            except Exception as e:
-                # 如果解析失败，使用原始响应数据
-                response_data = step_result.get('response_data', step_result.get('body', {}))
-                response_text = step_result.get('response_text', step_result.get('text', ''))
-        else:
-            # 如果没有解密后的响应体，使用原始响应数据
-            response_data = step_result.get('response_data', step_result.get('body', {}))
-            response_text = step_result.get('response_text', step_result.get('text', ''))
-        
-        # 如果字段路径是特殊字段
-        if field_path in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
-            return self.extract_field_value(step_result, field_path)
-        
-        # 如果字段路径以header.开头，提取响应头
-        if field_path.startswith('header.'):
-            return self.extract_field_value(step_result, field_path)
-        
-        # 如果字段路径以json.开头，提取JSON路径
-        if field_path.startswith('json.'):
-            return self.extract_field_value(step_result, field_path)
-        
-        # 处理复杂路径：支持数组索引和对象属性
-        try:
-            import json
-            # 如果response_data是字符串，尝试解析为JSON
-            if isinstance(response_data, str):
-                data = json.loads(response_data)
-            else:
-                data = response_data
-            
-            # 解析字段路径，支持数组索引 [0] 和对象属性 .name
-            path_parts = []
-            current_part = ''
-            
-            i = 0
-            while i < len(field_path):
-                char = field_path[i]
-                
-                if char == '[':
-                    # 数组索引开始
-                    if current_part:
-                        path_parts.append(current_part)
-                        current_part = ''
-                    
-                    # 找到数组索引结束位置
-                    j = i + 1
-                    while j < len(field_path) and field_path[j] != ']':
-                        j += 1
-                    
-                    if j < len(field_path):
-                        index_str = field_path[i+1:j]
-                        if index_str.isdigit():
-                            path_parts.append(int(index_str))
-                        i = j  # 跳过']'
-                elif char == '.':
-                    # 对象属性分隔符
-                    if current_part:
-                        path_parts.append(current_part)
-                        current_part = ''
-                else:
-                    current_part += char
-                
-                i += 1
-            
-            # 添加最后一个部分
-            if current_part:
-                path_parts.append(current_part)
-            
-            # 根据路径提取值
-            current = data
-            for i, part in enumerate(path_parts):
-                
-                if isinstance(current, dict) and part in current:
-                    current = current[part]
-                elif isinstance(current, list) and isinstance(part, int) and 0 <= part < len(current):
-                    current = current[part]
-                else:
-                    return None  # 路径不存在时返回None而不是空字符串
-            
-            # 如果最终值是None，直接返回None而不是'None'
-            if current is None:
-                return None
-            
-            return str(current)
-            
-        except Exception as e:
-            # 如果提取失败，返回空字符串
-            return ''
-
-    def replace_variables(self, text, step_result):
-        """替换文本中的变量，支持${变量名}格式"""
-        if not text or '${' not in text:
-            return text
-        
-        import re
-        
-        # 调试：记录替换前的文本
-        if hasattr(self, 'log_message'):
-            self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 替换前文本 = {text}", "debug", -1), "debug", -1)
-        
-        # 匹配${变量名}格式
-        pattern = r'\$\{([^}]+)\}'
-        matches = re.findall(pattern, text)
-        
-        # 调试：记录匹配到的变量
-        if hasattr(self, 'log_message'):
-            self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 匹配到的变量 = {matches}", "debug", -1), "debug", -1)
-        
-        for var_name in matches:
-            var_value = ''
-            
-            # 首先尝试从变量管理器中获取变量（前置处理器提取的变量）
-            if hasattr(self, 'variable_manager'):
-                # 调试：检查变量管理器状态
-                self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 变量管理器状态 - 局部变量: {self.variable_manager.local_variables}", "debug", -1), "debug", -1)
-                self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 变量管理器状态 - 全局变量: {self.variable_manager.global_variables}", "debug", -1), "debug", -1)
-                
-                # 尝试从局部变量中获取
-                if var_name in self.variable_manager.local_variables:
-                    var_value = self.variable_manager.local_variables[var_name]
-                    self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 从局部变量获取 {var_name} = {var_value}", "debug", -1), "debug", -1)
-                # 尝试从全局变量中获取
-                elif var_name in self.variable_manager.global_variables:
-                    var_value = self.variable_manager.global_variables[var_name]
-                    self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 从全局变量获取 {var_name} = {var_value}", "debug", -1), "debug", -1)
-            
-            # 如果变量管理器中没找到，再从步骤结果中获取
-            if not var_value and step_result:
-                var_value = step_result.get(var_name, '')
-                self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 从步骤结果获取 {var_name} = {var_value}", "debug", -1), "debug", -1)
-                
-                # 如果变量名是特殊字段，使用extract_field_value提取
-                if var_name in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
-                    var_value = self.extract_field_value(step_result, var_name)
-                elif var_name.startswith('header.'):
-                    var_value = self.extract_field_value(step_result, var_name)
-                elif var_name.startswith('json.'):
-                    var_value = self.extract_field_value(step_result, var_name)
-                else:
-                    # 尝试从响应数据中提取
-                    var_value = self.extract_field_value_from_response(step_result, var_name)
-            
-            # 记录变量替换的调试信息
-            if hasattr(self, 'log_message'):
-                self.log_message.emit(self.format_debug_message(f"变量替换: ${{{var_name}}} -> {var_value}", "debug", -1), "debug", -1)
-            
-            # 替换变量
-            text = text.replace(f'${{{var_name}}}', str(var_value))
-        
-        # 调试：记录替换后的文本
-        if hasattr(self, 'log_message'):
-            self.log_message.emit(self.format_debug_message(f"[DEBUG] replace_variables: 替换后文本 = {text}", "debug", -1), "debug", -1)
-        
-        return text
-
-    def execute_comparison(self, actual, expected, symbol):
-        """执行比较操作，支持多种比较符号"""
-        # 处理期望值为None的情况：与None比较，而不是空字符串
-        if expected is None:
-            expected_str = None
-        else:
-            expected_str = str(expected)
-        
-        # 处理实际值为None的情况
-        if actual is None:
-            actual_str = None
-        else:
-            actual_str = str(actual)
-        
-        # 根据符号执行比较
-        if symbol == 'equal':
-            # 特殊处理：当两个值都是None时，直接返回True
-            if actual is None and expected is None:
-                return True
-            # 当只有一个值是None时，返回False
-            if actual is None or expected is None:
-                return False
-            return actual_str == expected_str
-        elif symbol == 'not_equal':
-            # 特殊处理：当两个值都是None时，返回False
-            if actual is None and expected is None:
-                return False
-            # 当只有一个值是None时，返回True
-            if actual is None or expected is None:
-                return True
-            return actual_str != expected_str
-        elif symbol == 'contains':
-            # 包含比较：期望值不能为None，实际值不能为None
-            if expected_str is None or actual_str is None:
-                return False
-            return expected_str in actual_str
-        elif symbol == 'not_contains':
-            # 不包含比较：期望值不能为None，实际值不能为None
-            if expected_str is None or actual_str is None:
-                return False
-            return expected_str not in actual_str
-        elif symbol == 'greater':
-            try:
-                # 数值比较：期望值和实际值都不能为None
-                if expected_str is None or actual_str is None:
-                    return False
-                return float(actual_str) > float(expected_str)
-            except (ValueError, TypeError):
-                return False
-        elif symbol == 'less':
-            try:
-                # 数值比较：期望值和实际值都不能为None
-                if expected_str is None or actual_str is None:
-                    return False
-                return float(actual_str) < float(expected_str)
-            except (ValueError, TypeError):
-                return False
-        elif symbol == 'greater_equal':
-            try:
-                # 数值比较：期望值和实际值都不能为None
-                if expected_str is None or actual_str is None:
-                    return False
-                return float(actual_str) >= float(expected_str)
-            except (ValueError, TypeError):
-                return False
-        elif symbol == 'less_equal':
-            try:
-                # 数值比较：期望值和实际值都不能为None
-                if expected_str is None or actual_str is None:
-                    return False
-                return float(actual_str) <= float(expected_str)
-            except (ValueError, TypeError):
-                return False
-        else:
-            # 默认使用相等比较
-            return actual_str == expected_str
-
-    def get_comparison_symbol(self, symbol):
-        """获取比较符号的显示文本"""
-        symbol_map = {
-            'equal': '==',
-            'not_equal': '!=',
-            'contains': '包含',
-            'not_contains': '不包含',
-            'greater': '>',
-            'less': '<',
-            'greater_equal': '≥',
-            'less_equal': '≤'
-        }
-        return symbol_map.get(symbol, '==')
-
-    def execute_assertions(self, assertions, step_result, step_index):
-        """执行断言"""
-        if not assertions:
-            self.log_message.emit(self.format_debug_message("断言: 无配置", "debug", step_index), "debug", step_index)
-            return {}
-            
-        self.log_message.emit(self.format_debug_message("开始执行断言", "debug", step_index), "debug", step_index)
-        self.log_message.emit(self.format_debug_message(f"断言数量: {len(assertions)}", "debug", step_index), "debug", step_index)
-        
-        results = {}
-        
-        # 兼容不同的响应数据结构
-        # 1. 从execute_api_request返回的数据结构
-        response_data = step_result.get('response_data', step_result.get('body', {}))
-        response_text = step_result.get('response_text', step_result.get('text', ''))
-        response_headers = step_result.get('response_headers', step_result.get('headers', {}))
-        response_time = step_result.get('response_time', step_result.get('elapsed', 0))
-        status_code = step_result.get('status_code', 0)
-        
-        # 优先使用解密后的响应体（对于加解密请求）
-        decrypted_body = step_result.get('decrypted_body', '')
-        if decrypted_body:
-            # 如果有解密后的响应体，优先使用它
-            response_text = decrypted_body
-            # 尝试将解密后的响应体解析为JSON
-            try:
-                import json
-                response_data = json.loads(decrypted_body)
-            except:
-                # 如果解析失败，保持原样
-                pass
-        elif isinstance(response_data, str) and response_data.strip():
-            # 如果没有解密后的响应体，但response_data是字符串，尝试解析为JSON
-            try:
-                import json
-                response_data = json.loads(response_data)
-            except:
-                # 如果解析失败，保持原样
-                pass
-
-        for assertion_name, assertion_config in assertions.items():
-            try:
-                # 兼容新旧两种断言配置格式
-                # 新格式: {'type': 'assertion_type', 'config': {...}}
-                # 旧格式: {'name': '断言名称', 'assertions': [...]}
-                
-                # 判断配置格式
-                if 'type' in assertion_config:
-                    # 新格式
-                    assertion_type = assertion_config.get('type')
-                    config = assertion_config.get('config', {})
-                    
-                    # 检查断言是否启用
-                    if not config.get('enabled', True):
-                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 已禁用，跳过执行", "debug", step_index), "debug", step_index)
-                        results[assertion_name] = True  # 禁用的断言视为通过
-                        continue
-                else:
-                    # 旧格式 - 转换为新格式
-                    config = assertion_config
-                    
-                    # 从断言配置中推断类型
-                    assertions_list = config.get('assertions', [])
-                    if assertions_list:
-                        first_assertion = assertions_list[0]
-                        symbol = first_assertion.get('symbol', 'equal')
-                        
-                        # 符号到类型的映射
-                        symbol_to_type_map = {
-                            'equal': 'equal',
-                            'not_equal': 'not_equal',
-                            'contains': 'contains', 
-                            'not_contains': 'not_contains',
-                            'greater': 'greater',
-                            'less': 'less',
-                            'greater_equal': 'greater_equal',
-                            'less_equal': 'less_equal'
-                        }
-                        
-                        assertion_type = symbol_to_type_map.get(symbol, 'equal')
-                        
-                        # 为旧格式设置默认配置
-                        if assertion_type == 'response_time' and assertions_list:
-                            config['time_comparison'] = symbol
-                            config['time_value'] = float(assertions_list[0].get('expected')) if assertions_list[0].get('expected') else None  # 不设置默认值，保持None
-                        elif assertions_list:
-                            config['expected'] = assertions_list[0].get('expected')  # 不设置默认值，保持None
-                            config['ignore_case'] = False
-                    else:
-                        assertion_type = 'equal'  # 默认类型                
-                if assertion_type == 'equal':
-                    expected = config.get('expected')  # 不设置默认值，保持None
-                    
-                    # 变量替换：支持${变量名}格式（如果期望值不为None）
-                    if expected is not None:
-                        expected = self.replace_variables(expected, step_result)
-                    
-                    actual = response_text
-                    ignore_case = config.get('ignore_case', False)
-                    
-                    if ignore_case:
-                        results[assertion_name] = (expected or '').lower() == (actual or '').lower()
-                    else:
-                        results[assertion_name] = expected == actual
-                    
-                    log_level = "info" if results[assertion_name] else "error"
-                    expected_display = expected if expected is not None else "None"
-                    actual_display = actual if actual is not None else "None"
-                    self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'==' if results[assertion_name] else '!='}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'not_equal':
-                    expected = config.get('expected')  # 不设置默认值，保持None
-                    
-                    # 变量替换：支持${变量名}格式（如果期望值不为None）
-                    if expected is not None:
-                        expected = self.replace_variables(expected, step_result)
-                    
-                    actual = response_text
-                    ignore_case = config.get('ignore_case', False)
-                    
-                    if ignore_case:
-                        results[assertion_name] = (expected or '').lower() != (actual or '').lower()
-                    else:
-                        results[assertion_name] = expected != actual
-                    
-                    log_level = "info" if results[assertion_name] else "error"
-                    expected_display = expected if expected is not None else "None"
-                    actual_display = actual if actual is not None else "None"
-                    self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: 期望值='{expected_display}' 实际值='{actual_display}' 比较结果:{'!=' if results[assertion_name] else '=='}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'contains':
-                    expected = config.get('expected')  # 不设置默认值，保持None
-                    
-                    # 变量替换：支持${变量名}格式（如果期望值不为None）
-                    if expected is not None:
-                        expected = self.replace_variables(expected, step_result)
-                    
-                    actual = response_text
-                    ignore_case = config.get('ignore_case', False)
-                    
-                    if ignore_case:
-                        results[assertion_name] = (expected or '') in (actual or '').lower()
-                    else:
-                        results[assertion_name] = (expected or '') in (actual or '')
-                    
-                    log_level = "info" if results[assertion_name] else "error"
-                    expected_display = expected if expected is not None else "None"
-                    actual_display = actual if actual is not None else "None"
-                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 期望包含='{expected_display}' 实际响应='{actual_display}' 结果:{results[assertion_name]}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'not_contains':
-                    expected = config.get('expected')  # 不设置默认值，保持None
-                    
-                    # 变量替换：支持${变量名}格式（如果期望值不为None）
-                    if expected is not None:
-                        expected = self.replace_variables(expected, step_result)
-                    
-                    actual = response_text
-                    ignore_case = config.get('ignore_case', False)
-                    
-                    if ignore_case:
-                        results[assertion_name] = (expected or '') not in (actual or '').lower()
-                    else:
-                        results[assertion_name] = (expected or '') not in (actual or '')
-                    
-                    log_level = "info" if results[assertion_name] else "error"
-                    expected_display = expected if expected is not None else "None"
-                    actual_display = actual if actual is not None else "None"
-                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 期望不包含='{expected_display}' 实际响应='{actual_display}' 结果:{results[assertion_name]}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'regex':
-                    pattern = config.get('regex', '')
-                    actual = response_text
-                    ignore_case = config.get('ignore_case', False)
-                    
-                    import re
-                    flags = re.IGNORECASE if ignore_case else 0
-                    try:
-                        match = re.search(pattern, actual, flags)
-                        results[assertion_name] = match is not None
-                    except Exception as e:
-                        results[assertion_name] = False
-                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 正则表达式错误: {str(e)}", "error", step_index), "error", step_index)
-                    
-                    log_level = "info" if results[assertion_name] else "error"
-                    self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 正则匹配 '{pattern}' -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'status_code':
-                    expected = config.get('expected')  # 不设置默认值，保持None
-                    
-                    # 变量替换：支持${变量名}格式（如果期望值不为None）
-                    if expected is not None:
-                        expected = self.replace_variables(expected, step_result)
-                    
-                    actual = status_code
-                    results[assertion_name] = str(expected) == str(actual)
-                    log_level = "info" if results[assertion_name] else "error"
-                    expected_display = expected if expected is not None else "None"
-                    actual_display = actual if actual is not None else "None"
-                    self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: 状态码 {actual_display} {'==' if results[assertion_name] else '!='} {expected_display}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'json_path':
-                    path = config.get('path', '')
-                    expected = config.get('expected')  # 不设置默认值，保持None
-                    
-                    # 变量替换：支持${变量名}格式（如果期望值不为None）
-                    if expected is not None:
-                        expected = self.replace_variables(expected, step_result)
-                    
-                    actual = self.simple_json_path_extract(response_data, path)
-                    results[assertion_name] = expected == actual
-                    log_level = "info" if results[assertion_name] else "error"
-                    expected_display = expected if expected is not None else "None"
-                    actual_display = actual if actual is not None else "None"
-                    self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: {path} = {actual_display} {'==' if expected == actual else '!='} {expected_display}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'response_time':
-                    comparison = config.get('time_comparison', 'less')
-                    expected_value = config.get('time_value')  # 不设置默认值，保持None
-                    actual = response_time
-                    
-                    # 如果期望值为None，则使用0作为默认值进行比较
-                    expected_value_num = expected_value if expected_value is not None else 0
-                    
-                    if comparison == 'less':
-                        results[assertion_name] = actual < expected_value_num
-                    elif comparison == 'equal':
-                        results[assertion_name] = abs(actual - expected_value_num) < 0.001  # 浮点数比较容差
-                    elif comparison == 'greater':
-                        results[assertion_name] = actual > expected_value_num
-                    
-                    log_level = "info" if results[assertion_name] else "error"
-                    comparison_symbol = {'less': '<', 'equal': '==', 'greater': '>'}[comparison]
-                    expected_display = expected_value if expected_value is not None else "None"
-                    self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: 响应时间 {actual:.3f}s {comparison_symbol} {expected_display}s -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'header_exists':
-                    header_name = config.get('header_name', '')
-                    actual_headers = {k.lower(): v for k, v in response_headers.items()}
-                    results[assertion_name] = header_name.lower() in actual_headers
-                    log_level = "info" if results[assertion_name] else "error"
-                    self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: 响应头包含 '{header_name}' -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'json_schema':
-                    # 这里需要实现JSON Schema验证
-                    # 由于JSON Schema验证比较复杂，这里先简单返回True
-                    # 实际项目中应该使用jsonschema库进行验证
-                    schema = config.get('schema', '')
-                    results[assertion_name] = True  # 暂时返回True
-                    log_level = "info" if results[assertion_name] else "error"
-                    self.log_message.emit(
-                        self.format_debug_message(f"断言 {assertion_name}: JSON Schema验证 -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
-
-                elif assertion_type == 'field_path_assertion':
-                    # 新的字段路径提取断言，支持字段路径提取和变量替换
-                    assertions_list = config.get('assertions', [])
-                    
-                    # 检查断言是否启用
-                    if not config.get('enabled', True):
-                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 已禁用，跳过执行", "debug", step_index), "debug", step_index)
-                        results[assertion_name] = True  # 禁用的断言视为通过
-                        continue
-                    
-                    # 执行所有断言行
-                    assertion_results = []
-                    for assertion in assertions_list:
-                        field = assertion.get('field', '')
-                        symbol = assertion.get('symbol', 'equal')
-                        expected = assertion.get('expected')  # 不设置默认值，保持None
-                        
-                        # 提取实际值：支持字段路径提取
-                        actual = self.extract_field_value_from_response(step_result, field)
-                                                
-                        # 变量替换：支持${变量名}格式（如果期望值不为None）
-                        if expected is not None:
-                            # 执行变量替换
-                            expected = self.replace_variables(expected, step_result)
-
-                        # 根据符号执行比较
-                        result = self.execute_comparison(actual, expected, symbol)
-                        assertion_results.append(result)
-                        
-                        # 记录日志
-                        log_level = "info" if result else "error"
-                        comparison_symbol = self.get_comparison_symbol(symbol)
-                        # 正确显示None值
-                        expected_display = expected if expected is not None else "None"
-                        actual_display = actual if actual is not None else "None"
-                        self.log_message.emit(
-                            self.format_debug_message(f"断言 {assertion_name}: {field} = {actual_display} {comparison_symbol} {expected_display} -> {result}", log_level, step_index), log_level, step_index)
-                    
-                    # 所有断言行都必须通过
-                    results[assertion_name] = all(assertion_results)
-                    
-                elif assertion_type in ['greater', 'less', 'greater_equal', 'less_equal']:
-                    # 数值比较断言
-                    expected = config.get('expected')  # 不设置默认值，保持None
-                    
-                    # 从断言配置中获取字段名，用于从响应数据中提取实际值
-                    assertions_list = config.get('assertions', [])
-                    field_name = 'response_time'  # 默认字段
-                    if assertions_list:
-                        first_assertion = assertions_list[0]
-                        field_name = first_assertion.get('field', 'response_time')
-                    
-                    # 根据字段名从响应数据中提取实际值
-                    actual = self.extract_field_value(step_result, field_name)
-                    
-                    # 转换为数值进行比较
-                    try:
-                        expected_num = float(expected) if expected is not None else 0
-                        actual_num = float(actual) if actual is not None else 0
-                        
-                        if assertion_type == 'greater':
-                            results[assertion_name] = actual_num > expected_num
-                        elif assertion_type == 'less':
-                            results[assertion_name] = actual_num < expected_num
-                        elif assertion_type == 'greater_equal':
-                            results[assertion_name] = actual_num >= expected_num
-                        elif assertion_type == 'less_equal':
-                            results[assertion_name] = actual_num <= expected_num
-                            
-                        log_level = "info" if results[assertion_name] else "error"
-                        comparison_symbol = {
-                            'greater': '>', 'less': '<', 
-                            'greater_equal': '≥', 'less_equal': '≤'
-                        }[assertion_type]
-                        expected_display = expected if expected is not None else "None"
-                        actual_display = actual if actual is not None else "None"
-                        self.log_message.emit(
-                            self.format_debug_message(f"断言 {assertion_name}: {field_name} {actual_display} {comparison_symbol} {expected_display} -> {results[assertion_name]}", log_level, step_index), log_level, step_index)
-                            
-                    except (ValueError, TypeError) as e:
-                        results[assertion_name] = False
-                        expected_display = expected if expected is not None else "None"
-                        actual_display = actual if actual is not None else "None"
-                        self.log_message.emit(self.format_debug_message(f"断言 {assertion_name}: 数值转换错误 - 期望值: {expected_display}, 实际值: {actual_display}", "error", step_index), "error", step_index)
-
-                else:
-                    self.log_message.emit(self.format_debug_message(f"未知断言类型: {assertion_type}", "warning", step_index), "warning", step_index)
-                    results[assertion_name] = False
-
-            except Exception as e:
-                results[assertion_name] = False
-                self.log_message.emit(self.format_debug_message(f"断言 {assertion_name} 执行错误: {str(e)}", "error", step_index), "error", step_index)
-
-        # 检查所有断言是否通过
-        passed_count = sum(1 for result in results.values() if result)
-        all_passed = all(results.values())
-        
-        self.log_message.emit(self.format_debug_message(f"断言结果: {passed_count}/{len(assertions)} 通过", "debug", step_index), "debug", step_index)
-        
-        step_result['success'] = all_passed
-        step_result['status'] = 'success' if all_passed else 'failure'
-        
-        self.log_message.emit(self.format_debug_message("断言执行结束", "debug", step_index), "debug", step_index)
-
-        return results
 
     def stop(self):
         """停止执行"""
@@ -3003,74 +1645,7 @@ class CaseTabWidget(QWidget):
             self.modified = True
             self.modified_signal.emit(True)
 
-    def execute_case(self):
-        """执行用例"""
-        if not self.current_case or not self.current_case.steps:
-            Toast.warning(self, "警告", "请先添加测试步骤")
-            return
-        
-        # 加强重复执行保护
-        if self.is_executing:
-            Toast.warning(self, "警告", "用例正在执行中，请等待执行完成")
-            return
-        
-        # 检查线程状态，确保之前的线程已完全清理
-        if hasattr(self, 'execution_thread') and self.execution_thread:
-            if self.execution_thread.isRunning():
-                Toast.warning(self, "警告", "执行线程仍在运行，请稍后再试")
-                return
-            else:
-                # 清理残留的线程对象
-                try:
-                    self.execution_thread.deleteLater()
-                    self.execution_thread = None
-                except:
-                    self.execution_thread = None
-        
-        # 准备执行数据 - 确保获取前端UI所有最新的配置信息
-        # 首先同步当前用例对象的加解密配置（临时变量，不触发修改状态）
-        enable_encryption = self.enable_encryption_checkbox.isChecked()
-        encrypt_url = self.encrypt_url_edit.text().strip()
-        decrypt_url = self.decrypt_url_edit.text().strip()
-        
-        # 注意：不再强制同步所有步骤卡片的加解密状态
-        # 保留用户手动设置的加解密状态，只在步骤未手动设置时使用全局配置
-        # self.sync_all_step_cards_encryption_status(self.current_case.enable_encryption)
-        
-        # 获取最新的用例数据（不修改current_case对象，避免触发修改状态）
-        case_data = self.current_case.to_dict()
-        
-        # 同步前端UI步骤数据到临时用例数据，但不修改current_case对象
-        self.sync_step_data_to_temp_case(case_data)
-        
-        # 创建执行线程，使用临时用例数据避免触发修改状态
-        self.execution_thread = CaseExecutionThread(
-            case_data=case_data,
-            project_id=self.current_case.project_id
-        )
-        
-        # 连接信号
-        self.execution_thread.step_started.connect(self.on_step_started)
-        self.execution_thread.step_finished.connect(self.on_step_finished)
-        self.execution_thread.case_finished.connect(self.on_case_finished)
-        self.execution_thread.log_message.connect(self.log_message_with_step)
-        
-        # 清空之前的执行日志，确保每次执行都是全新的开始
-        self.log_message_with_step(f"执行前日志数量: {len(self.execution_logs)}", "debug", -1)
-        self.clear_logs()
-        
-        # 记录详细的调试信息
-        self.log_debug_info()
-        
-        # 记录开始执行日志 - 使用print语句替代log_message
-        print(f"[INFO] 开始执行用例: {self.current_case.name}")
-        
-        # 开始执行
-        self.execution_thread.start()
-        self.is_executing = True
-        
-        # 更新按钮状态
-        self.update_buttons_state()
+
     
     def log_debug_info(self):
         """记录调试信息 - 用例配置详情"""
@@ -3132,7 +1707,111 @@ class CaseTabWidget(QWidget):
             self.stop_execution()
         else:
             # 当前未执行，点击则开始调试
-            self.execute_case()
+            self.start_execution()
+
+    def start_execution(self):
+        """开始执行测试用例"""
+        if self.is_executing:
+            return
+        
+        # 清空上一次的日志，确保当前日志是空的
+        self.clear_logs()
+        
+        # 构建测试用例数据
+        case_data = self.build_case_data_for_execution()
+        if not case_data:
+            return
+        
+        # 获取环境配置
+        environment_config = self.get_environment_config()
+        
+        # 创建执行线程
+        self.execution_thread = CaseExecutionThread(
+            case_data=case_data,
+            environment_config=environment_config,
+            project_id=self.project_id
+        )
+        
+        # 连接信号
+        self.execution_thread.step_started.connect(self.on_step_started)
+        self.execution_thread.step_finished.connect(self.on_step_finished)
+        self.execution_thread.case_finished.connect(self.on_case_finished)
+        self.execution_thread.log_message.connect(self.log_message_with_step)
+        
+        # 开始执行
+        self.is_executing = True
+        self.execution_thread.start()
+        
+        # 更新按钮状态
+        self.update_buttons_state()
+        
+        # 记录开始执行日志
+        self.log_message(f"开始执行测试用例: {case_data.get('name', '未知用例')}", "info")
+
+    def build_case_data_for_execution(self):
+        """构建用于执行的测试用例数据"""
+        # 创建TestCase对象
+        case = TestCase()
+        case.name = self.name_edit.text().strip()
+        case.description = self.description_edit.toPlainText().strip()
+        case.environment_id = self.env_combo.currentData()
+        case.project_id = self.project_id
+        case.folder_id = self.folder_id
+        case.enable_encryption = self.enable_encryption_checkbox.isChecked()
+        case.encrypt_url = self.encrypt_url_edit.text().strip()
+        case.decrypt_url = self.decrypt_url_edit.text().strip()
+        
+        # 获取步骤数据
+        steps_data = self.get_steps_data()
+        if not steps_data:
+            Toast.warning(self, "警告", "没有可执行的测试步骤")
+            return None
+        
+        # 将步骤字典转换为TestCaseStep对象
+        from src.core.models.interface_models import TestCaseStep
+        case.steps = [TestCaseStep.from_dict(step_dict) for step_dict in steps_data]
+        
+        # 转换为字典格式
+        return case.to_dict()
+
+    def get_steps_data(self):
+        """获取步骤数据"""
+        steps = []
+        
+        # 从步骤布局中获取所有步骤卡片
+        if hasattr(self, 'steps_layout'):
+            for i in range(self.steps_layout.count()):
+                item = self.steps_layout.itemAt(i)
+                if item and item.widget():
+                    step_card = item.widget()
+                    if hasattr(step_card, 'get_step_data'):
+                        step_data = step_card.get_step_data()
+                        if step_data:
+                            steps.append(step_data)
+        
+        return steps
+
+    def get_environment_config(self):
+        """获取环境配置"""
+        environment_id = self.env_combo.currentData()
+        if environment_id:
+            try:
+                environment = self.environment_service.get_environment_by_id(environment_id)
+                if environment:
+                    return {
+                        'base_url': environment.get('base_url', ''),
+                        'headers': environment.get('headers', {}),
+                        'variables': environment.get('variables', {})
+                    }
+            except Exception as e:
+                print(f"获取环境配置失败: {e}")
+        
+        # 返回默认配置
+        return {
+            'base_url': '',
+            'headers': {},
+            'variables': {}
+        }
 
     def stop_execution(self):
         """停止执行 - 修复线程安全版本"""
@@ -4002,25 +2681,27 @@ class StepLogItem(QWidget):
         
         # 步骤标题栏
         self.header_widget = QWidget()
+        self.header_widget.setCursor(Qt.PointingHandCursor)  # 设置鼠标悬停为手型
         header_layout = QHBoxLayout(self.header_widget)
         header_layout.setContentsMargins(12, 8, 12, 8)
         
-        # 展开/收起按钮
-        self.expand_btn = QPushButton("▶")
-        self.expand_btn.setFixedSize(20, 20)
+        # 展开/收起按钮 - 使用树形结构样式
+        self.expand_btn = QPushButton()
+        self.expand_btn.setFixedSize(16, 16)
         self.expand_btn.setStyleSheet("""
             QPushButton {
                 border: none;
                 background: transparent;
-                font-size: 10px;
-                color: #666;
             }
             QPushButton:hover {
-                background: #f0f0f0;
+                background: #e1e4e8;
                 border-radius: 3px;
             }
         """)
         self.expand_btn.clicked.connect(self.toggle_expand)
+        # 初始设置收起状态图标
+        self.expand_btn.setIcon(QIcon(self.get_icon_path("expand_left.png")))
+        self.expand_btn.setIconSize(QSize(12, 12))
         
         # 步骤序号和名称
         if self.step_index == -1:
@@ -4031,14 +2712,21 @@ class StepLogItem(QWidget):
             self.step_label = QLabel(f"步骤 {self.step_index + 1}: {self.step_name}")
         self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #24292f;")
         
-        # 日志数量
+        # 日志数量（放在步骤名称后面）
         self.log_count_label = QLabel("0 条日志")
-        self.log_count_label.setStyleSheet("color: #666; font-size: 12px;")
+        self.log_count_label.setStyleSheet("color: #666; font-size: 12px; margin-left: 4px;")
+        
+        # 状态图标（放在最右边）
+        self.status_icon_label = QLabel()
+        self.status_icon_label.setFixedSize(32, 32)  # 增加图标容器大小以适应200x200图标
+        self.status_icon_label.setAlignment(Qt.AlignCenter)  # 居中对齐
+        self.status_icon_label.setStyleSheet("margin-left: 0px; margin-right: 8px; padding: 0px; background: transparent;")
         
         header_layout.addWidget(self.expand_btn)
         header_layout.addWidget(self.step_label)
-        header_layout.addStretch()
         header_layout.addWidget(self.log_count_label)
+        header_layout.addStretch(1)  # 增加弹性空间
+        header_layout.addWidget(self.status_icon_label)
         
         # 步骤日志内容区域
         self.content_widget = QWidget()
@@ -4071,7 +2759,7 @@ class StepLogItem(QWidget):
         self.setStyleSheet("""
             StepLogItem {
                 border: 1px solid #e1e4e8;
-                border-radius: 6px;
+                border-radius: 12px;
                 background: #ffffff;
                 margin: 2px;
             }
@@ -4086,28 +2774,52 @@ class StepLogItem(QWidget):
         self.is_expanded = not self.is_expanded
         self.content_widget.setVisible(self.is_expanded)
         
-        # 更新按钮图标
+        # 更新按钮图标 - 使用实际的图标文件
         if self.is_expanded:
-            self.expand_btn.setText("▼")
+            self.expand_btn.setIcon(QIcon(self.get_icon_path("exband_down.png")))
         else:
-            self.expand_btn.setText("▶")
+            self.expand_btn.setIcon(QIcon(self.get_icon_path("expand_left.png")))
+    
+    def mouseDoubleClickEvent(self, event):
+        """鼠标双击事件处理"""
+        # 检查双击是否发生在标题栏区域
+        if self.header_widget.geometry().contains(event.pos()):
+            self.toggle_expand()
+        super().mouseDoubleClickEvent(event)
     
     def add_log(self, message, level="info"):
         """添加日志消息"""
+        # 从HTML格式的消息中提取原始日志级别（如果消息包含HTML格式）
+        actual_level = level
+        
+        # 如果消息是HTML格式且包含颜色标记，尝试从消息中提取实际级别
+        if isinstance(message, str) and "<font color=" in message:
+            # 根据HTML颜色标记推断日志级别
+            if "color='red'" in message or "color=\"red\"" in message:
+                actual_level = "error"
+            elif "color='orange'" in message or "color=\"orange\"" in message:
+                actual_level = "warning"
+            elif "color='green'" in message or "color=\"green\"" in message:
+                actual_level = "success"
+            elif "color='gray'" in message or "color=\"gray\"" in message:
+                actual_level = "debug"
+            else:
+                actual_level = "info"
+        
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # 根据级别设置颜色
-        if level == "error":
+        # 根据实际级别设置颜色
+        if actual_level == "error":
             color = "red"
             prefix = "[ERROR]"
-        elif level == "warning":
+        elif actual_level == "warning":
             color = "orange"
             prefix = "[WARN]"
-        elif level == "success":
+        elif actual_level == "success":
             color = "green"
             prefix = "[SUCCESS]"
         else:
-            color = "blue"
+            color = "black"
             prefix = "[INFO]"
         
         # 格式化日志消息
@@ -4124,22 +2836,97 @@ class StepLogItem(QWidget):
         # 保存到日志列表
         self.logs.append({
             'timestamp': timestamp,
-            'level': level,
+            'level': actual_level,
             'message': message
         })
         
-        # 更新步骤状态：如果有错误日志，标记为执行报错
-        if level == "error" and self.step_status is not False:
-            self.step_status = False
+        # 更新步骤状态：智能判断最终状态
+        if self.step_status is None:
+            # 第一次添加日志，根据日志级别设置初始状态
+            if actual_level == "error" or "失败" in message or "failure" in message.lower():
+                self.step_status = False
+            else:
+                self.step_status = True
             self.update_header_style()
-        elif self.step_status is None and level != "error":
-            # 如果没有错误且是第一次添加日志，标记为执行成功
-            self.step_status = True
-            self.update_header_style()
+        else:
+            # 后续日志：优先根据最终执行结果判断
+            # 如果出现失败相关的日志，更新为失败状态
+            if (actual_level == "error" or "失败" in message or "failure" in message.lower() or
+                "断言结果" in message and "失败" in message or "执行完成: failure" in message):
+                self.step_status = False
+                self.update_header_style()
+            # 如果有成功或断言通过的信息，标记为成功
+            elif ("成功" in message or "success" in message.lower() or 
+                  "断言通过" in message or "assertion passed" in message.lower() or
+                  "执行完成: success" in message):
+                self.step_status = True
+                self.update_header_style()
         
         # 更新日志数量
         self.log_count_label.setText(f"{len(self.logs)} 条日志")
     
+    def get_icon_path(self, icon_name):
+        """获取图标路径，支持exe打包后的资源路径"""
+        import os
+        import sys
+        
+        # 尝试多种路径方式加载图标
+        icon_paths = [
+            # 开发环境路径
+            os.path.join("src", "resources", "icons", icon_name),
+            # exe打包后路径
+            os.path.join(os.path.dirname(sys.executable), "src", "resources", "icons", icon_name),
+            # 相对路径（如果exe在项目根目录）
+            os.path.join("src", "resources", "icons", icon_name),
+            # 临时解压路径（PyInstaller）
+            os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name) if hasattr(sys, '_MEIPASS') else None
+        ]
+        
+        for path in icon_paths:
+            if path and os.path.exists(path):
+                return path
+        
+        # 如果所有路径都找不到，返回空字符串
+        return ""
+    
+    def get_icon(self, icon_name):
+        """获取图标，支持exe打包后的资源路径"""
+        import os
+        import sys
+        
+        # 尝试多种路径方式加载图标
+        icon_paths = [
+            # 开发环境路径
+            os.path.join("src", "resources", "icons", icon_name),
+            # exe打包后路径
+            os.path.join(os.path.dirname(sys.executable), "src", "resources", "icons", icon_name),
+            # 相对路径（如果exe在项目根目录）
+            os.path.join("src", "resources", "icons", icon_name),
+            # 临时解压路径（PyInstaller）
+            os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name) if hasattr(sys, '_MEIPASS') else None
+        ]
+        
+        for path in icon_paths:
+            if path and os.path.exists(path):
+                return QIcon(path)
+        
+        # 如果所有路径都找不到，返回空图标
+        return QIcon()
+
+    def update_status_icon(self):
+        """根据步骤状态更新状态图标"""
+        if self.step_status is None:
+            # 未执行状态：不显示图标
+            self.status_icon_label.clear()
+        elif self.step_status:
+            # 执行成功：显示成功图标
+            success_icon = self.get_icon("success.png")
+            self.status_icon_label.setPixmap(success_icon.pixmap(16, 16))  # 增加图标大小以适应200x200源文件
+        else:
+            # 执行报错：显示失败图标
+            fail_icon = self.get_icon("fail.png")
+            self.status_icon_label.setPixmap(fail_icon.pixmap(16, 16))  # 增加图标大小以适应200x200源文件
+
     def update_header_style(self):
         """根据步骤状态更新标题栏样式"""
         if self.step_status is None:
@@ -4147,7 +2934,7 @@ class StepLogItem(QWidget):
             self.header_widget.setStyleSheet("""
                 QWidget {
                     background: #ffffff;
-                    border-radius: 4px;
+                    border-radius: 8px;
                 }
             """)
             self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #24292f;")
@@ -4156,19 +2943,22 @@ class StepLogItem(QWidget):
             self.header_widget.setStyleSheet("""
                 QWidget {
                     background: #e8f5e8;
-                    border-radius: 4px;
+                    border-radius: 8px;
                 }
             """)
             self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #000000;")
         else:
-            # 执行报错：浅绿色背景，红色字体
+            # 执行报错：浅红色背景，黑色字体
             self.header_widget.setStyleSheet("""
                 QWidget {
-                    background: #e8f5e8;
-                    border-radius: 4px;
+                    background: #ffeaea;
+                    border-radius: 8px;
                 }
             """)
-            self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #ff0000;")
+            self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #000000;")
+        
+        # 更新状态图标
+        self.update_status_icon()
 
 
 class ExecutionLogsDialog(QDialog):
@@ -4303,11 +3093,17 @@ class ExecutionLogsDialog(QDialog):
         insert_position = len(self.step_order) - 1
         self.steps_layout.insertWidget(insert_position, step_log)
         
-        # 强制刷新布局并确保可见性
-        step_log.ensure_visibility()
-        step_log.setVisible(True)
-        step_log.header_widget.setVisible(True)
-        step_log.content_widget.setVisible(step_log.is_expanded)
+        # 如果是通用信息步骤，则隐藏该步骤
+        if step_name == "通用信息":
+            step_log.setVisible(False)
+            step_log.header_widget.setVisible(False)
+            step_log.content_widget.setVisible(False)
+        else:
+            # 强制刷新布局并确保可见性
+            step_log.ensure_visibility()
+            step_log.setVisible(True)
+            step_log.header_widget.setVisible(True)
+            step_log.content_widget.setVisible(step_log.is_expanded)
         
         # 强制更新布局
         step_log.updateGeometry()
@@ -4322,8 +3118,25 @@ class ExecutionLogsDialog(QDialog):
     
     def add_log_to_step(self, step_index, message, level="info"):
         """向指定步骤添加日志"""
+        # 从HTML格式的消息中提取原始日志级别（如果消息包含HTML格式）
+        actual_level = level
+        
+        # 如果消息是HTML格式且包含颜色标记，尝试从消息中提取实际级别
+        if isinstance(message, str) and "<font color=" in message:
+            # 根据HTML颜色标记推断日志级别
+            if "color='red'" in message or "color=\"red\"" in message:
+                actual_level = "error"
+            elif "color='orange'" in message or "color=\"orange\"" in message:
+                actual_level = "warning"
+            elif "color='green'" in message or "color=\"green\"" in message:
+                actual_level = "success"
+            elif "color='gray'" in message or "color=\"gray\"" in message:
+                actual_level = "debug"
+            else:
+                actual_level = "info"
+        
         if step_index in self.step_logs:
-            self.step_logs[step_index].add_log(message, level)
+            self.step_logs[step_index].add_log(message, actual_level)
     
     def add_log(self, message, level="info"):
         """添加通用日志（不关联到具体步骤）"""
@@ -4332,6 +3145,23 @@ class ExecutionLogsDialog(QDialog):
 
     def add_log_with_step(self, message, level="info", step_index=-1, step_name=None):
         """添加带步骤信息的日志"""
+        # 从HTML格式的消息中提取原始日志级别（如果消息包含HTML格式）
+        actual_level = level
+        
+        # 如果消息是HTML格式且包含颜色标记，尝试从消息中提取实际级别
+        if isinstance(message, str) and "<font color=" in message:
+            # 根据HTML颜色标记推断日志级别
+            if "color='red'" in message or "color=\"red\"" in message:
+                actual_level = "error"
+            elif "color='orange'" in message or "color=\"orange\"" in message:
+                actual_level = "warning"
+            elif "color='green'" in message or "color=\"green\"" in message:
+                actual_level = "success"
+            elif "color='gray'" in message or "color=\"gray\"" in message:
+                actual_level = "debug"
+            else:
+                actual_level = "info"
+        
         # 简化逻辑：直接根据step_index创建或获取步骤日志项
         if step_index == -1:
             # 通用信息日志
@@ -4348,8 +3178,8 @@ class ExecutionLogsDialog(QDialog):
         if step_index not in self.step_logs:
             self.add_step_log(step_name, step_index)
         
-        # 添加日志到对应步骤
-        self.add_log_to_step(step_index, message, level)
+        # 添加日志到对应步骤，使用实际的日志级别
+        self.add_log_to_step(step_index, message, actual_level)
         
         # 强制刷新界面以确保日志显示
         if self.isVisible():
@@ -4416,7 +3246,7 @@ class ExecutionLogsTab(QWidget):
             color = "green"
             prefix = "[SUCCESS]"
         else:
-            color = "blue"
+            color = "black"
             prefix = "[INFO]"
         
         # 格式化日志消息
