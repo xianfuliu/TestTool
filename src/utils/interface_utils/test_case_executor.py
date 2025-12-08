@@ -33,10 +33,12 @@ from PyQt5.QtCore import QEventLoop
 class TestCaseExecutor:
     """通用测试用例执行器"""
     
-    def __init__(self, project_id: int = 0, environment_config: Dict[str, Any] = None):
+    def __init__(self, execution_mode: str = 'debug', project_id: int = 0, 
+                 environment_config: Dict[str, Any] = None):
         """初始化执行器
         
         Args:
+            execution_mode: 执行模式，'debug'（调试）或 'scheduler'（调度）
             project_id: 项目ID，用于加载全局变量
             environment_config: 环境配置，包含base_url等信息
         """
@@ -46,19 +48,20 @@ class TestCaseExecutor:
         self.environment_config = environment_config or {}
         self.variable_manager = VariableManager()
         
+        # 日志容器 - 存储所有执行日志
+        self.execution_logs = []
+        # 步骤日志容器 - 按步骤归档日志
+        self.step_logs = {}
+        
         # 日志回调机制
         self.log_callback = None
-        self.execution_logs = []
         
         # 步骤级别回调机制
         self.step_started_callback = None
         self.step_finished_callback = None
         
-        # 调用来源标识
-        self.execution_source = 'debug'  # 默认调试模式
-        
-        # 调试模式标识
-        self.debug_mode = self.execution_source == 'debug'
+        # 设置执行模式
+        self.set_execution_mode(execution_mode)
         
         # 初始化变量管理器
         self._init_variable_manager()
@@ -87,16 +90,18 @@ class TestCaseExecutor:
         """
         self.step_finished_callback = callback
     
-    def set_execution_source(self, source: str):
-        """设置调用来源
+    def set_execution_mode(self, mode: str):
+        """设置执行模式
         
         Args:
-            source: 调用来源，'debug' 或 'scheduler'
+            mode: 执行模式，'debug' 或 'scheduler'
         """
-        if source in ['debug', 'scheduler']:
-            self.execution_source = source
-            # 更新调试模式标识
-            self.debug_mode = self.execution_source == 'debug'
+        if mode in ['debug', 'scheduler']:
+            self.execution_mode = mode
+            self.debug_mode = self.execution_mode == 'debug'
+            self._log_message('INFO', f'设置执行模式为: {mode}')
+        else:
+            raise ValueError("执行模式必须是 'debug' 或 'scheduler'")
     
     def _log_message(self, level: str, message: str, step_index: int = None):
         """统一日志处理方法
@@ -117,32 +122,40 @@ class TestCaseExecutor:
             # 记录警告日志
             logging.warning(f"检测到空的日志消息，已使用默认消息: {message}")
         
-        # 记录到执行日志列表，包含步骤索引信息
+        # 创建日志条目
         log_entry = {
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'level': level,
             'message': message,
             'step_index': step_index  # 添加步骤索引信息
         }
+        
+        # 添加到总日志容器
         self.execution_logs.append(log_entry)
+        
+        # 按步骤归档日志
+        if step_index is not None:
+            if step_index not in self.step_logs:
+                self.step_logs[step_index] = []
+            self.step_logs[step_index].append(log_entry)
         
         # 调用日志回调函数（如果设置），传递步骤索引
         if self.log_callback:
             self.log_callback(message, level, step_index)
         
-        # 根据调用来源处理日志
-        if self.execution_source == 'debug':
-            # 调试模式：不调用标准logging，避免与已经格式化的消息冲突
-            # 消息已经通过format_debug_message格式化，直接传递给UI线程显示
+        # 根据执行模式处理日志输出
+        if self.debug_mode:
+            # 调试模式：日志直接传递给UI显示，不存储到数据库
             pass
         else:
-            # 定时调度模式：仅记录到日志列表，不输出到控制台
+            # 调度模式：日志会存储到数据库
             pass
     
     def _store_step_logs_to_database(self, step_id: int, step_name: str, status: str, 
                                    start_time: datetime, end_time: datetime, 
                                    scheduler_id: int = None, report_id: int = None, 
-                                   case_id: int = None, step_index: int = None):
+                                   case_id: int = None, step_index: int = None, 
+                                   step_order: int = None):
         """存储步骤执行日志到test_step_results表
         
         Args:
@@ -155,26 +168,53 @@ class TestCaseExecutor:
             report_id: 报告ID（定时调度时使用）
             case_id: 用例ID（定时调度时使用）
             step_index: 步骤索引（可选），用于日志记录
+            step_order: 步骤序号
         """
-        try:
-            # 准备执行日志数据
-            execution_logs = json.dumps(self.execution_logs, ensure_ascii=False, indent=2)
+        # 如果是调试模式，不存储到数据库
+        if self.debug_mode:
+            self._log_message('DEBUG', f"调试模式，跳过步骤 '{step_name}' 日志存储到数据库", step_index)
+            return
             
-            # 插入步骤执行结果记录
-            self.db.insert("test_step_results", {
+        try:
+            # 获取该步骤的日志
+            step_logs = self.step_logs.get(step_index, [])
+            
+            # 将步骤日志从列表格式转换为文本格式，逐行追加
+            execution_logs_text = ''
+            if step_logs:
+                execution_logs_text = '\n'.join([
+                    f"[{log.get('timestamp', '')}] {log.get('level', 'INFO')}: {log.get('message', '')}"
+                    for log in step_logs
+                    if log.get('message', '').strip()  # 过滤空消息
+                ])
+            
+            # 构建步骤结果数据，格式与execute_test_case.py保持一致
+            step_result_data = {
                 'scheduler_id': scheduler_id,
                 'report_id': report_id,
                 'case_id': case_id,
-                'step_id': step_id,
-                'step_name': step_name,
+                'step_id': step_id if step_id is not None else 0,  # 如果step_id为None，使用0作为默认值
+                'step_order': step_order or (step_index + 1) if step_index is not None else 1,
                 'status': status,
-                'start_time': start_time.strftime('%Y-%m-%d %H:%M:%S'),
-                'end_time': end_time.strftime('%Y-%m-%d %H:%M:%S'),
-                'execution_logs': execution_logs,
-                'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            })
+                'request_data': {},  # 与execute_test_case.py格式保持一致
+                'response_data': {},  # 与execute_test_case.py格式保持一致
+                'execution_logs': execution_logs_text,  # 使用文本格式，逐行存储
+                'error_message': '',  # 与execute_test_case.py格式保持一致
+                'start_time': start_time,
+                'end_time': end_time,
+                'execution_time': (end_time - start_time).total_seconds()
+            }
             
-            self._log_message('INFO', f"步骤 '{step_name}' 执行日志已存储到数据库", step_index)
+            # 使用TestReportService保存步骤结果，与execute_test_case.py保持一致
+            from src.core.services.test_report_service import TestReportService
+            report_service = TestReportService()
+            success = report_service.save_step_result(report_id, step_result_data)
+            
+            if success:
+                self._log_message('INFO', f"步骤 '{step_name}' 执行日志已存储到数据库", step_index)
+            else:
+                self._log_message('ERROR', f"存储步骤执行日志失败: 保存步骤结果返回False", step_index)
+                
         except Exception as e:
             self._log_message('ERROR', f"存储步骤执行日志失败: {str(e)}", step_index)
     
@@ -191,7 +231,8 @@ class TestCaseExecutor:
                     stop_on_failure: bool = True,
                     generate_report: bool = False,
                     scheduler_id: Optional[int] = None,
-                    parent_report_id: Optional[int] = None) -> Dict[str, Any]:
+                    parent_report_id: Optional[int] = None,
+                    execution_source: str = 'debug') -> Dict[str, Any]:
         """执行测试用例
         
         Args:
@@ -200,12 +241,17 @@ class TestCaseExecutor:
             generate_report: 是否生成测试报告（execute_test_case.py模式）
             scheduler_id: 调度ID（仅调度任务需要）
             parent_report_id: 父报告ID（用于统一报告模式）
+            execution_source: 执行来源，'debug' 或 'scheduler'
         
         Returns:
             执行结果字典
         """
-        # 清空执行日志
+        # 清空执行日志和步骤日志
         self.execution_logs = []
+        self.step_logs.clear()
+        
+        # 设置执行模式
+        self.set_execution_mode(execution_source)
         
         try:
             case_id = case_data.get('id', 0)
@@ -299,18 +345,19 @@ class TestCaseExecutor:
                     except Exception as e:
                         self._log_message('ERROR', f"步骤完成回调执行异常: {str(e)}", step_index)
                 
-                # 如果是定时调度执行，存储步骤日志到数据库
-                if self.execution_source == 'scheduler' and scheduler_id and parent_report_id:
+                # 如果是调度模式且有调度ID和报告ID，存储步骤日志到数据库
+                if self.execution_mode == 'scheduler' and scheduler_id and parent_report_id:
                     self._store_step_logs_to_database(
                         step_id=step.get('id'),
                         step_name=step_name,
-                        status='PASS' if step_result.get('success', False) else 'FAIL',
+                        status='success' if step_result.get('success', False) else 'failure',
                         start_time=step_start_time,
                         end_time=step_end_time,
                         scheduler_id=scheduler_id,
                         report_id=parent_report_id,
                         case_id=case_id,
-                        step_index=step_index
+                        step_index=step_index,
+                        step_order=step_order
                     )
                 
                 step_results.append(step_result)
@@ -659,8 +706,8 @@ class TestCaseExecutor:
             api_template_name = api_template.get('name', '未知接口')
             
             # 记录请求日志
-            self._log_message('INFO', f"执行步骤 {step_name} 的HTTP请求 [{api_template_name}]: {request_data['method']} {request_data['url']}", step_index)
-            self._log_message('DEBUG', f"请求体: {json.dumps(request_data['body'], ensure_ascii=False, indent=2)}", step_index)
+            self._log_message('INFO', f"执行步骤 {step_name} 的HTTP请求 - {api_template_name}: {request_data['method']} {request_data['url']}", step_index)
+            self._log_message('DEBUG', f"请求体: {json.dumps(request_data['body'], ensure_ascii=False)}", step_index)
             
             try:
                 # 构建符合 execute_request 方法要求的 API 数据格式
@@ -724,9 +771,9 @@ class TestCaseExecutor:
                     # 检查是否为加解密请求，优先打印解密后的响应体
                     if response.get('decrypted_body'):
                         try:
-                            # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串
+                            # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串（单行格式）
                             decrypted_json = json.loads(response.get('decrypted_body', ''))
-                            self._log_message('DEBUG', f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}", step_index)
+                            self._log_message('DEBUG', f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False)}", step_index)
                         except:
                             # 如果解析失败，直接打印原始字符串
                             self._log_message('DEBUG', f"解密后的响应体:{response.get('decrypted_body', '')}", step_index)
@@ -734,22 +781,22 @@ class TestCaseExecutor:
                         # 非加解密请求，尝试将响应体格式化为JSON
                         response_text = response.get('response_text', response.get('text', ''))
                         try:
-                            # 尝试解析为JSON并重新格式化
+                            # 尝试解析为JSON并重新格式化（单行格式）
                             response_json = json.loads(response_text)
-                            self._log_message('DEBUG', f"响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}", step_index)
+                            self._log_message('DEBUG', f"响应体: {json.dumps(response_json, ensure_ascii=False)}", step_index)
                         except:
                             # 如果解析失败，直接打印原始文本
                             self._log_message('DEBUG', f"响应体: {response_text}", step_index)
                 else:
-                    # 记录失败请求的详细信息到日志
-                    self._log_message('ERROR', f"请求失败: {json.dumps({'error': response.get('error', '未知错误'), 'status_code': response.get('status_code', 0)}, ensure_ascii=False, indent=2)}", step_index)
+                    # 记录失败请求的详细信息到日志（单行格式）
+                    self._log_message('ERROR', f"请求失败: {json.dumps({'error': response.get('error', '未知错误'), 'status_code': response.get('status_code', 0)}, ensure_ascii=False)}", step_index)
                     
                     # 检查是否为加解密请求，优先打印解密后的响应体
                     if response.get('decrypted_body'):
                         try:
-                            # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串
+                            # 尝试将解密后的响应体解析为JSON，然后重新格式化为JSON字符串（单行格式）
                             decrypted_json = json.loads(response.get('decrypted_body', ''))
-                            self._log_message('DEBUG', f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False, indent=2)}", step_index)
+                            self._log_message('DEBUG', f"解密后的响应体:{json.dumps(decrypted_json, ensure_ascii=False)}", step_index)
                         except:
                             # 如果解析失败，直接打印原始字符串
                             self._log_message('DEBUG', f"解密后的响应体:{response.get('decrypted_body', '')}", step_index)
@@ -757,9 +804,9 @@ class TestCaseExecutor:
                         # 非加解密请求，尝试将响应体格式化为JSON
                         response_text = response.get('response_text', response.get('text', ''))
                         try:
-                            # 尝试解析为JSON并重新格式化
+                            # 尝试解析为JSON并重新格式化（单行格式）
                             response_json = json.loads(response_text)
-                            self._log_message('DEBUG', f"失败响应体: {json.dumps(response_json, ensure_ascii=False, indent=2)}", step_index)
+                            self._log_message('DEBUG', f"失败响应体: {json.dumps(response_json, ensure_ascii=False)}", step_index)
                         except:
                             # 如果解析失败，直接打印原始文本
                             self._log_message('DEBUG', f"失败响应体: {response_text}", step_index)
@@ -827,7 +874,7 @@ class TestCaseExecutor:
             self._log_message('DEBUG', f"变量替换后 - 请求体: {body}", step_index)
             
             # 记录请求日志
-            self._log_message('INFO', f"前置处理器HTTP请求工具[{name}]: {method} {url}", step_index)
+            self._log_message('INFO', f"前置处理器HTTP请求工具-{name}: {method} {url}", step_index)
             
             # 执行请求
             request_data = {
@@ -847,7 +894,7 @@ class TestCaseExecutor:
                 response_data = response.get('response_data', response.get('body', {}))
                 status_code = response.get('status_code', 0)
                 
-                self._log_message('INFO', f"前置处理器HTTP请求工具[{name}]成功: 状态码 {status_code}", step_index)
+                self._log_message('INFO', f"前置处理器HTTP请求工具-{name}成功: 状态码 {status_code}", step_index)
                 self._log_message('DEBUG', f"响应数据: {response_data}", step_index)
                 
                 # 提取变量
@@ -915,14 +962,14 @@ class TestCaseExecutor:
             
             if not sql:
                 error_msg = "SQL工具配置错误: SQL语句不能为空"
-                self._log_message('ERROR', error_msg, step_index)
+                self._log_message('ERROR', f"SQL工具配置错误: {error_msg}", step_index)
                 result['success'] = False
                 result['error'] = error_msg
                 return result
             
             if not database_config:
                 error_msg = "SQL工具配置错误: 数据库配置不能为空"
-                self._log_message('ERROR', error_msg, step_index)
+                self._log_message('ERROR', f"SQL工具配置错误: {error_msg}", step_index)
                 result['success'] = False
                 result['error'] = error_msg
                 return result
@@ -986,7 +1033,7 @@ class TestCaseExecutor:
             if sql_result['success']:
                 # SQL执行成功
                 data = sql_result.get('data', [])
-                self._log_message('INFO', f"前置处理器SQL工具[{name}]执行成功: 返回 {len(data)} 行数据", step_index)
+                self._log_message('INFO', f"前置处理器SQL工具 - {name} 执行成功: 返回 {len(data)} 行数据", step_index)
                 
                 # 提取变量到变量管理器
                 if output_fields and data:
@@ -1007,7 +1054,7 @@ class TestCaseExecutor:
                             self.variable_manager.set_local_variable(field_name, value)
                             
                             # 打印局部变量状态
-                            self._log_message('DEBUG', f"SQL工具[{name}]提取变量后局部变量状态: {self.variable_manager.local_variables}", step_index)
+                            self._log_message('DEBUG', f"SQL工具 - {name} 提取变量后局部变量状态: {self.variable_manager.local_variables}", step_index)
                         else:
                             self._log_message('WARNING', f"提取变量失败: 字段 {field_name} 不存在或为空", step_index)
                 else:
@@ -1935,14 +1982,14 @@ class TestCaseExecutor:
         import re
         
         # 调试：记录替换前的文本
-        self._log_message('DEBUG', f"[DEBUG] replace_variables: 替换前文本 = {text}", step_index)
+        self._log_message('DEBUG', f"replace_variables: 替换前文本 = {text}", step_index)
         
         # 匹配${变量名}格式
         pattern = r'\$\{([^}]+)\}'
         matches = re.findall(pattern, text)
         
         # 调试：记录匹配到的变量
-        self._log_message('DEBUG', f"[DEBUG] replace_variables: 匹配到的变量 = {matches}", step_index)
+        self._log_message('DEBUG', f"replace_variables: 匹配到的变量 = {matches}", step_index)
         
         for var_name in matches:
             var_value = ''
@@ -1950,22 +1997,22 @@ class TestCaseExecutor:
             # 首先尝试从变量管理器中获取变量（前置处理器提取的变量）
             if hasattr(self, 'variable_manager'):
                 # 调试：检查变量管理器状态
-                self._log_message('DEBUG', f"[DEBUG] replace_variables: 变量管理器状态 - 局部变量: {self.variable_manager.local_variables}", step_index)
-                self._log_message('DEBUG', f"[DEBUG] replace_variables: 变量管理器状态 - 全局变量: {self.variable_manager.global_variables}", step_index)
+                self._log_message('DEBUG', f"replace_variables: 变量管理器状态 - 局部变量: {self.variable_manager.local_variables}", step_index)
+                self._log_message('DEBUG', f"replace_variables: 变量管理器状态 - 全局变量: {self.variable_manager.global_variables}", step_index)
                 
                 # 尝试从局部变量中获取
                 if var_name in self.variable_manager.local_variables:
                     var_value = self.variable_manager.local_variables[var_name]
-                    self._log_message('DEBUG', f"[DEBUG] replace_variables: 从局部变量获取 {var_name} = {var_value}", step_index)
+                    self._log_message('DEBUG', f"replace_variables: 从局部变量获取 {var_name} = {var_value}", step_index)
                 # 尝试从全局变量中获取
                 elif var_name in self.variable_manager.global_variables:
                     var_value = self.variable_manager.global_variables[var_name]
-                    self._log_message('DEBUG', f"[DEBUG] replace_variables: 从全局变量获取 {var_name} = {var_value}", step_index)
+                    self._log_message('DEBUG', f"replace_variables: 从全局变量获取 {var_name} = {var_value}", step_index)
             
             # 如果变量管理器中没找到，再从步骤结果中获取
             if not var_value and step_result:
                 var_value = step_result.get(var_name, '')
-                self._log_message('DEBUG', f"[DEBUG] replace_variables: 从步骤结果获取 {var_name} = {var_value}", step_index)
+                self._log_message('DEBUG', f"replace_variables: 从步骤结果获取 {var_name} = {var_value}", step_index)
                 
                 # 如果变量名是特殊字段，使用_extract_field_value提取
                 if var_name in ['response_time', 'status_code', 'response_text', 'response_data', 'response_headers']:
@@ -1979,13 +2026,13 @@ class TestCaseExecutor:
                     var_value = self._extract_field_value(step_result, var_name)
             
             # 记录变量替换的调试信息
-            self._log_message('DEBUG', f"[DEBUG] replace_variables: 变量替换: ${{{var_name}}} -> {var_value}", step_index)
+            self._log_message('DEBUG', f"replace_variables: 变量替换: ${{{var_name}}} -> {var_value}", step_index)
             
             # 替换变量
             text = text.replace(f'${{{var_name}}}', str(var_value))
         
         # 调试：记录替换后的文本
-        self._log_message('DEBUG', f"[DEBUG] replace_variables: 替换后文本 = {text}", step_index)
+        self._log_message('DEBUG', f"replace_variables: 替换后文本 = {text}", step_index)
         
         return text
 
@@ -2122,6 +2169,28 @@ class TestCaseExecutor:
             'execution_time': 0,
             'variables_snapshot': self.variable_manager.get_all_variables()
         }
+    
+    def get_step_logs(self, step_index: int = None):
+        """获取步骤日志
+        
+        Args:
+            step_index: 步骤索引，如果为None则返回所有日志
+            
+        Returns:
+            list: 日志列表
+        """
+        if step_index is not None:
+            # 返回指定步骤的日志
+            return self.step_logs.get(step_index, [])
+        else:
+            # 返回所有日志
+            return self.execution_logs
+    
+    def clear_logs(self):
+        """清空日志容器"""
+        self.execution_logs.clear()
+        self.step_logs.clear()
+        self._log_message('INFO', '日志容器已清空')
 
 
 # 兼容性包装器，用于替换execute_test_case.py的功能

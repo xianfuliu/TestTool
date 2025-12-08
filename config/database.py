@@ -271,7 +271,7 @@ DB_TABLES = {
             status ENUM('success', 'failure', 'error', 'skipped') DEFAULT 'skipped',
             request_data JSON COMMENT '请求数据',
             response_data JSON COMMENT '响应数据',
-            execution_logs JSON COMMENT '执行日志信息',
+            execution_logs TEXT COMMENT '执行日志信息（文本格式）',
             error_message TEXT,
             start_time TIMESTAMP NULL,
             end_time TIMESTAMP NULL,

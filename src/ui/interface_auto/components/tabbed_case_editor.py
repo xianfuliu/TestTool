@@ -112,14 +112,12 @@ class CaseExecutionThread(QThread):
     def run(self):
         """执行测试用例"""
         try:
-            # 创建测试用例执行器
+            # 创建测试用例执行器（调试模式）
             executor = TestCaseExecutor(
+                execution_mode='debug',
                 project_id=self.project_id,
                 environment_config=self.environment_config
             )
-            
-            # 设置执行来源为调试模式
-            executor.set_execution_source('debug')
             
             # 设置日志回调函数，确保日志格式与原有系统一致
             def log_callback(message, level, step_index):

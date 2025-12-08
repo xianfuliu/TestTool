@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
                              QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
                              QProgressBar, QTreeWidget, QTreeWidgetItem, QFrame, QFileDialog,
-                             QSizePolicy, QScrollArea)
+                             QSizePolicy, QScrollArea, QStackedLayout)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QUrl
 from PyQt5.QtGui import QIcon, QFont, QColor, QDesktopServices, QCursor, QBrush
 from src.core.services.scheduler_service import UnifiedSchedulerService
@@ -25,21 +25,1532 @@ from src.utils.css_utils import get_combobox_style, get_toolbar_combobox_style
 from PyQt5.QtGui import QTextCursor
 
 
-class StepLogItem(QWidget):
-    """步骤日志项组件"""
+class ReportDetailPage(QWidget):
+    """测试报告详情页 - 二级页面，覆盖整个测试报告tab"""
     
-    def __init__(self, step_name, step_index, parent=None):
+    back_requested = pyqtSignal()  # 返回信号
+    
+    def __init__(self, parent=None, report_data=None):
+        super().__init__(parent)
+        self.report_data = report_data or {}
+        self.report_service = TestReportService()
+        self.init_ui()
+        self.load_report_details()
+    
+    def init_ui(self):
+        """初始化界面"""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+        
+        # 顶部导航栏
+        nav_layout = QHBoxLayout()
+        
+        # 返回按钮
+        back_btn = QPushButton("返回")
+        back_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                border: 1px solid #d0d7de;
+                border-radius: 6px;
+                background: #ffffff;
+                font-size: 14px;
+                color: #24292f;
+            }
+            QPushButton:hover {
+                background: #f6f8fa;
+                border-color: #0969da;
+            }
+        """)
+        back_btn.clicked.connect(self.back_requested.emit)
+        
+        # 页面标题
+        title_label = QLabel("测试报告详情")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #24292f;")
+        
+        nav_layout.addWidget(back_btn)
+        nav_layout.addStretch()
+        nav_layout.addWidget(title_label)
+        nav_layout.addStretch()
+        
+        layout.addLayout(nav_layout)
+        
+        # 基础概要信息区域
+        self.setup_summary_section(layout)
+        
+        # 用例列表树形结构
+        self.setup_case_tree_section(layout)
+    
+    def setup_summary_section(self, parent_layout):
+        """设置基础概要信息区域"""
+        # 概要信息容器
+        summary_widget = QWidget()
+        summary_layout = QVBoxLayout(summary_widget)
+        
+        # 报告基本信息
+        basic_info_group = QGroupBox("报告信息")
+        basic_layout = QFormLayout(basic_info_group)
+        
+        self.report_name_label = QLabel()
+        self.report_status_label = QLabel()
+        self.report_case_label = QLabel()
+        self.report_scheduler_label = QLabel()
+        self.report_start_time_label = QLabel()
+        self.report_end_time_label = QLabel()
+        self.report_duration_label = QLabel()
+
+        basic_layout.addRow("报告名称:", self.report_name_label)
+        basic_layout.addRow("执行状态:", self.report_status_label)
+        basic_layout.addRow("测试用例:", self.report_case_label)
+        basic_layout.addRow("关联调度:", self.report_scheduler_label)
+        basic_layout.addRow("开始时间:", self.report_start_time_label)
+        basic_layout.addRow("结束时间:", self.report_end_time_label)
+        basic_layout.addRow("执行时长:", self.report_duration_label)
+
+        # 统计信息
+        stats_group = QGroupBox("执行统计")
+        stats_layout = QVBoxLayout(stats_group)
+
+        # 进度条显示
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximum(100)
+        stats_layout.addWidget(self.progress_bar)
+
+        # 数字统计
+        stats_grid = QHBoxLayout()
+
+        # 总步骤数
+        total_frame = QFrame()
+        total_frame.setFrameStyle(QFrame.Box)
+        total_layout = QVBoxLayout(total_frame)
+        self.total_cases_label = QLabel("0")
+        self.total_cases_label.setAlignment(Qt.AlignCenter)
+        self.total_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #333;")
+        total_layout.addWidget(self.total_cases_label)
+        total_layout.addWidget(QLabel("总用例"))
+        stats_grid.addWidget(total_frame)
+
+        # 通过数
+        passed_frame = QFrame()
+        passed_frame.setFrameStyle(QFrame.Box)
+        passed_layout = QVBoxLayout(passed_frame)
+        self.passed_cases_label = QLabel("0")
+        self.passed_cases_label.setAlignment(Qt.AlignCenter)
+        self.passed_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #4CAF50;")
+        passed_layout.addWidget(self.passed_cases_label)
+        passed_layout.addWidget(QLabel("通过"))
+        stats_grid.addWidget(passed_frame)
+
+        # 失败数
+        failed_frame = QFrame()
+        failed_frame.setFrameStyle(QFrame.Box)
+        failed_layout = QVBoxLayout(failed_frame)
+        self.failed_cases_label = QLabel("0")
+        self.failed_cases_label.setAlignment(Qt.AlignCenter)
+        self.failed_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #F44336;")
+        failed_layout.addWidget(self.failed_cases_label)
+        failed_layout.addWidget(QLabel("失败"))
+        stats_grid.addWidget(failed_frame)
+
+        # 错误数
+        error_frame = QFrame()
+        error_frame.setFrameStyle(QFrame.Box)
+        error_layout = QVBoxLayout(error_frame)
+        self.error_cases_label = QLabel("0")
+        self.error_cases_label.setAlignment(Qt.AlignCenter)
+        self.error_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FF9800;")
+        error_layout.addWidget(self.error_cases_label)
+        error_layout.addWidget(QLabel("错误"))
+        stats_grid.addWidget(error_frame)
+
+        # 通过率
+        rate_frame = QFrame()
+        rate_frame.setFrameStyle(QFrame.Box)
+        rate_layout = QVBoxLayout(rate_frame)
+        self.success_rate_label = QLabel("0%")
+        self.success_rate_label.setAlignment(Qt.AlignCenter)
+        self.success_rate_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2196F3;")
+        rate_layout.addWidget(self.success_rate_label)
+        rate_layout.addWidget(QLabel("通过率"))
+        stats_grid.addWidget(rate_frame)
+
+        stats_layout.addLayout(stats_grid)
+
+        summary_layout.addWidget(basic_info_group)
+        summary_layout.addWidget(stats_group)
+        
+        parent_layout.addWidget(summary_widget)
+    
+    def setup_case_tree_section(self, parent_layout):
+        """设置用例列表布局结构"""
+        # 用例树容器
+        case_tree_widget = QWidget()
+        case_tree_layout = QVBoxLayout(case_tree_widget)
+        
+        # 标题
+        case_tree_title = QLabel("执行详情")
+        case_tree_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #24292f; margin-bottom: 8px;")
+        case_tree_layout.addWidget(case_tree_title)
+        
+        # 创建滚动区域
+        self.steps_scroll_area = QScrollArea()
+        self.steps_scroll_area.setWidgetResizable(True)
+        self.steps_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.steps_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.steps_scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: #f8f9fa;
+                border: 1px solid #e1e4e8;
+                border-radius: 12px;
+            }
+            QScrollBar:vertical {
+                background: #f5f5f5;
+                width: 12px;
+                margin: 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #c1c1c1;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #a8a8a8;
+            }
+            QScrollBar::handle:vertical:pressed {
+                background: #787878;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                background: #f5f5f5;
+                height: 12px;
+                margin: 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #c1c1c1;
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #a8a8a8;
+            }
+            QScrollBar::handle:horizontal:pressed {
+                background: #787878;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                border: none;
+                background: none;
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
+        """)
+        
+        # 创建容器用于存放步骤组件
+        self.steps_container = QWidget()
+        self.steps_container.setStyleSheet("""
+            QWidget {
+                background: #f8f9fa;
+                border: none;
+                border-radius: 12px;
+            }
+        """)
+        self.steps_layout = QVBoxLayout(self.steps_container)
+        self.steps_layout.setSpacing(4)
+        self.steps_layout.setContentsMargins(8, 8, 8, 8)
+        self.steps_layout.addStretch()  # 添加拉伸因子，使内容靠上显示
+        
+        self.steps_scroll_area.setWidget(self.steps_container)
+        case_tree_layout.addWidget(self.steps_scroll_area)
+        parent_layout.addWidget(case_tree_widget, 1)  # 设置拉伸因子为1
+    
+    def load_report_details(self):
+        """加载报告详情"""
+        if not self.report_data:
+            return
+
+        # 基本信息
+        self.report_name_label.setText(self.report_data.get('report_name', ''))
+
+        status = self.report_data.get('status', '')
+        status_text = {
+            'success': '成功',
+            'failure': '失败',
+            'error': '错误',
+            'running': '执行中'
+        }.get(status, status)
+        status_color = {
+            'success': 'green',
+            'failure': 'red',
+            'error': 'orange',
+            'running': 'blue'
+        }.get(status, 'black')
+        self.report_status_label.setText(f"<font color='{status_color}'>{status_text}</font>")
+
+        # 测试用例信息
+        case_name = self.report_data.get('case_name', '未知用例')
+        self.report_case_label.setText(case_name)
+
+        # 调度信息
+        scheduler_name = self.report_data.get('scheduler_name', '手动执行')
+        self.report_scheduler_label.setText(scheduler_name)
+
+        # 时间信息
+        start_time = self.report_data.get('start_time')
+        if start_time:
+            if isinstance(start_time, str):
+                start_text = start_time
+            else:
+                start_text = start_time.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            start_text = 'N/A'
+        self.report_start_time_label.setText(start_text)
+
+        end_time = self.report_data.get('end_time')
+        if end_time:
+            if isinstance(end_time, str):
+                end_text = end_time
+            else:
+                end_text = end_time.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            end_text = 'N/A'
+        self.report_end_time_label.setText(end_text)
+
+        duration = self.report_data.get('duration', 0)
+        try:
+            duration_value = float(duration)
+            self.report_duration_label.setText(f"{duration_value:.2f} 秒")
+        except (ValueError, TypeError):
+            self.report_duration_label.setText(f"{duration} 秒")
+
+        # 统计信息
+        total_cases = self.report_data.get('total_cases', 0)
+        passed_cases = self.report_data.get('passed_cases', 0)
+        failed_cases = self.report_data.get('failed_cases', 0)
+        error_cases = self.report_data.get('error_cases', 0)
+
+        self.total_cases_label.setText(str(total_cases))
+        self.passed_cases_label.setText(str(passed_cases))
+        self.failed_cases_label.setText(str(failed_cases))
+        self.error_cases_label.setText(str(error_cases))
+
+        # 计算通过率
+        if total_cases > 0:
+            success_rate = (passed_cases / total_cases) * 100
+            self.success_rate_label.setText(f"{success_rate:.1f}%")
+            self.progress_bar.setValue(int(success_rate))
+        else:
+            self.success_rate_label.setText("0%")
+            self.progress_bar.setValue(0)
+
+        # 加载用例树形结构
+        self.load_case_tree()
+    
+    def _get_case_status(self, steps):
+        """根据步骤状态确定用例状态"""
+        if not steps:
+            return 'unknown'
+        
+        status_priority = {
+            'error': 4,
+            'failure': 3,
+            'skipped': 2,
+            'success': 1
+        }
+        
+        # 获取最高优先级的状态
+        highest_priority = 0
+        case_status = 'success'
+        
+        for step in steps:
+            status = step.get('status', 'skipped')
+            priority = status_priority.get(status, 0)
+            if priority > highest_priority:
+                highest_priority = priority
+                case_status = status
+        
+        return case_status
+    
+    def _calculate_case_duration(self, steps):
+        """计算用例总执行时间"""
+        total_duration = 0.0
+        for step in steps:
+            duration = step.get('duration', 0)
+            try:
+                total_duration += float(duration)
+            except (ValueError, TypeError):
+                # 如果转换失败，跳过该步骤
+                continue
+        return total_duration
+
+    def _format_steps_data(self, steps):
+        """格式化步骤数据"""
+        formatted_steps = []
+        
+        for step in steps:
+            # 优先使用step_name字段，如果为空则使用api_name字段，最后使用默认值
+            step_name = step.get('step_name') or step.get('api_name', '未知接口')
+            formatted_step = {
+                'step_name': step_name,
+                'status': step.get('status', 'skipped'),
+                'duration': step.get('duration', 0),  # 使用duration字段
+                'execution_logs': step.get('execution_logs', [])
+            }
+            formatted_steps.append(formatted_step)
+        
+        return formatted_steps
+    
+    def load_case_tree(self):
+        """加载用例布局结构 - 使用新的布局架构"""
+        try:
+            # 清空现有内容
+            for i in reversed(range(self.steps_layout.count())):
+                item = self.steps_layout.itemAt(i)
+                if item.widget():
+                    item.widget().deleteLater()
+            
+            # 检查report_data中是否包含id字段
+            if 'id' not in self.report_data:
+                print(f"报告数据缺少id字段: {self.report_data}")
+                return
+                
+            report_id = self.report_data['id']
+            print(f"开始加载报告 {report_id} 的步骤结果")
+            
+            # 从数据库加载步骤结果
+            step_results = self.report_service.get_step_results_by_report(report_id)
+            print(f"获取到 {len(step_results)} 个步骤结果")
+            
+            # 打印详细的步骤数据信息
+            if step_results:
+                print("[DEBUG] 步骤数据详细内容:")
+                for i, step in enumerate(step_results[:5]):  # 只打印前5个步骤
+                    print(f"[DEBUG] 步骤 {i+1}:")
+                    print(f"[DEBUG]   case_id: {step.get('case_id')}")
+                    print(f"[DEBUG]   case_name: {step.get('case_name')}")
+                    print(f"[DEBUG]   step_order: {step.get('step_order')}")
+                    print(f"[DEBUG]   step_name: {step.get('step_name')}")
+                    print(f"[DEBUG]   name: {step.get('name')}")
+                    print(f"[DEBUG]   api_template.name: {step.get('api_template', {}).get('name') if isinstance(step.get('api_template'), dict) else 'N/A'}")
+                    print("")
+            
+            if not step_results:
+                # 添加提示项
+                no_data_label = QLabel("暂无步骤执行数据")
+                no_data_label.setAlignment(Qt.AlignCenter)
+                no_data_label.setStyleSheet("color: gray; font-size: 14px; padding: 20px;")
+                self.steps_layout.insertWidget(0, no_data_label)
+                return
+            
+            # 按用例分组
+            case_groups = {}
+            for step in step_results:
+                case_id = step.get('case_id')
+                if case_id not in case_groups:
+                    case_groups[case_id] = []
+                case_groups[case_id].append(step)
+            
+            print(f"按用例分组后得到 {len(case_groups)} 个用例组")
+            
+            # 创建用例组件
+            for case_id, steps in case_groups.items():
+                # 获取用例名称（从第一个步骤中获取），直接使用用例名称而不是"用例 X"格式
+                case_name = steps[0].get('case_name', f'用例 {case_id}') if steps else f'用例 {case_id}'
+                # 如果用例名称是"用例 X"格式，提取实际用例名称
+                if case_name.startswith('用例 '):
+                    # 尝试从步骤数据中获取实际用例名称
+                    actual_case_name = steps[0].get('case_name', case_name) if steps else case_name
+                    case_name = actual_case_name
+                
+                print(f"[DEBUG] 创建用例: case_id={case_id}, case_name={case_name}")
+                
+                # 创建用例数据
+                case_data = {
+                    'status': self._get_case_status(steps),
+                    'steps': self._format_steps_data(steps),
+                    'duration': self._calculate_case_duration(steps)  # 计算用例总执行时间
+                }
+                
+                # 创建CaseItem组件
+                case_item = CaseItem(case_name, case_data)
+                
+                # 添加到布局
+                self.steps_layout.insertWidget(self.steps_layout.count() - 1, case_item)
+            
+            print(f"用例布局加载完成，共 {len(case_groups)} 个用例")
+        except Exception as e:
+            print(f"加载用例布局失败: {e}")
+            import traceback
+            traceback.print_exc()
+    
+
+    
+    def on_case_item_double_clicked(self, item, column):
+        """处理用例树形结构双击事件 - 在新的布局架构中不再需要"""
+        # 在新的布局架构中，双击事件由CaseItem组件内部处理
+        print("[DEBUG] 双击事件在新的布局架构中由组件内部处理")
+    
+    def show_step_logs_dialog(self, step_data):
+        """显示步骤执行日志对话框"""
+        try:
+            # 优先使用step_name字段，如果为空则使用api_name字段，最后使用默认值
+            step_name = step_data.get('step_name') or step_data.get('api_name', '未知接口')
+            
+            # 创建对话框
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"步骤执行日志 - {step_name}")
+            dialog.setMinimumSize(800, 600)
+            
+            layout = QVBoxLayout(dialog)
+            
+            # 步骤基本信息
+            info_group = QGroupBox("步骤信息")
+            info_layout = QFormLayout(info_group)
+            
+            step_order = step_data.get('step_order', 0)
+            status = step_data.get('status', 'skipped')
+            execution_time = step_data.get('execution_time', 0)
+            
+            info_layout.addRow("步骤序号:", QLabel(str(step_order)))
+            info_layout.addRow("接口名称:", QLabel(step_name))
+            info_layout.addRow("执行状态:", QLabel({
+                'success': '通过',
+                'failure': '失败', 
+                'error': '错误',
+                'skipped': '跳过'
+            }.get(status, status)))
+            info_layout.addRow("执行时间:", QLabel(f"{execution_time:.2f}秒"))
+            
+            layout.addWidget(info_group)
+            
+            # 执行日志区域
+            logs_group = QGroupBox("执行日志")
+            logs_layout = QVBoxLayout(logs_group)
+            
+            # 日志文本框
+            logs_text = QTextEdit()
+            logs_text.setReadOnly(True)
+            logs_text.setFont(QFont("Consolas", 10))
+            logs_text.setStyleSheet("""
+                QTextEdit {
+                    border: 1px solid #e1e4e8;
+                    border-radius: 4px;
+                    background: #fafbfc;
+                    padding: 12px;
+                    font-size: 13px;
+                    line-height: 1.5;
+                }
+            """)
+            
+            # 加载执行日志
+            execution_logs = step_data.get('execution_logs', [])
+            if execution_logs:
+                for log in execution_logs:
+                    timestamp = log.get('timestamp', '')
+                    level = log.get('level', 'info')
+                    message = log.get('message', '')
+                    
+                    # 根据日志级别设置颜色
+                    if level == "error":
+                        color = "red"
+                        prefix = "[ERROR]"
+                    elif level == "warning":
+                        color = "orange"
+                        prefix = "[WARN]"
+                    elif level == "success":
+                        color = "green"
+                        prefix = "[SUCCESS]"
+                    else:
+                        color = "black"
+                        prefix = "[INFO]"
+                    
+                    # 格式化日志消息
+                    log_entry = f"<span style='color: gray;'>[{timestamp}]</span> <span style='color: {color};'>{prefix}</span> {message}"
+                    logs_text.append(log_entry)
+            else:
+                logs_text.setText("暂无执行日志")
+            
+            logs_layout.addWidget(logs_text)
+            layout.addWidget(logs_group)
+            
+            # 按钮区域
+            button_box = QDialogButtonBox(QDialogButtonBox.Close)
+            button_box.rejected.connect(dialog.reject)
+            layout.addWidget(button_box)
+            
+            dialog.exec_()
+            
+        except Exception as e:
+            print(f"显示步骤日志对话框失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+class CaseItem(QWidget):
+    """用例项组件 - 支持展开收起，管理步骤和日志容器"""
+    
+    def __init__(self, case_name, case_data, parent=None):
+        super().__init__(parent)
+        self.case_name = case_name
+        self.case_data = case_data
+        self.is_expanded = False
+        self.step_items = []
+        self.step_logs_containers = {}  # 存储每个步骤的日志容器
+        self.init_ui()
+        self.load_case_steps()
+    
+    def init_ui(self):
+        """初始化界面"""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 用例标题栏 - 添加背景容器
+        self.header_widget = QWidget()
+        self.header_widget.setCursor(Qt.PointingHandCursor)
+        # 启用鼠标跟踪以接收鼠标事件
+        self.header_widget.setMouseTracking(True)
+        header_layout = QHBoxLayout(self.header_widget)
+        header_layout.setContentsMargins(12, 8, 12, 8)
+        
+        # 为标题栏添加背景容器
+        self.header_container = QWidget()
+        self.header_container.setStyleSheet("""
+            QWidget {
+                background: #e6f3ff;  /* 统一的浅蓝色背景 */
+                border: none;        /* 去除边框 */
+                border-radius: 20px; /* 加大倒角，呈现半圆样式 */
+                margin: 2px;
+            }
+        """)
+        header_container_layout = QHBoxLayout(self.header_container)
+        header_container_layout.setContentsMargins(12, 8, 12, 8)
+        
+        # 展开/收起按钮 - 使用图片图标
+        self.expand_btn = QPushButton()
+        self.expand_btn.setFixedSize(20, 20)
+        self.expand_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                qproperty-iconSize: 14px;
+            }
+            QPushButton:hover {
+                background: #f0f0f0;
+                border-radius: 3px;
+            }
+        """)
+        self.expand_btn.clicked.connect(self.toggle_expand)
+        
+        # 设置初始图标
+        self.update_expand_icon()
+        
+        # 用例名称 - 加大字体
+        self.case_label = QLabel(self.case_name)
+        self.case_label.setStyleSheet("font-weight: 600; font-size: 16px; color: #24292f;")
+        
+        # 用例状态信息 - 左边三个字段
+        left_info_widget = QWidget()
+        left_layout = QHBoxLayout(left_info_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(20)
+        
+        # 步骤数量
+        steps = self.case_data.get('steps', [])
+        self.step_count_label = QLabel(f"{len(steps)} 个步骤")
+        self.step_count_label.setStyleSheet("color: #666; font-size: 14px;")
+        
+        # 耗时
+        duration = self.case_data.get('duration', 0)
+        self.duration_label = QLabel(f"耗时: {duration:.2f}s")
+        self.duration_label.setStyleSheet("color: #666; font-size: 14px;")
+        
+        left_layout.addWidget(self.case_label)
+        left_layout.addWidget(self.step_count_label)
+        left_layout.addWidget(self.duration_label)
+        left_layout.addStretch()
+        
+        # 右边状态显示 - PASS/FAIL
+        self.status_label = QWidget()
+        status_layout = QHBoxLayout(self.status_label)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setAlignment(Qt.AlignRight)
+        
+        status = self.case_data.get('status', 'unknown')
+        status_text = {
+            'success': 'PASS',
+            'failure': 'FAIL',
+            'error': 'FAIL',
+            'skipped': 'SKIP',
+            'unknown': 'UNKNOWN'
+        }.get(status, status)
+        
+        self.status_label_text = QLabel(status_text)
+        status_color = {
+            'success': '#4CAF50',
+            'failure': '#F44336',
+            'error': '#FF9800',
+            'skipped': '#9E9E9E',
+            'unknown': '#9E9E9E'
+        }.get(status, '#9E9E9E')
+        self.status_label_text.setStyleSheet(f"color: {status_color}; font-size: 18px; font-weight: bold;")
+        
+        status_layout.addWidget(self.status_label_text)
+        
+        # 将组件添加到背景容器中
+        header_container_layout.addWidget(self.expand_btn)
+        header_container_layout.addWidget(left_info_widget)
+        header_container_layout.addStretch()
+        header_container_layout.addWidget(self.status_label)
+        
+        # 将背景容器添加到标题栏
+        header_layout.addWidget(self.header_container)
+        
+        # 步骤列表容器
+        self.steps_container = QWidget()
+        self.steps_container.setVisible(self.is_expanded)
+        self.steps_layout = QVBoxLayout(self.steps_container)
+        self.steps_layout.setContentsMargins(32, 0, 0, 0)
+        self.steps_layout.setSpacing(4)
+        
+        # 不再使用单独的日志布局，日志容器将直接插入到步骤布局中
+        layout.addWidget(self.header_widget)
+        layout.addWidget(self.steps_container)
+        
+        # 设置样式
+        self.update_case_style()
+    
+    def update_case_style(self):
+        """根据用例状态更新样式"""
+        # 统一使用浅蓝色背景，不区分状态
+        bg_color = '#e6f3ff'  # 浅蓝色背景
+        
+        # 设置用例样式 - 应用到header_container，去除hover效果
+        self.header_container.setStyleSheet(f"""
+            QWidget {{
+                background: {bg_color};
+                border: none;        /* 去除边框 */
+                border-radius: 12px;
+                margin: 2px;
+            }}
+        """)
+    
+    def get_icon(self, icon_name):
+        """获取图标 - 复制自ReportDetailPage类的实现"""
+        try:
+            # 打包后路径处理：尝试从 PyInstaller 临时解压目录加载
+            if getattr(sys, 'frozen', False):
+                # 打包后的可执行文件路径
+                base_path = sys._MEIPASS
+                # 尝试从打包后的 resources/icons 目录加载
+                icon_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试直接加载图标文件
+                icon_path = os.path.join(base_path, icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试从当前目录加载
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+            
+            # 开发环境：尝试从 ui/interface_auto/icons 目录加载
+            icon_path = os.path.join("src", "ui", "interface_auto", "icons", icon_name)
+            if os.path.exists(icon_path):
+                return QIcon(icon_path)
+            
+            # 尝试从 resources/icons 目录加载
+            icon_path = os.path.join("src", "resources", "icons", icon_name)
+            if os.path.exists(icon_path):
+                return QIcon(icon_path)
+        except:
+            pass
+        return QIcon()
+
+    def update_expand_icon(self):
+        """更新展开/收起图标"""
+        if self.is_expanded:
+            # 展开状态：使用向下箭头图标
+            icon = self.get_icon("exband_down.png")
+        else:
+            # 收起状态：使用向左箭头图标
+            icon = self.get_icon("expand_left.png")
+        
+        # 设置图标
+        self.expand_btn.setIcon(icon)
+    
+    def mouseDoubleClickEvent(self, event):
+        """处理鼠标双击事件"""
+        # 检查双击是否发生在标题栏区域
+        if self.header_widget.rect().contains(event.pos()):
+            self.toggle_expand()
+        super().mouseDoubleClickEvent(event)
+    
+    def toggle_expand(self):
+        """切换用例展开/收起状态"""
+        self.is_expanded = not self.is_expanded
+        
+        print(f"[DEBUG] CaseItem toggle_expand: self.is_expanded={self.is_expanded}")
+        
+        # 更新按钮图标
+        self.update_expand_icon()
+        
+        # 显示/隐藏步骤列表
+        self.steps_container.setVisible(self.is_expanded)
+        
+        # 显示/隐藏所有步骤的日志容器
+        for step_index, logs_data in self.step_logs_containers.items():
+            logs_scroll_area = logs_data['scroll_area']
+            # 只有当用例展开且步骤本身也展开时才显示日志容器
+            step_expanded = self.step_items[step_index].is_expanded
+            should_show = self.is_expanded and step_expanded
+            print(f"[DEBUG] 步骤 {step_index}: step_expanded={step_expanded}, should_show={should_show}")
+            logs_scroll_area.setVisible(should_show)
+    
+    def load_case_steps(self):
+        """加载用例步骤"""
+        steps = self.case_data.get('steps', [])
+        print(f"[DEBUG] 加载用例步骤，步骤数量: {len(steps)}")
+        for step_index, step_data in enumerate(steps):
+            # 获取步骤名称，优先使用接口名称，如果没有则使用默认名称
+            # 直接显示步骤名称，而不是"步骤 X：接口名称"格式
+            api_name = step_data.get('step_name') or step_data.get('api_template', {}).get('name') or step_data.get('name', '未知接口')
+            step_display_name = api_name  # 直接使用接口名称
+            
+            print(f"[DEBUG] 步骤 {step_index}: api_name={step_data.get('step_name')}, api_template.name={step_data.get('api_template', {}).get('name')}, name={step_data.get('name')}, 最终显示名称: {step_display_name}")
+            
+            step_item = StepItem(step_display_name, step_index, step_data, self, self)
+            self.steps_layout.addWidget(step_item)
+            self.step_items.append(step_item)
+            
+            # 为每个步骤创建日志容器
+            self.create_step_logs_container(step_item, step_index)
+    
+    def create_step_logs_container(self, step_item, step_index):
+        """为步骤创建日志容器"""
+        # 创建滚动区域
+        logs_scroll_area = QScrollArea()
+        logs_scroll_area.setWidgetResizable(True)
+        logs_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        logs_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        logs_scroll_area.setFixedHeight(250)  # 固定高度，超出滚动
+        logs_scroll_area.setVisible(False)  # 默认隐藏
+        logs_scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: #ffffff;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+            }
+            QScrollBar:vertical {
+                background: #f5f5f5;
+                width: 12px;
+                margin: 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #c1c1c1;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #a8a8a8;
+            }
+            QScrollBar::handle:vertical:pressed {
+                background: #787878;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+            QScrollBar:horizontal {
+                background: #f5f5f5;
+                height: 12px;
+                margin: 0px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #c1c1c1;
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #a8a8a8;
+            }
+            QScrollBar::handle:horizontal:pressed {
+                background: #787878;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                border: none;
+                background: none;
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
+        """)
+        
+        # 创建日志容器
+        logs_container = QWidget()
+        logs_layout = QVBoxLayout(logs_container)
+        logs_layout.setContentsMargins(30, 2, 0, 2)  # 减少边距，更紧凑
+        logs_layout.setSpacing(1)  # 减少间距
+        logs_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)  # 居上左对齐
+        
+        logs_container.setStyleSheet("""
+            QWidget {
+                background: #ffffff;
+                border: none;
+            }
+        """)
+        
+        logs_scroll_area.setWidget(logs_container)
+        
+        # 存储日志容器引用
+        self.step_logs_containers[step_index] = {
+            'scroll_area': logs_scroll_area,
+            'container': logs_container,
+            'layout': logs_layout
+        }
+        
+        # 将日志容器直接插入到步骤布局中对应的步骤项后面
+        # 计算插入位置：步骤项的位置 + 1
+        step_position = self.steps_layout.indexOf(step_item) + 1
+        self.steps_layout.insertWidget(step_position, logs_scroll_area)
+        
+        # 加载步骤日志到容器中
+        self.load_step_logs_to_container(step_item, step_index)
+    
+    def load_step_logs_to_container(self, step_item, step_index):
+        """加载步骤日志到对应的容器中（文本编辑框版本）"""
+        if step_index not in self.step_logs_containers:
+            return
+            
+        logs_container = self.step_logs_containers[step_index]['container']
+        logs_layout = self.step_logs_containers[step_index]['layout']
+        
+        # 清空现有日志
+        while logs_layout.count():
+            child = logs_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # 创建新的LogItem组件（文本编辑框版本）
+        log_item = LogItem(step_item.step_name, step_index, step_item.step_data, self)
+        logs_layout.addWidget(log_item)
+    
+    def on_step_expand_changed(self, step_item, is_expanded):
+        """处理步骤展开/收起状态变化"""
+        step_index = step_item.step_index
+        
+        print(f"[DEBUG] on_step_expand_changed: step_index={step_index}, is_expanded={is_expanded}, self.is_expanded={self.is_expanded}")
+        
+        if step_index not in self.step_logs_containers:
+            print(f"[DEBUG] 步骤 {step_index} 的日志容器不存在")
+            return
+            
+        logs_scroll_area = self.step_logs_containers[step_index]['scroll_area']
+        
+        # 显示/隐藏对应的日志容器
+        # 只有当用例展开且步骤本身也展开时才显示日志容器
+        should_show = self.is_expanded and is_expanded
+        print(f"[DEBUG] 设置日志容器可见性: {should_show}")
+        logs_scroll_area.setVisible(should_show)
+        
+        # 强制更新布局
+        self.updateGeometry()
+        if self.parent():
+            self.parent().updateGeometry()
+
+
+class StepItem(QWidget):
+    """步骤项组件 - 只包含步骤条本身，日志容器由父组件管理"""
+    
+    def __init__(self, step_name, step_index, step_data, parent=None, case_item_ref=None):
         super().__init__(parent)
         self.step_name = step_name
         self.step_index = step_index
+        self.step_data = step_data
+        self.is_expanded = False
+        self.log_items = []
+        self.logs_scroll_area = None  # 日志容器由父组件管理
+        self.case_item_ref = case_item_ref  # 保存CaseItem引用
+        self.init_ui()
+        self.load_step_logs()
+    
+    def init_ui(self):
+        """初始化界面"""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 步骤标题栏 - 添加背景容器
+        self.header_widget = QWidget()
+        # 移除点击光标，设置不可点击
+        header_layout = QHBoxLayout(self.header_widget)
+        header_layout.setContentsMargins(12, 6, 12, 6)
+        
+        # 为步骤标题栏添加背景容器
+        self.header_container = QWidget()
+        self.header_container.setStyleSheet("""
+            QWidget {
+                background: #ffffff;
+                border: none;        /* 去除边框 */
+                border-radius: 20px; /* 加大倒角，呈现半圆样式 */
+                margin: 1px;
+            }
+        """)
+        header_container_layout = QHBoxLayout(self.header_container)
+        header_container_layout.setContentsMargins(12, 6, 12, 6)
+        
+        # 展开/收起按钮 - 使用图片图标
+        self.expand_btn = QPushButton()
+        self.expand_btn.setFixedSize(18, 18)
+        self.expand_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: transparent;
+                qproperty-iconSize: 12px;
+            }
+            QPushButton:hover {
+                background: #f0f0f0;
+                border-radius: 3px;
+            }
+        """)
+        self.expand_btn.clicked.connect(self.toggle_expand)
+        
+        # 设置初始图标
+        self.update_expand_icon()
+        
+        # 步骤名称 - 加大字体
+        self.step_label = QLabel(self.step_name)
+        self.step_label.setStyleSheet("font-weight: 500; font-size: 15px; color: #24292f;")
+        
+        # 设置步骤条固定高度为50像素
+        self.header_container.setFixedHeight(50)
+        
+        # 左边三个字段
+        left_info_widget = QWidget()
+        left_layout = QHBoxLayout(left_info_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(15)
+        
+        # 日志数量
+        execution_logs = self.step_data.get('execution_logs', '')
+        # 计算文本格式日志的行数（非空行）
+        log_lines = [line.strip() for line in execution_logs.strip().split('\n') if line.strip()]
+        log_count = len(log_lines)
+        self.log_count_label = QLabel(f"{log_count} 条日志")
+        self.log_count_label.setStyleSheet("color: #666; font-size: 13px;")
+        
+        # 执行时间 - 使用duration字段
+        duration = self.step_data.get('duration', 0)
+        self.time_label = QLabel(f"耗时: {duration:.2f}s")
+        self.time_label.setStyleSheet("color: #666; font-size: 13px;")
+        
+        left_layout.addWidget(self.step_label)
+        left_layout.addWidget(self.log_count_label)
+        left_layout.addWidget(self.time_label)
+        left_layout.addStretch()
+        
+        # 右边状态显示 - PASS/FAIL
+        self.status_label = QWidget()
+        status_layout = QHBoxLayout(self.status_label)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setAlignment(Qt.AlignRight)
+        
+        status = self.step_data.get('status', 'skipped')
+        status_text = {
+            'success': 'PASS',
+            'failure': 'FAIL',
+            'error': 'FAIL',
+            'skipped': 'SKIP'
+        }.get(status, status)
+        
+        self.status_label_text = QLabel(status_text)
+        status_color = {
+            'success': '#4CAF50',
+            'failure': '#F44336',
+            'error': '#FF9800',
+            'skipped': '#9E9E9E'
+        }.get(status, '#9E9E9E')
+        self.status_label_text.setStyleSheet(f"color: {status_color}; font-size: 16px; font-weight: bold;")
+        
+        status_layout.addWidget(self.status_label_text)
+        
+        # 将组件添加到背景容器中
+        header_container_layout.addWidget(self.expand_btn)
+        header_container_layout.addWidget(left_info_widget)
+        header_container_layout.addStretch()
+        header_container_layout.addWidget(self.status_label)
+        
+        # 将背景容器添加到标题栏
+        header_layout.addWidget(self.header_container)
+        
+        # 只添加步骤标题栏，日志容器由父组件管理
+        layout.addWidget(self.header_widget)
+        
+        # 启用鼠标跟踪以接收鼠标事件
+        self.header_widget.setMouseTracking(True)
+        
+        # 设置样式
+        self.update_step_style()
+    
+    def update_step_style(self):
+        """根据步骤状态更新样式"""
+        status = self.step_data.get('status', 'unknown')
+        
+        # 根据状态设置背景色 - 参考执行日志弹窗的步骤条样式
+        if status == 'success':
+            bg_color = '#E8F5E8'  # 浅绿色
+        elif status == 'failure':
+            bg_color = '#FFE8E8'  # 浅红色
+        elif status == 'error':
+            bg_color = '#FFF3CD'  # 浅黄色
+        else:
+            bg_color = '#FFFFFF'  # 默认白色背景，参考执行日志弹窗的StepLogItem
+        
+        # 设置步骤样式 - 应用到header_container，去除边框和hover效果
+        self.header_container.setStyleSheet(f"""
+            QWidget {{
+                border: none;        /* 去除边框 */
+                border-radius: 12px;
+                background: {bg_color};
+                margin: 1px;
+            }}
+        """)
+    
+    def get_icon(self, icon_name):
+        """获取图标 - 复制自ReportDetailPage类的实现"""
+        try:
+            # 打包后路径处理：尝试从 PyInstaller 临时解压目录加载
+            if getattr(sys, 'frozen', False):
+                # 打包后的可执行文件路径
+                base_path = sys._MEIPASS
+                # 尝试从打包后的 resources/icons 目录加载
+                icon_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试直接加载图标文件
+                icon_path = os.path.join(base_path, icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试从当前目录加载
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+            
+            # 开发环境：尝试从 ui/interface_auto/icons 目录加载
+            icon_path = os.path.join("src", "ui", "interface_auto", "icons", icon_name)
+            if os.path.exists(icon_path):
+                return QIcon(icon_path)
+            
+            # 尝试从 resources/icons 目录加载
+            icon_path = os.path.join("src", "resources", "icons", icon_name)
+            if os.path.exists(icon_path):
+                return QIcon(icon_path)
+        except:
+            pass
+        return QIcon()
+
+    def update_expand_icon(self):
+         """更新展开/收起图标"""
+         if self.is_expanded:
+             # 展开状态：使用向下箭头图标
+             icon = self.get_icon("exband_down.png")
+         else:
+             # 收起状态：使用向左箭头图标
+             icon = self.get_icon("expand_left.png")
+         
+         # 设置图标
+         self.expand_btn.setIcon(icon)
+    
+    def toggle_expand(self):
+        """切换展开/收起状态"""
+        self.is_expanded = not self.is_expanded
+        
+        print(f"[DEBUG] StepItem toggle_expand: step_index={self.step_index}, is_expanded={self.is_expanded}")
+        
+        # 更新按钮图标
+        self.update_expand_icon()
+        
+        # 通知父组件展开/收起状态变化
+        parent = self.parent()
+        print(f"[DEBUG] 父组件类型: {type(parent)}")
+        print(f"[DEBUG] 父组件对象: {parent}")
+        
+        # 优先使用case_item_ref来调用CaseItem的方法
+        if hasattr(self, 'case_item_ref') and self.case_item_ref:
+            print(f"[DEBUG] 使用case_item_ref调用CaseItem方法")
+            try:
+                self.case_item_ref.on_step_expand_changed(self, self.is_expanded)
+                print(f"[DEBUG] 成功通过case_item_ref调用on_step_expand_changed方法")
+            except Exception as e:
+                print(f"[DEBUG] 通过case_item_ref调用方法失败: {e}")
+        # 如果case_item_ref不存在，尝试使用父组件
+        elif parent:
+            try:
+                # 直接调用父组件的on_step_expand_changed方法
+                print(f"[DEBUG] 直接调用父组件的on_step_expand_changed方法")
+                parent.on_step_expand_changed(self, self.is_expanded)
+                print(f"[DEBUG] 成功调用父组件的on_step_expand_changed方法")
+            except AttributeError as e:
+                print(f"[DEBUG] 父组件没有on_step_expand_changed方法: {e}")
+                # 检查父组件是否有其他相关方法
+                print(f"[DEBUG] 父组件方法列表: {[method for method in dir(parent) if not method.startswith('_')]}")
+                
+                # 如果父组件没有该方法，尝试调用CaseItem的toggle_expand方法来更新日志显示
+                try:
+                    print(f"[DEBUG] 尝试调用父组件的toggle_expand方法")
+                    parent.toggle_expand()
+                    print(f"[DEBUG] 成功调用父组件的toggle_expand方法")
+                except AttributeError as e2:
+                    print(f"[DEBUG] 父组件也没有toggle_expand方法: {e2}")
+            except Exception as e:
+                print(f"[DEBUG] 调用父组件方法时发生其他错误: {e}")
+        else:
+            print(f"[DEBUG] 父组件为None")
+        
+        # 强制更新布局
+        self.updateGeometry()
+        if parent:
+            parent.updateGeometry()
+        
+        # 强制更新布局，确保立即显示
+        self.updateGeometry()
+        if parent:
+            parent.updateGeometry()
+    
+    def mouseDoubleClickEvent(self, event):
+        """鼠标双击事件处理"""
+        # 检查双击是否发生在标题栏区域
+        if self.header_widget.rect().contains(event.pos()):
+            # 双击标题栏区域时触发展开/收起
+            self.toggle_expand()
+            event.accept()
+        else:
+            event.ignore()
+    
+    def load_step_logs(self):
+        """加载步骤日志 - 现在由父组件管理"""
+        # 通知父组件加载步骤日志
+        if hasattr(self.parent(), 'load_step_logs_to_container'):
+            self.parent().load_step_logs_to_container(self, self.step_index)
+
+
+class LogItem(QWidget):
+    """日志项组件 - 展示日志内容（文本编辑框版本，与执行日志弹窗保持一致）"""
+    
+    def __init__(self, step_name, step_index, step_data, parent=None):
+        super().__init__(parent)
+        self.step_name = step_name
+        self.step_index = step_index
+        self.step_data = step_data
+        self.logs = []
+        # 步骤执行状态：None-未执行，True-执行成功，False-执行报错
+        self.step_status = None
+        self.init_ui()
+        # 加载执行日志
+        self.load_step_logs()
+        # 确保初始化后组件可见（现在组件始终可见）
+        self.setVisible(True)
+    
+    def load_step_logs(self):
+        """加载步骤执行日志 - 支持文本格式的execution_logs字段"""
+        execution_logs = self.step_data.get('execution_logs', '')
+        
+        # 清空现有日志
+        self.logs = []
+        self.logs_text.clear()
+        
+        # 处理文本格式的日志数据
+        if execution_logs and isinstance(execution_logs, str):
+            # 按行分割日志
+            log_lines = execution_logs.strip().split('\n')
+            
+            for log_line in log_lines:
+                if not log_line.strip():
+                    continue
+                    
+                # 解析日志行格式：直接使用数据库中的标准格式
+                # 标准格式: [时间戳] 级别: 消息
+                import re
+                
+                # 尝试匹配标准格式: [时间戳] 级别: 消息
+                pattern = r'^\[(.*?)\] (.*?): (.*)$'
+                match = re.match(pattern, log_line)
+                
+                if match:
+                    # 提取时间戳
+                    timestamp = match.group(1).strip()
+                    
+                    # 提取级别
+                    level_part = match.group(2).strip()
+                    level = level_part.upper()
+                    
+                    # 提取消息
+                    message = match.group(3).strip()
+                else:
+                    # 如果格式不标准，使用默认值
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    level = "INFO"
+                    message = log_line
+                
+                # 格式化日志消息（支持大小写）
+                level_lower = level.lower()
+                if level_lower == "error":
+                    color = "red"
+                    prefix = "[ERROR]"
+                elif level_lower == "warning" or level_lower == "warn":
+                    color = "orange"
+                    prefix = "[WARN]"
+                elif level_lower == "success":
+                    color = "green"
+                    prefix = "[SUCCESS]"
+                else:
+                    color = "black"
+                    prefix = "[INFO]"
+                
+                # 整条日志使用相同的颜色
+                log_entry = f"<span style='color: {color};'>[{timestamp}] {prefix} {message}</span>"
+                
+                # 添加到日志文本框
+                self.logs_text.append(log_entry)
+                
+                # 保存到日志列表
+                self.logs.append({
+                    'timestamp': timestamp,
+                    'level': level.lower(),
+                    'message': message
+                })
+        
+        # 更新日志数量显示（现在不需要显示在UI上，但内部计数仍然有效）
+        # self.log_count_label.setText(f"{len(self.logs)} 条日志")  # 已移除log_count_label
+    
+    def init_ui(self):
+        """初始化界面"""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)  # 去除内边距，让日志文本框充满整个容器
+        
+        # 直接显示日志文本框，不包含步骤标题栏
+        self.logs_text = QTextEdit()
+        self.logs_text.setReadOnly(True)
+        self.logs_text.setFont(QFont("Consolas", 10))
+        # 移除最小高度设置，让外层容器统一控制滚动
+        # 移除日志文本框的样式，让外层容器统一处理样式
+        layout.addWidget(self.logs_text)
+        
+        # 设置外层容器样式，统一处理边框和背景
+        self.setStyleSheet("""
+            LogItem {
+                border: 1px solid #e1e4e8;
+                border-radius: 12px;
+                background: #ffffff;
+                margin: 4px;
+            }
+            LogItem:hover {
+                border-color: #d0d7de;
+                background: #f6f8fa;
+            }
+            LogItem QTextEdit {
+                border: none;
+                background: transparent;
+                padding: 12px;
+                font-size: 13px;
+                line-height: 1.5;
+            }
+        """)
+    
+
+    
+    def add_log(self, message, level="info"):
+        """添加日志消息"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 根据级别设置颜色（支持大小写）
+        level_lower = level.lower()
+        if level_lower == "error":
+            color = "red"
+            prefix = "[ERROR]"
+        elif level_lower == "warning" or level_lower == "warn":
+            color = "orange"
+            prefix = "[WARN]"
+        elif level_lower == "success":
+            color = "green"
+            prefix = "[SUCCESS]"
+        else:
+            color = "black"
+            prefix = "[INFO]"
+        
+        # 处理消息中的换行符，确保HTML格式正确
+        # 将换行符转换为HTML的<br>标签
+        processed_message = message.replace('\n', '<br>')
+        
+        # 格式化日志消息 - 整条日志使用相同的颜色
+        log_entry = f"<span style='color: {color};'>[{timestamp}] {prefix} {processed_message}</span>"
+        
+        # 添加到日志文本框
+        self.logs_text.append(log_entry)
+        
+        # 自动滚动到底部
+        cursor = self.logs_text.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.logs_text.setTextCursor(cursor)
+        
+        # 保存到日志列表
+        self.logs.append({
+            'timestamp': timestamp,
+            'level': level,
+            'message': message
+        })
+        
+        # 更新步骤状态：智能判断最终状态
+        if self.step_status is None:
+            # 第一次添加日志，根据日志级别设置初始状态
+            if level == "error" or "失败" in message or "failure" in message.lower():
+                self.step_status = False
+            else:
+                self.step_status = True
+        else:
+            # 后续日志：优先根据最终执行结果判断
+            if level == "error" or "失败" in message or "failure" in message.lower():
+                self.step_status = False
+        
+
+
+class StepLogItem(QWidget):
+    """步骤日志项组件 - 合并整行单元格版本"""
+    
+    def __init__(self, step_name, step_index, step_data, parent=None):
+        super().__init__(parent)
+        self.step_name = step_name
+        self.step_index = step_index
+        self.step_data = step_data
         # 默认收起步骤日志项，使界面更简洁
         self.is_expanded = False
         self.logs = []
         # 步骤执行状态：None-未执行，True-执行成功，False-执行报错
         self.step_status = None
         self.init_ui()
+        # 加载执行日志
+        self.load_step_logs()
         # 确保初始化后组件可见
         self.ensure_visibility()
+    
+    def load_step_logs(self):
+        """加载步骤执行日志"""
+        execution_logs = self.step_data.get('execution_logs', '')
+        
+        # 清空现有日志
+        self.logs = []
+        self.logs_text.clear()
+        
+        # 处理执行日志（数据库存储的是格式化好的文本）
+        if isinstance(execution_logs, str):
+            # 按行分割日志
+            log_lines = execution_logs.split('\n')
+            for log_line in log_lines:
+                if log_line.strip():  # 跳过空行
+                    # 根据日志级别确定整行颜色
+                    color = self._get_log_line_color(log_line)
+                    
+                    # 处理消息中的换行符，确保HTML格式正确
+                    processed_message = log_line.replace('\n', '<br>')
+                    
+                    # 使用整行颜色显示日志
+                    log_entry = f"<span style='color: {color};'>{processed_message}</span>"
+                    
+                    # 添加到日志文本框
+                    self.logs_text.append(log_entry)
+                    
+                    # 保存到日志列表
+                    self.logs.append({
+                        'timestamp': '',
+                        'level': 'info',
+                        'message': log_line
+                    })
+        else:
+            # 兼容旧格式（字典列表）
+            for log in execution_logs:
+                level = log.get('level', 'info')
+                message = log.get('message', '')
+                timestamp = log.get('timestamp', '')
+                
+                # 格式化日志消息（支持大小写）
+                level_lower = level.lower()
+                if level_lower == "error":
+                    color = "red"
+                    prefix = "[ERROR]"
+                elif level_lower == "warning" or level_lower == "warn":
+                    color = "orange"
+                    prefix = "[WARN]"
+                elif level_lower == "success":
+                    color = "green"
+                    prefix = "[SUCCESS]"
+                else:
+                    color = "black"
+                    prefix = "[INFO]"
+                
+                # 如果没有时间戳，使用当前时间
+                if not timestamp:
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                # 处理消息中的换行符，确保HTML格式正确
+                # 将换行符转换为HTML的<br>标签
+                processed_message = message.replace('\n', '<br>')
+                
+                # 使用整行颜色显示日志
+                log_entry = f"<span style='color: {color};'>[{timestamp}] {prefix} {processed_message}</span>"
+                
+                # 添加到日志文本框
+                self.logs_text.append(log_entry)
+                
+                # 保存到日志列表
+                self.logs.append({
+                    'timestamp': timestamp,
+                    'level': level,
+                    'message': message
+                })
+        
+        # 更新日志数量显示
+        self.log_count_label.setText(f"{len(self.logs)} 条日志")
+    
+    def _get_log_line_color(self, log_line):
+        """根据日志行内容确定颜色"""
+        log_line_lower = log_line.lower()
+        
+        # 根据日志级别关键词确定颜色
+        if 'error' in log_line_lower:
+            return 'red'
+        elif 'warning' in log_line_lower or 'warn' in log_line_lower:
+            return 'orange'
+        elif 'success' in log_line_lower:
+            return 'green'
+        elif 'info' in log_line_lower:
+            return 'black'
+        else:
+            # 默认颜色
+            return 'black'
     
     def ensure_visibility(self):
         """确保组件可见性正确设置"""
@@ -49,12 +1560,12 @@ class StepLogItem(QWidget):
         self.setVisible(True)
     
     def init_ui(self):
-        """初始化界面"""
+        """初始化界面 - 合并整行单元格版本"""
         layout = QVBoxLayout(self)
         layout.setSpacing(0)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(0, 0, 0, 0)
         
-        # 步骤标题栏
+        # 步骤标题栏 - 合并整行单元格
         self.header_widget = QWidget()
         header_layout = QHBoxLayout(self.header_widget)
         header_layout.setContentsMargins(12, 8, 12, 8)
@@ -85,35 +1596,75 @@ class StepLogItem(QWidget):
             self.step_label = QLabel(f"步骤 {self.step_index + 1}: {self.step_name}")
         self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #24292f;")
         
+        # 步骤状态和基本信息
+        status_info_widget = QWidget()
+        status_layout = QHBoxLayout(status_info_widget)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(20)
+        
+        # 执行状态
+        status = self.step_data.get('status', 'skipped')
+        status_text = {
+            'success': '通过',
+            'failure': '失败',
+            'error': '错误',
+            'skipped': '跳过'
+        }.get(status, status)
+        
+        self.status_label = QLabel(status_text)
+        status_color = {
+            'success': '#4CAF50',
+            'failure': '#F44336',
+            'error': '#FF9800',
+            'skipped': '#9E9E9E'
+        }.get(status, '#9E9E9E')
+        self.status_label.setStyleSheet(f"color: {status_color}; font-size: 12px; font-weight: 600;")
+        
+        # 执行时间
+        execution_time = self.step_data.get('execution_time', 0)
+        self.time_label = QLabel(f"{execution_time:.2f}秒")
+        self.time_label.setStyleSheet("color: #666; font-size: 12px;")
+        
         # 日志数量
-        self.log_count_label = QLabel("0 条日志")
+        execution_logs = self.step_data.get('execution_logs', [])
+        self.log_count_label = QLabel(f"{len(execution_logs)} 条日志")
         self.log_count_label.setStyleSheet("color: #666; font-size: 12px;")
+        
+        status_layout.addWidget(self.status_label)
+        status_layout.addWidget(self.time_label)
+        status_layout.addWidget(self.log_count_label)
+        status_layout.addStretch()
         
         header_layout.addWidget(self.expand_btn)
         header_layout.addWidget(self.step_label)
         header_layout.addStretch()
-        header_layout.addWidget(self.log_count_label)
+        header_layout.addWidget(status_info_widget)
         
-        # 步骤日志内容区域
+        # 步骤日志内容区域 - 紧凑布局
         self.content_widget = QWidget()
         # 默认收起状态
         self.content_widget.setVisible(self.is_expanded)
         content_layout = QVBoxLayout(self.content_widget)
-        content_layout.setContentsMargins(32, 8, 12, 8)
+        content_layout.setContentsMargins(30, 4, 0, 4)  # 减少边距，更紧凑
+        content_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)  # 居上左对齐
         
-        # 日志文本框
+        # 日志文本框 - 紧凑布局
         self.logs_text = QTextEdit()
         self.logs_text.setReadOnly(True)
-        self.logs_text.setFont(QFont("Consolas", 10))
-        self.logs_text.setMinimumHeight(200)  # 设置最小高度
+        self.logs_text.setFont(QFont("Consolas", 9))  # 减小字体
+        self.logs_text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.logs_text.setFixedHeight(200)  # 固定高度，紧凑显示
         self.logs_text.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #e1e4e8;
-                border-radius: 4px;
-                background: #fafbfc;
+                border-radius: 8px;
+                background: #ffffff;
                 padding: 12px;
-                font-size: 13px;
-                line-height: 1.5;
+                font-size: 11px;
+                line-height: 1.4;
+            }
+            QTextEdit:hover {
+                border-color: #d0d7de;
             }
         """)
         content_layout.addWidget(self.logs_text)
@@ -121,13 +1672,13 @@ class StepLogItem(QWidget):
         layout.addWidget(self.header_widget)
         layout.addWidget(self.content_widget)
         
-        # 设置样式
+        # 设置样式 - 合并整行单元格
         self.setStyleSheet("""
             StepLogItem {
                 border: 1px solid #e1e4e8;
-                border-radius: 6px;
+                border-radius: 12px;
                 background: #ffffff;
-                margin: 2px;
+                margin: 0px;
             }
             StepLogItem:hover {
                 border-color: #d0d7de;
@@ -136,15 +1687,22 @@ class StepLogItem(QWidget):
         """)
     
     def toggle_expand(self):
-        """切换展开/收起状态"""
+        """切换展开/收起状态 - 紧凑布局版本"""
         self.is_expanded = not self.is_expanded
-        self.content_widget.setVisible(self.is_expanded)
         
         # 更新按钮图标
         if self.is_expanded:
             self.expand_btn.setText("▼")
         else:
             self.expand_btn.setText("▶")
+        
+        # 显示/隐藏内容区域
+        self.content_widget.setVisible(self.is_expanded)
+        
+        # 强制更新布局，确保立即显示
+        self.updateGeometry()
+        if self.parent():
+            self.parent().updateGeometry()
     
     def add_log(self, message, level="info"):
         """添加日志消息"""
@@ -496,7 +2054,7 @@ class ReportDetailDialog(QDialog):
         self.load_logs()
 
     def load_step_results(self):
-        """加载步骤执行结果"""
+        """加载步骤执行结果 - 使用新的嵌套层级组件"""
         try:
             # 检查report_data中是否包含id字段
             if 'id' not in self.report_data:
@@ -511,36 +2069,73 @@ class ReportDetailDialog(QDialog):
             
             step_results = self.report_service.get_step_results_by_report(self.report_data['id'])
             
+            # 按用例分组
+            case_groups = {}
             for step in step_results:
-                # 创建步骤日志项
-                step_order = step.get('step_order', 0)
-                api_name = step.get('api_name', '未知接口')
-                step_log_item = StepLogItem(api_name, step_order - 1)  # 步骤序号从0开始
+                case_id = step.get('case_id')
+                if case_id not in case_groups:
+                    case_groups[case_id] = []
+                case_groups[case_id].append(step)
+            
+            # 创建用例项组件
+            for case_id, steps in case_groups.items():
+                # 获取用例名称（从第一个步骤中获取）
+                case_name = steps[0].get('case_name', f'用例 {case_id}') if steps else f'用例 {case_id}'
                 
-                # 添加执行日志
-                execution_logs = step.get('execution_logs', [])
-                if execution_logs:
-                    for log in execution_logs:
-                        level = log.get('level', 'info')
-                        message = log.get('message', '')
-                        step_log_item.add_log(message, level)
-                else:
-                    # 如果没有执行日志，添加基本信息
-                    status = step.get('status', 'skipped')
-                    if status == 'success':
-                        step_log_item.add_log("步骤执行成功", "success")
-                    elif status == 'failure':
-                        step_log_item.add_log("步骤执行失败", "error")
-                    elif status == 'error':
-                        step_log_item.add_log("步骤执行错误", "error")
-                    else:
-                        step_log_item.add_log("步骤未执行", "info")
+                # 创建用例数据
+                case_data = {
+                    'status': self._get_case_status(steps),
+                    'steps': self._format_steps_data(steps)
+                }
+                
+                # 创建用例项组件
+                case_item = CaseItem(case_name, case_data)
                 
                 # 添加到布局
-                self.steps_layout.insertWidget(self.steps_layout.count() - 1, step_log_item)
+                self.steps_layout.insertWidget(self.steps_layout.count() - 1, case_item)
 
         except Exception as e:
             print(f"加载步骤结果失败: {e}")
+    
+    def _get_case_status(self, steps):
+        """根据步骤状态确定用例状态"""
+        if not steps:
+            return 'unknown'
+        
+        status_priority = {
+            'error': 4,
+            'failure': 3,
+            'skipped': 2,
+            'success': 1
+        }
+        
+        # 获取最高优先级的状态
+        highest_priority = 0
+        case_status = 'success'
+        
+        for step in steps:
+            status = step.get('status', 'skipped')
+            priority = status_priority.get(status, 0)
+            if priority > highest_priority:
+                highest_priority = priority
+                case_status = status
+        
+        return case_status
+    
+    def _format_steps_data(self, steps):
+        """格式化步骤数据"""
+        formatted_steps = []
+        
+        for step in steps:
+            formatted_step = {
+                'step_name': step.get('step_name', step.get('step_name', '未知接口')),
+                'status': step.get('status', 'skipped'),
+                'duration': step.get('duration', 0),  # 使用duration字段
+                'execution_logs': step.get('execution_logs', '')
+            }
+            formatted_steps.append(formatted_step)
+        
+        return formatted_steps
 
     def load_logs(self):
         """加载日志内容"""
@@ -564,26 +2159,37 @@ class ReportDetailDialog(QDialog):
             log_content = ""
             for step in step_results:
                 step_order = step.get('step_order', 0)
-                api_name = step.get('api_name', '未知接口')
+                step_name = step.get('step_name', step.get('step_name', '未知接口'))
                 
                 # 添加步骤标题
-                log_content += f"\n=== 步骤 {step_order}: {api_name} ===\n"
+                log_content += f"\n=== 步骤 {step_order}: {step_name} ===\n"
                 
                 # 添加执行日志
-                execution_logs = step.get('execution_logs', [])
+                execution_logs = step.get('execution_logs', '')
                 if execution_logs:
-                    for log in execution_logs:
-                        timestamp = log.get('timestamp', '')
-                        level = log.get('level', 'info')
-                        message = log.get('message', '')
+                    # 解析文本格式的日志行
+                    log_lines = [line.strip() for line in execution_logs.strip().split('\n') if line.strip()]
+                    for log_line in log_lines:
+                        # 解析日志行格式：[时间戳] [级别] 消息
+                        parts = log_line.split(' ', 2)  # 最多分割成3部分
+                        if len(parts) >= 3:
+                            timestamp = parts[0].strip('[]') if parts[0].startswith('[') and parts[0].endswith(']') else ''
+                            level = parts[1].strip('[]') if parts[1].startswith('[') and parts[1].endswith(']') else 'info'
+                            message = parts[2] if len(parts) >= 3 else log_line
+                        else:
+                            # 非标准格式，直接显示整行
+                            timestamp = ''
+                            level = 'info'
+                            message = log_line
                         
                         # 格式化日志级别
                         level_display = {
                             'info': '[INFO]',
                             'warning': '[WARN]',
+                            'warn': '[WARN]',
                             'error': '[ERROR]',
                             'success': '[SUCCESS]'
-                        }.get(level, '[INFO]')
+                        }.get(level.lower(), '[INFO]')
                         
                         log_content += f"[{timestamp}] {level_display} {message}\n"
                 else:
@@ -666,7 +2272,12 @@ class TestReportManager(QWidget):
         QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
-        main_layout = QVBoxLayout(self)
+        # 使用堆栈布局管理列表页和详情页
+        self.stack_layout = QStackedLayout(self)
+        
+        # 创建列表页容器
+        self.list_page = QWidget()
+        main_layout = QVBoxLayout(self.list_page)
 
         # 筛选工具栏
         filter_toolbar = QToolBar()
@@ -966,6 +2577,15 @@ class TestReportManager(QWidget):
         status_layout.addStretch()
 
         main_layout.addLayout(status_layout)
+
+        # 将列表页添加到堆栈布局
+        self.stack_layout.addWidget(self.list_page)
+        
+        # 创建详情页（初始为空，需要时创建）
+        self.detail_page = None
+        
+        # 设置堆栈布局为当前布局
+        self.setLayout(self.stack_layout)
 
         self.setStyleSheet("""
             QTableWidget {
@@ -1773,12 +3393,26 @@ class TestReportManager(QWidget):
         try:
             report_data = self.report_service.get_report_with_details(report_id)
             if report_data:
-                dialog = ReportDetailDialog(self, report_data)
-                dialog.exec_()
+                # 创建详情页（如果不存在）
+                if self.detail_page is None:
+                    self.detail_page = ReportDetailPage(report_data=report_data)
+                    self.detail_page.back_requested.connect(self.show_list_page)
+                    self.stack_layout.addWidget(self.detail_page)
+                else:
+                    # 如果详情页已存在，更新报告数据
+                    self.detail_page.report_data = report_data
+                    self.detail_page.load_report_details()
+                
+                # 切换到详情页
+                self.stack_layout.setCurrentWidget(self.detail_page)
             else:
                 QMessageBox.warning(self, "提示", "报告数据不存在")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"加载报告详情失败: {str(e)}")
+    
+    def show_list_page(self):
+        """显示列表页"""
+        self.stack_layout.setCurrentWidget(self.list_page)
 
     def delete_scheduler_reports(self, scheduler_data):
         """删除调度组的所有报告"""

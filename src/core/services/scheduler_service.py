@@ -65,8 +65,8 @@ class UnifiedSchedulerService:
             self.test_report_service = TestReportService()
             
             # 延迟导入测试执行工具以避免循环导入
-            from src.utils.interface_utils.execute_test_case import ExecuteTestCase
-            self.execute_test_case = ExecuteTestCase()
+            from src.utils.interface_utils.test_case_executor import TestCaseExecutor
+            self.execute_test_case = TestCaseExecutor(execution_mode='scheduler')
             
             # 初始化报告生成工具
             self.report_generator = HTMLReportGenerator()
@@ -405,12 +405,21 @@ class UnifiedSchedulerService:
                     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     logger.info(f"{current_time} [INFO] 🚀 执行测试用例 [{i+1}/{total_count}]: {case_name} (ID: {case_id})")
                     
-                    # 使用ExecuteTestCase工具类执行测试用例，不生成独立报告
-                    execution_result = self.execute_test_case.execute_test_case_unified(
+                    # 使用TestCaseExecutor工具类执行测试用例，不生成独立报告
+                    # 创建新的TestCaseExecutor实例，传递正确的项目ID和执行模式
+                    from src.utils.interface_utils.test_case_executor import TestCaseExecutor
+                    test_case_executor = TestCaseExecutor(
+                        execution_mode='scheduler',
+                        project_id=scheduler_data.get('project_id', 0)
+                    )
+                    
+                    execution_result = test_case_executor.execute_case(
                         case_data, 
+                        stop_on_failure=True,  # 定时调度在断言失败后停止当前用例执行
                         generate_report=False,  # 不生成独立报告
                         scheduler_id=scheduler_id,
-                        parent_report_id=report_id  # 指定父报告ID，将步骤结果关联到统一报告
+                        parent_report_id=report_id,  # 指定父报告ID，将步骤结果关联到统一报告
+                        execution_source='scheduler'  # 设置执行来源为调度模式
                     )
                     
                     # 收集步骤结果

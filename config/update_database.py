@@ -102,7 +102,7 @@ def update_test_step_results_table():
     success = check_and_add_column(
         'test_step_results', 
         'execution_logs', 
-        'JSON COMMENT \'执行日志信息\' AFTER variables_snapshot'
+        'TEXT COMMENT \'执行日志信息（文本格式）\' AFTER variables_snapshot'
     ) and success
     
     return success

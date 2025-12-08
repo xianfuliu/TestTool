@@ -15,9 +15,9 @@ class TestReportService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # 基础查询
+                    # 基础查询 - 添加duration字段查询
                     sql = """
-                        SELECT r.*, c.name as case_name, s.name as scheduler_name
+                        SELECT r.*, c.name as case_name, s.name as scheduler_name, r.duration
                         FROM test_reports r
                         LEFT JOIN test_cases c ON r.case_id = c.id
                         LEFT JOIN test_schedulers s ON r.scheduler_id = s.id
@@ -81,9 +81,9 @@ class TestReportService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # 获取报告基本信息
+                    # 获取报告基本信息 - 添加duration字段查询
                     cursor.execute("""
-                        SELECT r.*, c.name as case_name, s.name as scheduler_name
+                        SELECT r.*, c.name as case_name, s.name as scheduler_name, r.duration
                         FROM test_reports r
                         LEFT JOIN test_cases c ON r.case_id = c.id
                         LEFT JOIN test_schedulers s ON r.scheduler_id = s.id
@@ -112,11 +112,10 @@ class TestReportService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT 
-                            tsr.id, tsr.scheduler_id, tsr.report_id, tsr.case_id, tsr.step_id, tsr.step_order, tsr.status,
-                            tsr.request_data, tsr.response_data,
-                            tsr.execution_logs, tsr.error_message, tsr.start_time, tsr.end_time, tsr.duration,
-                            tcs.name, tcs.pre_processing, tcs.post_processing
+                            tsr.*, 
+                            tc.name as case_name, tcs.name as step_name, tcs.pre_processing, tcs.post_processing
                         FROM test_step_results tsr
+                        LEFT JOIN test_cases tc ON tsr.case_id = tc.id
                         LEFT JOIN test_case_steps tcs ON tsr.step_id = tcs.id
                         WHERE tsr.report_id = %s
                         ORDER BY tsr.step_order ASC
@@ -126,23 +125,24 @@ class TestReportService:
                     step_results = []
                     for row in results:
                         step_result = {
-                            'id': row[0],
-                            'scheduler_id': row[1],
-                            'report_id': row[2],
-                            'case_id': row[3],
-                            'step_id': row[4],
-                            'step_order': row[5],
-                            'status': row[6],
-                            'request_data': json.loads(row[7]) if row[7] else {},
-                            'response_data': json.loads(row[8]) if row[8] else {},
-                            'execution_logs': json.loads(row[9]) if row[9] else [],
-                            'error_message': row[10],
-                            'start_time': row[11],
-                            'end_time': row[12],
-                            'duration': row[13],
-                            'step_name': row[14],
-                            'pre_processing': json.loads(row[15]) if row[15] else {},
-                            'post_processing': json.loads(row[16]) if row[16] else {}
+                            'id': row['id'],
+                            'scheduler_id': row['scheduler_id'],
+                            'report_id': row['report_id'],
+                            'case_id': row['case_id'],
+                            'step_id': row['step_id'],
+                            'step_order': row['step_order'],
+                            'status': row['status'],
+                            'request_data': json.loads(row['request_data']) if row['request_data'] else {},
+                            'response_data': json.loads(row['response_data']) if row['response_data'] else {},
+                            'execution_logs': row['execution_logs'] if row['execution_logs'] else '',
+                            'error_message': row['error_message'],
+                            'start_time': row['start_time'],
+                            'end_time': row['end_time'],
+                            'duration': row['duration'],
+                            'case_name': row['case_name'],
+                            'step_name': row['step_name'],
+                            'pre_processing': json.loads(row['pre_processing']) if row['pre_processing'] else {},
+                            'post_processing': json.loads(row['post_processing']) if row['post_processing'] else {}
                         }
                         
                         # 处理时间字段
@@ -309,7 +309,33 @@ class TestReportService:
                     # 准备数据
                     request_data = json.dumps(step_result.get('request_data', {}), ensure_ascii=False)
                     response_data = json.dumps(step_result.get('response_data', {}), ensure_ascii=False)
-                    execution_logs = json.dumps(step_result.get('execution_logs', []), ensure_ascii=False)
+                    # 将execution_logs从JSON格式改为文本格式，正确格式化日志内容
+                    execution_logs = step_result.get('execution_logs', '')
+                    if isinstance(execution_logs, list):
+                        # 如果是列表格式，正确转换为文本格式
+                        log_lines = []
+                        for log in execution_logs:
+                            if isinstance(log, dict):
+                                # 从字典格式转换为标准格式: [时间戳] 级别: 消息
+                                timestamp = log.get('timestamp', '')
+                                level = log.get('level', 'info').upper()
+                                message = log.get('message', '')
+                                # 格式化时间戳
+                                if timestamp:
+                                    try:
+                                        from datetime import datetime
+                                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                        formatted_timestamp = dt.strftime('%Y-%m-%d %H:%M:%S')
+                                    except (ValueError, AttributeError):
+                                        formatted_timestamp = timestamp
+                                else:
+                                    formatted_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                
+                                log_line = f"[{formatted_timestamp}] {level}: {message}"
+                                log_lines.append(log_line)
+                            else:
+                                log_lines.append(str(log))
+                        execution_logs = '\n'.join(log_lines)
                     
                     params = (
                         step_result.get('scheduler_id'),
