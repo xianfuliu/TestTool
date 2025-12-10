@@ -248,6 +248,7 @@ class TestDataTab(QWidget):
         self.name_label = QLabel("")
         self.name_label.setStyleSheet("font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
         self.name_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        self.name_label.mouseDoubleClickEvent = lambda event: self.copy_value_on_double_click("name")
         name_layout.addWidget(self.name_label)
         name_layout.addStretch()  # 添加弹性空间，让按钮右对齐
         self.name_refresh_btn = RefreshButton(self)
@@ -268,6 +269,7 @@ class TestDataTab(QWidget):
         self.id_label = QLabel("")
         self.id_label.setStyleSheet("font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
         self.id_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        self.id_label.mouseDoubleClickEvent = lambda event: self.copy_value_on_double_click("id")
         id_layout.addWidget(self.id_label)
         id_layout.addStretch()  # 添加弹性空间，让按钮右对齐
         self.id_refresh_btn = RefreshButton(self)
@@ -289,6 +291,7 @@ class TestDataTab(QWidget):
         self.phone_label.setStyleSheet(
             "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
         self.phone_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        self.phone_label.mouseDoubleClickEvent = lambda event: self.copy_value_on_double_click("phone")
         phone_layout.addWidget(self.phone_label)
         phone_layout.addStretch()  # 添加弹性空间，让按钮右对齐
         self.phone_refresh_btn = RefreshButton(self)
@@ -310,6 +313,7 @@ class TestDataTab(QWidget):
         self.bank_card_label.setStyleSheet(
             "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
         self.bank_card_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        self.bank_card_label.mouseDoubleClickEvent = lambda event: self.copy_value_on_double_click("bank_card")
         bank_card_layout.addWidget(self.bank_card_label)
         bank_card_layout.addStretch()  # 添加弹性空间，让按钮右对齐
         self.bank_card_refresh_btn = RefreshButton(self)
@@ -331,6 +335,7 @@ class TestDataTab(QWidget):
         self.company_name_label.setStyleSheet(
             "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
         self.company_name_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        self.company_name_label.mouseDoubleClickEvent = lambda event: self.copy_value_on_double_click("company_name")
         company_name_layout.addWidget(self.company_name_label)
         company_name_layout.addStretch()  # 添加弹性空间，让按钮右对齐
         self.company_name_refresh_btn = RefreshButton(self)
@@ -352,6 +357,7 @@ class TestDataTab(QWidget):
         self.credit_code_label.setStyleSheet(
             "font-size: 16px; color: #2196F3; font-family: 'Courier New'; font-weight: bold;")
         self.credit_code_label.setMinimumWidth(200)  # 设置最小宽度确保按钮位置固定
+        self.credit_code_label.mouseDoubleClickEvent = lambda event: self.copy_value_on_double_click("credit_code")
         credit_code_layout.addWidget(self.credit_code_label)
         credit_code_layout.addStretch()  # 添加弹性空间，让按钮右对齐
         self.credit_code_refresh_btn = RefreshButton(self)
@@ -1003,6 +1009,40 @@ class TestDataTab(QWidget):
 
         # 更新数据面板
         self.update_data_panel()
+
+    def copy_value_on_double_click(self, field_type):
+        """双击复制value值"""
+        if not self.parent_app.id_data:
+            Toast.warning(self, "警告", "请先生成身份证数据")
+            return
+
+        # 根据字段类型获取对应的值
+        value_mapping = {
+            "name": "name",
+            "id": "id_number", 
+            "phone": "phone",
+            "bank_card": "bank_card_number",
+            "company_name": "company_name",
+            "credit_code": "unified_social_credit_code"
+        }
+
+        if field_type not in value_mapping:
+            return
+
+        field_key = value_mapping[field_type]
+        if field_key not in self.parent_app.id_data:
+            return
+
+        value = self.parent_app.id_data[field_key]
+        if not value:
+            return
+
+        # 复制到剪贴板
+        clipboard = QApplication.clipboard()
+        clipboard.setText(value)
+
+        # 显示Toast提示
+        Toast.show_message(self, f"已复制: {value}", "success", 1500)
 
     def regenerate_id_card(self, update_fields=None):
         """更新身份证按钮：身份证图片，只更新指定字段"""
