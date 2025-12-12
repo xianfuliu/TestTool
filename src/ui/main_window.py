@@ -287,7 +287,18 @@ class MainWindow(QMainWindow):
 
         # 添加Tab到Tab Widget
         tab_widget.addTab(self.test_data_tab, "测试数据")
-        tab_widget.addTab(self.data_query_tab, "数据查询")
+        
+        # 条件加载卡片工具标签页
+        if self.enable_tool_cards and TOOL_CARDS_AVAILABLE:
+            try:
+                self.tool_cards_tab = ToolCardsTab(self)
+                tab_widget.addTab(self.tool_cards_tab, '卡片工具')
+                print("卡片工具标签页已加载")
+            except Exception as e:
+                print(f"加载卡片工具标签页失败: {e}")
+        else:
+            print("卡片工具功能已禁用或模块不可用")
+        
         tab_widget.addTab(self.api_tool_tab, "接口工具")
 
         # 条件加载接口自动化标签页
@@ -303,17 +314,9 @@ class MainWindow(QMainWindow):
                 print(f"加载接口自动化标签页失败: {e}")
         else:
             print("接口自动化功能已禁用或模块不可用")
-
-        # 条件加载卡片工具标签页
-        if self.enable_tool_cards and TOOL_CARDS_AVAILABLE:
-            try:
-                self.tool_cards_tab = ToolCardsTab(self)
-                tab_widget.addTab(self.tool_cards_tab, '卡片工具')
-                print("卡片工具标签页已加载")
-            except Exception as e:
-                print(f"加载卡片工具标签页失败: {e}")
-        else:
-            print("卡片工具功能已禁用或模块不可用")
+        
+        # 数据查询放到最后
+        tab_widget.addTab(self.data_query_tab, "数据查询")
 
         # 设置Tab Widget为中心部件
         self.setCentralWidget(tab_widget)

@@ -756,6 +756,8 @@ class TestDataTab(QWidget):
         """)
         self.id_front_label.setContextMenuPolicy(Qt.CustomContextMenu)
         self.id_front_label.customContextMenuRequested.connect(lambda pos: self.show_image_context_menu(pos, "front"))
+        # 启用双击事件，双击图片放大
+        self.id_front_label.mouseDoubleClickEvent = lambda event: self.enlarge_image("front") if hasattr(self.parent_app, 'front_image') and self.parent_app.front_image else None
         layout.addWidget(self.id_front_label)
 
         # 反面图片
@@ -839,6 +841,8 @@ class TestDataTab(QWidget):
         """)
         self.id_back_label.setContextMenuPolicy(Qt.CustomContextMenu)
         self.id_back_label.customContextMenuRequested.connect(lambda pos: self.show_image_context_menu(pos, "back"))
+        # 启用双击事件，双击图片放大
+        self.id_back_label.mouseDoubleClickEvent = lambda event: self.enlarge_image("back") if hasattr(self.parent_app, 'back_image') and self.parent_app.back_image else None
         layout.addWidget(self.id_back_label)
 
         # 下载按钮
@@ -954,6 +958,8 @@ class TestDataTab(QWidget):
         """)
         self.business_label.setContextMenuPolicy(Qt.CustomContextMenu)
         self.business_label.customContextMenuRequested.connect(lambda pos: self.show_business_image_context_menu(pos))
+        # 启用双击事件，双击图片放大
+        self.business_label.mouseDoubleClickEvent = lambda event: self.enlarge_image("business") if hasattr(self.parent_app, 'business_license_image') and self.parent_app.business_license_image else None
         layout.addWidget(self.business_label)
 
         # 下载按钮 - 放在图片底部
