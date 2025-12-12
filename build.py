@@ -38,9 +38,7 @@ def build_app():
         '--add-data=config/settings.json;config',  # 添加配置文件
         '--add-data=config/products_config.json;config',
         '--add-data=src/resources/icons;src/resources/icons',  # 添加所有图标文件
-        '--add-data=src/resources/images/id_card_template.png;src/resources/images',
-        '--add-data=src/resources/images/ocr_face_1.png;src/resources/images',
-        '--add-data=src/resources/images/ocr_face_2.png;src/resources/images',
+        '--add-data=src/resources/images;src/resources/images',  # 添加所有图片文件
         '--name', 'TestTool',
         'main.py'
     ]

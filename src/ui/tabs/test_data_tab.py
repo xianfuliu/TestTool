@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
                              QLabel, QLineEdit, QPushButton, QGroupBox, QFileDialog, QRadioButton, QMenu, QApplication, QFrame, QScrollArea, QDialog, QAction)
-from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtGui import QPixmap, QIcon, QFont
 from PyQt5.QtCore import Qt, QTimer, QSize
 from PyQt5.QtGui import QKeySequence
 import random
@@ -590,29 +590,6 @@ class TestDataTab(QWidget):
         generate_btn.clicked.connect(self.generate_all_data)
         button_layout.addWidget(generate_btn)
         
-        # 清空按钮
-        clear_input_btn = QPushButton("清空")
-        clear_input_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                font-size: 14px;
-                padding: 8px 16px;
-                border: none;
-                border-radius: 4px;
-                font-weight: bold;
-                margin-top: 8px;
-            }
-            QPushButton:hover {
-                background-color: #d32f2f;
-            }
-            QPushButton:pressed {
-                background-color: #b71c1c;
-            }
-        """)
-        clear_input_btn.clicked.connect(self.clear_all_inputs)
-        button_layout.addWidget(clear_input_btn)
-        
         # 复制按钮
         copy_all_btn = QPushButton("复制")
         copy_all_btn.setStyleSheet("""
@@ -659,6 +636,29 @@ class TestDataTab(QWidget):
         echo_all_btn.clicked.connect(self.echo_all_data)
         button_layout.addWidget(echo_all_btn)
         
+        # 清空按钮
+        clear_input_btn = QPushButton("清空")
+        clear_input_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-size: 14px;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+                margin-top: 8px;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+            QPushButton:pressed {
+                background-color: #b71c1c;
+            }
+        """)
+        clear_input_btn.clicked.connect(self.clear_all_inputs)
+        button_layout.addWidget(clear_input_btn)
+        
         layout.addLayout(button_layout)
 
         # 添加弹性空间
@@ -695,7 +695,13 @@ class TestDataTab(QWidget):
         # 放大按钮
         self.front_enlarge_btn = QPushButton()
         self.front_enlarge_btn.setFixedSize(26, 18)  # 高度调小为20像素
-        self.front_enlarge_btn.setIcon(QIcon("src/resources/icons/enlarge.png"))
+        # 使用 resource_path 处理图标路径，确保打包后能正确显示
+        enlarge_icon_path = resource_path("src/resources/icons/enlarge.png")
+        if os.path.exists(enlarge_icon_path):
+            self.front_enlarge_btn.setIcon(QIcon(enlarge_icon_path))
+        else:
+            # 如果资源文件不存在，使用文本替代
+            self.front_enlarge_btn.setText("🔍")
         self.front_enlarge_btn.setIconSize(QSize(16, 16))  # 设置图标尺寸为16x16像素
         self.front_enlarge_btn.setStyleSheet("""
             QPushButton {
@@ -772,7 +778,13 @@ class TestDataTab(QWidget):
         # 放大按钮
         self.back_enlarge_btn = QPushButton()
         self.back_enlarge_btn.setFixedSize(26, 18)  # 高度调小为20像素
-        self.back_enlarge_btn.setIcon(QIcon("src/resources/icons/enlarge.png"))
+        # 使用 resource_path 处理图标路径，确保打包后能正确显示
+        enlarge_icon_path = resource_path("src/resources/icons/enlarge.png")
+        if os.path.exists(enlarge_icon_path):
+            self.back_enlarge_btn.setIcon(QIcon(enlarge_icon_path))
+        else:
+            # 如果资源文件不存在，使用文本替代
+            self.back_enlarge_btn.setText("🔍")
         self.back_enlarge_btn.setIconSize(QSize(16, 16))  # 设置图标尺寸为16x16像素
         self.back_enlarge_btn.setStyleSheet("""
             QPushButton {
@@ -882,7 +894,13 @@ class TestDataTab(QWidget):
         # 放大按钮
         self.business_enlarge_btn = QPushButton()
         self.business_enlarge_btn.setFixedSize(26, 18)  # 高度调小为20像素
-        self.business_enlarge_btn.setIcon(QIcon("src/resources/icons/enlarge.png"))
+        # 使用 resource_path 处理图标路径，确保打包后能正确显示
+        enlarge_icon_path = resource_path("src/resources/icons/enlarge.png")
+        if os.path.exists(enlarge_icon_path):
+            self.business_enlarge_btn.setIcon(QIcon(enlarge_icon_path))
+        else:
+            # 如果资源文件不存在，使用文本替代
+            self.business_enlarge_btn.setText("🔍")
         self.business_enlarge_btn.setIconSize(QSize(16, 16))  # 设置图标尺寸为16x16像素
         self.business_enlarge_btn.setStyleSheet("""
             QPushButton {
@@ -2448,7 +2466,14 @@ class TestDataTab(QWidget):
             close_button = QPushButton()
             close_button.clicked.connect(dialog.close)
             close_button.setFixedSize(80, 80)  # 增大按钮尺寸
-            close_button.setIcon(QIcon(resource_path("src/resources/icons/clear.png")))
+            # 使用 resource_path 处理图标路径，确保打包后能正确显示
+            clear_icon_path = resource_path("src/resources/icons/clear.png")
+            if os.path.exists(clear_icon_path):
+                close_button.setIcon(QIcon(clear_icon_path))
+            else:
+                # 如果资源文件不存在，使用文本替代
+                close_button.setText("✕")
+                close_button.setFont(QFont("Arial", 24, QFont.Bold))
             close_button.setIconSize(QSize(60, 60))  # 特别大的图标
             close_button.setStyleSheet("QPushButton { border: none; background: transparent; }")
             
