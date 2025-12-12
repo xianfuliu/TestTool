@@ -44,11 +44,9 @@ class CopyButton(QPushButton):
 
         if os.path.exists(copy_icon_path):
             self.setIcon(QIcon(copy_icon_path))
-            print(f"使用复制图标: {copy_icon_path}")
         else:
             self.setText("📋")
             self.setFont(QFont("Arial", 10))  # 减小字体大小
-            print("警告: 无法找到复制图标，使用文本替代")
 
         self.setToolTip("复制")
         self.clicked.connect(self.copy_text)

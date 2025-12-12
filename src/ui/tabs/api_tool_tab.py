@@ -2605,9 +2605,6 @@ class ApiToolTab(QWidget):
                 self.variable_pool['id_card_front_base64'] = base64_images['front']
                 self.variable_pool['id_card_back_base64'] = base64_images['back']
                 self.variable_pool['face_base64'] = base64_images['face']
-                print(f"Base64生成成功 - 正面: {len(base64_images['front'])} 字符")
-                print(f"Base64生成成功 - 背面: {len(base64_images['back'])} 字符")
-                print(f"Base64生成成功 - 人脸: {len(base64_images['face'])} 字符")
             except Exception as e:
                 print(f"生成身份证图片Base64失败: {str(e)}")
                 # 如果生成失败，设置空值到变量池

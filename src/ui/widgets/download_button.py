@@ -41,10 +41,7 @@ class DownloadButton(QPushButton):
 
         if os.path.exists(download_icon_path):
             self.setIcon(QIcon(download_icon_path))
-            print(f"使用下载图标: {download_icon_path}")
         else:
             self.setText("↓")
             self.setFont(QFont("Arial", 14, QFont.Bold))
-            print("警告: 无法找到下载图标，使用文本替代")
-
         self.setToolTip("下载图片")

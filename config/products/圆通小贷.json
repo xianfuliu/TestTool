@@ -1,0 +1,114 @@
+{
+  "enable_encryption": false,
+  "encrypt_url": "",
+  "decrypt_url": "",
+  "schedule_tasks": [],
+  "layout": [
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "name",
+      "label": "姓名",
+      "priority": 1,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "id_card",
+      "label": "身份证号",
+      "priority": 2,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "phone",
+      "label": "手机号",
+      "priority": 3,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "bank_card_no",
+      "label": "银行卡号",
+      "priority": 4,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "name": "查询用户信息",
+      "priority": 5,
+      "type": "sql"
+    },
+    {
+      "name": "人脸信息mock",
+      "priority": 6,
+      "type": "sql"
+    },
+    {
+      "name": "签章发送验证码",
+      "priority": 7,
+      "type": "interface"
+    },
+    {
+      "name": "修改手机号",
+      "priority": 8,
+      "type": "interface"
+    }
+  ],
+  "interfaces": {
+    "修改手机号": {
+      "body_template": {
+        "idNum": "33022619720910287X",
+        "newPhone": "15796837903",
+        "oldPhone": "13710795686"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "http://47.106.192.83:8091/api/v2/psn/modifyPhone"
+    },
+    "签章发送验证码": {
+      "body_template": {},
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "GET",
+      "response_mapping": {},
+      "url": "http://47.106.192.83:8091/api/v2/sign/sendSignSms?businessNum={businessNum}&phoneNo={phone}"
+    }
+  },
+  "sqls": {
+    "人脸信息mock": {
+      "database": {
+        "database": "cfloan_biz",
+        "host": "47.106.192.83",
+        "password": "xvdba@2022",
+        "port": 3306,
+        "user": "xvdba"
+      },
+      "output_fields": [],
+      "sql": ""
+    },
+    "查询用户信息": {
+      "database": {
+        "database": "cfloan_biz",
+        "host": "47.106.192.83",
+        "password": "xvdba@2022",
+        "port": 3306,
+        "user": "xvdba"
+      },
+      "output_fields": [],
+      "sql": ""
+    }
+  }
+}

@@ -86,6 +86,10 @@ class MainWindow(QMainWindow):
         self.front_image = None
         self.back_image = None
 
+        # 存储生成的营业执照数据
+        self.business_license_data = None
+        self.business_license_image = None
+
         # 创建UI
         self.init_ui()
 

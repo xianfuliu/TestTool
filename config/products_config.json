@@ -4,7 +4,8 @@
     "数据服务": "config/products/数据服务.json",
     "360": "config/products/360.json",
     "360-real24": "config/products/360-real24.json",
-    "测试产品": "config/products/测试产品.json"
+    "测试产品": "config/products/测试产品.json",
+    "圆通小贷": "config/products/圆通小贷.json"
   },
   "default_product": "中银消金",
   "locked_products": [

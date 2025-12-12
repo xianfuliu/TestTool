@@ -488,19 +488,30 @@ class UserInfoGenerator:
 
     def generate_phone_number(self, prefix=None):
         """生成手机号"""
+        # 合法的手机号前缀列表
+        valid_prefixes = [
+            '134', '135', '136', '137', '138', '139', '147', '150', '151', '152', '157', '158', '159', '178',
+            '182', '183', '184', '187', '188', '198',
+            '130', '131', '132', '145', '155', '156', '166', '175', '176', '185', '186',
+            '133', '149', '153', '173', '177', '180', '181', '189', '199', '192'
+        ]
+        
         if prefix is None:
-            prefix = random.choice(
-                ['134', '135', '136', '137', '138', '139', '147', '150', '151', '152', '157', '158', '159', '178',
-                 '182', '183', '184', '187', '188', '198',
-                 '130', '131', '132', '145', '155', '156', '166', '175', '176', '185', '186',
-                 '133', '149', '153', '173', '177', '180', '181', '189', '199', '192'])
+            prefix = random.choice(valid_prefixes)
+        else:
+            # 校验传入的前缀是否合法
+            if prefix not in valid_prefixes:
+                # 如果前缀不合法，则使用随机前缀
+                prefix = random.choice(valid_prefixes)
+        
         phone_suffix = ''.join([str(random.randint(0, 9)) for _ in range(8)])
         return prefix + phone_suffix
 
     def generate_id_card_data(self, name=None, gender=None, ethnic=None,
                               birth_date=None, address=None, id_start=None,
                               issue_authority=None, valid_period=None,
-                              bank_name="建设银行", card_type="储蓄卡", phone_prefix=None):
+                              bank_name="建设银行", card_type="储蓄卡", phone_prefix=None,
+                              company_name=None, unified_social_credit_code=None):
         """生成完整的身份证数据"""
         # 生成基本信息
         name = self.generate_name(name)
@@ -540,10 +551,6 @@ class UserInfoGenerator:
         # 生成手机号
         phone_number = self.generate_phone_number(phone_prefix)
         
-        # 生成公司名称和统一社会信用代码
-        company_name = self.generate_company_name()
-        unified_social_credit_code = self.generate_unified_social_credit_code()
-
         return {
             "name": name,  # 姓名
             "gender": gender,  # 性别
@@ -560,8 +567,8 @@ class UserInfoGenerator:
             "id_card_end_time": id_card_end_time,    # 有效期结束时间，格式20251022
             "bank_card_number": bank_card_number,  # 银行卡号
             "phone": phone_number,  # 手机号
-            "company_name": company_name,  # 公司名称
-            "unified_social_credit_code": unified_social_credit_code  # 统一社会信用代码
+            "company_name": company_name,  # 公司名称（由营业执照生成方法统一生成）
+            "unified_social_credit_code": unified_social_credit_code  # 统一社会信用代码（由营业执照生成方法统一生成）
         }
 
     def generate_company_name(self):
@@ -691,3 +698,194 @@ class UserInfoGenerator:
         unified_code = full_code_without_check + final_check_char
 
         return unified_code
+
+    def generate_business_license_data(self, config=None):
+        """生成营业执照数据
+        
+        Args:
+            config: 配置参数，包含以下可选字段：
+                - company_type: 公司类型
+                - legal_representative: 法定代表人
+                - address: 住所
+                - registered_capital: 注册资本（输入框值）
+                - establishment_date: 成立日期
+                - business_start_date: 营业期限开始日期
+                - business_end_date: 营业期限结束日期
+                - business_scope: 经营范围
+                - industry_type: 行业类型
+                - province: 省份
+        """
+        config = config or {}
+        
+        # 1. 统一社会信用代码（使用配置或生成）
+        if config and config.get('unified_social_credit_code'):
+            unified_social_credit_code = config['unified_social_credit_code']
+        else:
+            unified_social_credit_code = self.generate_unified_social_credit_code()
+        
+        # 2. 名称（公司名称）（使用配置或生成）
+        if config and config.get('company_name'):
+            company_name = config['company_name']
+        else:
+            company_name = self.generate_company_name()
+        
+        # 3. 类型（根据配置或统一社会信用代码第一位确定）
+        if config.get('company_type'):
+            company_type = config['company_type']
+        else:
+            type_mapping = {
+                '1': '有限责任公司',
+                '5': '个体工商户', 
+                '9': '事业单位',
+                'Y': '社会组织'
+            }
+            company_type = type_mapping.get(unified_social_credit_code[0], '有限责任公司')
+        
+        # 4. 住所（使用配置或生成公司地址）
+        if config.get('address'):
+            address = config['address']
+        else:
+            # 使用配置的省份或随机选择
+            if config.get('province'):
+                # 从配置的省份中随机选择城市
+                province = config['province']
+                # 根据省份选择对应的城市
+                province_cities = {
+                    '北京市': ['北京市'],
+                    '上海市': ['上海市'],
+                    '天津市': ['天津市'],
+                    '重庆市': ['重庆市'],
+                    '广东省': ['广州市', '深圳市', '珠海市', '东莞市', '佛山市'],
+                    '浙江省': ['杭州市', '宁波市', '温州市', '绍兴市', '嘉兴市'],
+                    '江苏省': ['南京市', '苏州市', '无锡市', '常州市', '徐州市'],
+                    '山东省': ['济南市', '青岛市', '烟台市', '潍坊市', '临沂市'],
+                    '四川省': ['成都市', '绵阳市', '德阳市', '宜宾市', '南充市'],
+                    '湖北省': ['武汉市', '宜昌市', '襄阳市', '黄石市', '十堰市'],
+                    '湖南省': ['长沙市', '株洲市', '湘潭市', '衡阳市', '岳阳市'],
+                    '河南省': ['郑州市', '洛阳市', '开封市', '新乡市', '安阳市'],
+                    '河北省': ['石家庄市', '唐山市', '保定市', '邯郸市', '秦皇岛市'],
+                    '陕西省': ['西安市', '宝鸡市', '咸阳市', '渭南市', '延安市'],
+                    '辽宁省': ['沈阳市', '大连市', '鞍山市', '抚顺市', '锦州市'],
+                    '福建省': ['福州市', '厦门市', '泉州市', '漳州市', '莆田市']
+                }
+                city = random.choice(province_cities.get(province, ['北京市']))
+            else:
+                # 使用真实存在的行政区划代码对应的地址
+                area_codes = list(self.area_codes.keys())
+                area_code = random.choice(area_codes)
+                city = self.area_codes.get(area_code, '北京市')
+            
+            # 生成详细地址
+            streets = ['人民路', '中山路', '解放路', '建设路', '新华路', '文化路', '和平路', '胜利路', '民主路', '自由路']
+            street_numbers = ['1号', '2号', '10号', '15号', '20号', '25号', '30号', '35号', '40号', '45号']
+            buildings = ['A座', 'B座', 'C座', 'D座', 'E座', 'F座', 'G座', 'H座', 'I座', 'J座']
+            floors = ['1层', '2层', '3层', '4层', '5层', '6层', '7层', '8层', '9层', '10层']
+            
+            address = f"{city}{random.choice(streets)}{random.choice(street_numbers)}{random.choice(buildings)}{random.choice(floors)}"
+        
+        # 5. 法定代表人（使用配置或生成人名）
+        if config.get('legal_representative'):
+            legal_representative = config['legal_representative']
+        else:
+            legal_representative = self.generate_name()
+        
+        # 6. 注册资本（使用配置或随机生成）
+        if config.get('registered_capital'):
+            capital_input = config['registered_capital']
+            # 检查用户输入的是否为纯数字，如果是则自动添加"万元"单位
+            if capital_input.isdigit():
+                registered_capital = f"{capital_input}万元"
+            else:
+                registered_capital = capital_input
+        else:
+            capital_amounts = ['10万元', '50万元', '100万元', '200万元', '500万元', '1000万元']
+            registered_capital = random.choice(capital_amounts)
+        
+        # 7. 成立日期（使用配置或生成）
+        if config.get('establishment_date'):
+            establishment_date = config['establishment_date']
+        else:
+            current_year = datetime.now().year
+            # 生成过去1-20年内的日期
+            start_year = current_year - random.randint(1, 20)
+            start_month = random.randint(1, 12)
+            start_day = random.randint(1, 28)  # 避免2月29日等问题
+            
+            # 格式化日期为YYYYMMDD格式（图片填充器期望的格式）
+            establishment_date = f"{start_year:04d}{start_month:02d}{start_day:02d}"
+        
+        # 8. 营业期限（使用配置或生成）
+        if config.get('business_start_date') and config.get('business_end_date'):
+            # 将用户输入的YYYY-MM-DD格式转换为YYYYMMDD格式
+            start_date = config['business_start_date'].replace('-', '')
+            end_date = config['business_end_date'].replace('-', '')
+            business_term = f"{start_date}-{end_date}"
+        else:
+            # 解析成立日期
+            if '-' in establishment_date:
+                parts = establishment_date.split('-')
+                start_year = int(parts[0])
+                start_month = int(parts[1])
+                start_day = int(parts[2])
+            else:
+                # 如果是旧格式，直接使用
+                if len(establishment_date) == 8:
+                    start_year = int(establishment_date[:4])
+                    start_month = int(establishment_date[4:6])
+                    start_day = int(establishment_date[6:8])
+                else:
+                    start_year = datetime.now().year - random.randint(1, 20)
+                    start_month = random.randint(1, 12)
+                    start_day = random.randint(1, 28)
+            
+            # 生成10-50年的营业期限
+            term_years = random.randint(10, 50)
+            end_year = start_year + term_years
+            # 格式化为YYYYMMDD-YYYYMMDD格式（图片填充器期望的格式）
+            business_term = f"{start_year:04d}{start_month:02d}{start_day:02d}-{end_year:04d}{start_month:02d}{start_day:02d}"
+        
+        # 9. 经营范围（使用配置或随机生成）
+        if config.get('business_scope'):
+            business_scope = config['business_scope']
+        else:
+            if config.get('industry_type'):
+                industry_scopes = {
+                    '科技': "技术开发、技术咨询、技术服务、技术转让；销售计算机、软件及辅助设备、电子产品、通讯设备；货物进出口、技术进出口、代理进出口。",
+                    '软件': "软件开发；计算机系统服务；数据处理；基础软件服务；应用软件服务；销售计算机、软件及辅助设备、电子产品；技术开发、技术咨询、技术转让、技术服务。",
+                    '零售': "销售服装、鞋帽、针纺织品、化妆品、日用品、工艺品、珠宝首饰、文具用品、体育用品、玩具、五金交电、家用电器、电子产品；货物进出口、技术进出口。",
+                    '餐饮': "餐饮服务；食品销售；餐饮管理；酒店管理；会议服务；展览展示服务；礼仪服务；企业形象策划；市场营销策划。",
+                    '建筑': "建筑工程施工；建筑装饰装修工程设计与施工；市政公用工程施工；园林绿化工程施工；建筑材料销售；建筑机械设备租赁。",
+                    '医疗': "医疗器械的技术开发、技术咨询、技术服务；销售医疗器械；货物进出口、技术进出口；健康咨询；医学研究与试验发展。",
+                    '广告': "广告设计、制作、代理、发布；企业形象策划；市场营销策划；会议服务；展览展示服务；文化艺术交流活动策划。",
+                    '房地产': "房地产开发；物业管理；房屋租赁；房地产信息咨询；建筑工程；装饰装修工程；建筑材料销售。",
+                    '教育': "教育咨询；文化咨询；体育咨询；健康咨询；技术培训；会议服务；展览展示服务；组织文化艺术交流活动。",
+                    '贸易': "批发、零售：日用百货、服装鞋帽、化妆品、家居用品、电子产品、办公用品、体育用品、玩具、工艺品。"
+                }
+                business_scope = industry_scopes.get(config['industry_type'], 
+                    "技术开发、技术咨询、技术服务、技术转让；销售计算机、软件及辅助设备、电子产品、通讯设备；货物进出口、技术进出口、代理进出口。")
+            else:
+                business_scopes = [
+                    "技术开发、技术咨询、技术服务、技术转让；销售计算机、软件及辅助设备、电子产品、通讯设备；货物进出口、技术进出口、代理进出口。",
+                    "软件开发；计算机系统服务；数据处理；基础软件服务；应用软件服务；销售计算机、软件及辅助设备、电子产品；技术开发、技术咨询、技术转让、技术服务。",
+                    "销售服装、鞋帽、针纺织品、化妆品、日用品、工艺品、珠宝首饰、文具用品、体育用品、玩具、五金交电、家用电器、电子产品；货物进出口、技术进出口。",
+                    "餐饮服务；食品销售；餐饮管理；酒店管理；会议服务；展览展示服务；礼仪服务；企业形象策划；市场营销策划。",
+                    "建筑工程施工；建筑装饰装修工程设计与施工；市政公用工程施工；园林绿化工程施工；建筑材料销售；建筑机械设备租赁。",
+                    "医疗器械的技术开发、技术咨询、技术服务；销售医疗器械；货物进出口、技术进出口；健康咨询；医学研究与试验发展。",
+                    "广告设计、制作、代理、发布；企业形象策划；市场营销策划；会议服务；展览展示服务；文化艺术交流活动策划。",
+                    "房地产开发；物业管理；房屋租赁；房地产信息咨询；建筑工程；装饰装修工程；建筑材料销售。",
+                    "教育咨询；文化咨询；体育咨询；健康咨询；技术培训；会议服务；展览展示服务；组织文化艺术交流活动。",
+                    "批发、零售：日用百货、服装鞋帽、化妆品、家居用品、电子产品、办公用品、体育用品、玩具、工艺品。"
+                ]
+                business_scope = random.choice(business_scopes)
+        
+        return {
+            "unified_social_credit_code": unified_social_credit_code,
+            "company_name": company_name,
+            "company_type": company_type,
+            "address": address,
+            "legal_representative": legal_representative,
+            "registered_capital": registered_capital,
+            "establishment_date": establishment_date,
+            "business_term": business_term,
+            "business_scope": business_scope
+        }
