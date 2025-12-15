@@ -2,27 +2,248 @@ import os
 import json
 import sys
 import webbrowser
+import math
 from datetime import datetime, timedelta
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
-                             QTableWidgetItem, QPushButton, QLabel, QLineEdit,
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,
-                             QHeaderView, QInputDialog, QCheckBox, QSpinBox,
+                             QGroupBox, QFormLayout,QHeaderView, QInputDialog,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
-                             QAction, QToolButton, QMenu, QApplication, QDateTimeEdit,
-                             QProgressBar, QTreeWidget, QTreeWidgetItem, QFrame, QFileDialog,
+                             QAction,QApplication,
+                             QTreeWidget, QTreeWidgetItem, QFileDialog,
                              QSizePolicy, QScrollArea, QStackedLayout)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime, QUrl
-from PyQt5.QtGui import QIcon, QFont, QColor, QDesktopServices, QCursor, QBrush
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QRect, QThread
+from PyQt5.QtGui import QIcon, QFont, QColor, QCursor, QBrush, QPainter, QPen
 from src.core.services.scheduler_service import UnifiedSchedulerService
 from src.core.services.test_report_service import TestReportService
 from src.core.services.test_case_service import TestCaseService
 from src.core.services.project_service import ProjectService
-from src.core.models.interface_models import TestReport, TestStepResult
 from src.utils.interface_utils.report_generator import HTMLReportGenerator
-from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
-from src.utils.css_utils import get_combobox_style, get_toolbar_combobox_style
+from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox
+from src.utils.css_utils import get_toolbar_combobox_style
 from PyQt5.QtGui import QTextCursor
+from src.ui.widgets.toast_tips import Toast
+
+
+class ReportLoadingThread(QThread):
+    """报告加载线程 - 异步加载报告数据"""
+    
+    loading_finished = pyqtSignal(list)  # 加载完成信号
+    loading_progress = pyqtSignal(int, int)  # 加载进度信号
+    
+    def __init__(self, report_service, filters, parent=None):
+        super().__init__(parent)
+        self.report_service = report_service
+        self.filters = filters
+        
+    def run(self):
+        """线程执行函数"""
+        try:
+            # 获取报告数据
+            reports = self.report_service.get_reports_with_filters(self.filters)
+            
+            # 发送加载完成信号
+            self.loading_finished.emit(reports)
+            
+        except Exception as e:
+            print(f"报告加载线程出错: {str(e)}")
+            self.loading_finished.emit([])
+
+
+class PieChartWidget(QWidget):
+    """现代饼图组件 - 支持鼠标悬浮提示"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.passed_cases = 0
+        self.failed_cases = 0
+        self.error_cases = 0
+        self.total_cases = 0
+        self.hovered_slice = None  # 当前悬停的扇区
+        self.setMinimumSize(200, 200)
+        self.setMouseTracking(True)  # 启用鼠标跟踪
+        
+        # 现代配色方案
+        self.colors = {
+            'passed': QColor(34, 197, 94),   # 现代绿色
+            'failed': QColor(239, 68, 68),   # 现代红色
+            'error': QColor(245, 158, 11)    # 现代橙色
+        }
+        
+        # 悬停颜色（更亮的版本）
+        self.hover_colors = {
+            'passed': QColor(74, 222, 128),
+            'failed': QColor(248, 113, 113),
+            'error': QColor(251, 191, 36)
+        }
+        
+    def set_data(self, passed_cases, failed_cases, error_cases):
+        """设置饼图数据"""
+        self.passed_cases = passed_cases
+        self.failed_cases = failed_cases
+        self.error_cases = error_cases
+        self.total_cases = passed_cases + failed_cases + error_cases
+        self.update()
+        
+    def mouseMoveEvent(self, event):
+        """鼠标移动事件 - 检测悬停的扇区"""
+        if self.total_cases == 0:
+            return
+            
+        # 计算鼠标位置相对于饼图中心的位置
+        size = min(self.width(), self.height()) - 40
+        center_x = self.width() // 2
+        center_y = self.height() // 2
+        mouse_x = event.x()
+        mouse_y = event.y()
+        
+        # 计算鼠标到中心的距离和角度
+        dx = mouse_x - center_x
+        dy = mouse_y - center_y
+        distance = (dx**2 + dy**2)**0.5
+        
+        # 如果鼠标在饼图范围内
+        if distance <= size // 2:
+            # 计算角度（0-360度，从右侧开始顺时针）
+            # 修正角度计算，确保与绘制顺序一致
+            angle = (360 - math.degrees(math.atan2(dy, dx))) % 360
+            
+            # 计算每个扇区的角度范围（十六分度制，与绘制一致）
+            passed_angle = 360 * self.passed_cases / self.total_cases
+            failed_angle = 360 * self.failed_cases / self.total_cases
+            error_angle = 360 * self.error_cases / self.total_cases
+            
+            # 确定悬停的扇区（从0度开始顺时针，与绘制顺序一致）
+            current_angle = 0
+            if self.passed_cases > 0 and angle < current_angle + passed_angle:
+                self.hovered_slice = 'passed'
+            elif self.failed_cases > 0 and angle < current_angle + passed_angle + failed_angle:
+                self.hovered_slice = 'failed'
+            elif self.error_cases > 0 and angle < current_angle + passed_angle + failed_angle + error_angle:
+                self.hovered_slice = 'error'
+            else:
+                self.hovered_slice = None
+        else:
+            self.hovered_slice = None
+            
+        self.update()
+        
+    def leaveEvent(self, event):
+        """鼠标离开事件"""
+        self.hovered_slice = None
+        self.update()
+        
+    def paintEvent(self, event):
+        """绘制现代饼图"""
+        if self.total_cases == 0:
+            return
+            
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 设置饼图区域（带内边距）
+        size = min(self.width(), self.height()) - 40
+        rect = QRect((self.width() - size) // 2, (self.height() - size) // 2, size, size)
+        
+        # 计算角度（十六分度制）
+        passed_angle = int(5760 * self.passed_cases / self.total_cases)
+        failed_angle = int(5760 * self.failed_cases / self.total_cases)
+        error_angle = int(5760 * self.error_cases / self.total_cases)
+        
+        # 绘制饼图 - 使用现代样式
+        start_angle = 0
+        
+        # 通过的部分
+        if self.passed_cases > 0:
+            color = self.hover_colors['passed'] if self.hovered_slice == 'passed' else self.colors['passed']
+            painter.setPen(QPen(QColor(255, 255, 255, 180), 3))
+            painter.setBrush(QBrush(color))
+            painter.drawPie(rect, start_angle, passed_angle)
+            start_angle += passed_angle
+        
+        # 失败的部分
+        if self.failed_cases > 0:
+            color = self.hover_colors['failed'] if self.hovered_slice == 'failed' else self.colors['failed']
+            painter.setPen(QPen(QColor(255, 255, 255, 180), 3))
+            painter.setBrush(QBrush(color))
+            painter.drawPie(rect, start_angle, failed_angle)
+            start_angle += failed_angle
+        
+        # 错误的部分
+        if self.error_cases > 0:
+            color = self.hover_colors['error'] if self.hovered_slice == 'error' else self.colors['error']
+            painter.setPen(QPen(QColor(255, 255, 255, 180), 3))
+            painter.setBrush(QBrush(color))
+            painter.drawPie(rect, start_angle, error_angle)
+        
+        # 绘制中心圆形装饰
+        center_size = size // 3
+        center_rect = QRect(
+            (self.width() - center_size) // 2,
+            (self.height() - center_size) // 2,
+            center_size, center_size
+        )
+        painter.setPen(QPen(QColor(255, 255, 255, 100), 1))
+        painter.setBrush(QBrush(QColor(255, 255, 255, 30)))
+        painter.drawEllipse(center_rect)
+        
+        # 绘制悬停提示
+        if self.hovered_slice:
+            self.draw_tooltip(painter, event)
+    
+    def draw_tooltip(self, painter, event):
+        """绘制悬停提示"""
+        if not self.hovered_slice:
+            return
+            
+        # 获取当前扇区的数据
+        if self.hovered_slice == 'passed':
+            count = self.passed_cases
+            percentage = (self.passed_cases / self.total_cases) * 100
+            label = '通过'
+        elif self.hovered_slice == 'failed':
+            count = self.failed_cases
+            percentage = (self.failed_cases / self.total_cases) * 100
+            label = '失败'
+        else:
+            count = self.error_cases
+            percentage = (self.error_cases / self.total_cases) * 100
+            label = '错误'
+        
+        # 设置提示文本
+        text = f"{label}: {count} ({percentage:.1f}%)"
+        
+        # 计算提示框位置
+        font = QFont()
+        font.setPointSize(10)
+        font.setBold(True)
+        painter.setFont(font)
+        
+        text_rect = painter.fontMetrics().boundingRect(text)
+        tooltip_width = text_rect.width() + 20
+        tooltip_height = text_rect.height() + 10
+        
+        # 鼠标位置
+        mouse_pos = self.mapFromGlobal(QCursor.pos())
+        tooltip_x = mouse_pos.x() - tooltip_width // 2
+        tooltip_y = mouse_pos.y() - tooltip_height - 10
+        
+        # 确保提示框在窗口内
+        if tooltip_x < 5:
+            tooltip_x = 5
+        if tooltip_x + tooltip_width > self.width() - 5:
+            tooltip_x = self.width() - tooltip_width - 5
+        if tooltip_y < 5:
+            tooltip_y = mouse_pos.y() + 20
+        
+        # 绘制提示框背景
+        painter.setPen(QPen(QColor(0, 0, 0, 200), 1))
+        painter.setBrush(QBrush(QColor(255, 255, 255, 240)))
+        painter.drawRoundedRect(tooltip_x, tooltip_y, tooltip_width, tooltip_height, 5, 5)
+        
+        # 绘制提示文本
+        painter.setPen(QColor(0, 0, 0))
+        painter.drawText(tooltip_x + 10, tooltip_y + tooltip_height - 5, text)
+
 
 
 class ReportDetailPage(QWidget):
@@ -83,114 +304,138 @@ class ReportDetailPage(QWidget):
     
     def setup_summary_section(self, parent_layout):
         """设置基础概要信息区域"""
-        # 概要信息容器
-        summary_widget = QWidget()
-        summary_layout = QVBoxLayout(summary_widget)
+        # 创建水平布局容器，报告信息左对齐，执行统计右对齐
+        summary_container = QWidget()
+        summary_layout = QHBoxLayout(summary_container)
         
-        # 报告基本信息
-        basic_info_group = QGroupBox("报告信息")
+        # 左侧：报告基本信息
+        left_widget = QWidget()
+        left_widget.setFixedWidth(450)  # 增加宽度以适应更大的字体和间隙
+        left_layout = QVBoxLayout(left_widget)
+        
+        basic_info_group = QWidget()
         basic_layout = QFormLayout(basic_info_group)
+        basic_layout.setSpacing(30)  # 增加行间距
+        basic_layout.setContentsMargins(5, 0, 15, 0)  # 调整内边距，左内边距减小以与报告详情对齐
         
         self.report_name_label = QLabel()
+        self.report_name_label.setStyleSheet("font-size: 18px; font-weight: normal;")
         self.report_status_label = QLabel()
-        self.report_case_label = QLabel()
-        self.report_scheduler_label = QLabel()
+        self.report_status_label.setStyleSheet("font-size: 18px; font-weight: normal;")
         self.report_start_time_label = QLabel()
+        self.report_start_time_label.setStyleSheet("font-size: 18px; font-weight: normal;")
         self.report_end_time_label = QLabel()
+        self.report_end_time_label.setStyleSheet("font-size: 18px; font-weight: normal;")
         self.report_duration_label = QLabel()
+        self.report_duration_label.setStyleSheet("font-size: 18px; font-weight: normal;")
 
-        basic_layout.addRow("报告名称:", self.report_name_label)
-        basic_layout.addRow("执行状态:", self.report_status_label)
-        basic_layout.addRow("测试用例:", self.report_case_label)
-        basic_layout.addRow("关联调度:", self.report_scheduler_label)
-        basic_layout.addRow("开始时间:", self.report_start_time_label)
-        basic_layout.addRow("结束时间:", self.report_end_time_label)
-        basic_layout.addRow("执行时长:", self.report_duration_label)
+        # 创建标签并设置字体样式
+        name_label = QLabel("报告名称:")
+        name_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        status_label = QLabel("执行状态:")
+        status_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        start_time_label = QLabel("开始时间:")
+        start_time_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        end_time_label = QLabel("结束时间:")
+        end_time_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        duration_label = QLabel("执行时长:")
+        duration_label.setStyleSheet("font-size: 18px; font-weight: bold;")
 
-        # 统计信息
-        stats_group = QGroupBox("执行统计")
-        stats_layout = QVBoxLayout(stats_group)
+        basic_layout.addRow(name_label, self.report_name_label)
+        basic_layout.addRow(status_label, self.report_status_label)
+        basic_layout.addRow(start_time_label, self.report_start_time_label)
+        basic_layout.addRow(end_time_label, self.report_end_time_label)
+        basic_layout.addRow(duration_label, self.report_duration_label)
 
-        # 进度条显示
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximum(100)
-        stats_layout.addWidget(self.progress_bar)
-
-        # 数字统计
-        stats_grid = QHBoxLayout()
-
-        # 总步骤数
-        total_frame = QFrame()
-        total_frame.setFrameStyle(QFrame.Box)
-        total_layout = QVBoxLayout(total_frame)
-        self.total_cases_label = QLabel("0")
-        self.total_cases_label.setAlignment(Qt.AlignCenter)
-        self.total_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #333;")
-        total_layout.addWidget(self.total_cases_label)
-        total_layout.addWidget(QLabel("总用例"))
-        stats_grid.addWidget(total_frame)
-
-        # 通过数
-        passed_frame = QFrame()
-        passed_frame.setFrameStyle(QFrame.Box)
-        passed_layout = QVBoxLayout(passed_frame)
-        self.passed_cases_label = QLabel("0")
-        self.passed_cases_label.setAlignment(Qt.AlignCenter)
-        self.passed_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #4CAF50;")
-        passed_layout.addWidget(self.passed_cases_label)
-        passed_layout.addWidget(QLabel("通过"))
-        stats_grid.addWidget(passed_frame)
-
-        # 失败数
-        failed_frame = QFrame()
-        failed_frame.setFrameStyle(QFrame.Box)
-        failed_layout = QVBoxLayout(failed_frame)
-        self.failed_cases_label = QLabel("0")
-        self.failed_cases_label.setAlignment(Qt.AlignCenter)
-        self.failed_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #F44336;")
-        failed_layout.addWidget(self.failed_cases_label)
-        failed_layout.addWidget(QLabel("失败"))
-        stats_grid.addWidget(failed_frame)
-
-        # 错误数
-        error_frame = QFrame()
-        error_frame.setFrameStyle(QFrame.Box)
-        error_layout = QVBoxLayout(error_frame)
-        self.error_cases_label = QLabel("0")
-        self.error_cases_label.setAlignment(Qt.AlignCenter)
-        self.error_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FF9800;")
-        error_layout.addWidget(self.error_cases_label)
-        error_layout.addWidget(QLabel("错误"))
-        stats_grid.addWidget(error_frame)
-
-        # 通过率
-        rate_frame = QFrame()
-        rate_frame.setFrameStyle(QFrame.Box)
-        rate_layout = QVBoxLayout(rate_frame)
-        self.success_rate_label = QLabel("0%")
-        self.success_rate_label.setAlignment(Qt.AlignCenter)
-        self.success_rate_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2196F3;")
-        rate_layout.addWidget(self.success_rate_label)
-        rate_layout.addWidget(QLabel("通过率"))
-        stats_grid.addWidget(rate_frame)
-
-        stats_layout.addLayout(stats_grid)
-
-        summary_layout.addWidget(basic_info_group)
-        summary_layout.addWidget(stats_group)
+        left_layout.addWidget(basic_info_group)
+        left_layout.addStretch()
         
-        parent_layout.addWidget(summary_widget)
+        # 右侧：执行统计（饼图+数字统计）
+        right_widget = QWidget()
+        right_widget.setFixedWidth(500)  # 增加宽度以适应新的布局
+        right_layout = QVBoxLayout(right_widget)
+        
+        stats_group = QWidget()
+        stats_layout = QHBoxLayout(stats_group)  # 改为水平布局
+        stats_layout.setSpacing(20)  # 增加间距
+        
+        # 左侧：饼图
+        pie_chart_widget = QWidget()
+        pie_chart_layout = QVBoxLayout(pie_chart_widget)
+        
+        # 创建饼图
+        self.pie_chart = PieChartWidget()
+        self.pie_chart.setMinimumSize(200, 200)
+        pie_chart_layout.addWidget(self.pie_chart, 0, Qt.AlignCenter)
+        
+        stats_layout.addWidget(pie_chart_widget)
+        
+        # 右侧：统计信息（key:value样式）
+        stats_info_widget = QWidget()
+        stats_info_layout = QVBoxLayout(stats_info_widget)
+        stats_info_layout.setSpacing(40)  # 增加行间距
+        
+        # 用例数
+        total_layout = QHBoxLayout()
+        total_label = QLabel("用例数：")
+        total_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+        self.total_cases_label = QLabel("0")
+        self.total_cases_label.setStyleSheet("font-size: 16px; color: #333;")
+        total_layout.addWidget(total_label)
+        total_layout.addWidget(self.total_cases_label)
+        total_layout.addStretch()
+        stats_info_layout.addLayout(total_layout)
+        
+        # 成功数
+        passed_layout = QHBoxLayout()
+        passed_label = QLabel("成功数：")
+        passed_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #4CAF50;")
+        self.passed_cases_label = QLabel("0")
+        self.passed_cases_label.setStyleSheet("font-size: 16px; color: #4CAF50;")
+        passed_layout.addWidget(passed_label)
+        passed_layout.addWidget(self.passed_cases_label)
+        passed_layout.addStretch()
+        stats_info_layout.addLayout(passed_layout)
+        
+        # 失败数
+        failed_layout = QHBoxLayout()
+        failed_label = QLabel("失败数：")
+        failed_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #F44336;")
+        self.failed_cases_label = QLabel("0")
+        self.failed_cases_label.setStyleSheet("font-size: 16px; color: #F44336;")
+        failed_layout.addWidget(failed_label)
+        failed_layout.addWidget(self.failed_cases_label)
+        failed_layout.addStretch()
+        stats_info_layout.addLayout(failed_layout)
+        
+        # 通过率
+        rate_layout = QHBoxLayout()
+        rate_label = QLabel("通过率：")
+        rate_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2196F3;")
+        self.success_rate_label = QLabel("0%")
+        self.success_rate_label.setStyleSheet("font-size: 16px; color: #2196F3;")
+        rate_layout.addWidget(rate_label)
+        rate_layout.addWidget(self.success_rate_label)
+        rate_layout.addStretch()
+        stats_info_layout.addLayout(rate_layout)
+        
+        stats_info_layout.addStretch()
+        stats_layout.addWidget(stats_info_widget)
+        
+        right_layout.addWidget(stats_group)
+        
+        # 将两部分添加到水平布局，报告信息左对齐，执行统计右对齐
+        summary_layout.addWidget(left_widget)
+        summary_layout.addStretch()  # 添加弹性空间
+        summary_layout.addWidget(right_widget)
+        
+        parent_layout.addWidget(summary_container)
     
     def setup_case_tree_section(self, parent_layout):
         """设置用例列表布局结构"""
         # 用例树容器
         case_tree_widget = QWidget()
         case_tree_layout = QVBoxLayout(case_tree_widget)
-        
-        # 标题
-        case_tree_title = QLabel("执行详情")
-        case_tree_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #24292f; margin-bottom: 8px;")
-        case_tree_layout.addWidget(case_tree_title)
         
         # 创建滚动区域
         self.steps_scroll_area = QScrollArea()
@@ -296,14 +541,6 @@ class ReportDetailPage(QWidget):
         }.get(status, 'black')
         self.report_status_label.setText(f"<font color='{status_color}'>{status_text}</font>")
 
-        # 测试用例信息
-        case_name = self.report_data.get('case_name', '未知用例')
-        self.report_case_label.setText(case_name)
-
-        # 调度信息
-        scheduler_name = self.report_data.get('scheduler_name', '手动执行')
-        self.report_scheduler_label.setText(scheduler_name)
-
         # 时间信息
         start_time = self.report_data.get('start_time')
         if start_time:
@@ -341,16 +578,16 @@ class ReportDetailPage(QWidget):
         self.total_cases_label.setText(str(total_cases))
         self.passed_cases_label.setText(str(passed_cases))
         self.failed_cases_label.setText(str(failed_cases))
-        self.error_cases_label.setText(str(error_cases))
 
         # 计算通过率
         if total_cases > 0:
             success_rate = (passed_cases / total_cases) * 100
             self.success_rate_label.setText(f"{success_rate:.1f}%")
-            self.progress_bar.setValue(int(success_rate))
         else:
             self.success_rate_label.setText("0%")
-            self.progress_bar.setValue(0)
+
+        # 更新饼图
+        self.pie_chart.set_data(passed_cases, failed_cases, error_cases)
 
         # 加载用例树形结构
         self.load_case_tree()
@@ -413,84 +650,30 @@ class ReportDetailPage(QWidget):
         """加载用例布局结构 - 使用新的布局架构"""
         try:
             # 清空现有内容
-            for i in reversed(range(self.steps_layout.count())):
-                item = self.steps_layout.itemAt(i)
-                if item.widget():
-                    item.widget().deleteLater()
+            self._clear_steps_layout()
             
             # 检查report_data中是否包含id字段
             if 'id' not in self.report_data:
-                print(f"报告数据缺少id字段: {self.report_data}")
+                self._show_no_data_message("报告数据不完整")
                 return
                 
             report_id = self.report_data['id']
-            print(f"开始加载报告 {report_id} 的步骤结果")
             
             # 从数据库加载步骤结果
             step_results = self.report_service.get_step_results_by_report(report_id)
-            print(f"获取到 {len(step_results)} 个步骤结果")
-            
-            # 打印详细的步骤数据信息
-            if step_results:
-                print("[DEBUG] 步骤数据详细内容:")
-                for i, step in enumerate(step_results[:5]):  # 只打印前5个步骤
-                    print(f"[DEBUG] 步骤 {i+1}:")
-                    print(f"[DEBUG]   case_id: {step.get('case_id')}")
-                    print(f"[DEBUG]   case_name: {step.get('case_name')}")
-                    print(f"[DEBUG]   step_order: {step.get('step_order')}")
-                    print(f"[DEBUG]   step_name: {step.get('step_name')}")
-                    print(f"[DEBUG]   name: {step.get('name')}")
-                    print(f"[DEBUG]   api_template.name: {step.get('api_template', {}).get('name') if isinstance(step.get('api_template'), dict) else 'N/A'}")
-                    print("")
             
             if not step_results:
-                # 添加提示项
-                no_data_label = QLabel("暂无步骤执行数据")
-                no_data_label.setAlignment(Qt.AlignCenter)
-                no_data_label.setStyleSheet("color: gray; font-size: 14px; padding: 20px;")
-                self.steps_layout.insertWidget(0, no_data_label)
+                self._show_no_data_message("暂无步骤执行数据")
                 return
             
             # 按用例分组
-            case_groups = {}
-            for step in step_results:
-                case_id = step.get('case_id')
-                if case_id not in case_groups:
-                    case_groups[case_id] = []
-                case_groups[case_id].append(step)
-            
-            print(f"按用例分组后得到 {len(case_groups)} 个用例组")
+            case_groups = self._group_steps_by_case(step_results)
             
             # 创建用例组件
-            for case_id, steps in case_groups.items():
-                # 获取用例名称（从第一个步骤中获取），直接使用用例名称而不是"用例 X"格式
-                case_name = steps[0].get('case_name', f'用例 {case_id}') if steps else f'用例 {case_id}'
-                # 如果用例名称是"用例 X"格式，提取实际用例名称
-                if case_name.startswith('用例 '):
-                    # 尝试从步骤数据中获取实际用例名称
-                    actual_case_name = steps[0].get('case_name', case_name) if steps else case_name
-                    case_name = actual_case_name
-                
-                print(f"[DEBUG] 创建用例: case_id={case_id}, case_name={case_name}")
-                
-                # 创建用例数据
-                case_data = {
-                    'status': self._get_case_status(steps),
-                    'steps': self._format_steps_data(steps),
-                    'duration': self._calculate_case_duration(steps)  # 计算用例总执行时间
-                }
-                
-                # 创建CaseItem组件
-                case_item = CaseItem(case_name, case_data)
-                
-                # 添加到布局
-                self.steps_layout.insertWidget(self.steps_layout.count() - 1, case_item)
+            self._create_case_items(case_groups)
             
-            print(f"用例布局加载完成，共 {len(case_groups)} 个用例")
         except Exception as e:
-            print(f"加载用例布局失败: {e}")
-            import traceback
-            traceback.print_exc()
+            self._show_error_message(f"加载用例布局失败: {e}")
     
 
     
@@ -593,6 +776,60 @@ class ReportDetailPage(QWidget):
             print(f"显示步骤日志对话框失败: {e}")
             import traceback
             traceback.print_exc()
+
+    def _clear_steps_layout(self):
+        """清空步骤布局"""
+        for i in reversed(range(self.steps_layout.count())):
+            item = self.steps_layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _show_no_data_message(self, message):
+        """显示无数据消息"""
+        no_data_label = QLabel(message)
+        no_data_label.setAlignment(Qt.AlignCenter)
+        no_data_label.setStyleSheet("color: gray; font-size: 14px; padding: 20px;")
+        self.steps_layout.insertWidget(0, no_data_label)
+
+    def _group_steps_by_case(self, step_results):
+        """按用例分组步骤结果"""
+        case_groups = {}
+        for step in step_results:
+            case_id = step.get('case_id')
+            if case_id not in case_groups:
+                case_groups[case_id] = []
+            case_groups[case_id].append(step)
+        return case_groups
+
+    def _create_case_items(self, case_groups):
+        """创建用例组件"""
+        for case_id, steps in case_groups.items():
+            # 获取用例名称（从第一个步骤中获取），直接使用用例名称而不是"用例 X"格式
+            case_name = steps[0].get('case_name', f'用例 {case_id}') if steps else f'用例 {case_id}'
+            # 如果用例名称是"用例 X"格式，提取实际用例名称
+            if case_name.startswith('用例 '):
+                # 尝试从步骤数据中获取实际用例名称
+                actual_case_name = steps[0].get('case_name', case_name) if steps else case_name
+                case_name = actual_case_name
+            
+            # 创建用例数据
+            case_data = {
+                'status': self._get_case_status(steps),
+                'steps': self._format_steps_data(steps),
+                'duration': self._calculate_case_duration(steps)  # 计算用例总执行时间
+            }
+            
+            # 创建CaseItem组件
+            case_item = CaseItem(case_name, case_data)
+            
+            # 添加到布局
+            self.steps_layout.insertWidget(self.steps_layout.count() - 1, case_item)
+
+    def _show_error_message(self, message):
+        """显示错误消息"""
+        print(message)
+        import traceback
+        traceback.print_exc()
 
 
 class CaseItem(QWidget):
@@ -731,8 +968,15 @@ class CaseItem(QWidget):
     
     def update_case_style(self):
         """根据用例状态更新样式"""
-        # 统一使用浅蓝色背景，不区分状态
-        bg_color = '#e6f3ff'  # 浅蓝色背景
+        # 根据用例状态设置背景色
+        status = self.case_data.get('status', 'unknown')
+        
+        if status == 'success':
+            bg_color = '#e8f5e8'  # 浅绿色 - 执行通过
+        elif status in ['failure', 'error']:
+            bg_color = '#ffeaea'  # 浅红色 - 执行失败
+        else:
+            bg_color = '#e6f3ff'  # 浅蓝色 - 未知状态
         
         # 设置用例样式 - 应用到header_container，去除hover效果
         self.header_container.setStyleSheet(f"""
@@ -1783,475 +2027,7 @@ class StepLogItem(QWidget):
             self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #ff0000;")
 
 
-class ReportDetailDialog(QDialog):
-    """报告详情对话框"""
 
-    def __init__(self, parent=None, report_data=None):
-        super().__init__(parent)
-        self.report_data = report_data or {}
-        self.report_service = TestReportService()
-        self.init_ui()
-        self.load_report_details()
-
-    def init_ui(self):
-        self.setWindowTitle(f"测试报告 - {self.report_data.get('report_name', '')}")
-        self.setMinimumSize(1000, 700)
-
-        layout = QVBoxLayout(self)
-
-        # 创建Tab页
-        tab_widget = NoWheelTabWidget()
-
-        # 概览Tab
-        overview_tab = QWidget()
-        self.setup_overview_tab(overview_tab)
-
-        # 步骤详情Tab
-        steps_tab = QWidget()
-        self.setup_steps_tab(steps_tab)
-
-        # 日志Tab
-        logs_tab = QWidget()
-        self.setup_logs_tab(logs_tab)
-
-        tab_widget.addTab(overview_tab, "概览")
-        tab_widget.addTab(steps_tab, "步骤详情")
-        tab_widget.addTab(logs_tab, "日志")
-
-        # 按钮布局
-        button_box = QDialogButtonBox(QDialogButtonBox.Close)
-        button_box.rejected.connect(self.reject)
-        # 将关闭按钮文字改为中文
-        close_button = button_box.button(QDialogButtonBox.Close)
-        if close_button:
-            close_button.setText("关闭")
-
-        layout.addWidget(tab_widget)
-        layout.addWidget(button_box)
-
-    def setup_overview_tab(self, parent):
-        layout = QVBoxLayout(parent)
-
-        # 报告基本信息
-        basic_info_group = QGroupBox("报告信息")
-        basic_layout = QFormLayout(basic_info_group)
-
-        self.report_name_label = QLabel()
-        self.report_status_label = QLabel()
-        self.report_case_label = QLabel()
-        self.report_scheduler_label = QLabel()
-        self.report_start_time_label = QLabel()
-        self.report_end_time_label = QLabel()
-        self.report_duration_label = QLabel()
-
-        basic_layout.addRow("报告名称:", self.report_name_label)
-        basic_layout.addRow("执行状态:", self.report_status_label)
-        basic_layout.addRow("测试用例:", self.report_case_label)
-        basic_layout.addRow("关联调度:", self.report_scheduler_label)
-        basic_layout.addRow("开始时间:", self.report_start_time_label)
-        basic_layout.addRow("结束时间:", self.report_end_time_label)
-        basic_layout.addRow("执行时长:", self.report_duration_label)
-
-        # 统计信息
-        stats_group = QGroupBox("执行统计")
-        stats_layout = QVBoxLayout(stats_group)
-
-        # 进度条显示
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximum(100)
-        stats_layout.addWidget(self.progress_bar)
-
-        # 数字统计
-        stats_grid = QHBoxLayout()
-
-        # 总步骤数
-        total_frame = QFrame()
-        total_frame.setFrameStyle(QFrame.Box)
-        total_layout = QVBoxLayout(total_frame)
-        self.total_cases_label = QLabel("0")
-        self.total_cases_label.setAlignment(Qt.AlignCenter)
-        self.total_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #333;")
-        total_layout.addWidget(self.total_cases_label)
-        total_layout.addWidget(QLabel("总用例"))
-        stats_grid.addWidget(total_frame)
-
-        # 通过数
-        passed_frame = QFrame()
-        passed_frame.setFrameStyle(QFrame.Box)
-        passed_layout = QVBoxLayout(passed_frame)
-        self.passed_cases_label = QLabel("0")
-        self.passed_cases_label.setAlignment(Qt.AlignCenter)
-        self.passed_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #4CAF50;")
-        passed_layout.addWidget(self.passed_cases_label)
-        passed_layout.addWidget(QLabel("通过"))
-        stats_grid.addWidget(passed_frame)
-
-        # 失败数
-        failed_frame = QFrame()
-        failed_frame.setFrameStyle(QFrame.Box)
-        failed_layout = QVBoxLayout(failed_frame)
-        self.failed_cases_label = QLabel("0")
-        self.failed_cases_label.setAlignment(Qt.AlignCenter)
-        self.failed_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #F44336;")
-        failed_layout.addWidget(self.failed_cases_label)
-        failed_layout.addWidget(QLabel("失败"))
-        stats_grid.addWidget(failed_frame)
-
-        # 错误数
-        error_frame = QFrame()
-        error_frame.setFrameStyle(QFrame.Box)
-        error_layout = QVBoxLayout(error_frame)
-        self.error_cases_label = QLabel("0")
-        self.error_cases_label.setAlignment(Qt.AlignCenter)
-        self.error_cases_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FF9800;")
-        error_layout.addWidget(self.error_cases_label)
-        error_layout.addWidget(QLabel("错误"))
-        stats_grid.addWidget(error_frame)
-
-        # 通过率
-        rate_frame = QFrame()
-        rate_frame.setFrameStyle(QFrame.Box)
-        rate_layout = QVBoxLayout(rate_frame)
-        self.success_rate_label = QLabel("0%")
-        self.success_rate_label.setAlignment(Qt.AlignCenter)
-        self.success_rate_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2196F3;")
-        rate_layout.addWidget(self.success_rate_label)
-        rate_layout.addWidget(QLabel("通过率"))
-        stats_grid.addWidget(rate_frame)
-
-        stats_layout.addLayout(stats_grid)
-
-        layout.addWidget(basic_info_group)
-        layout.addWidget(stats_group)
-        layout.addStretch()
-
-    def setup_steps_tab(self, parent):
-        layout = QVBoxLayout(parent)
-
-        # 创建滚动区域
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #e0e0e0;
-                border-radius: 6px;
-                background: #fafafa;
-            }
-        """)
-
-        # 步骤日志容器
-        self.steps_container = QWidget()
-        self.steps_layout = QVBoxLayout(self.steps_container)
-        self.steps_layout.setSpacing(4)
-        self.steps_layout.setContentsMargins(8, 8, 8, 8)
-        self.steps_layout.addStretch()
-
-        scroll_area.setWidget(self.steps_container)
-        layout.addWidget(scroll_area)
-
-    def setup_logs_tab(self, parent):
-        layout = QVBoxLayout(parent)
-
-        # 日志内容
-        self.logs_text = QTextEdit()
-        self.logs_text.setReadOnly(True)
-        self.logs_text.setFont(QFont("Consolas", 10))
-
-        layout.addWidget(QLabel("执行日志:"))
-        layout.addWidget(self.logs_text)
-
-    def load_report_details(self):
-        """加载报告详情"""
-        if not self.report_data:
-            return
-
-        # 基本信息
-        self.report_name_label.setText(self.report_data.get('report_name', ''))
-
-        status = self.report_data.get('status', '')
-        status_text = {
-            'success': '成功',
-            'failure': '失败',
-            'error': '错误',
-            'running': '执行中'
-        }.get(status, status)
-        status_color = {
-            'success': 'green',
-            'failure': 'red',
-            'error': 'orange',
-            'running': 'blue'
-        }.get(status, 'black')
-        self.report_status_label.setText(f"<font color='{status_color}'>{status_text}</font>")
-
-        # 测试用例信息
-        case_name = self.report_data.get('case_name', '未知用例')
-        self.report_case_label.setText(case_name)
-
-        # 调度信息
-        scheduler_name = self.report_data.get('scheduler_name', '手动执行')
-        self.report_scheduler_label.setText(scheduler_name)
-
-        # 时间信息
-        start_time = self.report_data.get('start_time')
-        if start_time:
-            if isinstance(start_time, str):
-                # 如果是字符串，直接显示或尝试解析
-                start_text = start_time
-            else:
-                # 如果是datetime对象，格式化显示
-                start_text = start_time.strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            start_text = 'N/A'
-        self.report_start_time_label.setText(start_text)
-
-        end_time = self.report_data.get('end_time')
-        if end_time:
-            if isinstance(end_time, str):
-                # 如果是字符串，直接显示或尝试解析
-                end_text = end_time
-            else:
-                # 如果是datetime对象，格式化显示
-                end_text = end_time.strftime('%Y-%m-%d %H:%M:%S')
-        else:
-            end_text = 'N/A'
-        self.report_end_time_label.setText(end_text)
-
-        duration = self.report_data.get('duration', 0)
-        # 确保duration是数字类型
-        try:
-            duration_value = float(duration)
-            self.report_duration_label.setText(f"{duration_value:.2f} 秒")
-        except (ValueError, TypeError):
-            # 如果转换失败，直接显示原始值
-            self.report_duration_label.setText(f"{duration} 秒")
-
-        # 统计信息
-        total_cases = self.report_data.get('total_cases', 0)
-        passed_cases = self.report_data.get('passed_cases', 0)
-        failed_cases = self.report_data.get('failed_cases', 0)
-        error_cases = self.report_data.get('error_cases', 0)
-
-        self.total_cases_label.setText(str(total_cases))
-        self.passed_cases_label.setText(str(passed_cases))
-        self.failed_cases_label.setText(str(failed_cases))
-        self.error_cases_label.setText(str(error_cases))
-
-        # 计算通过率
-        if total_cases > 0:
-            success_rate = (passed_cases / total_cases) * 100
-            self.success_rate_label.setText(f"{success_rate:.1f}%")
-            self.progress_bar.setValue(int(success_rate))
-        else:
-            self.success_rate_label.setText("0%")
-            self.progress_bar.setValue(0)
-
-        # 加载步骤详情
-        self.load_step_results()
-
-        # 加载日志
-        self.load_logs()
-
-    def load_step_results(self):
-        """加载步骤执行结果 - 使用新的嵌套层级组件"""
-        try:
-            # 检查report_data中是否包含id字段
-            if 'id' not in self.report_data:
-                print("报告数据缺少id字段，无法加载步骤结果")
-                return
-                
-            # 清空现有步骤日志项
-            for i in reversed(range(self.steps_layout.count())):
-                item = self.steps_layout.itemAt(i)
-                if item.widget():
-                    item.widget().deleteLater()
-            
-            step_results = self.report_service.get_step_results_by_report(self.report_data['id'])
-            
-            # 按用例分组
-            case_groups = {}
-            for step in step_results:
-                case_id = step.get('case_id')
-                if case_id not in case_groups:
-                    case_groups[case_id] = []
-                case_groups[case_id].append(step)
-            
-            # 创建用例项组件
-            for case_id, steps in case_groups.items():
-                # 获取用例名称（从第一个步骤中获取）
-                case_name = steps[0].get('case_name', f'用例 {case_id}') if steps else f'用例 {case_id}'
-                
-                # 创建用例数据
-                case_data = {
-                    'status': self._get_case_status(steps),
-                    'steps': self._format_steps_data(steps)
-                }
-                
-                # 创建用例项组件
-                case_item = CaseItem(case_name, case_data)
-                
-                # 添加到布局
-                self.steps_layout.insertWidget(self.steps_layout.count() - 1, case_item)
-
-        except Exception as e:
-            print(f"加载步骤结果失败: {e}")
-    
-    def _get_case_status(self, steps):
-        """根据步骤状态确定用例状态"""
-        if not steps:
-            return 'unknown'
-        
-        status_priority = {
-            'error': 4,
-            'failure': 3,
-            'skipped': 2,
-            'success': 1
-        }
-        
-        # 获取最高优先级的状态
-        highest_priority = 0
-        case_status = 'success'
-        
-        for step in steps:
-            status = step.get('status', 'skipped')
-            priority = status_priority.get(status, 0)
-            if priority > highest_priority:
-                highest_priority = priority
-                case_status = status
-        
-        return case_status
-    
-    def _format_steps_data(self, steps):
-        """格式化步骤数据"""
-        formatted_steps = []
-        
-        for step in steps:
-            formatted_step = {
-                'step_name': step.get('step_name', step.get('step_name', '未知接口')),
-                'status': step.get('status', 'skipped'),
-                'duration': step.get('duration', 0),  # 使用duration字段
-                'execution_logs': step.get('execution_logs', '')
-            }
-            formatted_steps.append(formatted_step)
-        
-        return formatted_steps
-
-    def load_logs(self):
-        """加载日志内容"""
-        try:
-            # 清空现有内容
-            self.logs_text.clear()
-            
-            # 检查report_data中是否包含id字段
-            if 'id' not in self.report_data:
-                self.logs_text.setText("报告数据不完整，无法加载日志")
-                return
-                
-            # 从数据库加载步骤结果
-            step_results = self.report_service.get_step_results_by_report(self.report_data['id'])
-            
-            if not step_results:
-                self.logs_text.setText("暂无执行日志")
-                return
-            
-            # 格式化显示所有步骤的执行日志
-            log_content = ""
-            for step in step_results:
-                step_order = step.get('step_order', 0)
-                step_name = step.get('step_name', step.get('step_name', '未知接口'))
-                
-                # 添加步骤标题
-                log_content += f"\n=== 步骤 {step_order}: {step_name} ===\n"
-                
-                # 添加执行日志
-                execution_logs = step.get('execution_logs', '')
-                if execution_logs:
-                    # 解析文本格式的日志行
-                    log_lines = [line.strip() for line in execution_logs.strip().split('\n') if line.strip()]
-                    for log_line in log_lines:
-                        # 解析日志行格式：[时间戳] [级别] 消息
-                        parts = log_line.split(' ', 2)  # 最多分割成3部分
-                        if len(parts) >= 3:
-                            timestamp = parts[0].strip('[]') if parts[0].startswith('[') and parts[0].endswith(']') else ''
-                            level = parts[1].strip('[]') if parts[1].startswith('[') and parts[1].endswith(']') else 'info'
-                            message = parts[2] if len(parts) >= 3 else log_line
-                        else:
-                            # 非标准格式，直接显示整行
-                            timestamp = ''
-                            level = 'info'
-                            message = log_line
-                        
-                        # 格式化日志级别
-                        level_display = {
-                            'info': '[INFO]',
-                            'warning': '[WARN]',
-                            'warn': '[WARN]',
-                            'error': '[ERROR]',
-                            'success': '[SUCCESS]'
-                        }.get(level.lower(), '[INFO]')
-                        
-                        log_content += f"[{timestamp}] {level_display} {message}\n"
-                else:
-                    # 如果没有执行日志，显示基本信息
-                    status = step.get('status', 'skipped')
-                    status_text = {
-                        'success': '执行成功',
-                        'failure': '执行失败', 
-                        'error': '执行错误',
-                        'skipped': '未执行'
-                    }.get(status, '未知状态')
-                    
-                    log_content += f"[无详细日志] {status_text}\n"
-            
-            self.logs_text.setText(log_content.strip())
-            
-        except Exception as e:
-            self.logs_text.setText(f"加载日志失败: {str(e)}")
-
-    def show_step_detail(self):
-        """显示步骤详情"""
-        selected_items = self.steps_table.selectedItems()
-        if not selected_items:
-            return
-
-        row = selected_items[0].row()
-        step_order = self.steps_table.item(row, 0).text()
-
-        # 这里可以打开步骤详情对话框，显示请求、响应、断言等详细信息
-        QMessageBox.information(self, "步骤详情", f"查看步骤 {step_order} 的详细信息")
-
-    def export_report(self):
-        """导出报告"""
-        try:
-            # 选择导出路径
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, "导出测试报告",
-                f"{self.report_data['report_name']}.html",
-                "HTML Files (*.html);;All Files (*)"
-            )
-
-            if file_path:
-                # 生成HTML报告
-                generator = HTMLReportGenerator()
-                generator.generate_report(self.report_data, file_path)
-
-                # 询问是否打开
-                msg_box = QMessageBox(QMessageBox.Question, "导出成功", 
-                                    "测试报告导出成功，是否立即打开？")
-                confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
-                cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
-                msg_box.setDefaultButton(cancel_button)
-                msg_box.exec_()
-                reply = QMessageBox.Yes if msg_box.clickedButton() == confirm_button else QMessageBox.No
-
-                if reply == QMessageBox.Yes:
-                    webbrowser.open(f"file://{os.path.abspath(file_path)}")
-
-                QMessageBox.information(self, "成功", "测试报告导出成功")
-
-        except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"导出测试报告失败: {str(e)}")
 
 
 class TestReportManager(QWidget):
@@ -2267,6 +2043,8 @@ class TestReportManager(QWidget):
         self.project_service = None
         self.current_scheduler_id = None  # 当前选中的调度ID，用于过滤
         self.current_business_id = None  # 当前选中的业务分组ID，用于项目过滤
+        self.loading_thread = None  # 异步加载线程
+        self.is_loading = False  # 是否正在加载
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
@@ -2844,7 +2622,7 @@ class TestReportManager(QWidget):
             print(f"处理测试用例集点击事件失败: {e}")
 
     def load_reports_by_scheduler(self, scheduler_id):
-        """根据测试用例集ID加载对应的测试报告"""
+        """根据测试用例集ID加载对应的测试报告 - 异步加载版本"""
         # 检查服务对象是否已初始化
         if self.report_service is None:
             # 显示服务未初始化提示
@@ -2858,9 +2636,15 @@ class TestReportManager(QWidget):
             print("报告服务未初始化，跳过加载报告")
             return
             
+        # 如果正在加载，先停止之前的加载
+        if self.is_loading and self.loading_thread:
+            self.loading_thread.terminate()
+            self.loading_thread.wait()
+            self.is_loading = False
+            
         try:
             # 调试信息
-            print(f"=== 加载测试用例集报告 ===")
+            print(f"=== 异步加载测试用例集报告 ===")
             print(f"测试用例集ID: {scheduler_id}")
             
             # 获取筛选条件
@@ -2871,9 +2655,54 @@ class TestReportManager(QWidget):
             filters['scheduler_id'] = scheduler_id
             print(f"添加调度ID后的筛选条件: {filters}")
             
-            # 获取报告数据
-            reports = self.report_service.get_reports_with_filters(filters)
-            print(f"获取到的报告数量: {len(reports) if reports else 0}")
+            # 显示加载提示
+            self.tree_widget.clear()
+            loading_item = QTreeWidgetItem(self.tree_widget)
+            loading_item.setText(0, "正在加载报告数据...")
+            self.tree_widget.setFirstItemColumnSpanned(loading_item, True)
+            loading_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
+            loading_item.setBackground(0, QBrush(QColor("#e3f2fd")))
+            loading_item.setForeground(0, QBrush(QColor("#1565c0")))
+            font = QFont()
+            font.setPointSize(11)
+            font.setBold(True)
+            loading_item.setFont(0, font)
+            loading_item.setSizeHint(0, QSize(0, 50))
+            
+            # 创建异步加载线程
+            self.loading_thread = ReportLoadingThread(self.report_service, filters)
+            self.loading_thread.loading_finished.connect(self.on_reports_loaded)
+            self.is_loading = True
+            
+            # 启动线程
+            self.loading_thread.start()
+            
+        except Exception as e:
+            print(f"启动异步加载失败: {str(e)}")
+            self.is_loading = False
+            
+            # 显示错误提示
+            self.tree_widget.clear()
+            error_item = QTreeWidgetItem(self.tree_widget)
+            error_item.setText(0, f"加载失败: {str(e)}")
+            self.tree_widget.setFirstItemColumnSpanned(error_item, True)
+            error_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
+            error_item.setBackground(0, QBrush(QColor("#ffebee")))
+            error_item.setForeground(0, QBrush(QColor("#c62828")))
+            font = QFont()
+            font.setPointSize(11)
+            font.setBold(True)
+            error_item.setFont(0, font)
+            error_item.setSizeHint(0, QSize(0, 50))
+
+    def on_reports_loaded(self, reports):
+        """异步加载完成后的回调函数"""
+        try:
+            # 重置加载状态
+            self.is_loading = False
+            self.loading_thread = None
+            
+            print(f"异步加载完成，获取到的报告数量: {len(reports) if reports else 0}")
             
             # 清空树形控件
             self.tree_widget.clear()
@@ -2932,7 +2761,17 @@ class TestReportManager(QWidget):
                     'error': '错误',
                     'running': '执行中'
                 }.get(status, status)
+                
+                # 设置状态颜色
+                status_color = {
+                    'success': '#28a745',  # 绿色
+                    'failure': '#dc3545',  # 红色
+                    'error': '#ffc107',    # 黄色
+                    'running': '#17a2b8'   # 蓝色
+                }.get(status, '#6c757d')   # 默认灰色
+                
                 item.setText(3, status_text)
+                item.setForeground(3, QColor(status_color))
                 
                 # 通过率
                 total_cases = report.get('total_cases', 0)
@@ -2983,7 +2822,22 @@ class TestReportManager(QWidget):
                 view_btn.setFixedSize(25, 25)
                 view_btn.setIcon(self.get_icon("detail.png"))
                 view_btn.setToolTip("查看详情")
-                view_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                view_btn.setStyleSheet("""
+                    QPushButton {
+                        border: 1px solid transparent;
+                        background: transparent;
+                        padding: 2px;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background: #e0e0e0;
+                        border: 1px solid #c0c0c0;
+                    }
+                    QPushButton:pressed {
+                        background: #d0d0d0;
+                        border: 1px solid #a0a0a0;
+                    }
+                """)
                 view_btn.clicked.connect(lambda checked, report_id=report['id']: self.view_report_detail_by_id(report_id))
                 
                 # 删除按钮
@@ -2991,7 +2845,22 @@ class TestReportManager(QWidget):
                 delete_btn.setFixedSize(25, 25)
                 delete_btn.setIcon(self.get_icon("delete.png"))
                 delete_btn.setToolTip("删除")
-                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                delete_btn.setStyleSheet("""
+                    QPushButton {
+                        border: 1px solid transparent;
+                        background: transparent;
+                        padding: 2px;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background: #e0e0e0;
+                        border: 1px solid #c0c0c0;
+                    }
+                    QPushButton:pressed {
+                        background: #d0d0d0;
+                        border: 1px solid #a0a0a0;
+                    }
+                """)
                 delete_btn.clicked.connect(lambda checked, report_id=report['id']: self.delete_report_by_id(report_id))
                 
                 operation_layout.addWidget(view_btn)
@@ -3002,14 +2871,16 @@ class TestReportManager(QWidget):
                 # 设置数据
                 item.setData(0, Qt.UserRole, report['id'])
             
-            # 已移除状态标签显示
+            print(f"异步加载完成，成功显示 {len(reports)} 个报告")
             
         except Exception as e:
-            print(f"加载测试用例集报告失败: {e}")
+            print(f"处理异步加载结果失败: {str(e)}")
+            self.is_loading = False
+            
             # 显示错误提示
             self.tree_widget.clear()
             error_item = QTreeWidgetItem(self.tree_widget)
-            error_item.setText(0, f"加载报告失败: {str(e)}")
+            error_item.setText(0, f"处理加载结果失败: {str(e)}")
             self.tree_widget.setFirstItemColumnSpanned(error_item, True)
             error_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
             error_item.setBackground(0, QBrush(QColor("#ffebee")))
@@ -3084,7 +2955,17 @@ class TestReportManager(QWidget):
                     'error': '错误',
                     'running': '执行中'
                 }.get(status, status)
+                
+                # 设置状态颜色
+                status_color = {
+                    'success': '#28a745',  # 绿色
+                    'failure': '#dc3545',  # 红色
+                    'error': '#ffc107',    # 黄色
+                    'running': '#17a2b8'   # 蓝色
+                }.get(status, '#6c757d')   # 默认灰色
+                
                 item.setText(3, status_text)
+                item.setForeground(3, QColor(status_color))
                 
                 # 通过率
                 total_cases = report.get('total_cases', 0)
@@ -3135,7 +3016,22 @@ class TestReportManager(QWidget):
                 view_btn.setFixedSize(25, 25)
                 view_btn.setIcon(self.get_icon("detail.png"))
                 view_btn.setToolTip("查看详情")
-                view_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                view_btn.setStyleSheet("""
+                    QPushButton {
+                        border: 1px solid transparent;
+                        background: transparent;
+                        padding: 2px;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background: #e0e0e0;
+                        border: 1px solid #c0c0c0;
+                    }
+                    QPushButton:pressed {
+                        background: #d0d0d0;
+                        border: 1px solid #a0a0a0;
+                    }
+                """)
                 view_btn.clicked.connect(lambda checked, report_id=report['id']: self.view_report_detail_by_id(report_id))
                 
                 # 删除按钮
@@ -3143,7 +3039,22 @@ class TestReportManager(QWidget):
                 delete_btn.setFixedSize(25, 25)
                 delete_btn.setIcon(self.get_icon("delete.png"))
                 delete_btn.setToolTip("删除")
-                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                delete_btn.setStyleSheet("""
+                    QPushButton {
+                        border: 1px solid transparent;
+                        background: transparent;
+                        padding: 2px;
+                        border-radius: 3px;
+                    }
+                    QPushButton:hover {
+                        background: #e0e0e0;
+                        border: 1px solid #c0c0c0;
+                    }
+                    QPushButton:pressed {
+                        background: #d0d0d0;
+                        border: 1px solid #a0a0a0;
+                    }
+                """)
                 delete_btn.clicked.connect(lambda checked, report_id=report['id']: self.delete_report_by_id(report_id))
                 
                 operation_layout.addWidget(view_btn)
@@ -3285,56 +3196,15 @@ class TestReportManager(QWidget):
             # 父节点：只有点击序号列（第0列）时才展开/折叠
             if column == 0:
                 item.setExpanded(not item.isExpanded())
-            # 父节点：点击操作栏时处理详情和删除
+            # 父节点：点击操作栏时，由于已经使用按钮组件，不处理点击事件
             elif column == 8:
-                # 获取操作栏文本
-                action_text = item.text(8)
-                # 获取点击位置，判断是点击"查看详情"还是"删除"
-                cursor_pos = self.tree_widget.viewport().mapFromGlobal(QCursor.pos())
-                item_rect = self.tree_widget.visualItemRect(item)
-                column_rect = self.tree_widget.visualRect(self.tree_widget.indexFromItem(item, 8))
-                
-                # 计算操作栏内点击位置
-                click_x_in_column = cursor_pos.x() - column_rect.x()
-                column_width = column_rect.width()
-                
-                # 判断点击的是"查看详情"还是"删除"
-                if click_x_in_column < column_width / 2:
-                    # 点击"查看详情"
-                    if item.parent() is None:  # 父节点
-                        # 父节点查看第一条报告的详情
-                        if not isinstance(node_data, str) or not node_data.startswith("scheduler_"):
-                            self.view_report_detail_by_id(node_data)
-                else:
-                    # 点击"删除"
-                    if item.parent() is None:  # 父节点
-                        # 父节点删除整个调度组的所有报告
-                        self.delete_scheduler_reports(node_data)
+                # 父节点的操作栏使用按钮组件，不需要处理单元格点击
+                pass
         else:
-            # 子节点：点击操作栏时处理详情和删除
+            # 子节点：点击操作栏时，由于已经使用按钮组件，不处理点击事件
             if column == 8:
-                # 获取操作栏文本
-                action_text = item.text(8)
-                # 获取点击位置，判断是点击"查看详情"还是"删除"
-                cursor_pos = self.tree_widget.viewport().mapFromGlobal(QCursor.pos())
-                item_rect = self.tree_widget.visualItemRect(item)
-                column_rect = self.tree_widget.visualRect(self.tree_widget.indexFromItem(item, 8))
-                
-                # 计算操作栏内点击位置
-                click_x_in_column = cursor_pos.x() - column_rect.x()
-                column_width = column_rect.width()
-                
-                # 判断点击的是"查看详情"还是"删除"
-                if click_x_in_column < column_width / 2:
-                    # 点击"查看详情"
-                    report_id = node_data
-                    if report_id:
-                        self.view_report_detail_by_id(report_id)
-                else:
-                    # 点击"删除"
-                    report_id = node_data
-                    if report_id:
-                        self.delete_report_by_id(report_id)
+                # 子节点的操作栏使用按钮组件，不需要处理单元格点击
+                pass
             # 子节点：点击其他列时选中该行
             else:
                 self.tree_widget.setCurrentItem(item)
@@ -3381,8 +3251,18 @@ class TestReportManager(QWidget):
             QMessageBox.warning(self, "提示", "请先选择一个测试报告")
             return
 
-        dialog = ReportDetailDialog(self, report_data)
-        dialog.exec_()
+        # 创建详情页（如果不存在）
+        if self.detail_page is None:
+            self.detail_page = ReportDetailPage(report_data=report_data)
+            self.detail_page.back_requested.connect(self.show_list_page)
+            self.stack_layout.addWidget(self.detail_page)
+        else:
+            # 如果详情页已存在，更新报告数据
+            self.detail_page.report_data = report_data
+            self.detail_page.load_report_details()
+        
+        # 切换到详情页
+        self.stack_layout.setCurrentWidget(self.detail_page)
 
     def view_report_detail_by_id(self, report_id):
         """根据报告ID查看详情"""
@@ -3414,6 +3294,64 @@ class TestReportManager(QWidget):
         """显示列表页"""
         self.stack_layout.setCurrentWidget(self.list_page)
 
+    def filter_by_scheduler(self, jump_data):
+        """根据调度信息自动筛选报告列表
+        
+        Args:
+            jump_data: 跳转数据字典，包含调度信息和报告列表
+        """
+        try:
+            # 确保显示列表页
+            self.show_list_page()
+            
+            # 获取调度信息
+            scheduler_data = jump_data.get('scheduler', {})
+            reports = jump_data.get('reports', [])
+            
+            if not scheduler_data or not reports:
+                print("调度数据或报告列表为空，使用普通加载")
+                self.load_reports()
+                return
+            
+            # 设置当前调度ID用于过滤
+            scheduler_id = scheduler_data.get('id')
+            if scheduler_id:
+                self.current_scheduler_id = scheduler_id
+                
+                # 尝试在调度列表中选择对应的调度项
+                for i in range(self.scheduler_list_widget.count()):
+                    item = self.scheduler_list_widget.item(i)
+                    if item.flags() != Qt.NoItemFlags and item.data(Qt.UserRole) == scheduler_id:
+                        self.scheduler_list_widget.setCurrentItem(item)
+                        break
+            
+            # 设置项目筛选
+            project_id = scheduler_data.get('project_id')
+            if project_id and self.project_combo:
+                # 查找项目在组合框中的索引
+                for i in range(self.project_combo.count()):
+                    if self.project_combo.itemData(i) == project_id:
+                        self.project_combo.setCurrentIndex(i)
+                        break
+            
+            # 设置报告名称搜索
+            scheduler_name = scheduler_data.get('name', '')
+            if scheduler_name and self.search_edit:
+                self.search_edit.setText(scheduler_name)
+            
+            # 加载调度相关的报告
+            if scheduler_id:
+                self.load_reports_by_scheduler(scheduler_id)
+            else:
+                self.load_reports()
+                
+            print(f"已应用调度筛选: {scheduler_name}")
+                
+        except Exception as e:
+            print(f"应用调度筛选失败: {str(e)}")
+            # 出错时使用普通加载
+            self.load_reports()
+
     def delete_scheduler_reports(self, scheduler_data):
         """删除调度组的所有报告"""
         if not scheduler_data:
@@ -3443,16 +3381,16 @@ class TestReportManager(QWidget):
                             success_count += 1
                     
                     if success_count > 0:
-                        QMessageBox.information(self, "成功", f"成功删除 {success_count} 个测试报告")
+                        Toast.info(self, f"成功删除 {success_count} 个测试报告")
                         # 重新加载报告列表
                         self.load_reports()
                     else:
-                        QMessageBox.warning(self, "警告", "报告删除失败")
+                        Toast.warn(self, "报告删除失败")
                 else:
                     # 如果是单个报告ID，直接删除
                     self.delete_report_by_id(scheduler_data)
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除报告失败: {str(e)}")
+                Toast.error(self, f"删除报告失败: {str(e)}")
 
     def delete_report_by_id(self, report_id):
         """根据报告ID删除报告"""
@@ -3472,13 +3410,13 @@ class TestReportManager(QWidget):
                 # 删除报告
                 success = self.report_service.delete_report(report_id)
                 if success:
-                    QMessageBox.information(self, "成功", "报告删除成功")
+                    Toast.info(self, "报告删除成功")
                     # 重新加载报告列表
                     self.load_reports()
                 else:
-                    QMessageBox.warning(self, "警告", "报告删除失败")
+                    Toast.warn(self, "报告删除失败")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除报告失败: {str(e)}")
+                Toast.error(self, f"删除报告失败: {str(e)}")
 
 
 
@@ -3486,7 +3424,7 @@ class TestReportManager(QWidget):
         """删除选中的报告"""
         report_data = self.get_selected_report_data()
         if not report_data:
-            QMessageBox.warning(self, "提示", "请先选择一个测试报告")
+            Toast.warn(self, "请先选择一个测试报告")
             return
 
         msg_box = QMessageBox(QMessageBox.Question, "确认删除", 
@@ -3502,9 +3440,9 @@ class TestReportManager(QWidget):
                 self.report_service.delete_report(report_data['id'])
                 self.load_reports()
                 self.data_changed.emit()
-                QMessageBox.information(self, "成功", "报告删除成功")
+                Toast.info(self, "报告删除成功")
             except Exception as e:
-                QMessageBox.critical(self, "错误", f"删除报告失败: {str(e)}")
+                Toast.error(self, f"删除报告失败: {str(e)}")
 
     def clear_old_reports(self):
         """清理旧报告"""
@@ -3724,5 +3662,4 @@ class TestReportManager(QWidget):
                 
         except Exception as e:
             QMessageBox.critical(self, "导出失败", f"批量导出测试报告失败: {str(e)}")
-
 

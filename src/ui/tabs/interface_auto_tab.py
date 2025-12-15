@@ -82,6 +82,9 @@ class InterfaceAutoTab(QWidget):
         
         # 当定时调度页面请求查看报告详情时，跳转到测试报告标签页并打开对应报告
         self.scheduler.report_detail_requested.connect(self.on_report_detail_requested)
+        
+        # 当定时调度页面请求跳转到测试报告tab并筛选时，处理跳转和筛选
+        self.scheduler.report_tab_requested.connect(self.on_report_tab_requested)
 
     def delayed_init(self):
         """延迟初始化数据库连接和实际UI"""
@@ -333,7 +336,6 @@ class InterfaceAutoTab(QWidget):
                 if report_id:
                     # 调用view_report_detail_by_id方法打开对应报告
                     self.test_report.view_report_detail_by_id(report_id)
-                    print(f"成功跳转到测试报告详情页面，报告ID: {report_id}")
                 else:
                     print("报告数据中没有找到ID字段")
             else:
@@ -342,6 +344,45 @@ class InterfaceAutoTab(QWidget):
         except Exception as e:
             print(f"跳转到测试报告详情页面失败: {str(e)}")
             QMessageBox.critical(self, "错误", f"打开报告详情失败: {str(e)}")
+    
+    def on_report_tab_requested(self, jump_data):
+        """处理测试报告tab跳转请求，自动筛选调度相关的报告
+        
+        Args:
+            jump_data: 跳转数据字典，包含调度信息和报告列表
+        """
+        try:            
+            # 跳转到测试报告标签页（索引为4）
+            self.left_nav.setCurrentRow(4)
+            
+            # 检查test_report对象是否有filter_by_scheduler方法
+            if hasattr(self.test_report, 'filter_by_scheduler'):
+                # 调用filter_by_scheduler方法进行自动筛选
+                self.test_report.filter_by_scheduler(jump_data)
+            else:
+                # 备用方案：直接显示报告列表
+                self._handle_report_tab_fallback(jump_data)
+                
+        except Exception as e:
+            print(f"跳转到测试报告tab并筛选失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"跳转到测试报告tab失败: {str(e)}")
+    
+    def _handle_report_tab_fallback(self, jump_data):
+        """处理测试报告tab跳转的备用方案"""
+        try:
+            # 如果test_report对象有refresh_report_list方法，刷新列表
+            if hasattr(self.test_report, 'refresh_report_list'):
+                self.test_report.refresh_report_list()
+                
+            # 显示提示信息
+            scheduler_name = jump_data.get('scheduler', {}).get('name', '未知')
+            report_count = len(jump_data.get('reports', []))
+            
+            from src.ui.widgets.toast_tips import Toast
+            Toast.info(self, f"已跳转到测试报告tab，调度 '{scheduler_name}' 共有 {report_count} 条执行记录")
+                
+        except Exception as e:
+            print(f"备用方案处理失败: {str(e)}")
     
     def trigger_initial_business_change(self):
         """在所有页面创建和信号连接完成后，手动触发初始业务切换"""

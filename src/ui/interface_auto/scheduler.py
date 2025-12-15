@@ -2539,6 +2539,7 @@ class SchedulerManager(QWidget):
     """调度管理页面"""
     data_changed = pyqtSignal()  # 数据变化信号
     report_detail_requested = pyqtSignal(dict)  # 报告详情请求信号，传递报告数据
+    report_tab_requested = pyqtSignal(dict)  # 测试报告tab跳转请求信号，传递调度和报告数据
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -2616,23 +2617,33 @@ class SchedulerManager(QWidget):
         self.table_widget.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
         
-        # 参考变量管理的表格样式美化
+        # 参考测试报告列表的表格样式美化
         self.table_widget.setAlternatingRowColors(True)
         self.table_widget.verticalHeader().setVisible(False)  # 隐藏垂直序号列
+        
+        # 完全去除表格内部边框线
+        self.table_widget.setShowGrid(False)
+        
+        # 彻底禁用hover效果 - 使用更有效的方法
+        self.table_widget.setMouseTracking(False)
+        
+        # 设置选择模式，避免单元格级别的hover
+        self.table_widget.setSelectionMode(QTableWidget.SingleSelection)
+        
         self.table_widget.setStyleSheet("""
             QTableWidget {
                 background-color: #f8f9fa;
                 alternate-background-color: #ffffff;
-                gridline-color: #e9ecef;
                 border: 1px solid #dee2e6;
                 border-radius: 4px;
                 outline: 0;
+                gridline-color: transparent;
             }
             QTableWidget::item {
                 padding: 12px 8px;
-                border-bottom: 1px solid #e9ecef;
                 text-align: center;
-                height: 100px;
+                height: 32px;
+                border: none;
             }
             QTableWidget::item:selected {
                 background-color: #e3f2fd;
@@ -2645,7 +2656,10 @@ class SchedulerManager(QWidget):
                 font-weight: bold;
             }
             QTableWidget::item:hover {
-                background-color: #f8f9fa;
+                background-color: transparent;
+            }
+            QTableWidget::item:!selected:hover {
+                background-color: transparent;
             }
             QHeaderView::section {
                 background-color: #f8f9fa;
@@ -2657,9 +2671,6 @@ class SchedulerManager(QWidget):
                 border-bottom: 2px solid #1976d2;
                 min-height: 25px;
                 text-align: center;
-            }
-            QHeaderView::section:hover {
-                background-color: #e9ecef;
             }
             /* 自定义序号列样式 */
             QTableWidget QTableWidget::item:first-column {
@@ -2787,6 +2798,8 @@ class SchedulerManager(QWidget):
                 status_item = QTableWidgetItem("启用" if scheduler['enabled'] else "禁用")
                 status_item.setForeground(QColor("green") if scheduler['enabled'] else QColor("red"))
                 status_item.setTextAlignment(Qt.AlignCenter)
+                # 设置状态项为不可选中，避免选中时颜色被覆盖
+                status_item.setFlags(status_item.flags() & ~Qt.ItemIsSelectable)
                 self.table_widget.setItem(row, 2, status_item)
 
                 # Cron表达式（原第2列，现在第3列）
@@ -3477,7 +3490,7 @@ class SchedulerManager(QWidget):
             Toast.error(self, f"复制调度失败: {str(e)}")
 
     def show_execution_logs(self, scheduler_id):
-        """显示调度执行记录日志"""
+        """显示调度执行记录 - 直接跳转到测试报告tab并自动筛选"""
         try:
             # 保存当前调度ID，用于报告详情跳转
             self.current_scheduler_id = scheduler_id
@@ -3497,83 +3510,45 @@ class SchedulerManager(QWidget):
                 Toast.info(self, f"调度 '{scheduler_data['name']}' 暂无执行记录")
                 return
 
-            # 创建执行记录对话框
-            dialog = QDialog(self)
-            dialog.setWindowTitle(f"执行记录 - {scheduler_data['name']}")
-            dialog.setMinimumSize(800, 600)
-
-            layout = QVBoxLayout(dialog)
-
-            # 创建表格显示执行记录
-            table_widget = QTableWidget()
-            table_widget.setColumnCount(6)
-            table_widget.setHorizontalHeaderLabels([
-                "报告名称", "测试用例", "执行状态", "开始时间", "结束时间", "执行时长"
-            ])
-            table_widget.horizontalHeader().setStretchLastSection(True)
-            table_widget.setSelectionBehavior(QTableWidget.SelectRows)
-
-            # 填充数据
-            table_widget.setRowCount(len(reports))
-            for row, report in enumerate(reports):
-                # 报告名称
-                table_widget.setItem(row, 0, QTableWidgetItem(report.get('report_name', '未命名')))
-                
-                # 测试用例
-                table_widget.setItem(row, 1, QTableWidgetItem(report.get('case_name', '未知')))
-                
-                # 执行状态
-                status_item = QTableWidgetItem(report.get('status', 'unknown'))
-                status = report.get('status', '')
-                if status == 'success':
-                    status_item.setText('成功')
-                    status_item.setBackground(QColor('#d4edda'))
-                elif status == 'failure':
-                    status_item.setText('失败')
-                    status_item.setBackground(QColor('#f8d7da'))
-                elif status == 'error':
-                    status_item.setText('错误')
-                    status_item.setBackground(QColor('#fff3cd'))
-                else:
-                    status_item.setText('未知')
-                table_widget.setItem(row, 2, status_item)
-                
-                # 开始时间
-                start_time = report.get('start_time')
-                start_text = start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else 'N/A'
-                table_widget.setItem(row, 3, QTableWidgetItem(start_text))
-                
-                # 结束时间
-                end_time = report.get('end_time')
-                end_text = end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else 'N/A'
-                table_widget.setItem(row, 4, QTableWidgetItem(end_text))
-                
-                # 执行时长
-                duration = report.get('duration', 0)
-                duration_text = f"{duration:.2f}s" if duration > 0 else 'N/A'
-                table_widget.setItem(row, 5, QTableWidgetItem(duration_text))
-
-            # 调整列宽
-            table_widget.resizeColumnsToContents()
-
-            # 添加查看详情按钮
-            button_box = QDialogButtonBox(QDialogButtonBox.Close)
-            button_box.rejected.connect(dialog.reject)
-
-            # 添加查看报告详情按钮
-            view_detail_btn = QPushButton("查看报告详情")
-            view_detail_btn.clicked.connect(lambda: self._view_report_detail(table_widget, dialog))
-            button_box.addButton(view_detail_btn, QDialogButtonBox.ActionRole)
-
-            layout.addWidget(QLabel(f"调度 '{scheduler_data['name']}' 的执行记录 (共 {len(reports)} 条):"))
-            layout.addWidget(table_widget)
-            layout.addWidget(button_box)
-
-            dialog.exec_()
+            # 直接跳转到测试报告tab，并自动筛选
+            self._jump_to_test_report_tab(scheduler_data, reports)
 
         except Exception as e:
             Toast.error(self, f"显示执行记录失败: {str(e)}")
-
+    
+    def _jump_to_test_report_tab(self, scheduler_data, reports):
+        """跳转到测试报告tab并自动筛选"""
+        try:
+            # 发送信号，通知主窗口跳转到测试报告tab
+            if hasattr(self, 'report_tab_requested'):
+                # 创建一个包含调度信息和报告列表的数据对象
+                jump_data = {
+                    'scheduler': scheduler_data,
+                    'reports': reports,
+                    'action': 'filter_by_scheduler'
+                }
+                self.report_tab_requested.emit(jump_data)
+            else:
+                # 如果信号不存在，使用备用方式
+                self._jump_to_test_report_fallback(scheduler_data, reports)
+                
+        except Exception as e:
+            Toast.error(self, f"跳转到测试报告tab失败: {str(e)}")
+    
+    def _jump_to_test_report_fallback(self, scheduler_data, reports):
+        """备用方式跳转到测试报告tab"""
+        try:
+            # 尝试直接调用主窗口的方法
+            parent = self.parent()
+            if parent and hasattr(parent, 'switch_to_test_report_tab'):
+                parent.switch_to_test_report_tab(scheduler_data, reports)
+            else:
+                # 如果无法找到主窗口，显示提示信息
+                Toast.info(self, f"已跳转到测试报告tab，调度 '{scheduler_data['name']}' 共有 {len(reports)} 条执行记录")
+                
+        except Exception as e:
+            Toast.error(self, f"跳转到测试报告tab失败: {str(e)}")
+    
     def _view_report_detail(self, table_widget, parent_dialog):
         """查看报告详情 - 跳转到测试报告tab并自动进入详情页"""
         try:
@@ -3620,8 +3595,28 @@ class SchedulerManager(QWidget):
     def _open_report_detail_fallback(self, report_data):
         """备用方式打开报告详情"""
         try:
-            from src.ui.interface_auto.test_report import ReportDetailDialog
-            detail_dialog = ReportDetailDialog(self, report_data)
+            from src.ui.interface_auto.test_report import ReportDetailPage
+            
+            # 创建一个对话框来包装ReportDetailPage
+            detail_dialog = QDialog(self)
+            detail_dialog.setWindowTitle(f"测试报告 - {report_data.get('report_name', '')}")
+            detail_dialog.setMinimumSize(1000, 700)
+            
+            layout = QVBoxLayout(detail_dialog)
+            
+            # 创建ReportDetailPage
+            detail_page = ReportDetailPage(report_data=report_data)
+            
+            # 添加关闭按钮
+            button_box = QDialogButtonBox(QDialogButtonBox.Close)
+            button_box.rejected.connect(detail_dialog.reject)
+            close_button = button_box.button(QDialogButtonBox.Close)
+            if close_button:
+                close_button.setText("关闭")
+            
+            layout.addWidget(detail_page)
+            layout.addWidget(button_box)
+            
             detail_dialog.exec_()
         except Exception as e:
             Toast.error(self, f"打开报告详情失败: {str(e)}")
