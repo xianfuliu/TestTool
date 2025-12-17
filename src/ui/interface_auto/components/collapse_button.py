@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 import os
+from src.utils.resource_utils import resource_path
 
 
 class CollapseButton(QPushButton):
@@ -47,7 +48,7 @@ class CollapseButton(QPushButton):
         """更新图标显示"""
         if self._is_expanded:
             # 展开状态：显示收缩图标（指向左）
-            icon_path = os.path.join("src", "resources", "icons", "close_left.png")
+            icon_path = resource_path("src/resources/icons/close_left.png")
             if os.path.exists(icon_path):
                 self.setIcon(QIcon(icon_path))
                 self.setText("")
@@ -56,7 +57,7 @@ class CollapseButton(QPushButton):
             self.setToolTip("收起左侧菜单栏")
         else:
             # 收起状态：显示展开图标（指向右）
-            icon_path = os.path.join("src", "resources", "icons", "open_right.png")
+            icon_path = resource_path("src/resources/icons/open_right.png")
             if os.path.exists(icon_path):
                 self.setIcon(QIcon(icon_path))
                 self.setText("")
