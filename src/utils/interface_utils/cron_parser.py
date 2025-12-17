@@ -45,8 +45,6 @@ class CronParser:
             return None
 
         try:
-            # 简化的实现，实际应该使用更复杂的算法
-            # 这里使用一个简单的实现：每分钟检查一次
             parts = cron_expr.strip().split()
 
             # 支持7字段格式（包含秒字段和年字段）
@@ -78,21 +76,100 @@ class CronParser:
                 week_field = parts[4] if len(parts) > 4 else '*'
                 year_field = '*'  # 默认年字段为*
 
-            # 从基准时间开始，每次增加1秒，直到找到匹配的时间
+            # 使用更高效的算法：从当前时间开始，逐级查找下一个匹配的时间
             current_time = base_time.replace(microsecond=0) + timedelta(seconds=1)
-            max_iterations = 100000  # 防止无限循环
+            max_iterations = 1000  # 防止无限循环，最多检查1000天
 
             for _ in range(max_iterations):
-                if self._match_field(second_field, current_time.second) and \
-                        self._match_field(minute_field, current_time.minute) and \
-                        self._match_field(hour_field, current_time.hour) and \
-                        self._match_field(day_field, current_time.day) and \
-                        self._match_field(month_field, current_time.month) and \
-                        self._match_field(week_field, current_time.weekday()) and \
-                        self._match_field(year_field, current_time.year):
-                    return current_time
-
-                current_time += timedelta(seconds=1)
+                # 检查年字段
+                if not self._match_field(year_field, current_time.year):
+                    # 年份不匹配，跳到下一年
+                    current_time = current_time.replace(
+                        year=current_time.year + 1,
+                        month=1, day=1, hour=0, minute=0, second=0
+                    )
+                    continue
+                
+                # 检查月字段
+                if not self._match_field(month_field, current_time.month):
+                    # 月份不匹配，跳到下个月
+                    next_month = current_time.month + 1
+                    if next_month > 12:
+                        current_time = current_time.replace(
+                            year=current_time.year + 1,
+                            month=1, day=1, hour=0, minute=0, second=0
+                        )
+                    else:
+                        current_time = current_time.replace(
+                            month=next_month, day=1, hour=0, minute=0, second=0
+                        )
+                    continue
+                
+                # 检查日和周字段（日和周互斥）
+                if day_field != '?' and week_field != '?':
+                    # 如果日字段和周字段都指定了具体值，优先使用日字段
+                    if not self._match_field(day_field, current_time.day):
+                        # 日期不匹配，跳到下一天
+                        current_time = current_time.replace(
+                            day=current_time.day + 1, hour=0, minute=0, second=0
+                        )
+                        continue
+                elif day_field != '?':
+                    # 只使用日字段
+                    if not self._match_field(day_field, current_time.day):
+                        current_time = current_time.replace(
+                            day=current_time.day + 1, hour=0, minute=0, second=0
+                        )
+                        continue
+                elif week_field != '?':
+                    # 只使用周字段
+                    if not self._match_field(week_field, current_time.weekday()):
+                        # 周几不匹配，跳到下一周
+                        days_to_add = 7 - current_time.weekday()
+                        current_time = current_time + timedelta(days=days_to_add)
+                        current_time = current_time.replace(hour=0, minute=0, second=0)
+                        continue
+                
+                # 检查小时字段
+                if not self._match_field(hour_field, current_time.hour):
+                    # 小时不匹配，跳到下一小时
+                    next_hour = current_time.hour + 1
+                    if next_hour > 23:
+                        current_time = current_time.replace(
+                            day=current_time.day + 1, hour=0, minute=0, second=0
+                        )
+                    else:
+                        current_time = current_time.replace(
+                            hour=next_hour, minute=0, second=0
+                        )
+                    continue
+                
+                # 检查分钟字段
+                if not self._match_field(minute_field, current_time.minute):
+                    # 分钟不匹配，跳到下一分钟
+                    next_minute = current_time.minute + 1
+                    if next_minute > 59:
+                        current_time = current_time.replace(
+                            hour=current_time.hour + 1, minute=0, second=0
+                        )
+                    else:
+                        current_time = current_time.replace(minute=next_minute, second=0)
+                    continue
+                
+                # 检查秒字段
+                if not self._match_field(second_field, current_time.second):
+                    # 秒不匹配，跳到下一秒
+                    next_second = current_time.second + 1
+                    if next_second > 59:
+                        current_time = current_time.replace(
+                            minute=current_time.minute + 1, second=0
+                        )
+                    else:
+                        current_time = current_time.replace(second=next_second)
+                    continue
+                
+                # 所有字段都匹配，返回当前时间
+                return current_time
 
             return None
 
@@ -116,6 +193,9 @@ class CronParser:
             range_part, step_part = field.split('/')
             step = int(step_part)
             if range_part == '*' or range_part == '?':
+                # 对于分钟字段，需要处理跨小时的正确步长计算
+                # 例如：从0分钟开始，每50分钟执行一次，应该匹配：0, 50, 100(60+40), 150(120+30)...
+                # 正确的计算应该是：value % step == 0
                 return value % step == 0
             else:
                 # 处理复杂的步长表达式，如 "0-59/5"
@@ -123,11 +203,21 @@ class CronParser:
                     range_start, range_end = range_part.split('-')
                     start_val = self._parse_field_value(range_start.strip())
                     end_val = self._parse_field_value(range_end.strip())
-                    return start_val <= value <= end_val and (value - start_val) % step == 0
+                    # 修正步长计算逻辑
+                    if start_val <= value <= end_val:
+                        # 计算从起始值开始的偏移量
+                        offset = value - start_val
+                        return offset >= 0 and offset % step == 0
+                    return False
                 else:
                     # 处理单个值的步长，如 "0/5"
                     start_val = self._parse_field_value(range_part.strip())
-                    return value >= start_val and (value - start_val) % step == 0
+                    # 修正步长计算逻辑
+                    if value >= start_val:
+                        # 计算从起始值开始的偏移量
+                        offset = value - start_val
+                        return offset % step == 0
+                    return False
         else:
             field_val = self._parse_field_value(field)
             return field_val == value

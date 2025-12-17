@@ -1,6 +1,6 @@
 import json
 from config.database import Database
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 
 class GlobalToolService:
@@ -8,6 +8,41 @@ class GlobalToolService:
 
     def __init__(self):
         self.db = Database()
+
+    def get_tools_with_pagination(self, page: int = 1, page_size: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+        """获取分页工具列表"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 计算偏移量
+                    offset = (page - 1) * page_size
+                    
+                    # 获取分页数据
+                    cursor.execute("""
+                        SELECT id, name, tool_type, description, config, enabled, 
+                               created_by, created_at, updated_at
+                        FROM global_tools 
+                        ORDER BY created_at DESC
+                        LIMIT %s OFFSET %s
+                    """, (page_size, offset))
+                    tools = cursor.fetchall()
+
+                    # 处理JSON字段
+                    for tool in tools:
+                        if tool.get('config'):
+                            try:
+                                tool['config'] = json.loads(tool['config'])
+                            except (json.JSONDecodeError, TypeError):
+                                tool['config'] = {}
+
+                    # 获取总数
+                    cursor.execute("SELECT COUNT(*) as total FROM global_tools")
+                    total = cursor.fetchone()['total']
+
+                    return tools, total
+        except Exception as e:
+            print(f"获取分页工具失败: {e}")
+            return [], 0
 
     def get_all_tools(self) -> List[Dict[str, Any]]:
         """获取所有全局工具"""

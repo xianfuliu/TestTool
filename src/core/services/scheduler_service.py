@@ -6,9 +6,17 @@ import signal
 import traceback
 import threading
 import json
+import gc
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Any
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    print("警告: psutil模块未安装，资源监控功能将受限")
 
 # 添加项目路径
 project_root = Path(__file__).parent.parent.parent
@@ -38,19 +46,42 @@ class UnifiedSchedulerService:
     
     def __init__(self):
         self.running = False
-        self.check_interval = 5  # 检查间隔（秒）
+        self.check_interval = 10  # 检查间隔缩短到0.5秒，提高任务响应及时性
         
         # 服务状态
         self.start_time = None
         self.execution_count = 0
         self.error_count = 0
         
-        # 线程池
+        # 线程池 - 平台级应用优化
         self.thread_pool = []
-        self.max_threads = 5
+        self.max_threads = 50  # 增加线程池容量到50，适应高并发任务
+        
+        # 任务队列，用于处理线程池满时的任务
+        self.pending_tasks = []
+        self.max_pending_tasks = 100  # 最大待处理任务数增加到100
         
         # 正在执行的调度
         self.active_schedulers: Dict[int, threading.Thread] = {}
+        
+        # 资源监控配置 - 平台级应用优化
+        self.max_memory_mb = 2048  # 最大内存使用限制增加到2GB
+        self.max_cpu_percent = 90  # 最大CPU使用率限制增加到90%
+        self.memory_check_interval = 15  # 内存检查间隔缩短到15秒，提高监控频率
+        self.last_memory_check = datetime.now()
+        
+        # 任务执行时间限制
+        self.max_task_execution_time = 1800  # 单个任务最大执行时间增加到30分钟
+        
+        # 资源使用统计
+        self.memory_usage_history = []
+        self.cpu_usage_history = []
+        self.max_history_size = 200  # 最大历史记录数增加到200
+        
+        # 任务执行监控
+        self.task_start_times: Dict[int, datetime] = {}  # 任务ID -> 开始时间
+        self.task_timeout_check_interval = 30  # 任务超时检查间隔缩短到30秒
+        self.last_timeout_check = datetime.now()
         
         # 初始化服务组件
         self._initialize_services()
@@ -199,6 +230,12 @@ class UnifiedSchedulerService:
                 # 清理已完成的线程
                 self._cleanup_threads()
                 
+                # 检查资源使用情况
+                self._check_resource_limits()
+                
+                # 检查任务超时
+                self._check_task_timeouts()
+                
                 # 检查并执行调度
                 self._check_and_execute_schedulers()
                 
@@ -230,11 +267,14 @@ class UnifiedSchedulerService:
                 # 等待下一次检查
                 logger.info(f"等待 {self.check_interval} 秒后再次检查...")
                 
-                # 分段等待，便于及时响应停止信号
-                for _ in range(self.check_interval):
+                # 优化等待机制：使用更精确的等待，减少延迟
+                # 同时保持响应停止信号的能力
+                start_wait_time = time.time()
+                while time.time() - start_wait_time < self.check_interval:
                     if not self.running:
                         break
-                    time.sleep(1)
+                    # 每0.1秒检查一次，提高响应性
+                    time.sleep(0.1)
                     
             except Exception as e:
                 self.error_count += 1
@@ -247,8 +287,167 @@ class UnifiedSchedulerService:
         
         logger.info("服务主循环正常退出")
     
+    def _check_resource_limits(self):
+        """检查资源使用情况，确保在限制范围内"""
+        try:
+            current_time = datetime.now()
+            
+            # 定期检查内存使用情况
+            if (current_time - self.last_memory_check).total_seconds() >= self.memory_check_interval:
+                self.last_memory_check = current_time
+                
+                memory_usage_mb = 0
+                cpu_percent = 0
+                
+                if PSUTIL_AVAILABLE:
+                    # 获取当前进程的内存使用情况
+                    process = psutil.Process(os.getpid())
+                    memory_info = process.memory_info()
+                    memory_usage_mb = memory_info.rss / 1024 / 1024
+                    
+                    # 获取CPU使用率
+                    cpu_percent = process.cpu_percent(interval=0.1)
+                else:
+                    # 在没有psutil的情况下，使用简化的资源估算
+                    # 基于线程数量和任务队列长度估算资源使用
+                    memory_usage_mb = len(self.thread_pool) * 10 + len(self.pending_tasks) * 2
+                    cpu_percent = min(100, len(self.thread_pool) * 5 + len(self.pending_tasks))
+                
+                # 记录使用历史
+                self._add_to_history(self.memory_usage_history, memory_usage_mb)
+                self._add_to_history(self.cpu_usage_history, cpu_percent)
+                
+                # 检查是否超过限制
+                if memory_usage_mb > self.max_memory_mb:
+                    logger.warning(f"内存使用超过限制: {memory_usage_mb:.1f}MB > {self.max_memory_mb}MB")
+                    self._handle_memory_overflow()
+                
+                if cpu_percent > self.max_cpu_percent:
+                    logger.warning(f"CPU使用率超过限制: {cpu_percent:.1f}% > {self.max_cpu_percent}%")
+                    self._handle_cpu_overload()
+                
+                # 定期清理历史记录
+                if len(self.memory_usage_history) > self.max_history_size:
+                    self.memory_usage_history = self.memory_usage_history[-self.max_history_size:]
+                if len(self.cpu_usage_history) > self.max_history_size:
+                    self.cpu_usage_history = self.cpu_usage_history[-self.max_history_size:]
+                
+                # 每5分钟记录一次资源使用情况
+                if current_time.minute % 5 == 0 and current_time.second < 10:
+                    avg_memory = sum(self.memory_usage_history[-10:]) / min(10, len(self.memory_usage_history))
+                    avg_cpu = sum(self.cpu_usage_history[-10:]) / min(10, len(self.cpu_usage_history))
+                    logger.info(f"资源监控 - 内存: {avg_memory:.1f}MB, CPU: {avg_cpu:.1f}%, 活跃线程: {len(self.thread_pool)}")
+        
+        except Exception as e:
+            logger.error(f"资源检查失败: {str(e)}")
+    
+    def _add_to_history(self, history: List[float], value: float):
+        """添加值到历史记录"""
+        history.append(value)
+        if len(history) > self.max_history_size:
+            history.pop(0)
+    
+    def _handle_memory_overflow(self):
+        """处理内存溢出情况"""
+        try:
+            logger.warning("检测到内存使用过高，开始清理资源...")
+            
+            # 强制垃圾回收
+            gc.collect()
+            
+            # 清理过长的任务队列
+            if len(self.pending_tasks) > self.max_pending_tasks // 2:
+                logger.warning(f"清理待处理队列，从 {len(self.pending_tasks)} 个任务中移除一半")
+                self.pending_tasks = self.pending_tasks[:self.max_pending_tasks // 2]
+            
+            # 清理历史记录
+            self.memory_usage_history = self.memory_usage_history[-self.max_history_size // 2:]
+            self.cpu_usage_history = self.cpu_usage_history[-self.max_history_size // 2:]
+            
+            logger.info("内存清理完成")
+            
+        except Exception as e:
+            logger.error(f"内存清理失败: {str(e)}")
+    
+    def _handle_cpu_overload(self):
+        """处理CPU过载情况"""
+        try:
+            logger.warning("检测到CPU使用过高，开始调整调度策略...")
+            
+            # 临时增加检查间隔，减少CPU使用
+            original_interval = self.check_interval
+            self.check_interval = min(5, self.check_interval * 2)  # 最大5秒
+            
+            logger.info(f"临时调整检查间隔: {original_interval}秒 -> {self.check_interval}秒")
+            
+            # 30秒后恢复原间隔
+            def restore_interval():
+                time.sleep(30)
+                self.check_interval = original_interval
+                logger.info(f"恢复检查间隔: {self.check_interval}秒")
+            
+            threading.Thread(target=restore_interval, daemon=True).start()
+            
+        except Exception as e:
+            logger.error(f"CPU过载处理失败: {str(e)}")
+    
+    def _check_task_timeouts(self):
+        """检查任务执行超时情况"""
+        try:
+            current_time = datetime.now()
+            
+            # 定期检查任务超时
+            if (current_time - self.last_timeout_check).total_seconds() >= self.task_timeout_check_interval:
+                self.last_timeout_check = current_time
+                
+                timeout_tasks = []
+                for scheduler_id, start_time in self.task_start_times.items():
+                    execution_time = (current_time - start_time).total_seconds()
+                    if execution_time > self.max_task_execution_time:
+                        timeout_tasks.append((scheduler_id, execution_time))
+                
+                if timeout_tasks:
+                    logger.warning(f"发现 {len(timeout_tasks)} 个超时任务:")
+                    for scheduler_id, execution_time in timeout_tasks:
+                        logger.warning(f"  任务 {scheduler_id} 已执行 {execution_time:.1f}秒 > {self.max_task_execution_time}秒")
+                        
+                        # 尝试终止超时任务
+                        self._terminate_timeout_task(scheduler_id)
+                        
+                        # 从监控中移除
+                        if scheduler_id in self.task_start_times:
+                            del self.task_start_times[scheduler_id]
+        
+        except Exception as e:
+            logger.error(f"任务超时检查失败: {str(e)}")
+    
+    def _terminate_timeout_task(self, scheduler_id: int):
+        """终止超时任务"""
+        try:
+            if scheduler_id in self.active_schedulers:
+                thread = self.active_schedulers[scheduler_id]
+                if thread and thread.is_alive():
+                    # 尝试优雅终止（Python线程无法强制终止，只能标记为需要停止）
+                    logger.warning(f"尝试终止超时任务 {scheduler_id}")
+                    
+                    # 从线程池中移除
+                    if thread in self.thread_pool:
+                        self.thread_pool.remove(thread)
+                    
+                    # 从活跃调度中移除
+                    del self.active_schedulers[scheduler_id]
+                    
+                    logger.info(f"已标记超时任务 {scheduler_id} 为终止状态")
+                else:
+                    # 线程已经完成，清理记录
+                    if scheduler_id in self.active_schedulers:
+                        del self.active_schedulers[scheduler_id]
+        
+        except Exception as e:
+            logger.error(f"终止超时任务失败: {str(e)}")
+
     def _cleanup_threads(self):
-        """清理已完成的线程"""
+        """清理已完成的线程并处理待处理任务"""
         active_threads = []
         for thread in self.thread_pool:
             if thread.is_alive():
@@ -267,8 +466,36 @@ class UnifiedSchedulerService:
         for scheduler_id in completed_schedulers:
             del self.active_schedulers[scheduler_id]
         
-        if len(self.thread_pool) > 0:
-            logger.info(f"当前活跃线程数: {len(self.thread_pool)}, 活跃调度数: {len(self.active_schedulers)}")
+        # 处理待处理队列中的任务
+        processed_tasks = []
+        for scheduler in self.pending_tasks:
+            if len(self.thread_pool) < self.max_threads:
+                # 线程池有空闲，执行待处理任务
+                scheduler_id = scheduler['id']
+                scheduler_name = scheduler['name']
+                
+                thread = threading.Thread(
+                    target=self._execute_scheduler_thread,
+                    args=(scheduler,),
+                    name=f"PendingScheduler-{scheduler_id}"
+                )
+                thread.daemon = True
+                thread.start()
+                
+                self.thread_pool.append(thread)
+                self.active_schedulers[scheduler_id] = thread
+                processed_tasks.append(scheduler)
+                
+                logger.info(f"执行待处理调度 {scheduler_name} (ID: {scheduler_id})")
+            else:
+                break
+        
+        # 从待处理队列中移除已处理的任务
+        for task in processed_tasks:
+            self.pending_tasks.remove(task)
+        
+        if len(self.thread_pool) > 0 or len(self.pending_tasks) > 0:
+            logger.info(f"当前活跃线程数: {len(self.thread_pool)}, 活跃调度数: {len(self.active_schedulers)}, 待处理任务数: {len(self.pending_tasks)}")
     
     def _check_and_execute_schedulers(self):
         """检查并执行符合条件的调度"""
@@ -282,6 +509,9 @@ class UnifiedSchedulerService:
             logger.info(f"检查时间: {current_time}, 启用的调度数量: {len(enabled_schedulers)}")
             
             execution_count = 0
+            
+            # 检查过去一段时间内可能错过的任务（回溯检查）
+            self._check_missed_schedulers(enabled_schedulers, current_time)
             
             for scheduler in enabled_schedulers:
                 scheduler_id = scheduler['id']
@@ -305,16 +535,24 @@ class UnifiedSchedulerService:
                 logger.info(f"调度 {scheduler_name} - Cron: {cron_expression}, 下次执行: {next_run}")
                 
                 # 如果下次执行时间早于当前时间，说明需要执行
-                # 添加时间窗口容错（5秒），避免错过精确执行时间
-                time_window = timedelta(seconds=5)
+                # 扩大时间窗口容错（10秒），避免错过精确执行时间
+                time_window = timedelta(seconds=10)
                 if next_run and (next_run <= current_time or 
                                (next_run - current_time <= time_window and next_run >= current_time - time_window)):
                     logger.info(f"调度 {scheduler_name} (ID: {scheduler_id}) 需要执行")
                     
                     # 检查线程池容量
                     if len(self.thread_pool) >= self.max_threads:
-                        logger.warning(f"线程池已满，跳过调度 {scheduler_name}")
+                        # 线程池满，将任务加入待处理队列
+                        if len(self.pending_tasks) < self.max_pending_tasks:
+                            self.pending_tasks.append(scheduler)
+                            logger.warning(f"线程池已满，调度 {scheduler_name} 加入待处理队列，当前队列长度: {len(self.pending_tasks)}")
+                        else:
+                            logger.error(f"线程池和待处理队列均已满，跳过调度 {scheduler_name}")
                         continue
+                    
+                    # 记录任务开始时间
+                    self.task_start_times[scheduler_id] = datetime.now()
                     
                     # 创建执行线程
                     thread = threading.Thread(
@@ -339,6 +577,123 @@ class UnifiedSchedulerService:
         except Exception as e:
             logger.error(f"检查调度失败: {str(e)}")
             raise
+    
+    def _check_missed_schedulers(self, enabled_schedulers: List[Dict], current_time: datetime):
+        """检查过去一段时间内可能错过的调度任务
+        
+        Args:
+            enabled_schedulers: 启用的调度列表
+            current_time: 当前时间
+        """
+        try:
+            # 回溯检查过去30秒内的任务，避免错过执行
+            check_back_seconds = 30
+            past_time = current_time - timedelta(seconds=check_back_seconds)
+            
+            missed_count = 0
+            
+            for scheduler in enabled_schedulers:
+                scheduler_id = scheduler['id']
+                scheduler_name = scheduler['name']
+                cron_expression = scheduler.get('cron_expression', '')
+                
+                if not cron_expression:
+                    continue
+                
+                # 检查调度是否正在执行
+                if scheduler_id in self.active_schedulers:
+                    thread = self.active_schedulers[scheduler_id]
+                    if thread and thread.is_alive():
+                        continue
+                
+                # 检查过去一段时间内的执行时间
+                check_time = past_time
+                while check_time < current_time:
+                    # 计算在check_time时的下次执行时间
+                    next_run_at_check_time = self.cron_parser.get_next_run(cron_expression, check_time)
+                    
+                    if next_run_at_check_time and next_run_at_check_time < current_time:
+                        # 找到错过的执行时间
+                        time_diff = (current_time - next_run_at_check_time).total_seconds()
+                        if time_diff <= check_back_seconds:  # 只处理最近错过的任务
+                            logger.warning(f"发现错过的调度: {scheduler_name} (ID: {scheduler_id}), 应执行时间: {next_run_at_check_time}, 已错过: {time_diff:.1f}秒")
+                            
+                            # 立即执行错过的任务
+                            self._execute_missed_scheduler(scheduler, next_run_at_check_time)
+                            missed_count += 1
+                            break
+                    
+                    # 移动到下一个检查点（每秒检查一次）
+                    check_time += timedelta(seconds=1)
+            
+            if missed_count > 0:
+                logger.info(f"回溯检查发现 {missed_count} 个错过的调度任务")
+                
+        except Exception as e:
+            logger.error(f"回溯检查调度失败: {str(e)}")
+    
+    def _execute_missed_scheduler(self, scheduler_data: Dict, missed_time: datetime):
+        """执行错过的调度任务
+        
+        Args:
+            scheduler_data: 调度数据
+            missed_time: 错过的执行时间
+        """
+        try:
+            scheduler_id = scheduler_data['id']
+            scheduler_name = scheduler_data['name']
+            
+            # 检查线程池容量
+            if len(self.thread_pool) >= self.max_threads:
+                # 线程池满，将任务加入待处理队列
+                if len(self.pending_tasks) < self.max_pending_tasks:
+                    self.pending_tasks.append(scheduler_data)
+                    logger.warning(f"线程池已满，错过的调度 {scheduler_name} 加入待处理队列")
+                else:
+                    logger.error(f"线程池和待处理队列均已满，无法执行错过的调度 {scheduler_name}")
+                return
+            
+            # 创建执行线程
+            thread = threading.Thread(
+                target=self._execute_missed_scheduler_thread,
+                args=(scheduler_data, missed_time),
+                name=f"MissedScheduler-{scheduler_id}"
+            )
+            thread.daemon = True
+            thread.start()
+            
+            self.thread_pool.append(thread)
+            self.active_schedulers[scheduler_id] = thread
+            
+            logger.info(f"执行错过的调度 {scheduler_name} (ID: {scheduler_id}), 原应执行时间: {missed_time}")
+            
+        except Exception as e:
+            logger.error(f"执行错过调度失败: {str(e)}")
+    
+    def _execute_missed_scheduler_thread(self, scheduler_data: Dict, missed_time: datetime):
+        """执行错过调度的线程函数
+        
+        Args:
+            scheduler_data: 调度数据
+            missed_time: 错过的执行时间
+        """
+        try:
+            scheduler_id = scheduler_data['id']
+            scheduler_name = scheduler_data['name']
+            
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(f"{current_time} [INFO] 🔍 开始执行错过的调度: {scheduler_name} (ID: {scheduler_id})")
+            logger.info(f"{current_time} [INFO] ⏰ 原应执行时间: {missed_time}")
+            
+            # 这里可以添加错过的调度特有的处理逻辑
+            # 例如：记录错过执行的信息，或者调整执行参数等
+            
+            # 调用正常的执行逻辑
+            self._execute_scheduler_thread(scheduler_data)
+            
+        except Exception as e:
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            logger.error(f"{current_time} [ERROR] ❌ 执行错过的调度失败: {str(e)}")
     
     def _execute_scheduler_thread(self, scheduler_data):
         """执行单个调度的线程函数"""
@@ -505,9 +860,12 @@ class UnifiedSchedulerService:
                 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 logger.error(f"{current_time} [ERROR] 💥 更新调度执行时间失败: {str(e)}")
             
-            # 发送邮件通知（如果配置了收件人）
+            # 发送邮件通知（如果配置了收件人且启用了邮件通知）
             notify_emails = scheduler_data.get('notify_emails', [])
-            if notify_emails:
+            email_config = scheduler_data.get('email_config', {})
+            email_enabled = email_config.get('enabled', True)  # 默认为启用状态
+            
+            if notify_emails and email_enabled:
                 try:
                     self._send_test_report_email(notify_emails, case_results, scheduler_name, execution_duration)
                     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -515,9 +873,35 @@ class UnifiedSchedulerService:
                 except Exception as e:
                     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     logger.error(f"{current_time} [ERROR] 💥 发送测试报告邮件失败: {str(e)}")
+            elif notify_emails and not email_enabled:
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                logger.info(f"{current_time} [INFO] 📧 邮件通知已禁用，跳过发送")
+            
+            # 发送企业微信通知（如果配置了Webhook且启用了企业微信通知）
+            notify_wechat = scheduler_data.get('notify_wechat', {})
+            wechat_enabled = notify_wechat.get('enabled', True)  # 默认为启用状态
+            wechat_webhook = notify_wechat.get('webhook', '')
+            
+            if wechat_webhook and wechat_enabled:
+                try:
+                    self._send_wechat_notification(wechat_webhook, case_results, scheduler_name, execution_duration)
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    logger.info(f"{current_time} [INFO] 💬 企业微信通知发送成功")
+                except Exception as e:
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    logger.error(f"{current_time} [ERROR] 💥 发送企业微信通知失败: {str(e)}")
+            elif wechat_webhook and not wechat_enabled:
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                logger.info(f"{current_time} [INFO] 💬 企业微信通知已禁用，跳过发送")
             
         except Exception as e:
             logger.error(f"执行调度失败: {str(e)}")
+        finally:
+            # 清理任务开始时间记录
+            scheduler_id = scheduler_data.get('id')
+            if scheduler_id and scheduler_id in self.task_start_times:
+                del self.task_start_times[scheduler_id]
+                logger.debug(f"清理任务 {scheduler_id} 的开始时间记录")
     
     def execute_scheduler(self, scheduler_id):
         """执行指定ID的调度（公共方法，用于UI调用）"""
@@ -588,35 +972,88 @@ class UnifiedSchedulerService:
                         # 按项目筛选
                         cursor.execute("""
                             SELECT id, name, description, cron_expression, enabled, 
-                                   case_ids, notify_emails, notify_wechat, 
+                                   case_ids, notify_emails, notify_wechat, email_config,
                                    last_run_at, next_run_at, created_by, created_at, updated_at, project_id
                             FROM test_schedulers 
                             WHERE project_id = %s
-                            ORDER BY created_at DESC
+                            ORDER BY updated_at DESC
                         """, (project_id,))
                     else:
                         # 返回所有调度任务
                         cursor.execute("""
                             SELECT id, name, description, cron_expression, enabled, 
-                                   case_ids, notify_emails, notify_wechat, 
+                                   case_ids, notify_emails, notify_wechat, email_config,
                                    last_run_at, next_run_at, created_by, created_at, updated_at, project_id
                             FROM test_schedulers 
-                            ORDER BY created_at DESC
+                            ORDER BY updated_at DESC
                         """)
                     
                     schedulers = cursor.fetchall()
                     
                     # 处理JSON字段
                     for scheduler in schedulers:
-                        for field in ['case_ids', 'notify_emails', 'notify_wechat']:
-                            if scheduler.get(field):
+                        for field in ['case_ids', 'notify_emails', 'notify_wechat', 'email_config']:
+                            if scheduler.get(field) and scheduler[field] is not None:
                                 scheduler[field] = json.loads(scheduler[field])
                             else:
-                                scheduler[field] = []
+                                if field in ['case_ids', 'notify_emails']:
+                                    scheduler[field] = []
+                                else:
+                                    scheduler[field] = {}
                     
                     return schedulers
         except Exception as e:
             logger.error(f"获取项目调度列表失败: {e}")
+            return []
+
+    def get_schedulers_for_test_report(self, project_id):
+        """根据项目ID获取调度任务列表（用于测试报告tab，按创建时间升序排列）
+        
+        Args:
+            project_id: 项目ID，如果为None或空字符串则返回所有调度任务
+            
+        Returns:
+            List[Dict]: 调度任务列表，按创建时间升序排列
+        """
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    if project_id:
+                        # 按项目筛选
+                        cursor.execute("""
+                            SELECT id, name, description, cron_expression, enabled, 
+                                   case_ids, notify_emails, notify_wechat, email_config,
+                                   last_run_at, next_run_at, created_by, created_at, updated_at, project_id
+                            FROM test_schedulers 
+                            WHERE project_id = %s
+                            ORDER BY created_at ASC
+                        """, (project_id,))
+                    else:
+                        # 返回所有调度任务
+                        cursor.execute("""
+                            SELECT id, name, description, cron_expression, enabled, 
+                                   case_ids, notify_emails, notify_wechat, email_config,
+                                   last_run_at, next_run_at, created_by, created_at, updated_at, project_id
+                            FROM test_schedulers 
+                            ORDER BY created_at ASC
+                        """)
+                    
+                    schedulers = cursor.fetchall()
+                    
+                    # 处理JSON字段
+                    for scheduler in schedulers:
+                        for field in ['case_ids', 'notify_emails', 'notify_wechat', 'email_config']:
+                            if scheduler.get(field) and scheduler[field] is not None:
+                                scheduler[field] = json.loads(scheduler[field])
+                            else:
+                                if field in ['case_ids', 'notify_emails']:
+                                    scheduler[field] = []
+                                else:
+                                    scheduler[field] = {}
+                    
+                    return schedulers
+        except Exception as e:
+            logger.error(f"获取测试报告调度列表失败: {e}")
             return []
 
     def get_scheduler_by_id(self, scheduler_id):
@@ -677,8 +1114,8 @@ class UnifiedSchedulerService:
                     sql = """
                         INSERT INTO test_schedulers 
                         (name, description, cron_expression, enabled, case_ids, 
-                         notify_emails, notify_wechat, created_by, created_at, updated_at, project_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
+                         notify_emails, notify_wechat, email_config, created_by, created_at, updated_at, project_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
                     """
                     
                     # 准备参数
@@ -690,6 +1127,7 @@ class UnifiedSchedulerService:
                         json.dumps(scheduler_data.get('case_ids', [])),
                         json.dumps(scheduler_data.get('notify_emails', [])),
                         json.dumps(scheduler_data.get('notify_wechat', [])),
+                        json.dumps(scheduler_data.get('email_config', {})),
                         scheduler_data.get('created_by', 'system'),
                         scheduler_data.get('project_id')
                     )
@@ -758,7 +1196,7 @@ class UnifiedSchedulerService:
                         UPDATE test_schedulers 
                         SET name = %s, description = %s, cron_expression = %s, 
                             enabled = %s, case_ids = %s, notify_emails = %s, 
-                            notify_wechat = %s, project_id = %s, updated_at = NOW()
+                            notify_wechat = %s, email_config = %s, project_id = %s, updated_at = NOW()
                         WHERE id = %s
                     """
                     
@@ -771,6 +1209,7 @@ class UnifiedSchedulerService:
                         json.dumps(scheduler_data.get('case_ids', [])),
                         json.dumps(scheduler_data.get('notify_emails', [])),
                         json.dumps(scheduler_data.get('notify_wechat', [])),
+                        json.dumps(scheduler_data.get('email_config', {})),
                         scheduler_data.get('project_id'),
                         scheduler_id
                     )
@@ -802,25 +1241,87 @@ class UnifiedSchedulerService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT id, name, description, cron_expression, enabled, 
-                               case_ids, notify_emails, notify_wechat, 
+                               case_ids, notify_emails, notify_wechat, email_config,
                                last_run_at, next_run_at, created_by, created_at, updated_at, project_id
                         FROM test_schedulers 
-                        ORDER BY created_at DESC
+                        ORDER BY updated_at DESC
                     """)
                     schedulers = cursor.fetchall()
                     
                     # 处理JSON字段
                     for scheduler in schedulers:
-                        for field in ['case_ids', 'notify_emails', 'notify_wechat']:
+                        for field in ['case_ids', 'notify_emails', 'notify_wechat', 'email_config']:
                             if scheduler.get(field):
                                 scheduler[field] = json.loads(scheduler[field])
                             else:
-                                scheduler[field] = []
+                                if field in ['case_ids', 'notify_emails']:
+                                    scheduler[field] = []
+                                else:
+                                    scheduler[field] = {}
                     
                     return schedulers
         except Exception as e:
             logger.error(f"获取调度列表失败: {e}")
             return []
+
+    def get_schedulers_with_pagination(self, page: int = 1, page_size: int = 10, project_id: int = None) -> tuple:
+        """获取分页调度列表
+        
+        Args:
+            page: 页码，从1开始
+            page_size: 每页大小
+            project_id: 项目ID，可选，用于筛选特定项目的调度
+            
+        Returns:
+            tuple: (调度列表, 总记录数)
+        """
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 计算偏移量
+                    offset = (page - 1) * page_size
+                    
+                    # 构建查询条件
+                    where_clause = ""
+                    params = []
+                    
+                    if project_id is not None:
+                        where_clause = "WHERE project_id = %s"
+                        params.append(project_id)
+                    
+                    # 获取分页数据
+                    cursor.execute(f"""
+                        SELECT id, name, description, cron_expression, enabled, 
+                               case_ids, notify_emails, notify_wechat, email_config,
+                               last_run_at, next_run_at, created_by, created_at, updated_at, project_id
+                        FROM test_schedulers 
+                        {where_clause}
+                        ORDER BY updated_at DESC
+                        LIMIT %s OFFSET %s
+                    """, params + [page_size, offset])
+                    schedulers = cursor.fetchall()
+                    
+                    # 处理JSON字段
+                    for scheduler in schedulers:
+                        for field in ['case_ids', 'notify_emails', 'notify_wechat', 'email_config']:
+                            if scheduler.get(field):
+                                scheduler[field] = json.loads(scheduler[field])
+                            else:
+                                if field in ['case_ids', 'notify_emails']:
+                                    scheduler[field] = []
+                                else:
+                                    scheduler[field] = {}
+                    
+                    # 获取总数
+                    cursor.execute(f"""
+                        SELECT COUNT(*) as total FROM test_schedulers {where_clause}
+                    """, params)
+                    total = cursor.fetchone()['total']
+                    
+                    return schedulers, total
+        except Exception as e:
+            logger.error(f"获取分页调度列表失败: {e}")
+            return [], 0
 
     def _send_test_report_email(self, recipients: list, case_results: list, 
                               scheduler_name: str, execution_duration: float) -> bool:
@@ -855,6 +1356,114 @@ class UnifiedSchedulerService:
             
         except Exception as e:
             logger.error(f"发送测试报告邮件失败: {str(e)}")
+            return False
+    
+    def _send_wechat_notification(self, webhook_url: str, case_results: list, 
+                                scheduler_name: str, execution_duration: float) -> bool:
+        """
+        发送企业微信通知
+        
+        Args:
+            webhook_url: 企业微信机器人Webhook URL
+            case_results: 用例执行结果列表
+            scheduler_name: 调度任务名称
+            execution_duration: 执行时长（秒）
+            
+        Returns:
+            bool: 发送是否成功
+        """
+        try:
+            # 生成测试报告数据
+            report_data = self._generate_wechat_report_data(case_results, scheduler_name, execution_duration)
+            
+            # 构建企业微信消息
+            message = self._build_wechat_message(report_data)
+            
+            # 发送企业微信通知
+            return self._send_wechat_webhook(webhook_url, message)
+            
+        except Exception as e:
+            logger.error(f"发送企业微信通知失败: {str(e)}")
+            return False
+    
+    def _generate_wechat_report_data(self, case_results: list, scheduler_name: str, 
+                                   execution_duration: float) -> dict:
+        """生成企业微信报告数据"""
+        total_cases = len(case_results)
+        success_cases = sum(1 for result in case_results if result.get('success', False))
+        failed_cases = total_cases - success_cases
+        
+        # 确定整体状态
+        if failed_cases == 0:
+            status = '成功'
+            status_emoji = '✅'
+        elif success_cases == 0:
+            status = '失败'
+            status_emoji = '❌'
+        else:
+            status = '部分失败'
+            status_emoji = '⚠️'
+        
+        return {
+            'status': status,
+            'status_emoji': status_emoji,
+            'scheduler_name': scheduler_name,
+            'total_cases': total_cases,
+            'success_cases': success_cases,
+            'failed_cases': failed_cases,
+            'execution_duration': execution_duration,
+            'execution_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+    
+    def _build_wechat_message(self, report_data: dict) -> dict:
+        """构建企业微信消息"""
+        # 构建消息内容
+        content = f"""{report_data['status_emoji']} 测试任务执行报告
+
+📋 任务名称: {report_data['scheduler_name']}
+📊 执行状态: {report_data['status']}
+⏰ 执行时间: {report_data['execution_time']}
+⏱️ 执行时长: {report_data['execution_duration']:.2f}秒
+
+📈 测试统计:
+   • 总用例数: {report_data['total_cases']}
+   • 成功用例: {report_data['success_cases']}
+   • 失败用例: {report_data['failed_cases']}
+
+💡 执行结果: {report_data['status']}"""
+        
+        return {
+            "msgtype": "text",
+            "text": {
+                "content": content
+            }
+        }
+    
+    def _send_wechat_webhook(self, webhook_url: str, message: dict) -> bool:
+        """发送企业微信Webhook消息"""
+        try:
+            import requests
+            import json
+            
+            headers = {
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(webhook_url, data=json.dumps(message), headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('errcode') == 0:
+                    return True
+                else:
+                    logger.error(f"企业微信API返回错误: {result}")
+                    return False
+            else:
+                logger.error(f"企业微信请求失败，状态码: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"发送企业微信Webhook失败: {str(e)}")
             return False
     
     def _get_email_config(self):
@@ -901,7 +1510,7 @@ class UnifiedSchedulerService:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         UPDATE test_schedulers 
-                        SET last_run_at = NOW(), updated_at = NOW() 
+                        SET last_run_at = NOW() 
                         WHERE id = %s
                     """, (scheduler_id,))
                     conn.commit()

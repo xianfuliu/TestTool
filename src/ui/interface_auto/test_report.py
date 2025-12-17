@@ -1,25 +1,21 @@
 import os
-import json
 import sys
-import webbrowser
 import math
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
                              QGroupBox, QFormLayout,QHeaderView, QInputDialog,
                              QListWidget, QListWidgetItem, QSplitter, QToolBar,
-                             QAction,QApplication,
-                             QTreeWidget, QTreeWidgetItem, QFileDialog,
-                             QSizePolicy, QScrollArea, QStackedLayout)
+                             QTreeWidget, QTreeWidgetItem, 
+                             QSizePolicy, QScrollArea, QStackedLayout, QComboBox)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QRect, QThread
 from PyQt5.QtGui import QIcon, QFont, QColor, QCursor, QBrush, QPainter, QPen
 from src.core.services.scheduler_service import UnifiedSchedulerService
 from src.core.services.test_report_service import TestReportService
 from src.core.services.test_case_service import TestCaseService
 from src.core.services.project_service import ProjectService
-from src.utils.interface_utils.report_generator import HTMLReportGenerator
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox
-from src.utils.css_utils import get_toolbar_combobox_style
+from src.utils.css_utils import get_toolbar_combobox_style, get_combobox_style
 from PyQt5.QtGui import QTextCursor
 from src.ui.widgets.toast_tips import Toast
 
@@ -45,6 +41,41 @@ class ReportLoadingThread(QThread):
             self.loading_finished.emit(reports)
             
         except Exception as e:
+            print(f"报告加载线程出错: {str(e)}")
+            self.loading_finished.emit([])
+
+class PaginationReportLoadingThread(QThread):
+    """分页报告加载线程 - 异步加载分页报告数据"""
+    
+    loading_finished = pyqtSignal(dict)  # 加载完成信号，返回分页数据
+    
+    def __init__(self, report_service, filters, parent=None):
+        super().__init__(parent)
+        self.report_service = report_service
+        self.filters = filters
+        
+    def run(self):
+        """线程执行函数"""
+        try:
+            # 获取分页报告数据
+            result = self.report_service.get_reports_with_pagination(self.filters)
+            
+            # 发送加载完成信号
+            self.loading_finished.emit(result)
+            
+        except Exception as e:
+            # 发送空数据
+            self.loading_finished.emit({
+                'data': [],
+                'pagination': {
+                    'total': 0,
+                    'page': 1,
+                    'page_size': 20,
+                    'total_pages': 0,
+                    'has_prev': False,
+                    'has_next': False
+                }
+            })
             print(f"报告加载线程出错: {str(e)}")
             self.loading_finished.emit([])
 
@@ -255,6 +286,12 @@ class ReportDetailPage(QWidget):
         super().__init__(parent)
         self.report_data = report_data or {}
         self.report_service = TestReportService()
+        
+        # 分页相关变量初始化
+        self.current_page = 1
+        self.current_page_size = 20
+        self.total_pages = 0
+        
         self.init_ui()
         self.load_report_details()
     
@@ -2027,9 +2064,6 @@ class StepLogItem(QWidget):
             self.step_label.setStyleSheet("font-weight: 600; font-size: 13px; color: #ff0000;")
 
 
-
-
-
 class TestReportManager(QWidget):
     """测试报告管理页面"""
     data_changed = pyqtSignal()  # 数据变化信号
@@ -2045,6 +2079,13 @@ class TestReportManager(QWidget):
         self.current_business_id = None  # 当前选中的业务分组ID，用于项目过滤
         self.loading_thread = None  # 异步加载线程
         self.is_loading = False  # 是否正在加载
+        self.current_request_id = 0  # 当前请求ID，用于防止竞态条件
+        
+        # 分页相关变量初始化
+        self.current_page = 1
+        self.current_page_size = 20
+        self.total_pages = 0
+        
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
@@ -2126,29 +2167,9 @@ class TestReportManager(QWidget):
         self.search_edit.setFixedWidth(300)  # 固定宽度180px
         filter_toolbar.addWidget(self.search_edit)
 
+        filter_toolbar.addSeparator()
+
         main_layout.addWidget(filter_toolbar)
-
-        # 操作工具栏
-        toolbar = QToolBar()
-        toolbar.setIconSize(QSize(16, 16))
-
-        self.refresh_action = QAction("刷新", self)
-        self.refresh_action.triggered.connect(self.on_refresh_clicked)
-        self.refresh_action.setIcon(self.get_icon("refresh.png"))
-
-        self.export_action = QAction("导出报告", self)
-        self.export_action.triggered.connect(self.export_reports)
-        self.export_action.setIcon(self.get_icon("export.png"))
-
-        self.clear_action = QAction("清理报告", self)
-        self.clear_action.triggered.connect(self.clear_old_reports)
-        self.clear_action.setIcon(self.get_icon("clear.png"))
-
-        toolbar.addAction(self.refresh_action)
-        toolbar.addAction(self.export_action)
-        toolbar.addAction(self.clear_action)
-
-        main_layout.addWidget(toolbar)
 
         # 创建水平分割布局：左侧调度任务列表，右侧报告列表
         splitter = QSplitter(Qt.Horizontal)
@@ -2207,23 +2228,76 @@ class TestReportManager(QWidget):
         """)
         self.scheduler_list_widget.itemClicked.connect(self.on_scheduler_item_clicked)
         
-        # 连接双击事件（快速查看调度详情）
-        self.scheduler_list_widget.itemDoubleClicked.connect(self.on_scheduler_item_double_clicked)
-        
         # 禁用右键菜单
         self.scheduler_list_widget.setContextMenuPolicy(Qt.NoContextMenu)
         
         left_layout.addWidget(self.scheduler_list_widget)
         
         # 设置左侧宽度
-        left_widget.setMaximumWidth(300)
-        left_widget.setMinimumWidth(250)
+        left_widget.setMaximumWidth(350)
+        left_widget.setMinimumWidth(350)
         
         splitter.addWidget(left_widget)
         
         # 右侧：报告列表表格
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
+        
+        # 操作工具栏 - 移动到报告列表容器上方
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setAlignment(Qt.AlignLeft)  # 左对齐
+        
+        # 刷新按钮
+        refresh_btn = QPushButton()
+        refresh_btn.setFixedSize(32, 32)
+        refresh_btn.setIcon(self.get_icon("refresh.png"))
+        refresh_btn.setIconSize(QSize(24, 24))
+        refresh_btn.setToolTip("刷新报告列表")
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                border: 1px solid #dee2e6;
+                background-color: #ffffff;
+                border-radius: 4px;
+                padding: 4px;
+            }
+            QPushButton:hover {
+                background-color: #f8f9fa;
+                border-color: #adb5bd;
+            }
+            QPushButton:pressed {
+                background-color: #e9ecef;
+            }
+        """)
+        refresh_btn.clicked.connect(self.on_refresh_clicked)
+        
+        # 清理报告按钮
+        clear_btn = QPushButton()
+        clear_btn.setFixedSize(32, 32)
+        clear_btn.setIcon(self.get_icon("delete.png"))
+        clear_btn.setIconSize(QSize(24, 24))
+        clear_btn.setToolTip("清理旧报告")
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                border: 1px solid #dee2e6;
+                background-color: #ffffff;
+                border-radius: 4px;
+                padding: 4px;
+            }
+            QPushButton:hover {
+                background-color: #f8f9fa;
+                border-color: #adb5bd;
+            }
+            QPushButton:pressed {
+                background-color: #e9ecef;
+            }
+        """)
+        clear_btn.clicked.connect(self.clear_old_reports)
+        
+        toolbar_layout.addWidget(refresh_btn)
+        toolbar_layout.addWidget(clear_btn)
+        toolbar_layout.addStretch()  # 添加拉伸，确保按钮左对齐
+        
+        right_layout.addLayout(toolbar_layout)
         
         # 报告列表表格
         self.tree_widget = QTreeWidget()
@@ -2234,19 +2308,19 @@ class TestReportManager(QWidget):
         
         # 设置固定列宽 - 参考定时调度UI设计
         self.tree_widget.setColumnWidth(0, 80)     # 序号
-        self.tree_widget.setColumnWidth(1, 400)    # 报告名称
+        self.tree_widget.setColumnWidth(1, 445)    # 报告名称
         self.tree_widget.setColumnWidth(2, 80)    # 用例数
         self.tree_widget.setColumnWidth(3, 150)    # 执行结果
         self.tree_widget.setColumnWidth(4, 150)    # 通过率
-        self.tree_widget.setColumnWidth(5, 250)    # 开始时间
-        self.tree_widget.setColumnWidth(6, 250)    # 结束时间
+        self.tree_widget.setColumnWidth(5, 300)    # 开始时间
+        self.tree_widget.setColumnWidth(6, 300)    # 结束时间
         self.tree_widget.setColumnWidth(7, 100)    # 执行耗时
-        self.tree_widget.setColumnWidth(8, 300)    # 操作栏
         
-        # 设置列宽调整模式为固定
+        # 设置列宽调整模式 - 操作栏自适应拉伸
         header = self.tree_widget.header()
-        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
-        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 其他列固定宽度
+        header.setSectionResizeMode(8, QHeaderView.Stretch)  # 操作栏自适应拉伸
+        header.setStretchLastSection(True)  # 最后一列自动拉伸
         header.setSectionsMovable(False)  # 禁止表头拖拽
         header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
         
@@ -2259,11 +2333,6 @@ class TestReportManager(QWidget):
         # 设置所有列文本居中
         for i in range(self.tree_widget.columnCount()):
             self.tree_widget.headerItem().setTextAlignment(i, Qt.AlignCenter)
-        
-        # 连接点击事件
-        self.tree_widget.itemClicked.connect(self.on_tree_item_clicked)
-        # 连接双击事件
-        self.tree_widget.itemDoubleClicked.connect(self.on_tree_item_double_clicked)
         
         # 参考定时调度UI的表格样式美化
         self.tree_widget.setStyleSheet("""
@@ -2339,6 +2408,117 @@ class TestReportManager(QWidget):
 
         right_layout.addWidget(self.tree_widget)
         
+        # 分页控件
+        self.pagination_widget = QWidget()
+        pagination_layout = QHBoxLayout(self.pagination_widget)
+        pagination_layout.setContentsMargins(10, 5, 10, 5)
+        pagination_layout.setSpacing(10)
+        
+        # 分页信息标签
+        self.pagination_label = QLabel("共 0 条记录")
+        self.pagination_label.setStyleSheet("color: #6c757d; font-size: 12px;")
+        pagination_layout.addWidget(self.pagination_label)
+        
+        pagination_layout.addStretch()
+        
+        # 首页按钮
+        self.first_page_btn = QPushButton("« 首页")
+        self.first_page_btn.setFixedSize(70, 32)
+        self.first_page_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8f9fa, stop:1 #e9ecef);
+                border-radius: 6px;
+                padding: 6px 8px;
+                font-size: 12px;
+                font-weight: 500;
+                color: #495057;
+                margin: 1px;
+            }
+            QPushButton:hover:enabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #007bff, stop:1 #0056b3);
+                color: white;
+                border: 1px solid #007bff;
+            }
+            QPushButton:pressed:enabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0056b3, stop:1 #004085);
+                border: 1px solid #004085;
+            }
+            QPushButton:disabled {
+                background: #f8f9fa;
+                color: #adb5bd;
+                border: 1px solid #e9ecef;
+            }
+        """)
+        self.first_page_btn.clicked.connect(self.go_to_first_page)
+        pagination_layout.addWidget(self.first_page_btn)
+        
+        # 上一页按钮
+        self.prev_page_btn = QPushButton("‹ 上一页")
+        self.prev_page_btn.setFixedSize(70, 32)
+        self.prev_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        self.prev_page_btn.clicked.connect(self.go_to_prev_page)
+        pagination_layout.addWidget(self.prev_page_btn)
+        
+        # 页码输入框
+        self.page_input = QLineEdit()
+        self.page_input.setFixedSize(50, 32)
+        self.page_input.setAlignment(Qt.AlignCenter)
+        self.page_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                padding: 6px;
+                font-size: 12px;
+                background-color: #ffffff;
+                font-weight: 500;
+                margin: 1px;
+            }
+            QLineEdit:focus {
+                border-color: #007bff;
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+            }
+            QLineEdit:hover:enabled {
+                border-color: #adb5bd;
+            }
+        """)
+        self.page_input.returnPressed.connect(self.go_to_specific_page)
+        pagination_layout.addWidget(self.page_input)
+        
+        # 总页数标签
+        self.total_pages_label = QLabel("/ 0")
+        self.total_pages_label.setStyleSheet("color: #6c757d; font-size: 12px; font-weight: 500; margin: 0 4px;")
+        pagination_layout.addWidget(self.total_pages_label)
+        
+        # 下一页按钮
+        self.next_page_btn = QPushButton("下一页 ›")
+        self.next_page_btn.setFixedSize(70, 32)
+        self.next_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        self.next_page_btn.clicked.connect(self.go_to_next_page)
+        pagination_layout.addWidget(self.next_page_btn)
+        
+        # 末页按钮
+        self.last_page_btn = QPushButton("末页 »")
+        self.last_page_btn.setFixedSize(70, 32)
+        self.last_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        self.last_page_btn.clicked.connect(self.go_to_last_page)
+        pagination_layout.addWidget(self.last_page_btn)
+        
+        # 每页显示数量选择
+        self.page_size_combo = QComboBox()
+        self.page_size_combo.setFixedSize(85, 32)
+        self.page_size_combo.addItems(["10", "20", "50", "100"])
+        self.page_size_combo.setCurrentText("20")
+        self.page_size_combo.setStyleSheet(get_combobox_style())
+        self.page_size_combo.currentTextChanged.connect(self.on_page_size_changed)
+        pagination_layout.addWidget(self.page_size_combo)
+        
+        right_layout.addWidget(self.pagination_widget)
+        
         splitter.addWidget(right_widget)
         
         # 设置分割比例和大小策略
@@ -2388,6 +2568,14 @@ class TestReportManager(QWidget):
             # 检查服务是否成功初始化
             if not all([self.report_service, self.case_service, self.scheduler_service, self.project_service]):
                 raise Exception("服务初始化失败，部分服务对象为None")
+            
+            # 确保分页相关属性已初始化
+            if not hasattr(self, 'current_page'):
+                self.current_page = 1
+            if not hasattr(self, 'current_page_size'):
+                self.current_page_size = 20
+            if not hasattr(self, 'total_pages'):
+                self.total_pages = 0
             
             # 加载项目列表
             self.load_projects()
@@ -2541,7 +2729,7 @@ class TestReportManager(QWidget):
                     project_id = int(project_id)
             
             # 根据项目筛选调度任务
-            schedulers = self.scheduler_service.get_schedulers_by_project(project_id)
+            schedulers = self.scheduler_service.get_schedulers_for_test_report(project_id)
             
             if not schedulers:
                 # 添加提示项
@@ -2579,8 +2767,13 @@ class TestReportManager(QWidget):
                 
             # 更新状态（已移除状态标签）
             
-            # 如果有测试用例集，只加载列表，不自动选择
-            # 用户手动选择调度后，切换项目时保持当前选择状态
+            # 如果有测试用例集，自动选择第一个测试用例集
+            if schedulers and self.scheduler_list_widget.count() > 0:
+                first_item = self.scheduler_list_widget.item(0)
+                self.scheduler_list_widget.setCurrentItem(first_item)
+                self.current_scheduler_id = first_item.data(Qt.UserRole)
+                # 触发报告加载
+                self.load_reports()
             
         except Exception as e:
             print(f"加载测试用例集失败: {e}")
@@ -2622,82 +2815,31 @@ class TestReportManager(QWidget):
             print(f"处理测试用例集点击事件失败: {e}")
 
     def load_reports_by_scheduler(self, scheduler_id):
-        """根据测试用例集ID加载对应的测试报告 - 异步加载版本"""
-        # 检查服务对象是否已初始化
-        if self.report_service is None:
-            # 显示服务未初始化提示
-            self.tree_widget.clear()
-            error_item = QTreeWidgetItem(self.tree_widget)
-            error_item.setText(0, "报告服务未初始化，请检查数据库连接")
-            self.tree_widget.setFirstItemColumnSpanned(error_item, True)
-            error_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
-            error_item.setBackground(0, QBrush(QColor("#ffebee")))
-            error_item.setForeground(0, QBrush(QColor("#c62828")))
-            print("报告服务未初始化，跳过加载报告")
-            return
-            
-        # 如果正在加载，先停止之前的加载
-        if self.is_loading and self.loading_thread:
-            self.loading_thread.terminate()
-            self.loading_thread.wait()
-            self.is_loading = False
-            
-        try:
-            # 调试信息
-            print(f"=== 异步加载测试用例集报告 ===")
-            print(f"测试用例集ID: {scheduler_id}")
-            
-            # 获取筛选条件
-            filters = self.get_filters()
-            print(f"筛选条件: {filters}")
-            
-            # 添加测试用例集ID筛选条件
-            filters['scheduler_id'] = scheduler_id
-            print(f"添加调度ID后的筛选条件: {filters}")
-            
-            # 显示加载提示
-            self.tree_widget.clear()
-            loading_item = QTreeWidgetItem(self.tree_widget)
-            loading_item.setText(0, "正在加载报告数据...")
-            self.tree_widget.setFirstItemColumnSpanned(loading_item, True)
-            loading_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
-            loading_item.setBackground(0, QBrush(QColor("#e3f2fd")))
-            loading_item.setForeground(0, QBrush(QColor("#1565c0")))
-            font = QFont()
-            font.setPointSize(11)
-            font.setBold(True)
-            loading_item.setFont(0, font)
-            loading_item.setSizeHint(0, QSize(0, 50))
-            
-            # 创建异步加载线程
-            self.loading_thread = ReportLoadingThread(self.report_service, filters)
-            self.loading_thread.loading_finished.connect(self.on_reports_loaded)
-            self.is_loading = True
-            
-            # 启动线程
-            self.loading_thread.start()
-            
-        except Exception as e:
-            print(f"启动异步加载失败: {str(e)}")
-            self.is_loading = False
-            
-            # 显示错误提示
-            self.tree_widget.clear()
-            error_item = QTreeWidgetItem(self.tree_widget)
-            error_item.setText(0, f"加载失败: {str(e)}")
-            self.tree_widget.setFirstItemColumnSpanned(error_item, True)
-            error_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
-            error_item.setBackground(0, QBrush(QColor("#ffebee")))
-            error_item.setForeground(0, QBrush(QColor("#c62828")))
-            font = QFont()
-            font.setPointSize(11)
-            font.setBold(True)
-            error_item.setFont(0, font)
-            error_item.setSizeHint(0, QSize(0, 50))
+        """根据测试用例集ID加载对应的测试报告 - 使用分页功能"""
+        # 重置到第一页
+        self.current_page = 1
+        
+        # 获取筛选条件
+        filters = self.get_filters()
+        
+        # 添加测试用例集ID筛选条件
+        filters['scheduler_id'] = scheduler_id
+        
+        # 添加分页参数
+        filters['page'] = self.current_page
+        filters['page_size'] = self.current_page_size
+        
+        # 使用分页加载
+        self.load_reports_with_pagination(filters)
 
-    def on_reports_loaded(self, reports):
+    def on_reports_loaded(self, reports, request_id=None):
         """异步加载完成后的回调函数"""
         try:
+            # 检查请求ID是否匹配，防止处理过期的请求
+            if request_id is not None and request_id != self.current_request_id:
+                print(f"忽略过期请求: {request_id}，当前请求ID: {self.current_request_id}")
+                return
+                
             # 重置加载状态
             self.is_loading = False
             self.loading_thread = None
@@ -2774,7 +2916,6 @@ class TestReportManager(QWidget):
                 item.setForeground(3, QColor(status_color))
                 
                 # 通过率
-                total_cases = report.get('total_cases', 0)
                 passed_cases = report.get('passed_cases', 0)
                 if total_cases > 0:
                     success_rate = (passed_cases / total_cases) * 100
@@ -2887,17 +3028,23 @@ class TestReportManager(QWidget):
             error_item.setForeground(0, QBrush(QColor("#c62828")))
 
     def load_reports(self):
-        """加载报告列表 - 修改为直接平铺显示所有报告"""
-        # 检查服务对象是否已初始化
-        if self.report_service is None:
-            print("报告服务未初始化，跳过加载报告列表")
-            return
-            
-        try:
-            # 获取筛选条件
-            filters = self.get_filters()
-            reports = self.report_service.get_reports_with_filters(filters)
+        """加载报告列表 - 使用分页功能"""
+        # 重置到第一页
+        self.current_page = 1
+        
+        # 获取筛选条件
+        filters = self.get_filters()
+        
+        # 添加分页参数
+        filters['page'] = self.current_page
+        filters['page_size'] = self.current_page_size
+        
+        # 使用分页加载
+        self.load_reports_with_pagination(filters)
 
+    def display_reports(self, reports):
+        """显示报告数据到树形控件"""
+        try:
             # 清空树形控件
             self.tree_widget.clear()
             
@@ -2930,25 +3077,30 @@ class TestReportManager(QWidget):
             # 按开始时间排序（最新的在前）
             reports.sort(key=lambda x: x.get('start_time', ''), reverse=True)
             
+            # 计算起始序号：根据当前页码和每页大小
+            start_index = (self.current_page - 1) * self.current_page_size + 1
+            
             # 直接平铺显示所有报告
-            for i, report in enumerate(reports, start=1):
+            for i, report in enumerate(reports, start=start_index):
                 item = QTreeWidgetItem(self.tree_widget)
                 
-                # 设置所有列文本居中对齐
-                for j in range(9):
-                    item.setTextAlignment(j, Qt.AlignCenter)
+                # 设置所有列的文本居中对齐
+                for col in range(8):  # 0-7列（第8列是操作列，使用widget）
+                    item.setTextAlignment(col, Qt.AlignCenter)
                 
                 # 序号
                 item.setText(0, str(i))
                 
                 # 报告名称
-                item.setText(1, report['report_name'])
+                report_name = report.get('report_name', 'N/A')
+                item.setText(1, report_name)
                 
-                # 用例数（单个报告）
-                item.setText(2, "1")
+                # 用例数
+                total_cases = report.get('total_cases', 0)
+                item.setText(2, str(total_cases))
                 
                 # 状态
-                status = report.get('status', '')
+                status = report.get('status', 'unknown')
                 status_text = {
                     'success': '成功',
                     'failure': '失败',
@@ -3066,8 +3218,8 @@ class TestReportManager(QWidget):
                 item.setData(0, Qt.UserRole, report['id'])
             
             # 调试信息：显示加载完成
-            print(f"=== 报告加载完成 ===")
-            print(f"成功加载 {len(reports)} 份报告")
+            print(f"=== 报告显示完成 ===")
+            print(f"成功显示 {len(reports)} 份报告")
             if reports:
                 print("报告列表:")
                 for i, report in enumerate(reports):
@@ -3076,8 +3228,7 @@ class TestReportManager(QWidget):
                 print("没有找到符合条件的报告")
 
         except Exception as e:
-            # 静默处理，不显示弹窗
-            print(f"加载测试报告失败: {str(e)}")
+            print(f"显示报告数据失败: {str(e)}")
             import traceback
             traceback.print_exc()
 
@@ -3145,13 +3296,22 @@ class TestReportManager(QWidget):
             self.load_schedulers()
             
             # 尝试恢复之前选中的调度项
+            found_previous = False
             if current_scheduler_id:
                 for i in range(self.scheduler_list_widget.count()):
                     item = self.scheduler_list_widget.item(i)
                     if item.flags() != Qt.NoItemFlags and item.data(Qt.UserRole) == current_scheduler_id:
                         self.scheduler_list_widget.setCurrentItem(item)
                         self.current_scheduler_id = current_scheduler_id
+                        found_previous = True
                         break
+            
+            # 如果没有找到之前的调度项，自动选择第一个测试用例集
+            if not found_previous and self.scheduler_list_widget.count() > 0:
+                first_item = self.scheduler_list_widget.item(0)
+                if first_item.flags() != Qt.NoItemFlags:  # 确保不是提示项
+                    self.scheduler_list_widget.setCurrentItem(first_item)
+                    self.current_scheduler_id = first_item.data(Qt.UserRole)
         
         # 刷新报告列表，根据是否有当前选中的调度ID决定调用哪个方法
         if self.current_scheduler_id:
@@ -3170,13 +3330,22 @@ class TestReportManager(QWidget):
         self.load_schedulers()
         
         # 尝试恢复之前选中的调度项
+        found_previous = False
         if current_scheduler_id:
             for i in range(self.scheduler_list_widget.count()):
                 item = self.scheduler_list_widget.item(i)
                 if item.flags() != Qt.NoItemFlags and item.data(Qt.UserRole) == current_scheduler_id:
                     self.scheduler_list_widget.setCurrentItem(item)
                     self.current_scheduler_id = current_scheduler_id
+                    found_previous = True
                     break
+        
+        # 如果没有找到之前的调度项，自动选择第一个测试用例集
+        if not found_previous and self.scheduler_list_widget.count() > 0:
+            first_item = self.scheduler_list_widget.item(0)
+            if first_item.flags() != Qt.NoItemFlags:  # 确保不是提示项
+                self.scheduler_list_widget.setCurrentItem(first_item)
+                self.current_scheduler_id = first_item.data(Qt.UserRole)
         
         # 根据当前选中的调度ID决定如何刷新报告列表
         if self.current_scheduler_id:
@@ -3186,43 +3355,115 @@ class TestReportManager(QWidget):
             # 如果没有选中的调度ID，使用普通加载方法
             self.load_reports()
 
-    def on_tree_item_clicked(self, item, column):
-        """处理树形表格点击事件"""
-        # 获取节点数据
-        node_data = item.data(0, Qt.UserRole)
+    def update_pagination_ui(self, pagination_info):
+        """更新分页UI状态"""
+        total = pagination_info.get('total', 0)
+        page = pagination_info.get('page', 1)
+        page_size = pagination_info.get('page_size', 20)
+        total_pages = pagination_info.get('total_pages', 0)
+        has_prev = pagination_info.get('has_prev', False)
+        has_next = pagination_info.get('has_next', False)
         
-        # 判断是父节点（调度组）还是子节点（报告记录）
-        if isinstance(node_data, str) and node_data.startswith("scheduler_"):
-            # 父节点：只有点击序号列（第0列）时才展开/折叠
-            if column == 0:
-                item.setExpanded(not item.isExpanded())
-            # 父节点：点击操作栏时，由于已经使用按钮组件，不处理点击事件
-            elif column == 8:
-                # 父节点的操作栏使用按钮组件，不需要处理单元格点击
-                pass
-        else:
-            # 子节点：点击操作栏时，由于已经使用按钮组件，不处理点击事件
-            if column == 8:
-                # 子节点的操作栏使用按钮组件，不需要处理单元格点击
-                pass
-            # 子节点：点击其他列时选中该行
-            else:
-                self.tree_widget.setCurrentItem(item)
+        # 更新分页信息标签
+        self.pagination_label.setText(f"共 {total} 条记录")
+        self.page_input.setText(str(page))
+        self.total_pages_label.setText(f"/ {total_pages}")
+        
+        # 更新按钮状态
+        self.first_page_btn.setEnabled(has_prev)
+        self.prev_page_btn.setEnabled(has_prev)
+        self.next_page_btn.setEnabled(has_next)
+        self.last_page_btn.setEnabled(has_next)
+        
+        # 更新每页显示数量
+        self.page_size_combo.setCurrentText(str(page_size))
 
-    def on_tree_item_double_clicked(self, item, column):
-        """处理树形表格双击事件"""
-        # 获取节点数据
-        node_data = item.data(0, Qt.UserRole)
-        
-        # 判断是父节点（调度组）还是子节点（报告记录）
-        if isinstance(node_data, str) and node_data.startswith("scheduler_"):
-            # 父节点双击：展开/折叠
-            item.setExpanded(not item.isExpanded())
-        else:
-            # 子节点双击：查看报告详情
-            report_id = node_data
-            if report_id:
-                self.view_report_detail_by_id(report_id)
+    def go_to_first_page(self):
+        """跳转到首页"""
+        self.current_page = 1
+        self.load_reports_with_pagination()
+
+    def go_to_prev_page(self):
+        """跳转到上一页"""
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.load_reports_with_pagination()
+
+    def go_to_next_page(self):
+        """跳转到下一页"""
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            self.load_reports_with_pagination()
+
+    def go_to_last_page(self):
+        """跳转到末页"""
+        self.current_page = self.total_pages
+        self.load_reports_with_pagination()
+
+    def go_to_specific_page(self):
+        """跳转到指定页码"""
+        try:
+            page = int(self.page_input.text())
+            if 1 <= page <= self.total_pages:
+                self.current_page = page
+                self.load_reports_with_pagination()
+            else:
+                self.page_input.setText(str(self.current_page))
+        except ValueError:
+            self.page_input.setText(str(self.current_page))
+
+    def on_page_size_changed(self, page_size_text):
+        """每页显示数量变化"""
+        try:
+            page_size = int(page_size_text)
+            self.current_page_size = page_size
+            self.current_page = 1  # 重置到第一页
+            self.load_reports_with_pagination()
+        except ValueError:
+            pass
+
+    def load_reports_with_pagination(self, filters=None):
+        """使用分页加载测试报告"""
+        try:
+            # 获取筛选条件
+            if filters is None:
+                filters = self.get_filters()
+            
+            # 添加分页参数
+            filters['page'] = self.current_page
+            filters['page_size'] = self.current_page_size
+            
+            # 使用分页API获取数据
+            result = self.report_service.get_reports_with_pagination(filters)
+            
+            if result:
+                reports = result.get('data', [])
+                pagination_info = result.get('pagination', {})
+                
+                # 更新分页信息
+                self.total_pages = pagination_info.get('total_pages', 0)
+                
+                # 更新UI
+                self.update_pagination_ui(pagination_info)
+                
+                # 显示报告数据
+                self.display_reports(reports)
+            else:
+                # 显示空数据
+                self.tree_widget.clear()
+                self.update_pagination_ui({
+                    'total': 0,
+                    'page': 1,
+                    'page_size': self.current_page_size,
+                    'total_pages': 0,
+                    'has_prev': False,
+                    'has_next': False
+                })
+                
+        except Exception as e:
+            print(f"分页加载测试报告失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def get_selected_report_id(self):
         """获取选中的报告ID - 适配树形表格"""
@@ -3473,97 +3714,6 @@ class TestReportManager(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"清理报告失败: {str(e)}")
 
-    def on_scheduler_item_double_clicked(self, item):
-        """双击调度任务项事件 - 快速查看调度详情"""
-        try:
-            # 检查是否为提示项（不可选择）
-            if item.flags() == Qt.NoItemFlags:
-                return
-                
-            # 获取选中的调度任务ID
-            scheduler_id = item.data(Qt.UserRole)
-            
-            # 获取调度详细信息
-            scheduler = self.scheduler_service.get_scheduler_by_id(scheduler_id)
-            if not scheduler:
-                QMessageBox.warning(self, "提示", "调度任务不存在")
-                return
-            
-            # 显示调度详情对话框
-            self.show_scheduler_detail_dialog(scheduler)
-            
-        except Exception as e:
-            print(f"处理调度任务双击事件失败: {e}")
-            QMessageBox.critical(self, "错误", f"查看调度详情失败: {str(e)}")
-
-
-
-    def show_scheduler_detail_dialog(self, scheduler):
-        """显示调度详情对话框"""
-        try:
-            # 创建详情对话框
-            dialog = QDialog(self)
-            dialog.setWindowTitle("调度任务详情")
-            dialog.setModal(True)
-            dialog.resize(500, 400)
-            
-            layout = QVBoxLayout(dialog)
-            
-            # 创建表单布局
-            form_layout = QFormLayout()
-            form_layout.setLabelAlignment(Qt.AlignRight)
-            
-            # 调度名称
-            name_label = QLabel(scheduler.get('name', '未知调度'))
-            name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-            form_layout.addRow("调度名称:", name_label)
-            
-            # 状态
-            status_text = "已启用" if scheduler.get('enabled', False) else "已禁用"
-            status_color = "#28a745" if scheduler.get('enabled', False) else "#dc3545"
-            status_label = QLabel(status_text)
-            status_label.setStyleSheet(f"color: {status_color}; font-weight: bold;")
-            form_layout.addRow("状态:", status_label)
-            
-            # Cron表达式
-            cron_label = QLabel(scheduler.get('cron_expression', 'N/A'))
-            form_layout.addRow("Cron表达式:", cron_label)
-            
-            # 上次执行时间
-            last_run = scheduler.get('last_run_at')
-            last_run_text = last_run.strftime('%Y-%m-%d %H:%M:%S') if last_run else "N/A"
-            last_run_label = QLabel(last_run_text)
-            form_layout.addRow("上次执行时间:", last_run_label)
-            
-            # 下次执行时间
-            next_run = scheduler.get('next_run_at')
-            next_run_text = next_run.strftime('%Y-%m-%d %H:%M:%S') if next_run else "N/A"
-            next_run_label = QLabel(next_run_text)
-            form_layout.addRow("下次执行时间:", next_run_label)
-            
-            # 创建时间
-            created_at = scheduler.get('created_at')
-            created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else "N/A"
-            created_label = QLabel(created_text)
-            form_layout.addRow("创建时间:", created_label)
-            
-            layout.addLayout(form_layout)
-            
-            # 添加关闭按钮
-            button_box = QDialogButtonBox(QDialogButtonBox.Close)
-            button_box.rejected.connect(dialog.reject)
-            # 将关闭按钮文字改为中文
-            close_button = button_box.button(QDialogButtonBox.Close)
-            if close_button:
-                close_button.setText("关闭")
-            layout.addWidget(button_box)
-            
-            dialog.exec_()
-            
-        except Exception as e:
-            print(f"显示调度详情对话框失败: {e}")
-            QMessageBox.critical(self, "错误", f"显示调度详情失败: {str(e)}")
-
     def toggle_scheduler_status(self, scheduler_id, enable):
         """切换调度任务状态"""
         try:
@@ -3582,84 +3732,4 @@ class TestReportManager(QWidget):
             print(f"切换调度状态失败: {e}")
             QMessageBox.critical(self, "错误", f"操作失败: {str(e)}")
 
-    def export_reports(self):
-        """批量导出测试报告"""
-        try:
-            # 获取当前筛选条件下的所有报告
-            filters = self.get_filters()
-            reports = self.report_service.get_reports_with_filters(filters)
-            
-            if not reports:
-                QMessageBox.information(self, "提示", "当前没有可导出的测试报告")
-                return
-            
-            # 选择导出目录
-            export_dir = QFileDialog.getExistingDirectory(
-                self, "选择导出目录", 
-                os.path.expanduser("~/Desktop")
-            )
-            
-            if not export_dir:
-                return
-            
-            # 创建导出目录
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            export_folder = os.path.join(export_dir, f"测试报告_{timestamp}")
-            os.makedirs(export_folder, exist_ok=True)
-            
-            # 创建进度对话框
-            progress_dialog = QProgressDialog("正在导出测试报告...", "取消", 0, len(reports), self)
-            progress_dialog.setWindowTitle("导出进度")
-            progress_dialog.setWindowModality(Qt.WindowModal)
-            progress_dialog.setMinimumDuration(0)
-            progress_dialog.setValue(0)
-            
-            # 导出报告
-            generator = HTMLReportGenerator()
-            success_count = 0
-            
-            for i, report in enumerate(reports, 1):
-                if progress_dialog.wasCanceled():
-                    break
-                    
-                try:
-                    # 获取完整的报告数据
-                    full_report = self.report_service.get_report_by_id(report['id'])
-                    if not full_report:
-                        continue
-                    
-                    # 生成报告文件名
-                    safe_name = "".join(c for c in report['report_name'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                    file_name = f"{safe_name}_{report['id']}.html"
-                    file_path = os.path.join(export_folder, file_name)
-                    
-                    # 导出报告
-                    generator.generate_report(full_report, file_path)
-                    success_count += 1
-                    
-                except Exception as e:
-                    print(f"导出报告 {report['report_name']} 失败: {e}")
-                
-                # 更新进度
-                progress_dialog.setValue(i)
-                QApplication.processEvents()
-            
-            progress_dialog.close()
-            
-            # 显示导出结果
-            if success_count > 0:
-                msg_box = QMessageBox(QMessageBox.Information, "导出成功", 
-                                    f"成功导出 {success_count} 个测试报告到目录:\n{export_folder}")
-                view_button = msg_box.addButton("查看目录", QMessageBox.YesRole)
-                close_button = msg_box.addButton("关闭", QMessageBox.NoRole)
-                msg_box.setDefaultButton(close_button)
-                msg_box.exec_()
-                
-                if msg_box.clickedButton() == view_button:
-                    webbrowser.open(f"file://{os.path.abspath(export_folder)}")
-            else:
-                QMessageBox.warning(self, "导出失败", "没有成功导出任何报告")
-                
-        except Exception as e:
-            QMessageBox.critical(self, "导出失败", f"批量导出测试报告失败: {str(e)}")
 

@@ -219,16 +219,16 @@ class VariableManagement(QWidget):
         # 创建Tab页
         self.tab_widget = NoWheelTabWidget()
 
-        # 系统变量Tab
-        system_tab = QWidget()
-        self.setup_system_tab(system_tab)
-
         # 全局变量Tab
         global_tab = QWidget()
         self.setup_global_tab(global_tab)
 
-        self.tab_widget.addTab(system_tab, "系统变量")
+        # 系统变量Tab
+        system_tab = QWidget()
+        self.setup_system_tab(system_tab)
+
         self.tab_widget.addTab(global_tab, "全局变量")
+        self.tab_widget.addTab(system_tab, "系统变量")
 
         right_layout.addWidget(self.project_info_label)
         right_layout.addWidget(self.variable_container)
@@ -265,37 +265,37 @@ class VariableManagement(QWidget):
         info_label.setStyleSheet("color: #666; padding: 10px;")
         layout.addWidget(info_label)
 
-        # 系统变量表格 - 使用全局工具表格的配置和样式
-        self.system_table = QTableWidget()
-        self.system_table.setColumnCount(4)  # 增加一列用于自定义序号
-        self.system_table.setHorizontalHeaderLabels(["序号", "变量名", "值", "描述"])
+        # 系统变量树形控件 - 参考定时调度实现
+        self.system_tree = QTreeWidget()
+        self.system_tree.setColumnCount(4)
+        self.system_tree.setHeaderLabels(["序号", "变量名", "值", "描述"])
         
-        # 设置表格属性 - 完全匹配全局工具表格配置
-        self.system_table.setAlternatingRowColors(True)
-        self.system_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.system_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 整个表格不可编辑
-        self.system_table.verticalHeader().setVisible(False)  # 去除组件自带序号栏
-        self.system_table.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        # 设置固定列宽 - 参考定时调度设计
+        self.system_tree.setColumnWidth(0, 100)     # 序号
+        self.system_tree.setColumnWidth(1, 450)    # 变量名
+        self.system_tree.setColumnWidth(2, 600)    # 值
         
-        # 设置序号列宽度
-        self.system_table.setColumnWidth(0, 60)  # 序号列宽度
-        
-        # 设置列宽策略 - 使用固定列宽模式
-        header = self.system_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
-        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        # 设置列宽调整模式 - 参考定时调度实现
+        header = self.system_tree.header()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 其他列固定宽度
+        header.setSectionResizeMode(3, QHeaderView.Stretch)  # 描述列自适应拉伸
+        header.setStretchLastSection(True)  # 最后一列自动拉伸
         header.setSectionsMovable(False)  # 禁止表头拖拽
         header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
         
-        # 设置固定列宽 - 参考全局工具表格的列宽设计
-        self.system_table.setColumnWidth(0, 60)     # 序号
-        self.system_table.setColumnWidth(1, 300)    # 变量名
-        self.system_table.setColumnWidth(2, 400)    # 值
-        self.system_table.setColumnWidth(3, 300)    # 描述
+        # 设置树形控件属性 - 参考定时调度实现
+        self.system_tree.setSelectionBehavior(QTreeWidget.SelectRows)
+        self.system_tree.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        self.system_tree.setRootIsDecorated(False)  # 不显示展开/折叠图标列
+        self.system_tree.setAlternatingRowColors(True)
         
-        # 设置表格样式 - 完全匹配全局工具表格的CSS样式
-        self.system_table.setStyleSheet("""
-            QTableWidget {
+        # 设置所有列文本居中 - 参考定时调度实现
+        for i in range(self.system_tree.columnCount()):
+            self.system_tree.headerItem().setTextAlignment(i, Qt.AlignCenter)
+        
+        # 设置树形控件样式 - 参考定时调度实现
+        self.system_tree.setStyleSheet("""
+            QTreeWidget {
                 background-color: #f8f9fa;
                 alternate-background-color: #ffffff;
                 gridline-color: #e9ecef;
@@ -303,24 +303,18 @@ class VariableManagement(QWidget):
                 border-radius: 4px;
                 outline: 0;
             }
-            QTableWidget::item {
-                padding: 12px 8px;
+            QTreeWidget::item {
+                padding: 8px 8px;
                 border-bottom: 1px solid #e9ecef;
                 text-align: center;
-                height: 100px;
+                height: 32px;
             }
-            QTableWidget::item:selected {
+            QTreeWidget::item:selected {
                 background-color: #e3f2fd;
                 color: #1976d2;
-                font-weight: bold;
             }
-            QTableWidget::item:selected:!active {
-                background-color: #e3f2fd;
-                color: #1976d2;
-                font-weight: bold;
-            }
-            QTableWidget::item:hover {
-                background-color: #f8f9fa;
+            QTreeWidget::item:hover {
+                background-color: #f5f5f5;
             }
             QHeaderView::section {
                 background-color: #f8f9fa;
@@ -336,20 +330,13 @@ class VariableManagement(QWidget):
             QHeaderView::section:hover {
                 background-color: #e9ecef;
             }
-            /* 自定义序号列样式 */
-            QTableWidget QTableWidget::item:first-column {
-                background-color: #f8f9fa;
-                color: #495057;
-                font-weight: 600;
-            }
         """)
         
-        # 关键设置：设置表格大小策略，允许表格充分拉伸
-        self.system_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.system_table.setMinimumHeight(400)  # 设置最小高度，避免表格太矮
-        self.system_table.verticalHeader().setDefaultSectionSize(60)  # 设置行高
+        # 设置大小策略
+        self.system_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.system_tree.setMinimumHeight(400)
 
-        layout.addWidget(self.system_table)
+        layout.addWidget(self.system_tree)
 
     def setup_global_tab(self, parent):
         """设置全局变量Tab"""
@@ -358,7 +345,7 @@ class VariableManagement(QWidget):
         # 创建顶部按钮布局（左上角）
         top_layout = QHBoxLayout()
         
-        self.add_global_btn = QPushButton("新增变量")
+        self.add_global_btn = QPushButton("新增")
         self.add_global_btn.setFixedSize(80, 28)  # 调整按钮大小以适应文字
         self.add_global_btn.setStyleSheet("""
             QPushButton {
@@ -383,36 +370,41 @@ class VariableManagement(QWidget):
         top_layout.addWidget(self.add_global_btn)
         top_layout.addStretch()  # 添加弹性空间，将按钮推到左侧
 
-        # 全局变量表格 - 使用全局工具表格的配置和样式
-        self.global_table = QTableWidget()
-        self.global_table.setColumnCount(6)  # 增加一列用于自定义序号，一列用于操作栏
-        self.global_table.setHorizontalHeaderLabels(["序号", "变量名", "类型", "值", "描述", "操作"])
+        # 全局变量树形控件 - 参考定时调度实现
+        self.global_tree = QTreeWidget()
+        self.global_tree.setColumnCount(6)
+        self.global_tree.setHeaderLabels(["序号", "变量名", "类型", "值", "描述", "操作"])
         
-        # 设置表格属性 - 完全匹配全局工具表格配置
-        self.global_table.setAlternatingRowColors(True)
-        self.global_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.global_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 整个表格不可编辑
-        self.global_table.verticalHeader().setVisible(False)  # 去除组件自带序号栏
-        self.global_table.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        # 设置固定列宽 - 参考定时调度设计
+        self.global_tree.setColumnWidth(0, 80)     # 序号
+        self.global_tree.setColumnWidth(1, 300)    # 变量名
+        self.global_tree.setColumnWidth(2, 100)    # 类型
+        self.global_tree.setColumnWidth(3, 600)    # 值
+        self.global_tree.setColumnWidth(4, 200)    # 描述
+        # 操作栏宽度设置为自适应内容
+        self.global_tree.setColumnWidth(5, 120)    # 操作栏宽度
         
-        # 设置列宽策略 - 使用固定列宽模式
-        header = self.global_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
-        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        # 设置列宽调整模式 - 参考定时调度实现
+        header = self.global_tree.header()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 其他列固定宽度
+        header.setSectionResizeMode(5, QHeaderView.Fixed)  # 操作栏固定宽度
+        header.setStretchLastSection(True)  # 最后一列自动拉伸
         header.setSectionsMovable(False)  # 禁止表头拖拽
         header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
         
-        # 设置固定列宽 - 参考全局工具表格的列宽设计
-        self.global_table.setColumnWidth(0, 80)     # 序号
-        self.global_table.setColumnWidth(1, 300)    # 变量名
-        self.global_table.setColumnWidth(2, 100)    # 类型
-        self.global_table.setColumnWidth(3, 450)    # 值
-        self.global_table.setColumnWidth(4, 250)    # 描述
-        self.global_table.setColumnWidth(5, 400)    # 操作
+        # 设置树形控件属性 - 参考定时调度实现
+        self.global_tree.setSelectionBehavior(QTreeWidget.SelectRows)
+        self.global_tree.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        self.global_tree.setRootIsDecorated(False)  # 不显示展开/折叠图标列
+        self.global_tree.setAlternatingRowColors(True)
         
-        # 设置表格样式 - 完全匹配全局工具表格的CSS样式
-        self.global_table.setStyleSheet("""
-            QTableWidget {
+        # 设置所有列文本居中 - 参考定时调度实现
+        for i in range(self.global_tree.columnCount()):
+            self.global_tree.headerItem().setTextAlignment(i, Qt.AlignCenter)
+        
+        # 设置树形控件样式 - 参考定时调度实现
+        self.global_tree.setStyleSheet("""
+            QTreeWidget {
                 background-color: #f8f9fa;
                 alternate-background-color: #ffffff;
                 gridline-color: #e9ecef;
@@ -420,24 +412,18 @@ class VariableManagement(QWidget):
                 border-radius: 4px;
                 outline: 0;
             }
-            QTableWidget::item {
-                padding: 12px 8px;
+            QTreeWidget::item {
+                padding: 8px 8px;
                 border-bottom: 1px solid #e9ecef;
                 text-align: center;
-                height: 100px;
+                height: 32px;
             }
-            QTableWidget::item:selected {
+            QTreeWidget::item:selected {
                 background-color: #e3f2fd;
                 color: #1976d2;
-                font-weight: bold;
             }
-            QTableWidget::item:selected:!active {
-                background-color: #e3f2fd;
-                color: #1976d2;
-                font-weight: bold;
-            }
-            QTableWidget::item:hover {
-                background-color: #f8f9fa;
+            QTreeWidget::item:hover {
+                background-color: #f5f5f5;
             }
             QHeaderView::section {
                 background-color: #f8f9fa;
@@ -453,25 +439,15 @@ class VariableManagement(QWidget):
             QHeaderView::section:hover {
                 background-color: #e9ecef;
             }
-            /* 自定义序号列样式 */
-            QTableWidget QTableWidget::item:first-column {
-                background-color: #f8f9fa;
-                color: #495057;
-                font-weight: 600;
-            }
         """)
         
-        # 关键设置：设置表格大小策略，允许表格自适应容器宽度
-        self.global_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.global_table.setMinimumHeight(400)  # 设置最小高度，避免表格太矮
-        self.global_table.verticalHeader().setDefaultSectionSize(60)  # 设置行高
-        
-        # 设置表格水平滚动条策略，允许表格自适应
-        self.global_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # 设置大小策略
+        self.global_tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.global_tree.setMinimumHeight(400)
 
         # 添加布局到主布局
         layout.addLayout(top_layout)
-        layout.addWidget(self.global_table)
+        layout.addWidget(self.global_tree)
 
     def get_icon(self, icon_name):
         """获取图标"""
@@ -504,8 +480,8 @@ class VariableManagement(QWidget):
             icon_path = os.path.join("src", "resources", "icons", icon_name)
             if os.path.exists(icon_path):
                 return QIcon(icon_path)
-        except:
-            pass
+        except Exception as e:
+            print(f"Error loading icon {icon_name}: {e}")
         return QIcon()
 
     def delayed_load_data(self):
@@ -569,9 +545,9 @@ class VariableManagement(QWidget):
         self.project_info_label.show()
         self.variable_container.hide()
         
-        # 清空变量表格
-        self.system_table.setRowCount(0)
-        self.global_table.setRowCount(0)
+        # 清空变量树形控件
+        self.system_tree.clear()
+        self.global_tree.clear()
         
         # 更新状态栏信息
         if business_id:
@@ -601,7 +577,7 @@ class VariableManagement(QWidget):
     def load_system_variables(self):
         """加载系统变量"""
         system_vars = self.variable_manager.system_variables
-        self.system_table.setRowCount(len(system_vars))
+        self.system_tree.clear()
 
         descriptions = {
             '${__timestamp}': '当前时间戳',
@@ -619,33 +595,33 @@ class VariableManagement(QWidget):
         }
 
         for row, (name, value) in enumerate(system_vars.items()):
+            # 创建树节点
+            item = QTreeWidgetItem()
+            
             # 序号 - 居中对齐
-            index_item = QTableWidgetItem(str(row + 1))
-            index_item.setTextAlignment(Qt.AlignCenter)
-            index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
-            self.system_table.setItem(row, 0, index_item)
+            item.setText(0, str(row + 1))
+            item.setTextAlignment(0, Qt.AlignCenter)
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
             
             # 变量名 - 居中对齐
-            name_item = QTableWidgetItem(name)
-            name_item.setTextAlignment(Qt.AlignCenter)
-            self.system_table.setItem(row, 1, name_item)
+            item.setText(1, name)
+            item.setTextAlignment(1, Qt.AlignCenter)
 
             # 值 - 居中对齐
             if callable(value):
                 value_str = '<动态函数>'
             else:
                 value_str = str(value)
-            value_item = QTableWidgetItem(value_str)
-            value_item.setTextAlignment(Qt.AlignCenter)
-            self.system_table.setItem(row, 2, value_item)
+            item.setText(2, value_str)
+            item.setTextAlignment(2, Qt.AlignCenter)
 
             # 描述 - 居中对齐
             desc = descriptions.get(name, '系统预定义变量')
-            desc_item = QTableWidgetItem(desc)
-            desc_item.setTextAlignment(Qt.AlignCenter)
-            self.system_table.setItem(row, 3, desc_item)
-
-        # 移除自动调整列宽，保持固定列宽
+            item.setText(3, desc)
+            item.setTextAlignment(3, Qt.AlignCenter)
+            
+            # 添加到树形控件
+            self.system_tree.addTopLevelItem(item)
 
     def load_global_variables(self):
         """加载全局变量"""
@@ -655,111 +631,89 @@ class VariableManagement(QWidget):
         try:
             # 加载当前项目的全局变量
             global_vars = self.variable_service.get_global_variables_by_project(self.current_project['id'])
-            self.global_table.setRowCount(len(global_vars))
+            self.global_tree.clear()
 
             for row, var in enumerate(global_vars):
+                # 创建树节点
+                item = QTreeWidgetItem()
+                
                 # 序号 - 居中对齐
-                index_item = QTableWidgetItem(str(row + 1))
-                index_item.setTextAlignment(Qt.AlignCenter)
-                index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
-                self.global_table.setItem(row, 0, index_item)
+                item.setText(0, str(row + 1))
+                item.setTextAlignment(0, Qt.AlignCenter)
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
                 
                 # 变量名 - 居中对齐
-                name_item = QTableWidgetItem(var['name'])
-                name_item.setTextAlignment(Qt.AlignCenter)
-                self.global_table.setItem(row, 1, name_item)
+                item.setText(1, var['name'])
+                item.setTextAlignment(1, Qt.AlignCenter)
                 
                 # 类型 - 居中对齐
-                type_item = QTableWidgetItem(var.get('variable_type', 'string'))
-                type_item.setTextAlignment(Qt.AlignCenter)
-                self.global_table.setItem(row, 2, type_item)
+                item.setText(2, var.get('variable_type', 'string'))
+                item.setTextAlignment(2, Qt.AlignCenter)
                 
                 # 值 - 居中对齐
                 value_str = str(var['value'])
                 if len(value_str) > 50:
                     value_str = value_str[:50] + '...'
-                value_item = QTableWidgetItem(value_str)
-                value_item.setTextAlignment(Qt.AlignCenter)
-                self.global_table.setItem(row, 3, value_item)
+                item.setText(3, value_str)
+                item.setTextAlignment(3, Qt.AlignCenter)
                 
                 # 描述 - 居中对齐
-                desc_item = QTableWidgetItem(var.get('description', ''))
-                desc_item.setTextAlignment(Qt.AlignCenter)
-                self.global_table.setItem(row, 4, desc_item)
+                item.setText(4, var.get('description', ''))
+                item.setTextAlignment(4, Qt.AlignCenter)
                 
-                # 操作栏 - 编辑、删除、复制按钮
+                # 操作栏 - 设置为空，实际按钮通过setItemWidget添加
+                item.setText(5, "")
+                
+                # 创建操作按钮容器 - 严格参考定时调度实现
                 operation_widget = QWidget()
                 operation_layout = QHBoxLayout(operation_widget)
                 operation_layout.setContentsMargins(5, 2, 5, 2)
-                operation_layout.setSpacing(5)
-                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
+                operation_layout.setSpacing(3)
+                operation_layout.setAlignment(Qt.AlignCenter)
                 
                 # 编辑按钮
-                edit_btn = QPushButton("编辑")
-                edit_btn.setFixedSize(50, 25)
-                edit_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #4A90E2;
-                        color: white;
-                        border: none;
-                        border-radius: 3px;
-                        font-size: 11px;
-                    }
-                    QPushButton:hover {
-                        background-color: #3A7BC8;
-                    }
-                    QPushButton:pressed {
-                        background-color: #2A66AE;
-                    }
-                """)
-                edit_btn.clicked.connect(lambda checked, r=row: self.edit_global_variable_by_row(r))
+                edit_btn = QPushButton()
+                edit_btn.setFixedSize(22, 22)
+                edit_btn.setIcon(self.get_icon("edit.png"))
+                edit_btn.setToolTip("编辑")
+                edit_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                # 使用默认参数方式解决lambda闭包问题
+                edit_btn.clicked.connect(lambda checked=False, r=row: self.edit_global_variable_by_row(r))
                 
                 # 删除按钮
-                delete_btn = QPushButton("删除")
-                delete_btn.setFixedSize(50, 25)
-                delete_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #E74C3C;
-                        color: white;
-                        border: none;
-                        border-radius: 3px;
-                        font-size: 11px;
-                    }
-                    QPushButton:hover {
-                        background-color: #C0392B;
-                    }
-                    QPushButton:pressed {
-                        background-color: #A9261A;
-                    }
-                """)
-                delete_btn.clicked.connect(lambda checked, r=row: self.delete_global_variable_by_row(r))
+                delete_btn = QPushButton()
+                delete_btn.setFixedSize(22, 22)
+                delete_btn.setIcon(self.get_icon("delete.png"))
+                delete_btn.setToolTip("删除")
+                delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                # 使用默认参数方式解决lambda闭包问题
+                delete_btn.clicked.connect(lambda checked=False, r=row: self.delete_global_variable_by_row(r))
                 
                 # 复制按钮
-                copy_btn = QPushButton("复制")
-                copy_btn.setFixedSize(50, 25)
-                copy_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #27AE60;
-                        color: white;
-                        border: none;
-                        border-radius: 3px;
-                        font-size: 11px;
-                    }
-                    QPushButton:hover {
-                        background-color: #219653;
-                    }
-                    QPushButton:pressed {
-                        background-color: #1B7D46;
-                    }
-                """)
-                copy_btn.clicked.connect(lambda checked, r=row: self.copy_global_variable_by_row(r))
+                copy_btn = QPushButton()
+                copy_btn.setFixedSize(22, 22)
+                copy_btn.setIcon(self.get_icon("copy.png"))
+                copy_btn.setToolTip("复制")
+                copy_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
+                # 使用默认参数方式解决lambda闭包问题
+                copy_btn.clicked.connect(lambda checked=False, r=row: self.copy_global_variable_by_row(r))
                 
                 operation_layout.addWidget(edit_btn)
                 operation_layout.addWidget(delete_btn)
                 operation_layout.addWidget(copy_btn)
                 
-                self.global_table.setCellWidget(row, 5, operation_widget)
-            # 移除自动调整列宽，保持固定列宽
+                # 添加到树形控件
+                self.global_tree.addTopLevelItem(item)
+                
+                # 设置操作按钮到第5列（必须在addTopLevelItem之后）
+                self.global_tree.setItemWidget(item, 5, operation_widget)
+                
+                # 确保按钮容器有正确的最小尺寸
+                operation_widget.setMinimumHeight(28)
+                operation_widget.setMinimumWidth(85)
+                
+                # 强制刷新视图以确保按钮正确显示
+                self.global_tree.viewport().update()
         except Exception as e:
             print(f"加载全局变量失败: {e}")
 

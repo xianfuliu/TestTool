@@ -31,7 +31,19 @@ class EmailConfigService:
                     
                     result = cursor.fetchone()
                     if result and result['config_value']:
-                        config_data = json.loads(result['config_value'])
+                        # 安全处理JSON数据编码
+                        config_json = result['config_value']
+                        if isinstance(config_json, bytes):
+                            # 如果是字节数据，尝试多种编码
+                            try:
+                                config_json = config_json.decode('utf-8')
+                            except UnicodeDecodeError:
+                                try:
+                                    config_json = config_json.decode('gbk')
+                                except UnicodeDecodeError:
+                                    config_json = config_json.decode('latin-1')
+                        
+                        config_data = json.loads(config_json)
                         return EmailConfig.from_dict(config_data)
                     
                     return None
@@ -106,32 +118,57 @@ class EmailConfigService:
                 """安全编码处理"""
                 if text is None:
                     return ""
-                try:
-                    # 先尝试直接使用
-                    return str(text)
-                except UnicodeDecodeError:
-                    # 如果出现解码错误，尝试使用不同的编码
+                
+                # 如果已经是字符串，直接返回
+                if isinstance(text, str):
+                    # 确保字符串是有效的UTF-8
                     try:
-                        return text.encode('latin-1').decode('utf-8')
-                    except:
+                        text.encode('utf-8')
+                        return text
+                    except UnicodeEncodeError:
+                        # 如果包含非UTF-8字符，尝试修复
+                        return text.encode('utf-8', errors='ignore').decode('utf-8')
+                
+                # 处理字节类型
+                if isinstance(text, bytes):
+                    # 尝试多种编码解码
+                    encodings = ['utf-8', 'gbk', 'gb2312', 'latin-1', 'iso-8859-1']
+                    for encoding in encodings:
                         try:
-                            return text.encode('utf-8', errors='ignore').decode('utf-8')
-                        except:
-                            return str(text).encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+                            decoded = text.decode(encoding)
+                            # 验证解码后的字符串可以重新编码为UTF-8
+                            decoded.encode('utf-8')
+                            return decoded
+                        except (UnicodeDecodeError, UnicodeEncodeError):
+                            continue
+                    
+                    # 如果所有编码都失败，使用忽略错误的方式
+                    return text.decode('utf-8', errors='ignore')
+                
+                # 处理其他类型
+                try:
+                    text_str = str(text)
+                    # 尝试编码为UTF-8验证
+                    text_str.encode('utf-8')
+                    return text_str
+                except UnicodeEncodeError:
+                    # 如果包含非UTF-8字符，尝试修复
+                    return str(text).encode('utf-8', errors='ignore').decode('utf-8')
             
             # 安全处理所有字符串
             smtp_server = safe_encode(config.smtp_server)
             smtp_username = safe_encode(config.smtp_username)
             smtp_password = safe_encode(config.smtp_password)
             
-            # 测试连接
+            # 测试连接 - 使用ASCII安全的本地主机名
+            # 创建SMTP连接，设置ASCII安全的本地主机名
             if config.use_tls:
-                server = smtplib.SMTP(smtp_server, config.smtp_port, timeout=10)
+                server = smtplib.SMTP(smtp_server, config.smtp_port, local_hostname='localhost', timeout=10)
                 server.starttls()
             else:
-                server = smtplib.SMTP(smtp_server, config.smtp_port, timeout=10)
+                server = smtplib.SMTP(smtp_server, config.smtp_port, local_hostname='localhost', timeout=10)
             
-            # 登录测试（确保编码正确）
+            # 登录测试
             server.login(smtp_username, smtp_password)
             
             # 关闭连接
@@ -142,14 +179,42 @@ class EmailConfigService:
             
         except UnicodeDecodeError as e:
             logger.error(f"邮件连接测试失败：编码错误 - {str(e)}")
+            # 安全记录调试信息，避免编码错误
+            try:
+                safe_server = smtp_server.encode('utf-8', 'ignore').decode('utf-8')
+                safe_username = smtp_username.encode('utf-8', 'ignore').decode('utf-8')
+                logger.debug(f"编码错误详情 - 服务器: {safe_server}, 用户名: {safe_username}")
+            except:
+                logger.debug("无法记录编码错误详情")
             return False
         except Exception as e:
             # 处理各种可能的编码错误
             error_msg = str(e)
             if "utf-8" in error_msg.lower() and "codec" in error_msg.lower():
                 logger.error(f"邮件连接测试失败：UTF-8编码错误 - {error_msg}")
+                # 安全记录调试信息
+                try:
+                    safe_server = smtp_server.encode('utf-8', 'ignore').decode('utf-8')
+                    safe_username = smtp_username.encode('utf-8', 'ignore').decode('utf-8')
+                    logger.debug(f"UTF-8编码错误详情 - 服务器: {safe_server}, 用户名: {safe_username}")
+                except:
+                    logger.debug("无法记录UTF-8编码错误详情")
             elif "ascii" in error_msg.lower() and "codec" in error_msg.lower():
                 logger.error(f"邮件连接测试失败：ASCII编码错误 - {error_msg}")
+                # 安全记录调试信息
+                try:
+                    safe_server = smtp_server.encode('utf-8', 'ignore').decode('utf-8')
+                    safe_username = smtp_username.encode('utf-8', 'ignore').decode('utf-8')
+                    logger.debug(f"ASCII编码错误详情 - 服务器: {safe_server}, 用户名: {safe_username}")
+                except:
+                    logger.debug("无法记录ASCII编码错误详情")
             else:
                 logger.error(f"邮件连接测试失败: {error_msg}")
+                # 安全记录调试信息
+                try:
+                    safe_server = smtp_server.encode('utf-8', 'ignore').decode('utf-8')
+                    safe_username = smtp_username.encode('utf-8', 'ignore').decode('utf-8')
+                    logger.debug(f"其他错误详情 - 服务器: {safe_server}, 用户名: {safe_username}")
+                except:
+                    logger.debug("无法记录其他错误详情")
             return False

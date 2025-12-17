@@ -113,7 +113,14 @@ class BusinessLicenseFiller:
                 "business_term_end_day": (953, 1049),
                 
                 # 经营范围
-                "business_scope": (472, 1105)
+                "business_scope": (472, 1105),
+
+                # 登记日期 - 年
+                "registration_year": (780, 1379),
+                # 登记日期 - 月
+                "registration_month": (898, 1379),
+                # 登记日期 - 日
+                "registration_day": (983, 1379)
             }
 
             # 绘制文本
@@ -201,6 +208,17 @@ class BusinessLicenseFiller:
                 for line in scope_lines:
                     draw.text((positions["business_scope"][0], scope_y), line, fill="black", font=scope_font)
                     scope_y += 30  # 增加行间距，避免文字重叠
+
+                # 10. 登记日期
+                if "registration_date" in business_data:
+                    registration_date = business_data["registration_date"]
+                    reg_year = registration_date[:4]
+                    reg_month = registration_date[4:6]
+                    reg_day = registration_date[6:8]
+                    
+                    draw.text(positions["registration_year"], reg_year, fill="black", font=main_font)
+                    draw.text(positions["registration_month"], reg_month, fill="black", font=main_font)
+                    draw.text(positions["registration_day"], reg_day, fill="black", font=main_font)
 
             except Exception as draw_error:
                 print(f"绘制文本时出错: {draw_error}")

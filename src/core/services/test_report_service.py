@@ -15,9 +15,13 @@ class TestReportService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # 基础查询 - 添加duration字段查询
+                    # 优化查询：只选择需要的字段，添加分页限制
                     sql = """
-                        SELECT r.*, c.name as case_name, s.name as scheduler_name, r.duration
+                        SELECT 
+                            r.id, r.scheduler_id, r.case_id, r.project_id, r.report_name,
+                            r.status, r.total_cases, r.passed_cases, r.failed_cases, r.error_cases,
+                            r.start_time, r.end_time, r.duration, r.log_path, r.created_at,
+                            c.name as case_name, s.name as scheduler_name
                         FROM test_reports r
                         LEFT JOIN test_cases c ON r.case_id = c.id
                         LEFT JOIN test_schedulers s ON r.scheduler_id = s.id
@@ -57,7 +61,10 @@ class TestReportService:
                             sql += " AND r.report_name LIKE %s"
                             params.append(f"%{filters['search']}%")
 
-                    sql += " ORDER BY r.created_at DESC"
+                    # 添加分页限制（默认显示最近200条记录）
+                    limit = filters.get('limit', 200) if filters else 200
+                    sql += " ORDER BY r.created_at DESC LIMIT %s"
+                    params.append(limit)
 
                     cursor.execute(sql, params)
                     reports = cursor.fetchall()
@@ -71,10 +78,148 @@ class TestReportService:
                                 except (ValueError, AttributeError):
                                     report[field] = None
 
-                    return reports
+                    # 将元组转换为列表，以匹配信号期望的类型
+                    return list(reports)
         except Exception as e:
             print(f"获取测试报告失败: {e}")
             return []
+
+    def get_reports_with_pagination(self, filters: Dict[str, Any] = None) -> Dict[str, Any]:
+        """根据筛选条件获取测试报告（带分页）"""
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 获取总记录数
+                    count_sql = "SELECT COUNT(*) as total FROM test_reports r WHERE 1=1"
+                    count_params = []
+                    
+                    # 添加筛选条件
+                    if filters:
+                        # 时间范围
+                        if 'start_date' in filters and 'end_date' in filters:
+                            count_sql += " AND r.created_at BETWEEN %s AND %s"
+                            count_params.extend([filters['start_date'], filters['end_date']])
+
+                        # 状态筛选
+                        if 'status' in filters:
+                            count_sql += " AND r.status = %s"
+                            count_params.append(filters['status'])
+
+                        # 用例筛选
+                        if 'case_id' in filters and filters['case_id']:
+                            count_sql += " AND r.case_id = %s"
+                            count_params.append(filters['case_id'])
+
+                        # 调度任务筛选
+                        if 'scheduler_id' in filters and filters['scheduler_id']:
+                            count_sql += " AND r.scheduler_id = %s"
+                            count_params.append(filters['scheduler_id'])
+
+                        # 项目筛选
+                        if 'project_id' in filters and filters['project_id']:
+                            count_sql += " AND r.project_id = %s"
+                            count_params.append(filters['project_id'])
+
+                        # 搜索
+                        if 'search' in filters:
+                            count_sql += " AND r.report_name LIKE %s"
+                            count_params.append(f"%{filters['search']}%")
+
+                    cursor.execute(count_sql, count_params)
+                    total_count = cursor.fetchone()['total']
+
+                    # 获取分页数据
+                    page = filters.get('page', 1) if filters else 1
+                    page_size = filters.get('page_size', 20) if filters else 20
+                    offset = (page - 1) * page_size
+                    
+                    sql = """
+                        SELECT 
+                            r.id, r.scheduler_id, r.case_id, r.project_id, r.report_name,
+                            r.status, r.total_cases, r.passed_cases, r.failed_cases, r.error_cases,
+                            r.start_time, r.end_time, r.duration, r.log_path, r.created_at,
+                            c.name as case_name, s.name as scheduler_name
+                        FROM test_reports r
+                        LEFT JOIN test_cases c ON r.case_id = c.id
+                        LEFT JOIN test_schedulers s ON r.scheduler_id = s.id
+                        WHERE 1=1
+                    """
+                    params = []
+
+                    # 添加筛选条件
+                    if filters:
+                        # 时间范围
+                        if 'start_date' in filters and 'end_date' in filters:
+                            sql += " AND r.created_at BETWEEN %s AND %s"
+                            params.extend([filters['start_date'], filters['end_date']])
+
+                        # 状态筛选
+                        if 'status' in filters:
+                            sql += " AND r.status = %s"
+                            params.append(filters['status'])
+
+                        # 用例筛选
+                        if 'case_id' in filters and filters['case_id']:
+                            sql += " AND r.case_id = %s"
+                            params.append(filters['case_id'])
+
+                        # 调度任务筛选
+                        if 'scheduler_id' in filters and filters['scheduler_id']:
+                            sql += " AND r.scheduler_id = %s"
+                            params.append(filters['scheduler_id'])
+
+                        # 项目筛选
+                        if 'project_id' in filters and filters['project_id']:
+                            sql += " AND r.project_id = %s"
+                            params.append(filters['project_id'])
+
+                        # 搜索
+                        if 'search' in filters:
+                            sql += " AND r.report_name LIKE %s"
+                            params.append(f"%{filters['search']}%")
+
+                    sql += " ORDER BY r.created_at DESC LIMIT %s OFFSET %s"
+                    params.extend([page_size, offset])
+
+                    cursor.execute(sql, params)
+                    reports = cursor.fetchall()
+
+                    # 处理时间字段
+                    for report in reports:
+                        for field in ['start_time', 'end_time', 'created_at']:
+                            if report.get(field) and isinstance(report[field], str):
+                                try:
+                                    report[field] = datetime.fromisoformat(report[field].replace('Z', '+00:00'))
+                                except (ValueError, AttributeError):
+                                    report[field] = None
+
+                    # 计算分页信息
+                    total_pages = (total_count + page_size - 1) // page_size
+                    
+                    return {
+                        'data': list(reports),
+                        'pagination': {
+                            'total': total_count,
+                            'page': page,
+                            'page_size': page_size,
+                            'total_pages': total_pages,
+                            'has_prev': page > 1,
+                            'has_next': page < total_pages
+                        }
+                    }
+        except Exception as e:
+            print(f"获取测试报告（分页）失败: {e}")
+            return {
+                'data': [],
+                'pagination': {
+                    'total': 0,
+                    'page': 1,
+                    'page_size': 20,
+                    'total_pages': 0,
+                    'has_prev': False,
+                    'has_next': False
+                }
+            }
 
     def get_report_with_details(self, report_id: int) -> Dict[str, Any]:
         """获取报告详情（包含关联信息）"""

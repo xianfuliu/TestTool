@@ -886,6 +886,7 @@ class UserInfoGenerator:
             "legal_representative": legal_representative,
             "registered_capital": registered_capital,
             "establishment_date": establishment_date,
+            "registration_date": establishment_date,  # 登记日期通常与成立日期相同
             "business_term": business_term,
             "business_scope": business_scope
         }

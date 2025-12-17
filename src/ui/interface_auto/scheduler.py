@@ -13,11 +13,11 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                              QFormLayout, QHeaderView, QCheckBox, QSpinBox,
                              QListWidget, QListWidgetItem, QToolBar, QAction,
                              QSizePolicy, QTabWidget, QRadioButton, QTreeWidget, 
-                             QTreeWidgetItem, QGroupBox)
+                             QTreeWidgetItem, QGroupBox, QComboBox)
 from src.ui.widgets.toast_tips import Toast
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QDateTime
-from PyQt5.QtGui import QIcon, QFont, QColor
+from PyQt5.QtGui import QIcon, QFont, QColor, QBrush
 from src.utils.css_utils import get_combobox_style
 from src.core.services.scheduler_service import UnifiedSchedulerService
 from src.core.services.test_case_service import TestCaseService
@@ -362,6 +362,93 @@ class SchedulerDialog(QDialog):
             logger.warning(f"图标文件不存在: {icon_path}")
             return QIcon()
 
+    def setup_next_runs_display(self, parent_layout):
+        """设置最近5次运行时间展示区域"""
+        # 创建最近5次运行时间展示区域
+        next_runs_widget = QWidget()
+        next_runs_layout = QVBoxLayout(next_runs_widget)
+        next_runs_layout.setSpacing(8)
+        
+        # 标题
+        next_runs_title = QLabel("最近5次运行时间:")
+        next_runs_title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+                margin-bottom: 5px;
+            }
+        """)
+        next_runs_layout.addWidget(next_runs_title)
+        
+        # 运行时间展示区域
+        self.next_runs_text = QTextEdit()
+        self.next_runs_text.setReadOnly(True)
+        self.next_runs_text.setFixedHeight(120)
+        self.next_runs_text.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background-color: #f8f9fa;
+                font-size: 12px;
+                font-family: Consolas, 'Courier New', monospace;
+                padding: 8px;
+                color: #555;
+            }
+        """)
+        self.next_runs_text.setPlaceholderText("点击'解析'按钮计算最近5次运行时间...")
+        next_runs_layout.addWidget(self.next_runs_text)
+        
+        parent_layout.addWidget(next_runs_widget)
+
+
+    def parse_cron_expression(self):
+        """解析Cron表达式并计算最近5次运行时间"""
+        try:
+            cron_expression = self.cron_edit.text().strip()
+            
+            if not cron_expression:
+                QMessageBox.warning(self, "警告", "请输入Cron表达式")
+                return
+            
+            # 校验Cron表达式格式
+            is_valid, error_msg = self.validate_cron_expression(cron_expression)
+            if not is_valid:
+                QMessageBox.warning(self, "Cron表达式错误", error_msg)
+                return
+            
+            # 导入Cron解析器
+            from src.utils.interface_utils.cron_parser import CronParser
+            
+            # 创建解析器实例
+            parser = CronParser()
+            
+            # 获取当前时间作为基准时间
+            base_time = datetime.now()
+            
+            # 计算最近5次运行时间
+            next_runs = []
+            current_time = base_time
+            
+            for i in range(5):
+                next_run = parser.get_next_run(cron_expression, current_time)
+                if next_run:
+                    next_runs.append(next_run)
+                    # 将下次执行时间作为新的基准时间，继续计算下一次
+                    current_time = next_run + timedelta(seconds=1)
+                else:
+                    break
+            
+            # 更新显示
+            self.update_next_runs_display(next_runs)
+            
+            # 只在解析失败时显示警告
+            if not next_runs:
+                QMessageBox.warning(self, "解析失败", "无法计算运行时间，请检查Cron表达式")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "解析错误", f"解析Cron表达式时发生错误：{str(e)}")
+
     def setup_schedule_tab(self, parent):
         layout = QVBoxLayout(parent)
         layout.setSpacing(20)  # 增加区域间距
@@ -413,7 +500,33 @@ class SchedulerDialog(QDialog):
         self.cron_edit.setFixedWidth(400)  # 设置固定宽度
         cron_input_layout.addWidget(self.cron_edit)
 
-        # 校验状态标签（放在输入框右侧，同一行）
+        # 解析按钮（放在输入框右侧）
+        self.parse_button = QPushButton("解析")
+        self.parse_button.setFixedSize(60, 32)
+        self.parse_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background-color: #106ebe;
+            }
+            QPushButton:pressed {
+                background-color: #005a9e;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        cron_input_layout.addWidget(self.parse_button)
+
+        # 校验状态标签（放在解析按钮右侧）
         self.cron_validation_label = QLabel()
         self.cron_validation_label.setStyleSheet("""
             QLabel {
@@ -433,11 +546,17 @@ class SchedulerDialog(QDialog):
 
         cron_layout.addLayout(cron_input_layout)
         
+        # 最近5次运行时间展示区域
+        self.setup_next_runs_display(cron_layout)
+        
         # 连接所有Tab选项的变化信号
         self.connect_tab_signals()
         
         # 连接cron表达式输入框的实时校验信号
         self.cron_edit.textChanged.connect(self.validate_cron_input)
+        
+        # 连接解析按钮的点击信号
+        self.parse_button.clicked.connect(self.parse_cron_expression)
 
         layout.addWidget(cron_widget)
         layout.addStretch()  # 添加弹性空间
@@ -1430,6 +1549,11 @@ class SchedulerDialog(QDialog):
         self.smtp_ssl_check.setChecked(email_config.get('use_ssl', True))
         self.sender_email_edit.setText(email_config.get('sender_email', ''))
         self.sender_password_edit.setText(email_config.get('sender_password', ''))
+        
+        # 设置邮件通知启用状态
+        # 直接使用数据库中保存的启用状态
+        email_enabled = email_config.get('enabled', True)  # 默认为启用状态
+        self.email_enabled_check.setChecked(email_enabled)
 
         notify_wechat = self.scheduler_data.get('notify_wechat', {})
         # 处理notify_wechat可能是列表的情况
@@ -1441,6 +1565,11 @@ class SchedulerDialog(QDialog):
                 notify_wechat = {}
         
         self.wechat_webhook_edit.setText(notify_wechat.get('webhook', ''))
+        
+        # 设置企业微信通知启用状态
+        # 直接使用数据库中保存的启用状态
+        wechat_enabled = notify_wechat.get('enabled', True)  # 默认为启用状态
+        self.wechat_enabled_check.setChecked(wechat_enabled)
 
     def validate_and_accept(self):
         """校验表单数据，通过后关闭对话框"""
@@ -1514,24 +1643,34 @@ class SchedulerDialog(QDialog):
             data['notify_emails'] = []
 
         # 邮件服务器配置
-        if (self.smtp_server_edit.text().strip() or 
-            self.sender_email_edit.text().strip() or 
-            self.sender_password_edit.text().strip()):
+        # 只要用户填写了任何邮件配置信息，就保存邮件配置
+        smtp_server = self.smtp_server_edit.text().strip()
+        sender_email = self.sender_email_edit.text().strip()
+        sender_password = self.sender_password_edit.text().strip()
+        
+        # 记录邮件通知启用状态
+        email_enabled = self.email_enabled_check.isChecked()
+        
+        if smtp_server or sender_email or sender_password or email_enabled:
             data['email_config'] = {
-                'smtp_server': self.smtp_server_edit.text().strip(),
+                'smtp_server': smtp_server,
                 'smtp_port': self.smtp_port_edit.value(),
                 'use_ssl': self.smtp_ssl_check.isChecked(),
-                'sender_email': self.sender_email_edit.text().strip(),
-                'sender_password': self.sender_password_edit.text().strip()
+                'sender_email': sender_email,
+                'sender_password': sender_password,
+                'enabled': email_enabled  # 记录邮件通知启用状态
             }
         else:
             data['email_config'] = {}
 
         wechat_webhook = self.wechat_webhook_edit.text().strip()
-        if wechat_webhook:
+        wechat_enabled = self.wechat_enabled_check.isChecked()
+        
+        # 只要用户填写了Webhook URL或启用了企业微信通知，就保存配置
+        if wechat_webhook or wechat_enabled:
             data['notify_wechat'] = {
                 'webhook': wechat_webhook,
-                'enabled': True
+                'enabled': wechat_enabled  # 记录企业微信通知启用状态
             }
         else:
             data['notify_wechat'] = {}
@@ -2534,6 +2673,20 @@ class SchedulerDialog(QDialog):
             return f"{self.year_start.value()}-{self.year_end.value()}"
         return ""
 
+    
+    def update_next_runs_display(self, next_runs):
+        """更新最近5次运行时间显示"""
+        if not next_runs:
+            self.next_runs_text.setPlainText("无法计算运行时间")
+            return
+        
+        # 格式化时间显示
+        time_text = ""
+        for i, run_time in enumerate(next_runs, 1):
+            time_text += f"{run_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        
+        self.next_runs_text.setPlainText(time_text.strip())
+
 
 class SchedulerManager(QWidget):
     """调度管理页面"""
@@ -2550,6 +2703,13 @@ class SchedulerManager(QWidget):
         self.timer.start(60000)  # 每分钟更新一次
         self.execution_status = {}  # 执行状态监控
         self.current_business_id = None  # 当前选中的业务分组ID
+        
+        # 分页相关变量初始化
+        self.current_page = 1
+        self.current_page_size = 20
+        self.total_pages = 0
+        self.total_records = 0
+        
         self.init_ui()
         # 延迟加载数据，避免启动时数据库连接失败导致弹窗
         QTimer.singleShot(100, self.delayed_load_data)
@@ -2590,76 +2750,96 @@ class SchedulerManager(QWidget):
 
         main_layout.addWidget(toolbar)
 
-        # 调度列表表格
-        self.table_widget = QTableWidget()
-        self.table_widget.setColumnCount(9)  # 增加序号列，调整为9列
-        self.table_widget.setHorizontalHeaderLabels([
-            "序号", "调度名称", "状态", "Cron表达式", "用例数量", "上次执行", "下次执行", "创建时间", "操作"
+        # 调度列表树形控件
+        self.tree_widget = QTreeWidget()
+        self.tree_widget.setColumnCount(10)
+        self.tree_widget.setHeaderLabels([
+            "序号", "调度名称", "状态", "Cron表达式", "用例数量", "上次执行", "下次执行", "创建时间", "更新时间", "操作"
         ])
         
-        # 设置固定列宽 - 增加关键列的宽度
-        self.table_widget.setColumnWidth(0, 80)     # 序号（自定义序号列）
-        self.table_widget.setColumnWidth(1, 370)    # 调度名称（增加宽度）
-        self.table_widget.setColumnWidth(2, 100)     # 状态
-        self.table_widget.setColumnWidth(3, 270)    # Cron表达式（增加宽度）
-        self.table_widget.setColumnWidth(4, 100)     # 用例数量
-        self.table_widget.setColumnWidth(5, 270)     # 上次执行
-        self.table_widget.setColumnWidth(6, 270)    # 下次执行
-        self.table_widget.setColumnWidth(7, 270)    # 创建时间
-        self.table_widget.setColumnWidth(8, 250)    # 操作栏（调整为图标按钮宽度）
+        # 设置固定列宽 - 参考测试报告列表设计
+        self.tree_widget.setColumnWidth(0, 80)     # 序号
+        self.tree_widget.setColumnWidth(1, 450)    # 调度名称
+        self.tree_widget.setColumnWidth(2, 80)    # 状态
+        self.tree_widget.setColumnWidth(3, 200)    # Cron表达式
+        self.tree_widget.setColumnWidth(4, 100)    # 用例数量
+        self.tree_widget.setColumnWidth(5, 250)    # 上次执行
+        self.tree_widget.setColumnWidth(6, 250)    # 下次执行
+        self.tree_widget.setColumnWidth(7, 250)    # 创建时间
+        self.tree_widget.setColumnWidth(8, 250)    # 更新时间
         
-        # 设置列宽调整模式为固定
-        header = self.table_widget.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
-        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        # 设置列宽调整模式 - 操作栏自适应拉伸
+        header = self.tree_widget.header()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # 其他列固定宽度
+        header.setSectionResizeMode(9, QHeaderView.Stretch)  # 操作栏自适应拉伸
+        header.setStretchLastSection(True)  # 最后一列自动拉伸
+        header.setSectionsMovable(False)  # 禁止表头拖拽
+        header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
         
-        # 设置表格不可编辑
-        self.table_widget.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
+        # 设置树形控件属性
+        self.tree_widget.setSelectionBehavior(QTreeWidget.SelectRows)
+        self.tree_widget.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        self.tree_widget.setRootIsDecorated(False)  # 不显示展开/折叠图标列
+        self.tree_widget.setAlternatingRowColors(True)
         
-        # 参考测试报告列表的表格样式美化
-        self.table_widget.setAlternatingRowColors(True)
-        self.table_widget.verticalHeader().setVisible(False)  # 隐藏垂直序号列
+        # 设置所有列文本居中
+        for i in range(self.tree_widget.columnCount()):
+            self.tree_widget.headerItem().setTextAlignment(i, Qt.AlignCenter)
         
-        # 完全去除表格内部边框线
-        self.table_widget.setShowGrid(False)
-        
-        # 彻底禁用hover效果 - 使用更有效的方法
-        self.table_widget.setMouseTracking(False)
-        
-        # 设置选择模式，避免单元格级别的hover
-        self.table_widget.setSelectionMode(QTableWidget.SingleSelection)
-        
-        self.table_widget.setStyleSheet("""
-            QTableWidget {
+        # 参考测试报告列表的树形控件样式美化
+        self.tree_widget.setStyleSheet("""
+            QTreeWidget {
                 background-color: #f8f9fa;
                 alternate-background-color: #ffffff;
+                gridline-color: #e9ecef;
                 border: 1px solid #dee2e6;
                 border-radius: 4px;
                 outline: 0;
-                gridline-color: transparent;
             }
-            QTableWidget::item {
+            QTreeWidget::item {
                 padding: 12px 8px;
+                border-bottom: 1px solid #e9ecef;
                 text-align: center;
                 height: 32px;
-                border: none;
             }
-            QTableWidget::item:selected {
+            QTreeWidget::item:selected {
                 background-color: #e3f2fd;
                 color: #1976d2;
                 font-weight: bold;
             }
-            QTableWidget::item:selected:!active {
+            QTreeWidget::item:selected:!active {
                 background-color: #e3f2fd;
                 color: #1976d2;
                 font-weight: bold;
             }
-            QTableWidget::item:hover {
-                background-color: transparent;
+            QTreeWidget::item:hover {
+                background-color: #f8f9fa;
             }
-            QTableWidget::item:!selected:hover {
-                background-color: transparent;
+            QTreeWidget::item:has-children {
+                background-color: #f1f3f4;
+                font-weight: bold;
+            }
+            QTreeWidget::item:has-children:hover {
+                background-color: #e8eaed;
+            }
+            QTreeWidget::branch:has-siblings:!adjoins-item {
+                border-image: url(vline.png) 0;
+            }
+            QTreeWidget::branch:has-siblings:adjoins-item {
+                border-image: url(branch-more.png) 0;
+            }
+            QTreeWidget::branch:!has-children:!has-siblings:adjoins-item {
+                border-image: url(branch-end.png) 0;
+            }
+            QTreeWidget::branch:has-children:!has-siblings:closed,
+            QTreeWidget::branch:closed:has-children:has-siblings {
+                border-image: none;
+                image: url(branch-closed.png);
+            }
+            QTreeWidget::branch:open:has-children:!has-siblings,
+            QTreeWidget::branch:open:has-children:has-siblings {
+                border-image: none;
+                image: url(branch-open.png);
             }
             QHeaderView::section {
                 background-color: #f8f9fa;
@@ -2672,39 +2852,125 @@ class SchedulerManager(QWidget):
                 min-height: 25px;
                 text-align: center;
             }
-            /* 自定义序号列样式 */
-            QTableWidget QTableWidget::item:first-column {
-                background-color: #f8f9fa;
-                color: #495057;
-                font-weight: 600;
+            QHeaderView::section:hover {
+                background-color: #e9ecef;
             }
         """)
-        self.table_widget.setMinimumHeight(400)  # 增加表格高度
-        self.table_widget.verticalHeader().setDefaultSectionSize(60)  # 设置行高
+        self.tree_widget.setMinimumHeight(400)  # 增加控件高度
 
-        # 移除重复的表格设置代码
-        # 移除双击编辑功能
-        # self.table_widget.doubleClicked.connect(self.edit_selected_scheduler)
+        main_layout.addWidget(self.tree_widget)
 
-        main_layout.addWidget(self.table_widget)
-
-        # 状态栏
-        status_layout = QHBoxLayout()
-        self.status_label = QLabel("就绪")
-        self.status_label.setStyleSheet("""
-            QLabel {
-                background-color: #f0f0f0;
-                color: #333333;
-                padding: 4px 8px;
-                border: 1px solid #d0d0d0;
-                border-radius: 3px;
+        # 分页控件
+        self.pagination_widget = QWidget()
+        pagination_layout = QHBoxLayout(self.pagination_widget)
+        pagination_layout.setContentsMargins(10, 5, 10, 5)
+        pagination_layout.setSpacing(10)
+        
+        # 分页信息标签
+        self.pagination_label = QLabel("共 0 条记录")
+        self.pagination_label.setStyleSheet("color: #6c757d; font-size: 12px;")
+        pagination_layout.addWidget(self.pagination_label)
+        
+        pagination_layout.addStretch()
+        
+        # 首页按钮
+        self.first_page_btn = QPushButton("« 首页")
+        self.first_page_btn.setFixedSize(70, 32)
+        self.first_page_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8f9fa, stop:1 #e9ecef);
+                border-radius: 6px;
+                padding: 6px 8px;
                 font-size: 12px;
+                font-weight: 500;
+                color: #495057;
+                margin: 1px;
+            }
+            QPushButton:hover:enabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #007bff, stop:1 #0056b3);
+                color: white;
+                border: 1px solid #007bff;
+            }
+            QPushButton:pressed:enabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0056b3, stop:1 #004085);
+                border: 1px solid #004085;
+            }
+            QPushButton:disabled {
+                background: #f8f9fa;
+                color: #adb5bd;
             }
         """)
-        status_layout.addWidget(self.status_label)
-        status_layout.addStretch()
+        pagination_layout.addWidget(self.first_page_btn)
+        
+        # 上一页按钮
+        self.prev_page_btn = QPushButton("‹ 上一页")
+        self.prev_page_btn.setFixedSize(70, 32)
+        self.prev_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        pagination_layout.addWidget(self.prev_page_btn)
+        
+        # 页码输入框
+        self.page_input = QLineEdit()
+        self.page_input.setFixedSize(50, 32)
+        self.page_input.setAlignment(Qt.AlignCenter)
+        self.page_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                padding: 6px;
+                font-size: 12px;
+                background-color: #ffffff;
+                font-weight: 500;
+                margin: 1px;
+            }
+            QLineEdit:focus {
+                border-color: #007bff;
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+            }
+            QLineEdit:hover:enabled {
+                border-color: #adb5bd;
+            }
+        """)
+        pagination_layout.addWidget(self.page_input)
+        
+        # 总页数标签
+        self.total_pages_label = QLabel("/ 0")
+        self.total_pages_label.setStyleSheet("color: #6c757d; font-size: 12px; font-weight: 500; margin: 0 4px;")
+        pagination_layout.addWidget(self.total_pages_label)
+        
+        # 下一页按钮
+        self.next_page_btn = QPushButton("下一页 ›")
+        self.next_page_btn.setFixedSize(70, 32)
+        self.next_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        pagination_layout.addWidget(self.next_page_btn)
+        
+        # 末页按钮
+        self.last_page_btn = QPushButton("末页 »")
+        self.last_page_btn.setFixedSize(70, 32)
+        self.last_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        pagination_layout.addWidget(self.last_page_btn)
+        
+        # 每页显示数量选择
+        self.page_size_combo = QComboBox()
+        self.page_size_combo.setFixedSize(85, 32)
+        self.page_size_combo.addItems(["10", "20", "50", "100"])
+        self.page_size_combo.setCurrentText("20")
+        self.page_size_combo.setStyleSheet(get_combobox_style())
+        pagination_layout.addWidget(self.page_size_combo)
+        
+        main_layout.addWidget(self.pagination_widget)
 
-        main_layout.addLayout(status_layout)
+        # 连接分页控件信号
+        self.first_page_btn.clicked.connect(self.go_to_first_page)
+        self.prev_page_btn.clicked.connect(self.go_to_prev_page)
+        self.next_page_btn.clicked.connect(self.go_to_next_page)
+        self.last_page_btn.clicked.connect(self.go_to_last_page)
+        self.page_input.returnPressed.connect(self.go_to_specific_page)
+        self.page_size_combo.currentTextChanged.connect(self.on_page_size_changed)
 
     def delayed_load_data(self):
         """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
@@ -2766,83 +3032,119 @@ class SchedulerManager(QWidget):
         self.load_schedulers(project_id)
 
     def load_schedulers(self, project_id=None):
-        """加载调度列表，支持按项目筛选"""
+        """加载调度列表，支持按项目筛选和分页"""
         # 检查服务对象是否已初始化
         if self.scheduler_service is None:
             print("调度服务未初始化，跳过加载调度列表")
-            self.status_label.setText("调度服务未就绪")
             return
             
         try:
-            schedulers = self.scheduler_service.get_all_schedulers()
+            # 使用分页查询获取调度数据
+            schedulers, total_records = self.scheduler_service.get_schedulers_with_pagination(
+                page=self.current_page,
+                page_size=self.current_page_size,
+                project_id=project_id
+            )
             
-            # 如果指定了项目ID，进行筛选
-            if project_id is not None:
-                schedulers = [s for s in schedulers if s.get('project_id') == project_id]
+            # 更新分页信息
+            self.total_records = total_records
+            self.total_pages = (total_records + self.current_page_size - 1) // self.current_page_size
             
-            self.table_widget.setRowCount(len(schedulers))
+            # 清空树形控件
+            self.tree_widget.clear()
+            
+            if not schedulers:
+                # 创建提示节点 - 合并第一行所有单元格并居中显示
+                empty_item = QTreeWidgetItem(self.tree_widget)
+                empty_item.setText(0, "暂无调度任务")
+                
+                # 合并所有列（从第0列到第8列）
+                self.tree_widget.setFirstItemColumnSpanned(empty_item, True)
+                
+                # 设置文本居中对齐（水平和垂直都居中）
+                empty_item.setTextAlignment(0, Qt.AlignCenter | Qt.AlignVCenter)
+                
+                # 设置特殊样式
+                empty_item.setBackground(0, QBrush(QColor("#f8f9fa")))
+                empty_item.setForeground(0, QBrush(QColor("#6c757d")))
+                
+                # 设置更大的字体和行高
+                font = QFont()
+                font.setPointSize(12)
+                font.setBold(True)
+                empty_item.setFont(0, font)
+                
+                # 设置更大的行高
+                empty_item.setSizeHint(0, QSize(0, 60))
+                
+                # 更新分页信息显示
+                self.update_pagination_info()
+                return
 
-            for row, scheduler in enumerate(schedulers):
-                # 序号列（第0列）- 自定义序号
-                index_item = QTableWidgetItem(str(row + 1))
-                index_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 0, index_item)
-
-                # 调度名称（原第0列，现在第1列）
-                name_item = QTableWidgetItem(scheduler['name'])
-                name_item.setData(Qt.UserRole, scheduler['id'])
-                name_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 1, name_item)
-
-                # 状态（原第1列，现在第2列）
-                status_item = QTableWidgetItem("启用" if scheduler['enabled'] else "禁用")
-                status_item.setForeground(QColor("green") if scheduler['enabled'] else QColor("red"))
-                status_item.setTextAlignment(Qt.AlignCenter)
-                # 设置状态项为不可选中，避免选中时颜色被覆盖
-                status_item.setFlags(status_item.flags() & ~Qt.ItemIsSelectable)
-                self.table_widget.setItem(row, 2, status_item)
-
-                # Cron表达式（原第2列，现在第3列）
-                cron_item = QTableWidgetItem(scheduler['cron_expression'])
-                cron_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 3, cron_item)
-
-                # 用例数量（原第3列，现在第4列）
+            # 创建树形结构
+            for i, scheduler in enumerate(schedulers, start=1):
+                item = QTreeWidgetItem(self.tree_widget)
+                
+                # 设置所有列文本居中对齐
+                for j in range(10):
+                    item.setTextAlignment(j, Qt.AlignCenter)
+                
+                # 序号（计算当前页的序号）
+                item_index = (self.current_page - 1) * self.current_page_size + i
+                item.setText(0, str(item_index))
+                
+                # 调度名称
+                item.setText(1, scheduler['name'])
+                item.setData(1, Qt.UserRole, scheduler['id'])  # 存储ID到第一列
+                
+                # 状态
+                status_text = "启用" if scheduler['enabled'] else "禁用"
+                item.setText(2, status_text)
+                # 设置状态颜色
+                if scheduler['enabled']:
+                    item.setForeground(2, QBrush(QColor("green")))
+                else:
+                    item.setForeground(2, QBrush(QColor("red")))
+                
+                # Cron表达式
+                item.setText(3, scheduler['cron_expression'])
+                
+                # 用例数量
                 case_ids = scheduler.get('case_ids', [])
                 case_count = len(case_ids) if isinstance(case_ids, list) else 0
-                case_item = QTableWidgetItem(str(case_count))
-                case_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 4, case_item)
-
-                # 上次执行时间（原第4列，现在第5列）
+                item.setText(4, str(case_count))
+                
+                # 上次执行时间
                 last_run = scheduler.get('last_run_at')
                 last_run_text = last_run.strftime('%Y-%m-%d %H:%M:%S') if last_run else "从未执行"
-                last_run_item = QTableWidgetItem(last_run_text)
-                last_run_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 5, last_run_item)
-
-                # 下次执行时间（原第5列，现在第6列）
+                item.setText(5, last_run_text)
+                
+                # 下次执行时间
                 next_run = scheduler.get('next_run_at')
                 next_run_text = next_run.strftime('%Y-%m-%d %H:%M:%S') if next_run else "未计算"
-                next_run_item = QTableWidgetItem(next_run_text)
-                next_run_item.setTextAlignment(Qt.AlignCenter)
+                item.setText(6, next_run_text)
                 if next_run and next_run < datetime.now():
-                    next_run_item.setForeground(QColor("orange"))
-                self.table_widget.setItem(row, 6, next_run_item)
-
-                # 创建时间（原第6列，现在第7列）
+                    item.setForeground(6, QBrush(QColor("orange")))
+                
+                # 创建时间
                 created_at = scheduler.get('created_at')
                 created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
-                created_item = QTableWidgetItem(created_text)
-                created_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 7, created_item)
-
-                # 操作栏（原第7列，现在第8列）
+                item.setText(7, created_text)
+                
+                # 更新时间
+                updated_at = scheduler.get('updated_at')
+                updated_text = updated_at.strftime('%Y-%m-%d %H:%M:%S') if updated_at else ""
+                item.setText(8, updated_text)
+                
+                # 操作栏 - 设置为空，实际按钮通过setItemWidget添加
+                item.setText(9, "")
+                
+                # 创建操作按钮容器
                 operation_widget = QWidget()
                 operation_layout = QHBoxLayout(operation_widget)
                 operation_layout.setContentsMargins(5, 2, 5, 2)
                 operation_layout.setSpacing(3)
-                operation_layout.setAlignment(Qt.AlignCenter)  # 设置布局居中对齐
+                operation_layout.setAlignment(Qt.AlignCenter)
                 
                 # 执行按钮
                 run_btn = QPushButton()
@@ -2863,7 +3165,6 @@ class SchedulerManager(QWidget):
                 # 启用/禁用按钮
                 toggle_btn = QPushButton()
                 toggle_btn.setFixedSize(25, 25)
-                # 根据调度状态设置不同图标
                 if scheduler['enabled']:
                     toggle_btn.setIcon(self.get_icon("stop.png"))
                     toggle_btn.setToolTip("禁用")
@@ -2889,7 +3190,7 @@ class SchedulerManager(QWidget):
                 delete_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding: 0px; } QPushButton:hover { background: #e0e0e0; }")
                 delete_btn.clicked.connect(lambda checked, sched_id=scheduler['id']: self.delete_scheduler_by_id(sched_id))
                 
-                # 详情按钮 - 查看执行记录日志
+                # 详情按钮
                 detail_btn = QPushButton()
                 detail_btn.setFixedSize(25, 25)
                 detail_btn.setIcon(self.get_icon("detail.png"))
@@ -2904,9 +3205,11 @@ class SchedulerManager(QWidget):
                 operation_layout.addWidget(delete_btn)
                 operation_layout.addWidget(detail_btn)
                 
-                self.table_widget.setCellWidget(row, 8, operation_widget)
+                # 设置操作按钮到第9列
+                self.tree_widget.setItemWidget(item, 9, operation_widget)
 
-            self.status_label.setText(f"共 {len(schedulers)} 个调度任务")
+            # 更新分页信息
+            self.update_pagination_info()
             
             # 加载完成后重新计算下次执行时间
             self.update_next_run_times()
@@ -2914,7 +3217,10 @@ class SchedulerManager(QWidget):
         except Exception as e:
             # 静默处理，不显示弹窗
             print(f"加载调度列表失败: {str(e)}")
-            self.status_label.setText("加载失败")
+            # 重置分页信息
+            self.total_records = 0
+            self.total_pages = 0
+            self.update_pagination_info()
 
     def start_service(self):
         """启动调度服务"""
@@ -2947,14 +3253,11 @@ class SchedulerManager(QWidget):
             'timestamp': datetime.now()
         }
         
-        # 更新状态栏显示
-        status_text = f"调度 '{scheduler_name}' 执行{'成功' if success else '失败'}: {message}"
-        self.status_label.setText(status_text)
-        
         # 刷新表格显示
         self.update_scheduler_status(scheduler_id)
         
         # 显示Toast提示
+        status_text = f"调度 '{scheduler_name}' 执行{'成功' if success else '失败'}: {message}"
         if success:
             Toast.success(self, status_text)
         else:
@@ -2973,48 +3276,43 @@ class SchedulerManager(QWidget):
             'timestamp': datetime.now()
         }
         
-        # 更新状态栏显示
-        status_text = f"调度 '{scheduler_name}' 执行错误: {error_msg}"
-        self.status_label.setText(status_text)
-        
         # 刷新表格显示
         self.update_scheduler_status(scheduler_id)
         
         # 显示Toast提示
+        status_text = f"调度 '{scheduler_name}' 执行错误: {error_msg}"
         Toast.error(self, status_text)
     
     def update_scheduler_status(self, scheduler_id):
         """更新调度状态显示"""
-        for row in range(self.table_widget.rowCount()):
-            item = self.table_widget.item(row, 1)  # 调度名称列
-            if item and item.data(Qt.UserRole) == scheduler_id:
+        for i in range(self.tree_widget.topLevelItemCount()):
+            item = self.tree_widget.topLevelItem(i)
+            if item and item.data(1, Qt.UserRole) == scheduler_id:  # 调度名称列存储ID
                 # 更新状态列
-                status_item = self.table_widget.item(row, 2)
-                if status_item:
-                    if scheduler_id in self.execution_status:
-                        status_info = self.execution_status[scheduler_id]
-                        if status_info['status'] == 'executing':
-                            status_item.setText('执行中')
-                            status_item.setBackground(QColor('#fff3cd'))  # 黄色背景
-                        elif status_info['status'] == 'completed':
-                            if status_info['success']:
-                                status_item.setText('执行成功')
-                                status_item.setBackground(QColor('#d4edda'))  # 绿色背景
-                            else:
-                                status_item.setText('执行失败')
-                                status_item.setBackground(QColor('#f8d7da'))  # 红色背景
-                        elif status_info['status'] == 'error':
-                            status_item.setText('执行错误')
-                            status_item.setBackground(QColor('#f8d7da'))  # 红色背景
-                    else:
-                        # 检查调度是否启用
-                        scheduler_data = self.get_scheduler_data_by_id(scheduler_id)
-                        if scheduler_data and scheduler_data.get('enabled', False):
-                            status_item.setText('已启用')
-                            status_item.setBackground(QColor('#d4edda'))  # 绿色背景
+                if scheduler_id in self.execution_status:
+                    status_info = self.execution_status[scheduler_id]
+                    if status_info['status'] == 'executing':
+                        item.setText(2, '执行中')
+                        item.setBackground(2, QBrush(QColor('#fff3cd')))  # 黄色背景
+                    elif status_info['status'] == 'completed':
+                        if status_info['success']:
+                            item.setText(2, '执行成功')
+                            item.setBackground(2, QBrush(QColor('#d4edda')))  # 绿色背景
                         else:
-                            status_item.setText('已禁用')
-                            status_item.setBackground(QColor('#f8d7da'))  # 红色背景
+                            item.setText(2, '执行失败')
+                            item.setBackground(2, QBrush(QColor('#f8d7da')))  # 红色背景
+                    elif status_info['status'] == 'error':
+                        item.setText(2, '执行错误')
+                        item.setBackground(2, QBrush(QColor('#f8d7da')))  # 红色背景
+                else:
+                    # 检查调度是否启用
+                    scheduler_data = self.get_scheduler_data_by_id(scheduler_id)
+                    if scheduler_data and scheduler_data.get('enabled', False):
+                        item.setText(2, '已启用')
+                        item.setBackground(2, QBrush(QColor('#d4edda')))  # 绿色背景
+                    else:
+                        item.setText(2, '已禁用')
+                        item.setBackground(2, QBrush(QColor('#f8d7da')))  # 红色背景
                 break
 
     def closeEvent(self, event):
@@ -3064,35 +3362,32 @@ class SchedulerManager(QWidget):
         from src.utils.interface_utils.cron_parser import CronParser
         parser = CronParser()
         
-        for row in range(self.table_widget.rowCount()):
-            # 获取调度名称和Cron表达式
-            name_item = self.table_widget.item(row, 1)
-            cron_item = self.table_widget.item(row, 3)
-            next_run_item = self.table_widget.item(row, 6)
-            
-            if name_item and cron_item and next_run_item:
-                cron_expr = cron_item.text()
+        for i in range(self.tree_widget.topLevelItemCount()):
+            item = self.tree_widget.topLevelItem(i)
+            if item:
+                # 获取Cron表达式
+                cron_expr = item.text(3)  # 第3列是Cron表达式
                 
                 # 重新计算下次执行时间
                 next_run = parser.get_next_run(cron_expr)
                 if next_run:
                     next_run_text = next_run.strftime('%Y-%m-%d %H:%M:%S')
-                    next_run_item.setText(next_run_text)
+                    item.setText(6, next_run_text)  # 第6列是下次执行时间
                     
                     # 更新颜色：如果下次执行时间已过，显示橙色
                     if next_run < datetime.now():
-                        next_run_item.setForeground(QColor("orange"))
+                        item.setForeground(6, QBrush(QColor("orange")))
                     else:
-                        next_run_item.setForeground(QColor("black"))
+                        item.setForeground(6, QBrush(QColor("black")))
                 else:
-                    next_run_item.setText("未计算")
-                    next_run_item.setForeground(QColor("black"))
+                    item.setText(6, "未计算")
+                    item.setForeground(6, QBrush(QColor("black")))
 
     def get_selected_scheduler_id(self):
         """获取选中的调度ID"""
-        selected_items = self.table_widget.selectedItems()
+        selected_items = self.tree_widget.selectedItems()
         if selected_items:
-            return selected_items[0].data(Qt.UserRole)
+            return selected_items[0].data(1, Qt.UserRole)  # 第1列存储ID
         return None
 
     def get_selected_scheduler_data(self):
@@ -3275,10 +3570,7 @@ class SchedulerManager(QWidget):
                 # 通过统一调度服务执行调度
                 success = self.scheduler_service.execute_scheduler(scheduler_data['id'])
                 
-                if success:
-                    # 显示异步执行提示
-                    Toast.info(self, f"调度 '{scheduler_data['name']}' 已提交执行")
-                    
+                if success:                    
                     # 刷新调度列表以更新状态
                     self.load_schedulers(self.project_combo.currentData())
                 else:
@@ -3666,3 +3958,69 @@ class SchedulerManager(QWidget):
             if "utf-8" in error_msg and "codec" in error_msg:
                 error_msg = "邮件连接测试失败：编码错误，请检查输入内容是否包含特殊字符"
             QMessageBox.critical(self, "错误", f"测试邮件连接时发生错误：{error_msg}")
+
+    def update_pagination_info(self):
+        """更新分页信息显示"""
+        if self.total_records == 0:
+            self.pagination_label.setText("共 0 条记录")
+            self.page_input.setText("1")
+            self.total_pages_label.setText("共 0 页")
+        else:
+            self.pagination_label.setText(f"共 {self.total_records} 条记录")
+            self.page_input.setText(str(self.current_page))
+            self.total_pages_label.setText(f"共 {self.total_pages} 页")
+        
+        # 更新按钮状态
+        self.first_page_btn.setEnabled(self.current_page > 1)
+        self.prev_page_btn.setEnabled(self.current_page > 1)
+        self.next_page_btn.setEnabled(self.current_page < self.total_pages)
+        self.last_page_btn.setEnabled(self.current_page < self.total_pages)
+
+    def go_to_first_page(self):
+        """跳转到第一页"""
+        if self.current_page != 1:
+            self.current_page = 1
+            self.load_schedulers()
+
+    def go_to_prev_page(self):
+        """跳转到上一页"""
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.load_schedulers()
+
+    def go_to_next_page(self):
+        """跳转到下一页"""
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            self.load_schedulers()
+
+    def go_to_last_page(self):
+        """跳转到最后一页"""
+        if self.current_page != self.total_pages:
+            self.current_page = self.total_pages
+            self.load_schedulers()
+
+    def go_to_specific_page(self):
+        """跳转到指定页码"""
+        try:
+            page = int(self.page_input.text().strip())
+            if 1 <= page <= self.total_pages:
+                if page != self.current_page:
+                    self.current_page = page
+                    self.load_schedulers()
+            else:
+                QMessageBox.warning(self, "警告", f"页码必须在 1 到 {self.total_pages} 之间")
+        except ValueError:
+            QMessageBox.warning(self, "警告", "请输入有效的页码")
+
+    def on_page_size_changed(self, page_size_text):
+        """页面大小改变事件"""
+        try:
+            new_page_size = int(page_size_text)
+            if new_page_size != self.current_page_size:
+                self.current_page_size = new_page_size
+                self.current_page = 1  # 重置到第一页
+                self.load_schedulers()
+        except ValueError:
+            # 忽略无效输入
+            pass

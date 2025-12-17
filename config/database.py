@@ -218,6 +218,7 @@ DB_TABLES = {
             case_ids JSON COMMENT '测试用例ID列表',
             notify_emails JSON COMMENT '邮件通知列表',
             notify_wechat JSON COMMENT '微信通知配置',
+            email_config JSON COMMENT '邮件服务器配置',
             last_run_at TIMESTAMP NULL,
             next_run_at TIMESTAMP NULL,
             project_id INT,
@@ -256,7 +257,14 @@ DB_TABLES = {
             INDEX idx_case_id (case_id),
             INDEX idx_project_id (project_id),
             INDEX idx_status (status),
-            INDEX idx_created_at (created_at)
+            INDEX idx_created_at_desc (created_at DESC),
+            INDEX idx_status_created_at (status, created_at DESC),
+            INDEX idx_project_id_created_at (project_id, created_at DESC),
+            INDEX idx_scheduler_id_created_at (scheduler_id, created_at DESC),
+            INDEX idx_case_id_created_at (case_id, created_at DESC),
+            INDEX idx_report_name (report_name),
+            INDEX idx_start_time (start_time DESC),
+            INDEX idx_end_time (end_time DESC)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 

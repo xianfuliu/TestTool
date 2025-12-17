@@ -3,18 +3,17 @@ import json
 import sys
 import random
 import string
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
-                             QTableWidgetItem, QPushButton, QLabel, QLineEdit,
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
                              QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,
-                             QHeaderView, QCheckBox, QSpinBox,
-                             QToolBar, QAction, QScrollArea, QSizePolicy)
+                             QGroupBox, QFormLayout,QCheckBox, QSpinBox,
+                             QScrollArea, QSizePolicy,QTreeWidget, QTreeWidgetItem, QComboBox)
 from src.ui.widgets.toast_tips import Toast
-from PyQt5.QtCore import Qt, pyqtSignal, QSize,QThread, pyqtSignal as Signal
+from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
 from PyQt5.QtGui import QIcon, QColor, QTextCursor
 from src.utils.interface_utils.database_utils import DatabaseUtils
 from src.utils.interface_utils.script_engine import ScriptEngine
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
+from src.utils.css_utils import get_combobox_style
 
 
 class ToolTestThread(QThread):
@@ -741,6 +740,13 @@ class GlobalToolsManager(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.tool_service = None  # 延迟初始化，避免启动时数据库连接检查
+        
+        # 分页相关变量初始化
+        self.current_page = 1
+        self.current_page_size = 20
+        self.total_pages = 0
+        self.total_records = 0
+        
         self.init_ui()
         # 延迟加载数据，避免启动时弹窗
         from PyQt5.QtCore import QTimer
@@ -776,39 +782,39 @@ class GlobalToolsManager(QWidget):
         # 直接添加按钮到主布局
         main_layout.addWidget(self.add_button)
 
-        # 工具列表表格 - 完全匹配测试报告tab中tree_widget的配置和样式
-        self.table_widget = QTableWidget()
-        self.table_widget.setColumnCount(7)  # 新增序号栏和操作栏
-        self.table_widget.setHorizontalHeaderLabels([
+        # 工具列表 - 使用与定时调度tab中调度任务列表相同的QTreeWidget组件和样式
+        self.tree_widget = QTreeWidget()
+        self.tree_widget.setHeaderLabels([
             "序号", "工具名称", "工具类型", "状态", "描述", "创建时间", "操作"
         ])
         
-        # 设置表格属性 - 完全匹配tree_widget配置
-        self.table_widget.setAlternatingRowColors(True)
-        self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table_widget.setEditTriggers(QTableWidget.NoEditTriggers)  # 整个表格不可编辑
-        self.table_widget.verticalHeader().setVisible(False)  # 去除组件自带序号栏
-        self.table_widget.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
-        
-        # 设置列宽策略 - 使用固定列宽模式，参考tree_widget
-        header = self.table_widget.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Fixed)  # 所有列固定宽度
-        header.setStretchLastSection(False)  # 最后一列不自动拉伸
+        # 设置树形控件属性 - 完全匹配定时调度tab中tree_widget配置
+        header = self.tree_widget.header()
         header.setSectionsMovable(False)  # 禁止表头拖拽
         header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
         
-        # 设置固定列宽 - 参考tree_widget的列宽设计
-        self.table_widget.setColumnWidth(0, 100)     # 序号
-        self.table_widget.setColumnWidth(1, 350)    # 工具名称
-        self.table_widget.setColumnWidth(2, 250)    # 工具类型
-        self.table_widget.setColumnWidth(3, 100)      # 状态
-        self.table_widget.setColumnWidth(4, 400)    # 描述
-        self.table_widget.setColumnWidth(5, 250)    # 创建时间
-        self.table_widget.setColumnWidth(6, 350)    # 操作
+        # 设置树形控件属性
+        self.tree_widget.setSelectionBehavior(QTreeWidget.SelectRows)
+        self.tree_widget.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
+        self.tree_widget.setRootIsDecorated(False)  # 不显示展开/折叠图标列
+        self.tree_widget.setAlternatingRowColors(True)
         
-        # 设置表格样式 - 完全匹配tree_widget的CSS样式
-        self.table_widget.setStyleSheet("""
-            QTableWidget {
+        # 设置所有列文本居中
+        for i in range(self.tree_widget.columnCount()):
+            self.tree_widget.headerItem().setTextAlignment(i, Qt.AlignCenter)
+        
+        # 设置固定列宽 - 参考定时调度tab的列宽设计
+        self.tree_widget.setColumnWidth(0, 100)     # 序号
+        self.tree_widget.setColumnWidth(1, 450)    # 工具名称
+        self.tree_widget.setColumnWidth(2, 250)    # 工具类型
+        self.tree_widget.setColumnWidth(3, 150)      # 状态
+        self.tree_widget.setColumnWidth(4, 450)    # 描述
+        self.tree_widget.setColumnWidth(5, 300)    # 创建时间
+        self.tree_widget.setColumnWidth(6, 400)    # 操作
+        
+        # 参考定时调度UI的表格样式美化
+        self.tree_widget.setStyleSheet("""
+            QTreeWidget {
                 background-color: #f8f9fa;
                 alternate-background-color: #ffffff;
                 gridline-color: #e9ecef;
@@ -816,23 +822,21 @@ class GlobalToolsManager(QWidget):
                 border-radius: 4px;
                 outline: 0;
             }
-            QTableWidget::item {
+            QTreeWidget::item {
                 padding: 12px 8px;
                 border-bottom: 1px solid #e9ecef;
                 text-align: center;
-                height: 100px;
+                height: 32px;
             }
-            QTableWidget::item:selected {
+            QTreeWidget::item:selected {
                 background-color: #e3f2fd;
                 color: #1976d2;
                 font-weight: bold;
             }
-            QTableWidget::item:selected:!active {
+            QTreeWidget::item:selected:!active {
                 background-color: #e3f2fd;
-                color: #1976d2;
-                font-weight: bold;
             }
-            QTableWidget::item:hover {
+            QTreeWidget::item:hover {
                 background-color: #f8f9fa;
             }
             QHeaderView::section {
@@ -851,30 +855,115 @@ class GlobalToolsManager(QWidget):
             }
         """)
 
-        # 关键设置：设置表格大小策略，允许表格充分拉伸
-        self.table_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.table_widget.setMinimumHeight(400)  # 设置最小高度，避免表格太矮
-        self.table_widget.verticalHeader().setDefaultSectionSize(60)  # 设置行高
+        # 关键设置：设置树形控件大小策略，允许充分拉伸
+        self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tree_widget.setMinimumHeight(400)  # 设置最小高度
         
-        main_layout.addWidget(self.table_widget, 1)
+        main_layout.addWidget(self.tree_widget, 1)
 
-        # 状态栏 - 现代化设计
-        status_layout = QHBoxLayout()
-        self.status_label = QLabel("就绪")
-        self.status_label.setStyleSheet("""
-            QLabel {
-                color: #6c757d;
+        # 分页控件
+        self.pagination_widget = QWidget()
+        pagination_layout = QHBoxLayout(self.pagination_widget)
+        pagination_layout.setContentsMargins(10, 5, 10, 5)
+        pagination_layout.setSpacing(10)
+        
+        # 分页信息标签
+        self.pagination_label = QLabel("共 0 条记录")
+        self.pagination_label.setStyleSheet("color: #6c757d; font-size: 12px;")
+        pagination_layout.addWidget(self.pagination_label)
+        
+        pagination_layout.addStretch()
+        
+        # 首页按钮
+        self.first_page_btn = QPushButton("« 首页")
+        self.first_page_btn.setFixedSize(70, 32)
+        self.first_page_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f8f9fa, stop:1 #e9ecef);
+                border-radius: 6px;
+                padding: 6px 8px;
                 font-size: 12px;
-                padding: 4px 8px;
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
+                font-weight: 500;
+                color: #495057;
+                margin: 1px;
+            }
+            QPushButton:hover:enabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #007bff, stop:1 #0056b3);
+                color: white;
+                border: 1px solid #007bff;
+            }
+            QPushButton:pressed:enabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #0056b3, stop:1 #004085);
+                border: 1px solid #004085;
+            }
+            QPushButton:disabled {
+                background: #f8f9fa;
+                color: #adb5bd;
             }
         """)
-        status_layout.addWidget(self.status_label)
-        status_layout.addStretch()
-
-        main_layout.addLayout(status_layout)
+        pagination_layout.addWidget(self.first_page_btn)
+        
+        # 上一页按钮
+        self.prev_page_btn = QPushButton("‹ 上一页")
+        self.prev_page_btn.setFixedSize(70, 32)
+        self.prev_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        pagination_layout.addWidget(self.prev_page_btn)
+        
+        # 页码输入框
+        self.page_input = QLineEdit()
+        self.page_input.setFixedSize(50, 32)
+        self.page_input.setAlignment(Qt.AlignCenter)
+        self.page_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                padding: 6px;
+                font-size: 12px;
+                background-color: #ffffff;
+                font-weight: 500;
+                margin: 1px;
+            }
+            QLineEdit:focus {
+                border-color: #007bff;
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+            }
+            QLineEdit:hover:enabled {
+                border-color: #adb5bd;
+            }
+        """)
+        pagination_layout.addWidget(self.page_input)
+        
+        # 总页数标签
+        self.total_pages_label = QLabel("/ 0")
+        self.total_pages_label.setStyleSheet("color: #6c757d; font-size: 12px; font-weight: 500; margin: 0 4px;")
+        pagination_layout.addWidget(self.total_pages_label)
+        
+        # 下一页按钮
+        self.next_page_btn = QPushButton("下一页 ›")
+        self.next_page_btn.setFixedSize(70, 32)
+        self.next_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        pagination_layout.addWidget(self.next_page_btn)
+        
+        # 末页按钮
+        self.last_page_btn = QPushButton("末页 »")
+        self.last_page_btn.setFixedSize(70, 32)
+        self.last_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
+        pagination_layout.addWidget(self.last_page_btn)
+        
+        # 每页显示数量选择
+        self.page_size_combo = QComboBox()
+        self.page_size_combo.setFixedSize(85, 32)
+        self.page_size_combo.addItems(["10", "20", "50", "100"])
+        self.page_size_combo.setCurrentText("20")
+        self.page_size_combo.setStyleSheet(get_combobox_style())
+        pagination_layout.addWidget(self.page_size_combo)
+        
+        main_layout.addWidget(self.pagination_widget)
 
         # 设置整体样式
         self.setStyleSheet("""
@@ -897,12 +986,20 @@ class GlobalToolsManager(QWidget):
             }
         """)
 
+        # 连接分页控件信号
+        self.first_page_btn.clicked.connect(self.go_to_first_page)
+        self.prev_page_btn.clicked.connect(self.go_to_prev_page)
+        self.next_page_btn.clicked.connect(self.go_to_next_page)
+        self.last_page_btn.clicked.connect(self.go_to_last_page)
+        self.page_input.returnPressed.connect(self.go_to_specific_page)
+        self.page_size_combo.currentTextChanged.connect(self.on_page_size_changed)
+
     def delayed_load_data(self):
         """延迟加载数据，避免启动时弹窗"""
         try:
             from src.core.services.global_tool_service import GlobalToolService
             self.tool_service = GlobalToolService()
-            self.load_tools()
+            self.load_tools_with_pagination()
         except Exception as e:
             # 静默处理异常，避免启动时弹窗
             print(f"GlobalToolsManager初始化失败: {e}")
@@ -951,20 +1048,20 @@ class GlobalToolsManager(QWidget):
             
         try:
             tools = self.tool_service.get_all_tools()
-            self.table_widget.setRowCount(len(tools))
+            self.tree_widget.clear()
 
-            for row, tool in enumerate(tools):
+            for index, tool in enumerate(tools):
+                # 创建树形项
+                tree_item = QTreeWidgetItem()
+                tree_item.setData(0, Qt.UserRole, tool['id'])
+                
                 # 序号栏
-                index_item = QTableWidgetItem(str(row + 1))
-                index_item.setTextAlignment(Qt.AlignCenter)
-                index_item.setFlags(index_item.flags() & ~Qt.ItemIsEditable)
-                self.table_widget.setItem(row, 0, index_item)
+                tree_item.setText(0, str(index + 1))
+                tree_item.setTextAlignment(0, Qt.AlignCenter)
 
-                # 工具名称
-                name_item = QTableWidgetItem(tool['name'])
-                name_item.setData(Qt.UserRole, tool['id'])
-                name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-                self.table_widget.setItem(row, 1, name_item)
+                # 工具名称 - 确保居中显示
+                tree_item.setText(1, tool['name'])
+                tree_item.setTextAlignment(1, Qt.AlignCenter)
 
                 # 工具类型
                 type_map = {
@@ -976,131 +1073,165 @@ class GlobalToolsManager(QWidget):
                     'custom': '自定义工具'
                 }
                 type_text = type_map.get(tool['tool_type'], tool['tool_type'])
-                type_item = QTableWidgetItem(type_text)
-                type_item.setFlags(type_item.flags() & ~Qt.ItemIsEditable)
-                type_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 2, type_item)
+                tree_item.setText(2, type_text)
+                tree_item.setTextAlignment(2, Qt.AlignCenter)
 
                 # 状态 - 使用现代化样式
-                status_item = QTableWidgetItem("启用" if tool['enabled'] else "禁用")
-                status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
-                if tool['enabled']:
-                    status_item.setBackground(QColor(229, 248, 237))  # 浅绿色背景
-                    status_item.setForeground(QColor(21, 115, 71))    # 深绿色文字
-                else:
-                    status_item.setBackground(QColor(248, 215, 218))  # 浅红色背景
-                    status_item.setForeground(QColor(114, 28, 36))    # 深红色文字
+                status_text = "启用" if tool['enabled'] else "禁用"
+                tree_item.setText(3, status_text)
+                tree_item.setTextAlignment(3, Qt.AlignCenter)
                 
-                # 设置状态单元格的字体和样式
-                font = status_item.font()
+                # 设置状态文本的字体和样式
+                font = tree_item.font(3)
                 font.setBold(True)
-                status_item.setFont(font)
-                status_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 3, status_item)
-
+                tree_item.setFont(3, font)
+                
+                # 设置状态文本的颜色样式
+                if tool['enabled']:
+                    # 启用状态 - 绿色
+                    tree_item.setForeground(3, QColor('#28a745'))
+                else:
+                    # 禁用状态 - 红色
+                    tree_item.setForeground(3, QColor('#dc3545'))
+                
                 # 描述
                 desc = tool.get('description', '')
-                desc_item = QTableWidgetItem(desc)
-                desc_item.setToolTip(desc)
-                desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
-                self.table_widget.setItem(row, 4, desc_item)
+                tree_item.setText(4, desc)
+                tree_item.setToolTip(4, desc)
+                tree_item.setTextAlignment(4, Qt.AlignCenter)
 
                 # 创建时间
                 created_at = tool.get('created_at')
                 created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
-                created_item = QTableWidgetItem(created_text)
-                created_item.setFlags(created_item.flags() & ~Qt.ItemIsEditable)
-                created_item.setTextAlignment(Qt.AlignCenter)
-                self.table_widget.setItem(row, 5, created_item)
+                tree_item.setText(5, created_text)
+                tree_item.setTextAlignment(5, Qt.AlignCenter)
 
-                # 操作栏 - 添加编辑、删除、启用/禁用按钮
+                # 操作栏 - 使用图标按钮，完全匹配定时调度tab的设计
                 action_widget = QWidget()
+                action_widget.setStyleSheet("background-color: transparent;")
                 action_layout = QHBoxLayout(action_widget)
-                action_layout.setContentsMargins(4, 4, 4, 4)
-                action_layout.setSpacing(6)
-                action_layout.setAlignment(Qt.AlignCenter)  # 设置按钮居中显示
+                action_layout.setContentsMargins(5, 2, 5, 2)
+                action_layout.setSpacing(3)
+                action_layout.setAlignment(Qt.AlignCenter)
                 
                 # 编辑按钮
-                edit_button = QPushButton("编辑")
-                edit_button.setFixedWidth(60)
+                edit_button = QPushButton()
+                edit_button.setFixedSize(25, 25)
+                edit_button.setIcon(self.get_icon("edit.png"))
+                edit_button.setToolTip("编辑")
                 edit_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #007bff;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        padding: 4px 8px;
-                        font-size: 12px;
-                        font-weight: bold;
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
                     }
-                    QPushButton:hover {
-                        background-color: #0056b3;
-                    }
-                    QPushButton:pressed {
-                        background-color: #004085;
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
                     }
                 """)
                 edit_button.clicked.connect(lambda checked, tool_id=tool['id']: self.edit_tool_by_id(tool_id))
                 
                 # 删除按钮
-                delete_button = QPushButton("删除")
-                delete_button.setFixedWidth(60)
+                delete_button = QPushButton()
+                delete_button.setFixedSize(25, 25)
+                delete_button.setIcon(self.get_icon("delete.png"))
+                delete_button.setToolTip("删除")
                 delete_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #dc3545;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        padding: 4px 8px;
-                        font-size: 12px;
-                        font-weight: bold;
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
                     }
-                    QPushButton:hover {
-                        background-color: #c82333;
-                    }
-                    QPushButton:pressed {
-                        background-color: #bd2130;
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
                     }
                 """)
                 delete_button.clicked.connect(lambda checked, tool_id=tool['id']: self.delete_tool_by_id(tool_id))
                 
+                # 复制按钮
+                copy_button = QPushButton()
+                copy_button.setFixedSize(25, 25)
+                copy_button.setIcon(self.get_icon("copy.png"))
+                copy_button.setToolTip("复制")
+                copy_button.setStyleSheet("""
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
+                    }
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
+                    }
+                """)
+                copy_button.clicked.connect(lambda checked, tool_id=tool['id']: self.copy_tool_by_id(tool_id))
+                
                 # 启用/禁用按钮
-                toggle_button = QPushButton("禁用" if tool['enabled'] else "启用")
-                toggle_button.setFixedWidth(60)
+                toggle_button = QPushButton()
+                toggle_button.setFixedSize(25, 25)
+                if tool['enabled']:
+                    toggle_button.setIcon(self.get_icon("stop.png"))
+                    toggle_button.setToolTip("禁用")
+                else:
+                    toggle_button.setIcon(self.get_icon("start.png"))
+                    toggle_button.setToolTip("启用")
                 toggle_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #28a745;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        padding: 4px 8px;
-                        font-size: 12px;
-                        font-weight: bold;
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
                     }
-                    QPushButton:hover {
-                        background-color: #218838;
-                    }
-                    QPushButton:pressed {
-                        background-color: #1e7e34;
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
                     }
                 """)
                 toggle_button.clicked.connect(lambda checked, tool_id=tool['id']: self.toggle_tool_by_id(tool_id))
                 
-                action_layout.addWidget(edit_button)
-                action_layout.addWidget(delete_button)
                 action_layout.addWidget(toggle_button)
+                action_layout.addWidget(edit_button)
+                action_layout.addWidget(copy_button)
+                action_layout.addWidget(delete_button)
                 
-                # 将按钮容器添加到表格
-                self.table_widget.setCellWidget(row, 6, action_widget)
-
-            # 移除resizeColumnsToContents调用，因为我们已经设置了固定的列宽
-            # self.table_widget.resizeColumnsToContents()
-            self.status_label.setText(f"共 {len(tools)} 个全局工具")
+                # 为操作列设置空文本
+                tree_item.setText(6, "")
+                tree_item.setTextAlignment(6, Qt.AlignCenter)
+                
+                # 先添加到树形控件
+                self.tree_widget.addTopLevelItem(tree_item)
+                
+                # 然后将按钮容器添加到树形项
+            self.tree_widget.setItemWidget(tree_item, 6, action_widget)
 
         except Exception as e:
             # 静默处理异常，避免启动时弹窗
             print(f"GlobalToolsManager加载工具列表失败: {e}")
-            self.status_label.setText("加载失败")
 
     def edit_tool_by_id(self, tool_id):
         """根据工具ID编辑工具"""
@@ -1119,7 +1250,7 @@ class GlobalToolsManager(QWidget):
 
                 try:
                     self.tool_service.update_tool(tool_id, data)
-                    self.load_tools()
+                    self.load_tools_with_pagination()
                     self.data_changed.emit()
                     Toast.success(self, "工具更新成功")
                 except Exception as e:
@@ -1129,9 +1260,9 @@ class GlobalToolsManager(QWidget):
 
     def get_selected_tool_id(self):
         """获取选中的工具ID"""
-        selected_items = self.table_widget.selectedItems()
+        selected_items = self.tree_widget.selectedItems()
         if selected_items:
-            return selected_items[0].data(Qt.UserRole)
+            return selected_items[0].data(0, Qt.UserRole)
         return None
 
     def get_selected_tool_data(self):
@@ -1152,7 +1283,7 @@ class GlobalToolsManager(QWidget):
 
             try:
                 self.tool_service.create_tool(data)
-                self.load_tools()
+                self.load_tools_with_pagination()
                 self.data_changed.emit()
                 Toast.success(self, "工具创建成功")
             except Exception as e:
@@ -1174,7 +1305,7 @@ class GlobalToolsManager(QWidget):
 
             try:
                 self.tool_service.update_tool(tool_data['id'], data)
-                self.load_tools()
+                self.load_tools_with_pagination()
                 self.data_changed.emit()
                 Toast.success(self, "工具更新成功")
             except Exception as e:
@@ -1201,7 +1332,7 @@ class GlobalToolsManager(QWidget):
         if msg_box.clickedButton() == confirm_btn:
             try:
                 self.tool_service.delete_tool(tool_data['id'])
-                self.load_tools()
+                self.load_tools_with_pagination()
                 self.data_changed.emit()
                 Toast.success(self, "工具删除成功")
             except Exception as e:
@@ -1231,10 +1362,10 @@ class GlobalToolsManager(QWidget):
         status_text = "启用" if new_status else "禁用"
 
         try:
-            self.tool_service.update_tool_status(tool_data['id'], new_status)
-            self.load_tools()
-            self.data_changed.emit()
-            Toast.success(self, f"工具已{status_text}")
+                self.tool_service.update_tool_status(tool_data['id'], new_status)
+                self.load_tools_with_pagination()
+                self.data_changed.emit()
+                Toast.success(self, f"工具已{status_text}")
         except Exception as e:
             Toast.error(self, f"{status_text}工具失败: {str(e)}")
 
@@ -1258,7 +1389,7 @@ class GlobalToolsManager(QWidget):
             
             if msg_box.clickedButton() == confirm_btn:
                 self.tool_service.delete_tool(tool_id)
-                self.load_tools()
+                self.load_tools_with_pagination()
                 self.data_changed.emit()
                 Toast.success(self, "工具删除成功")
         except Exception as e:
@@ -1276,8 +1407,347 @@ class GlobalToolsManager(QWidget):
             status_text = "启用" if new_status else "禁用"
 
             self.tool_service.update_tool_status(tool_id, new_status)
-            self.load_tools()
+            self.load_tools_with_pagination()
             self.data_changed.emit()
             Toast.success(self, f"工具已{status_text}")
         except Exception as e:
             Toast.error(self, f"{status_text}工具失败: {str(e)}")
+
+    def copy_tool_by_id(self, tool_id):
+        """根据工具ID复制工具"""
+        try:
+            # 获取原始工具数据
+            tool_data = self.tool_service.get_tool_by_id(tool_id)
+            if not tool_data:
+                Toast.warn(self, "工具不存在")
+                return
+
+            # 生成不重复的工具名称
+            new_name = self.generate_unique_copy_name(tool_data['name'])
+            
+            # 深拷贝工具数据
+            import copy
+            new_tool_data = copy.deepcopy(tool_data)
+            
+            # 更新复制后的工具数据
+            new_tool_data['name'] = new_name
+            new_tool_data['id'] = None  # 清除ID以创建新记录
+            new_tool_data['created_at'] = None  # 清除创建时间
+            new_tool_data['updated_at'] = None  # 清除更新时间
+            
+            # 创建新工具
+            self.tool_service.create_tool(new_tool_data)
+            
+            # 重新加载工具列表
+            self.load_tools_with_pagination()
+            self.data_changed.emit()
+            
+            Toast.success(self, f"工具复制成功: {new_name}")
+            
+        except Exception as e:
+            Toast.error(self, f"复制工具失败: {str(e)}")
+
+    def generate_unique_copy_name(self, original_name):
+        """生成唯一的副本名称"""
+        # 获取所有工具
+        tools = self.tool_service.get_all_tools()
+        
+        # 查找所有以原始名称开头的副本
+        copy_pattern = f"{original_name}_副本"
+        existing_copies = []
+        
+        for tool in tools:
+            name = tool['name']
+            if name.startswith(copy_pattern):
+                # 提取副本编号
+                suffix = name[len(copy_pattern):]
+                if suffix.isdigit():
+                    existing_copies.append(int(suffix))
+                elif suffix == "":
+                    existing_copies.append(1)  # 默认第一个副本
+        
+        # 确定下一个副本编号
+        if existing_copies:
+            next_copy_num = max(existing_copies) + 1
+        else:
+            next_copy_num = 1
+        
+        # 生成副本名称
+        if next_copy_num == 1:
+            return f"{original_name}_副本"
+        else:
+            return f"{original_name}_副本{next_copy_num}"
+
+    def load_tools_with_pagination(self):
+        """使用分页加载工具列表"""
+        # 检查服务对象是否已初始化
+        if self.tool_service is None:
+            print("GlobalToolsManager: tool_service未初始化，跳过加载")
+            return
+            
+        try:
+            # 调用分页服务方法
+            tools, total_records = self.tool_service.get_tools_with_pagination(
+                self.current_page, self.current_page_size
+            )
+            
+            # 更新分页信息
+            self.total_records = total_records
+            self.total_pages = max(1, (total_records + self.current_page_size - 1) // self.current_page_size)
+            
+            # 清空树形控件
+            self.tree_widget.clear()
+
+            # 计算当前页的起始序号
+            start_index = (self.current_page - 1) * self.current_page_size
+            
+            for index, tool in enumerate(tools):
+                # 创建树形项
+                tree_item = QTreeWidgetItem()
+                tree_item.setData(0, Qt.UserRole, tool['id'])
+                
+                # 序号栏 - 使用全局序号
+                tree_item.setText(0, str(start_index + index + 1))
+                tree_item.setTextAlignment(0, Qt.AlignCenter)
+
+                # 工具名称 - 确保居中显示
+                tree_item.setText(1, tool['name'])
+                tree_item.setTextAlignment(1, Qt.AlignCenter)
+
+                # 工具类型
+                type_map = {
+                    'sql': 'SQL工具',
+                    'random': '随机数生成器',
+                    'python': 'Python脚本执行器',
+                    'timer': '等待定时器',
+                    'http': 'HTTP请求工具',
+                    'custom': '自定义工具'
+                }
+                type_text = type_map.get(tool['tool_type'], tool['tool_type'])
+                tree_item.setText(2, type_text)
+                tree_item.setTextAlignment(2, Qt.AlignCenter)
+
+                # 状态 - 使用现代化样式
+                status_text = "启用" if tool['enabled'] else "禁用"
+                tree_item.setText(3, status_text)
+                tree_item.setTextAlignment(3, Qt.AlignCenter)
+                
+                # 设置状态文本的字体和样式
+                font = tree_item.font(3)
+                font.setBold(True)
+                tree_item.setFont(3, font)
+                
+                # 设置状态文本的颜色样式
+                if tool['enabled']:
+                    # 启用状态 - 绿色
+                    tree_item.setForeground(3, QColor('#28a745'))
+                else:
+                    # 禁用状态 - 红色
+                    tree_item.setForeground(3, QColor('#dc3545'))
+                
+                # 描述
+                desc = tool.get('description', '')
+                tree_item.setText(4, desc)
+                tree_item.setToolTip(4, desc)
+                tree_item.setTextAlignment(4, Qt.AlignCenter)
+
+                # 创建时间
+                created_at = tool.get('created_at')
+                created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
+                tree_item.setText(5, created_text)
+                tree_item.setTextAlignment(5, Qt.AlignCenter)
+
+                # 操作栏 - 使用图标按钮，完全匹配定时调度tab的设计
+                action_widget = QWidget()
+                action_widget.setStyleSheet("background-color: transparent;")
+                action_layout = QHBoxLayout(action_widget)
+                action_layout.setContentsMargins(5, 2, 5, 2)
+                action_layout.setSpacing(3)
+                action_layout.setAlignment(Qt.AlignCenter)
+                
+                # 编辑按钮
+                edit_button = QPushButton()
+                edit_button.setFixedSize(25, 25)
+                edit_button.setIcon(self.get_icon("edit.png"))
+                edit_button.setToolTip("编辑")
+                edit_button.setStyleSheet("""
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
+                    }
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
+                    }
+                """)
+                edit_button.clicked.connect(lambda checked, tool_id=tool['id']: self.edit_tool_by_id(tool_id))
+                
+                # 删除按钮
+                delete_button = QPushButton()
+                delete_button.setFixedSize(25, 25)
+                delete_button.setIcon(self.get_icon("delete.png"))
+                delete_button.setToolTip("删除")
+                delete_button.setStyleSheet("""
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
+                    }
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
+                    }
+                """)
+                delete_button.clicked.connect(lambda checked, tool_id=tool['id']: self.delete_tool_by_id(tool_id))
+                
+                # 复制按钮
+                copy_button = QPushButton()
+                copy_button.setFixedSize(25, 25)
+                copy_button.setIcon(self.get_icon("copy.png"))
+                copy_button.setToolTip("复制")
+                copy_button.setStyleSheet("""
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
+                    }
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
+                    }
+                """)
+                copy_button.clicked.connect(lambda checked, tool_id=tool['id']: self.copy_tool_by_id(tool_id))
+                
+                # 启用/禁用按钮
+                toggle_button = QPushButton()
+                toggle_button.setFixedSize(25, 25)
+                if tool['enabled']:
+                    toggle_button.setIcon(self.get_icon("stop.png"))
+                    toggle_button.setToolTip("禁用")
+                else:
+                    toggle_button.setIcon(self.get_icon("start.png"))
+                    toggle_button.setToolTip("启用")
+                toggle_button.setStyleSheet("""
+                    QPushButton { 
+                        border: none; 
+                        background: transparent; 
+                        padding: 0px; 
+                    } 
+                    QPushButton:hover { 
+                        background: #e0e0e0; 
+                    }
+                    QToolTip {
+                        background-color: white;
+                        color: black;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 5px;
+                    }
+                """)
+                toggle_button.clicked.connect(lambda checked, tool_id=tool['id']: self.toggle_tool_by_id(tool_id))
+                
+                action_layout.addWidget(toggle_button)
+                action_layout.addWidget(edit_button)
+                action_layout.addWidget(copy_button)
+                action_layout.addWidget(delete_button)
+                
+                # 为操作列设置空文本
+                tree_item.setText(6, "")
+                tree_item.setTextAlignment(6, Qt.AlignCenter)
+                
+                # 先添加到树形控件
+                self.tree_widget.addTopLevelItem(tree_item)
+                
+                # 然后将按钮容器添加到树形项
+                self.tree_widget.setItemWidget(tree_item, 6, action_widget)
+
+            # 更新分页控件状态
+            self.update_pagination_status()
+
+        except Exception as e:
+            # 静默处理异常，避免启动时弹窗
+            print(f"GlobalToolsManager加载分页工具列表失败: {e}")
+
+    def update_pagination_status(self):
+        """更新分页控件状态"""
+        # 更新分页标签
+        self.pagination_label.setText(f"共 {self.total_records} 条记录")
+        self.total_pages_label.setText(f"/ {self.total_pages}")
+        
+        # 更新页码输入框
+        self.page_input.setText(str(self.current_page))
+        
+        # 更新按钮状态
+        self.first_page_btn.setEnabled(self.current_page > 1)
+        self.prev_page_btn.setEnabled(self.current_page > 1)
+        self.next_page_btn.setEnabled(self.current_page < self.total_pages)
+        self.last_page_btn.setEnabled(self.current_page < self.total_pages)
+
+    def go_to_first_page(self):
+        """跳转到首页"""
+        if self.current_page != 1:
+            self.current_page = 1
+            self.load_tools_with_pagination()
+
+    def go_to_prev_page(self):
+        """跳转到上一页"""
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.load_tools_with_pagination()
+
+    def go_to_next_page(self):
+        """跳转到下一页"""
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            self.load_tools_with_pagination()
+
+    def go_to_last_page(self):
+        """跳转到末页"""
+        if self.current_page != self.total_pages:
+            self.current_page = self.total_pages
+            self.load_tools_with_pagination()
+
+    def go_to_specific_page(self):
+        """跳转到指定页码"""
+        try:
+            page_num = int(self.page_input.text().strip())
+            if 1 <= page_num <= self.total_pages:
+                self.current_page = page_num
+                self.load_tools_with_pagination()
+            else:
+                # 页码无效，恢复当前页码
+                self.page_input.setText(str(self.current_page))
+        except ValueError:
+            # 输入无效，恢复当前页码
+            self.page_input.setText(str(self.current_page))
+
+    def on_page_size_changed(self, page_size_text):
+        """每页显示数量改变"""
+        try:
+            new_page_size = int(page_size_text)
+            if new_page_size > 0:
+                self.current_page_size = new_page_size
+                self.current_page = 1  # 重置到第一页
+                self.load_tools_with_pagination()
+        except ValueError:
+            # 恢复原来的值
+            self.page_size_combo.setCurrentText(str(self.current_page_size))
