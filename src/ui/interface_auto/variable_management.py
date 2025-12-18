@@ -20,6 +20,7 @@ from src.core.services.global_variable_service import GlobalVariableService
 from src.utils.interface_utils.variable_manager import VariableManager
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelTabWidget
 from src.ui.widgets.toast_tips import Toast
+from src.utils.css_utils import get_combobox_style
 
 
 class VariableDialog(QDialog):
@@ -59,6 +60,7 @@ class VariableDialog(QDialog):
 
         self.type_combo = QComboBox()
         self.type_combo.addItems(["string", "number", "boolean", "json"])
+        self.type_combo.setStyleSheet(get_combobox_style())
         if self.variable_data:
             var_type = self.variable_data.get('variable_type', 'string')
             index = self.type_combo.findText(var_type)

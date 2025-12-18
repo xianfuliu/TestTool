@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 from src.ui.widgets.toast_tips import Toast
+from src.utils.css_utils import get_combobox_style
 
 
 class ParameterExtractionDialog(QDialog):

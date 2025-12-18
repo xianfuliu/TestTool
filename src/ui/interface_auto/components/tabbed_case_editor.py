@@ -20,6 +20,7 @@ from src.core.services.global_variable_service import get_global_variable_servic
 from src.utils.interface_utils.variable_manager import get_global_variable_manager
 from src.utils.interface_utils.request_engine import RequestEngine
 from src.utils.interface_utils.test_case_executor import TestCaseExecutor
+from src.utils.css_utils import get_combobox_style
 
 
 class CaseExecutionThread(QThread):
@@ -378,6 +379,7 @@ class CaseTabWidget(QWidget):
         env_layout.addWidget(QLabel("环境:"))
         self.env_combo = QComboBox()
         self.env_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # 设置下拉框固定大小，不拉伸
+        self.env_combo.setStyleSheet(get_combobox_style())
         self.load_environments()
         self.env_combo.currentTextChanged.connect(self.on_content_changed)
         env_layout.addWidget(self.env_combo)

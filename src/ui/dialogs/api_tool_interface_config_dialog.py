@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QScrollArea, QWidget, QGroupBo
 
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
+from src.utils.css_utils import get_combobox_style
 
 
 class InterfaceConfigDialog(QDialog):
@@ -59,6 +60,7 @@ class InterfaceConfigDialog(QDialog):
         self.method_combo = NoWheelComboBox()
         self.method_combo.addItems(["GET", "POST", "PUT", "DELETE"])
         self.method_combo.setFixedWidth(120)
+        self.method_combo.setStyleSheet(get_combobox_style())
         basic_layout.addRow("请求方式:", self.method_combo)
 
         # 请求头配置
@@ -85,6 +87,7 @@ class InterfaceConfigDialog(QDialog):
         self.request_type_combo.addItems(["普通", "条件"])
         self.request_type_combo.setFixedWidth(100)
         self.request_type_combo.currentTextChanged.connect(self.on_request_type_changed)
+        self.request_type_combo.setStyleSheet(get_combobox_style())
         request_type_row_layout.addWidget(self.request_type_combo)
         request_type_row_layout.addStretch()
         request_type_layout.addLayout(request_type_row_layout)
@@ -113,6 +116,7 @@ class InterfaceConfigDialog(QDialog):
         condition_field_layout.addWidget(field_label)
         self.condition_field_combo = NoWheelComboBox()
         self.condition_field_combo.setFixedWidth(200)
+        self.condition_field_combo.setStyleSheet(get_combobox_style())
         condition_field_layout.addWidget(self.condition_field_combo)
         condition_field_layout.addStretch()
         conditional_body_layout.addLayout(condition_field_layout)

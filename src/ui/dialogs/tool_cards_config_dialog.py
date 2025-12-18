@@ -9,6 +9,7 @@ import json
 
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
+from src.utils.css_utils import get_combobox_style
 
 
 class ToolCardsConfigDialog(QDialog):
@@ -141,11 +142,13 @@ class ToolCardsConfigDialog(QDialog):
         card_selection_layout.addWidget(QLabel("选择业务线:"))
         self.business_combo = NoWheelComboBox()
         self.business_combo.currentTextChanged.connect(self.on_business_combo_changed)
+        self.business_combo.setStyleSheet(get_combobox_style())
         card_selection_layout.addWidget(self.business_combo)
 
         card_selection_layout.addWidget(QLabel("选择子模块:"))
         self.sub_business_combo = NoWheelComboBox()
         self.sub_business_combo.currentTextChanged.connect(self.on_sub_business_combo_changed)
+        self.sub_business_combo.setStyleSheet(get_combobox_style())
         card_selection_layout.addWidget(self.sub_business_combo)
 
         card_selection_layout.addStretch()
@@ -273,6 +276,7 @@ class ToolCardsConfigDialog(QDialog):
         self.card_type_combo = NoWheelComboBox()
         self.card_type_combo.addItems(["SQL查询", "SQL更新", "SQL删除", "HTTP接口", "Python类"])
         self.card_type_combo.currentTextChanged.connect(self.on_card_type_changed)
+        self.card_type_combo.setStyleSheet(get_combobox_style())
         basic_layout.addRow("卡片类型:", self.card_type_combo)
 
         self.card_desc_edit = QTextEdit()
@@ -325,6 +329,7 @@ class ToolCardsConfigDialog(QDialog):
         self.database_combo = NoWheelComboBox()
         # TODO: 从数据库配置中加载可用的数据库连接
         self.database_combo.addItems(["default_db", "test_db"])
+        self.database_combo.setStyleSheet(get_combobox_style())
         self.config_layout.addRow("数据库连接:", self.database_combo)
 
         self.sql_editor = QTextEdit()
@@ -342,6 +347,7 @@ class ToolCardsConfigDialog(QDialog):
 
         self.method_combo = NoWheelComboBox()
         self.method_combo.addItems(["GET", "POST", "PUT", "DELETE"])
+        self.method_combo.setStyleSheet(get_combobox_style())
         self.config_layout.addRow("请求方法:", self.method_combo)
 
         self.headers_edit = QTextEdit()

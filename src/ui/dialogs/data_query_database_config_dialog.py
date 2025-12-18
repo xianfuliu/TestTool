@@ -8,6 +8,7 @@ import pymysql
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.utils.resource_utils import resource_path
+from src.utils.css_utils import get_combobox_style
 import json
 import os
 import re
@@ -94,6 +95,7 @@ class DatabaseConfigDialog(QDialog):
         self.input_fields_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.input_fields_combo.setMinimumWidth(200)
         self.input_fields_combo.currentTextChanged.connect(self.on_input_field_selected)
+        self.input_fields_combo.setStyleSheet(get_combobox_style())
         param_selection_layout.addWidget(self.input_fields_combo)
         param_selection_layout.addStretch(1)
 
@@ -164,6 +166,7 @@ class DatabaseConfigDialog(QDialog):
         self.db_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.db_combo.setMinimumWidth(200)
         self.db_combo.currentTextChanged.connect(self.on_db_selected)
+        self.db_combo.setStyleSheet(get_combobox_style())
         db_selection_layout.addWidget(self.db_combo)
         db_selection_layout.addStretch(1)
 
@@ -255,6 +258,7 @@ class DatabaseConfigDialog(QDialog):
         self.sql_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.sql_combo.setMinimumWidth(180)  # 增加宽度
         self.sql_combo.currentTextChanged.connect(self.on_sql_selected)
+        self.sql_combo.setStyleSheet(get_combobox_style())
         operation_row_layout.addWidget(self.sql_combo)
 
         # 配置名称
@@ -285,6 +289,7 @@ class DatabaseConfigDialog(QDialog):
         self.sql_db_connection.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.sql_db_connection.setMinimumWidth(180)  # 增加宽度
         self.sql_db_connection.currentTextChanged.connect(self.on_db_connection_changed)
+        self.sql_db_connection.setStyleSheet(get_combobox_style())
         database_row_layout.addWidget(self.sql_db_connection)
 
         # 库名
@@ -294,6 +299,7 @@ class DatabaseConfigDialog(QDialog):
         self.database_combo.setEnabled(False)
         self.database_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.database_combo.setMinimumWidth(180)  # 增加宽度
+        self.database_combo.setStyleSheet(get_combobox_style())
         self.database_combo.currentTextChanged.connect(self.on_database_changed)
 
         # 添加模糊匹配功能
@@ -317,6 +323,7 @@ class DatabaseConfigDialog(QDialog):
         self.table_combo.setEnabled(False)
         self.table_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.table_combo.setMinimumWidth(180)  # 增加宽度
+        self.table_combo.setStyleSheet(get_combobox_style())
         self.table_combo.currentTextChanged.connect(self.on_table_changed)
 
         # 添加模糊匹配功能
@@ -344,6 +351,7 @@ class DatabaseConfigDialog(QDialog):
         self.required_param_combo = NoWheelComboBox()
         self.required_param_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.required_param_combo.setMinimumWidth(220)  # 增加宽度
+        self.required_param_combo.setStyleSheet(get_combobox_style())
         required_param_layout.addWidget(self.required_param_combo)
 
         self.add_param_btn = QPushButton("添加")

@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QTableWidget,
 from src.utils.interface_utils.variable_manager import VariableManager, VariableValidator, VariableStorage
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
 from src.ui.widgets.toast_tips import Toast
+from src.utils.css_utils import get_combobox_style
 
 
 class VariableEditorDialog(QDialog):
@@ -51,6 +52,7 @@ class VariableEditorDialog(QDialog):
 
         self.type_combo = NoWheelComboBox()
         self.type_combo.addItems(["string", "number", "boolean", "list", "dict"])
+        self.type_combo.setStyleSheet(get_combobox_style())
         self.type_combo.currentIndexChanged.connect(self.on_type_changed)
         if self.variable_data:
             var_type = self.variable_data.get('type', 'string')

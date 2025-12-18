@@ -13,6 +13,7 @@ from PyQt5.QtGui import QFont, QKeySequence, QTextCursor, QTextCharFormat, QColo
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.ui.widgets.width_aware import WidthAwareWidget
+from src.utils.css_utils import get_combobox_style
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_images_generator import IdCardImageGenerator
 from src.ui.dialogs.api_tool_config_management_dialog import ConfigManagementDialog
@@ -349,6 +350,7 @@ class ApiToolTab(QWidget):
         self.product_combo = NoWheelComboBox()
         self.product_combo.currentTextChanged.connect(self.on_product_changed)
         self.product_combo.setFixedWidth(150)
+        self.product_combo.setStyleSheet(get_combobox_style())
         first_row_layout.addWidget(self.product_combo)
 
         # 增加间距（添加固定宽度的空白）
@@ -373,6 +375,7 @@ class ApiToolTab(QWidget):
         first_row_layout.addWidget(QLabel("定时任务:"))
         self.schedule_combo = NoWheelComboBox()
         self.schedule_combo.setFixedWidth(250)
+        self.schedule_combo.setStyleSheet(get_combobox_style())
         first_row_layout.addWidget(self.schedule_combo)
 
         # 执行按钮 - 修改为支持SVG动画
@@ -841,6 +844,7 @@ class ApiToolTab(QWidget):
                 combo_box.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                 combo_box.setMinimumWidth(120)  # 设置最小宽度
                 combo_box.setMaximumWidth(250)  # 设置最大宽度
+                combo_box.setStyleSheet(get_combobox_style())
 
                 # 设置默认值 - 修复：使用配置的默认值而不是第一个选项
                 combo_key = item["key"]

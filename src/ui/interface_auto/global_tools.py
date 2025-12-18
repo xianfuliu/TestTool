@@ -262,6 +262,7 @@ class GlobalToolDialog(QDialog):
             "等待定时器", "HTTP请求工具", "自定义工具"
         ])
         self.type_combo.currentIndexChanged.connect(self.on_tool_type_changed)
+        self.type_combo.setStyleSheet(get_combobox_style())
 
         self.desc_edit = QTextEdit()
         self.desc_edit.setMaximumHeight(80)
@@ -376,6 +377,7 @@ class GlobalToolDialog(QDialog):
 
         self.sql_database_type = NoWheelComboBox()
         self.sql_database_type.addItems(["MySQL", "PostgreSQL", "SQLite", "Oracle", "SQL Server"])
+        self.sql_database_type.setStyleSheet(get_combobox_style())
 
         self.sql_host = QLineEdit()
         self.sql_host.setPlaceholderText("localhost")
@@ -396,10 +398,12 @@ class GlobalToolDialog(QDialog):
         self.sql_charset = NoWheelComboBox()
         self.sql_charset.addItems(["utf8", "utf8mb4", "gbk", "latin1"])
         self.sql_charset.setCurrentText("utf8mb4")
+        self.sql_charset.setStyleSheet(get_combobox_style())
 
         self.sql_result_type = NoWheelComboBox()
         self.sql_result_type.addItems(["single", "multiple", "count"])
         self.sql_result_type.setToolTip("single: 返回单条记录\nmultiple: 返回多条记录\ncount: 返回计数")
+        self.sql_result_type.setStyleSheet(get_combobox_style())
 
         layout.addRow("数据库类型:", self.sql_database_type)
         layout.addRow("主机:", self.sql_host)
@@ -420,6 +424,7 @@ class GlobalToolDialog(QDialog):
         self.random_type = NoWheelComboBox()
         self.random_type.addItems(["integer", "float", "string"])
         self.random_type.currentIndexChanged.connect(self.on_random_type_changed)
+        self.random_type.setStyleSheet(get_combobox_style())
 
         self.random_min = QSpinBox()
         self.random_min.setRange(0, 1000000)
@@ -437,6 +442,7 @@ class GlobalToolDialog(QDialog):
         self.random_charset = NoWheelComboBox()
         self.random_charset.addItems(["letters", "digits", "alphanumeric", "custom"])
         self.random_charset.setVisible(False)
+        self.random_charset.setStyleSheet(get_combobox_style())
 
         self.random_custom_chars = QLineEdit()
         self.random_custom_chars.setPlaceholderText("自定义字符集")

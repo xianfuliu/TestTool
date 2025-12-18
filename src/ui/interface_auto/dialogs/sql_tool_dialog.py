@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
 from PyQt5.QtCore import pyqtSignal
 from src.ui.widgets.toast_tips import Toast
 from src.utils.sql_worker import SQLWorker
+from src.utils.css_utils import get_combobox_style
 
 
 class SQLToolDialog(QDialog):
@@ -112,28 +113,7 @@ class SQLToolDialog(QDialog):
         self.db_combo.setEditable(False)  # 不允许编辑，设置为只读下拉框
         self.db_combo.setEnabled(True)  # 启用选择功能
         self.db_combo.currentTextChanged.connect(self.on_database_changed)  # 监听数据库选择变化
-        self.db_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #ccc;
-                border-radius: 6px;  /* 添加圆角 */
-                padding: 6px 8px;
-                background-color: white;
-                color: black;
-                font-family: 'Microsoft YaHei', sans-serif;
-            }
-            QComboBox:focus {
-                border-color: #0078d4;
-                outline: none;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 1px solid #ccc;
-                width: 20px;
-            }
-        """)
+        self.db_combo.setStyleSheet(get_combobox_style())
         db_left_layout.addWidget(self.db_combo)
         
         # 连接状态

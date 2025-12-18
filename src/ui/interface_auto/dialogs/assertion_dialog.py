@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 from src.ui.widgets.toast_tips import Toast
+from src.utils.css_utils import get_combobox_style
 
 
 class AssertionDialog(QDialog):
@@ -236,6 +237,7 @@ class AssertionDialog(QDialog):
         
         # 断言符号选择下拉框
         symbol_combo = QComboBox()
+        symbol_combo.setStyleSheet(get_combobox_style())
         for symbol_key, symbol_text in self.ASSERTION_SYMBOLS.items():
             symbol_combo.addItem(symbol_text, symbol_key)
         symbol_combo.setCurrentText("=")  # 默认选择"="

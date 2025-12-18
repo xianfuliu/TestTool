@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QIcon
 import os
+from src.utils.css_utils import get_combobox_style
 import sys
 from src.ui.widgets.toast_tips import Toast
 
@@ -60,27 +61,7 @@ class HttpRequestDialog(QDialog):
             QDialogButtonBox QPushButton {
                 min-width: 80px;
             }
-            QComboBox {
-                background-color: white;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                padding: 4px;
-                min-height: 20px;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border: none;
-            }
-            QComboBox QAbstractItemView {
-                background-color: white;
-                border: 1px solid #ccc;
-                selection-background-color: #4CAF50;
-                selection-color: white;
-            }
+
             QLineEdit, QTextEdit {
                 background-color: white;
                 border: 1px solid #ccc;
@@ -172,6 +153,7 @@ class HttpRequestDialog(QDialog):
         self.method_combo = QComboBox()
         self.method_combo.addItems(["GET", "POST", "PUT", "DELETE"])
         self.method_combo.setFixedWidth(120)
+        self.method_combo.setStyleSheet(get_combobox_style())
         method_layout.addWidget(self.method_combo)
         method_layout.addStretch()
         

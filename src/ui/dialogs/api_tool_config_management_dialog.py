@@ -12,6 +12,7 @@ from src.ui.dialogs.api_tool_interface_config_dialog import InterfaceConfigDialo
 from src.ui.dialogs.api_tool_sql_config_dialog import SQLConfigDialog
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
+from src.utils.css_utils import get_combobox_style
 from src.utils.resource_utils import resource_path
 
 
@@ -87,6 +88,7 @@ class ConfigManagementDialog(QDialog):
         self.product_combo = NoWheelComboBox()
         self.product_combo.currentTextChanged.connect(self.on_product_selected)
         self.product_combo.setFixedWidth(250)
+        self.product_combo.setStyleSheet(get_combobox_style())
         product_select_layout.addWidget(self.product_combo)
         product_select_layout.addStretch()
         product_edit_layout.addLayout(product_select_layout)
@@ -159,6 +161,7 @@ class ConfigManagementDialog(QDialog):
         self.detail_product_combo = NoWheelComboBox()
         self.detail_product_combo.currentTextChanged.connect(self.on_detail_product_changed)
         self.detail_product_combo.setFixedWidth(250)
+        self.detail_product_combo.setStyleSheet(get_combobox_style())
         product_select_layout.addWidget(self.detail_product_combo)
 
         # 锁定状态提示
@@ -1411,6 +1414,7 @@ class ConfigManagementDialog(QDialog):
         self.add_type_combo.addItem("条件", "condition")
         self.add_type_combo.addItem("公式", "formula")  # 新增公式类型
         self.add_type_combo.setFixedWidth(120)
+        self.add_type_combo.setStyleSheet(get_combobox_style())
         type_layout.addWidget(self.add_type_combo)
         type_layout.addStretch()
         layout.addLayout(type_layout)
@@ -1464,6 +1468,7 @@ class ConfigManagementDialog(QDialog):
         self.add_condition_field_label = QLabel("条件字段:")
         self.add_condition_field_combo = NoWheelComboBox()
         self.add_condition_field_combo.setFixedWidth(250)
+        self.add_condition_field_combo.setStyleSheet(get_combobox_style())
         self.add_condition_field_combo.currentIndexChanged.connect(self.on_condition_field_changed)
         self.add_condition_field_label.setVisible(False)
         self.add_condition_field_combo.setVisible(False)
@@ -1475,6 +1480,7 @@ class ConfigManagementDialog(QDialog):
         self.add_data_type_combo.addItems(["string", "int", "float", "bool"])
         self.add_data_type_combo.setCurrentText("string")
         self.add_data_type_combo.setFixedWidth(120)
+        self.add_data_type_combo.setStyleSheet(get_combobox_style())
         form_layout.addRow(self.add_data_type_label, self.add_data_type_combo)
 
         # 默认值 - 字段和下拉框显示
@@ -1497,6 +1503,7 @@ class ConfigManagementDialog(QDialog):
         self.add_formula_type_combo.addItem("数值", "numeric")
         self.add_formula_type_combo.addItem("日期", "date")
         self.add_formula_type_combo.setFixedWidth(100)  # 减小宽度
+        self.add_formula_type_combo.setStyleSheet(get_combobox_style())
         self.add_formula_type_combo.setVisible(False)
         form_layout.addRow(self.add_formula_type_label, self.add_formula_type_combo)
 
@@ -1861,20 +1868,13 @@ class ConfigManagementDialog(QDialog):
             label_edit.setFixedWidth(250)
             form_layout.addRow("标签:", label_edit)
 
-        if item_type in ["field", "combo", "condition", "formula"]:  # 添加公式类型
-            # 是否展示到前端
-            show_in_ui_checkbox = QCheckBox()
-            show_in_ui = item_data.get("show_in_ui", True)  # 默认True
-            show_in_ui_checkbox.setChecked(show_in_ui)
-            show_in_ui_checkbox.setToolTip("勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数")
-            form_layout.addRow("展示到前端:", show_in_ui_checkbox)
-
-        if item_type in ["field", "combo"]:
+        if item_type in ["field", "combo", "condition"]:
             # 数据类型
             data_type_combo = NoWheelComboBox()
             data_type_combo.addItems(["string", "int", "float", "bool"])
             data_type_combo.setCurrentText(item_data.get("data_type", "string"))
             data_type_combo.setFixedWidth(120)
+            data_type_combo.setStyleSheet(get_combobox_style())
             form_layout.addRow("数据类型:", data_type_combo)
 
             # 默认值
@@ -1882,6 +1882,14 @@ class ConfigManagementDialog(QDialog):
             default_edit.setText(item_data.get("default", ""))
             default_edit.setFixedWidth(250)
             form_layout.addRow("默认值:", default_edit)
+
+        if item_type in ["field", "combo", "condition", "formula"]:  # 添加公式类型
+            # 是否展示到前端
+            show_in_ui_checkbox = QCheckBox()
+            show_in_ui = item_data.get("show_in_ui", True)  # 默认True
+            show_in_ui_checkbox.setChecked(show_in_ui)
+            show_in_ui_checkbox.setToolTip("勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数")
+            form_layout.addRow("展示到前端:", show_in_ui_checkbox)
 
         elif item_type == "interface":
             # 接口名称
@@ -1903,6 +1911,7 @@ class ConfigManagementDialog(QDialog):
             formula_type_combo.addItem("数值", "numeric")
             formula_type_combo.addItem("日期", "date")
             formula_type_combo.setFixedWidth(120)
+            formula_type_combo.setStyleSheet(get_combobox_style())
 
             # 设置当前公式类型
             current_formula_type = item_data.get("formula_type", "numeric")
@@ -1926,6 +1935,7 @@ class ConfigManagementDialog(QDialog):
             # 条件字段（可编辑）
             condition_field_combo = NoWheelComboBox()
             condition_field_combo.setFixedWidth(250)
+            condition_field_combo.setStyleSheet(get_combobox_style())
 
             # 初始化条件字段下拉框
             combo_fields = []
@@ -2202,6 +2212,7 @@ class ConfigManagementDialog(QDialog):
 
                 # 第二列：变量字段选择（下拉框）
                 combo = NoWheelComboBox()
+                combo.setStyleSheet(get_combobox_style())
                 combo.addItem("", "")  # 空选项
                 current_index = 0
                 for idx, field in enumerate(field_items):
@@ -2241,6 +2252,7 @@ class ConfigManagementDialog(QDialog):
                     value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable)
                     condition_mapping_table.setItem(row, 0, value_item)
                     combo = NoWheelComboBox()
+                    combo.setStyleSheet(get_combobox_style())
                     combo.addItem("", "")
                     current_index = 0
                     for idx, field in enumerate(field_items):
@@ -2649,6 +2661,7 @@ class ConfigManagementDialog(QDialog):
             data_type_combo.setCurrentText(item_data.get("data_type", "string"))
             data_type_combo.setEnabled(False)
             data_type_combo.setFixedWidth(120)
+            data_type_combo.setStyleSheet(get_combobox_style())
             form_layout.addRow("数据类型:", data_type_combo)
 
             # 默认值（只读）
@@ -2692,6 +2705,7 @@ class ConfigManagementDialog(QDialog):
             formula_type_edit.addItems(["数值", "日期"])
             formula_type_edit.setEnabled(False)
             formula_type_edit.setFixedWidth(120)
+            formula_type_edit.setStyleSheet(get_combobox_style())
             # 将英文类型映射为对应的索引
             current_formula_type = item_data.get("formula_type", "numeric")
             if current_formula_type == "numeric":
@@ -2992,6 +3006,7 @@ class ConfigManagementDialog(QDialog):
 
             # 第二列：变量字段选择（下拉框）
             combo = NoWheelComboBox()
+            combo.setStyleSheet(get_combobox_style())
             combo.addItem("", "")  # 空选项
             for field in field_items:
                 display_text = f"{field['label']} ({field['key']})"

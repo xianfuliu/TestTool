@@ -13,6 +13,7 @@ from src.ui.widgets.download_button import DownloadButton
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.ui.widgets.clear_button import ClearLineEdit
+from src.utils.css_utils import get_combobox_style
 from src.utils.id_card_images_generator import IdCardImageGenerator
 from src.utils.business_license_images_generator import BusinessLicenseImageGenerator
 from src.utils.resource_utils import resource_path
@@ -216,6 +217,7 @@ class TestDataTab(QWidget):
         layout.addWidget(QLabel("民族:"), row, 0)
         self.ethnic_combo = NoWheelComboBox()
         self.ethnic_combo.setFixedWidth(120)
+        self.ethnic_combo.setStyleSheet(get_combobox_style())
         self.ethnic_combo.addItems(
             ["随机", "汉", "蒙古", "回", "藏", "维吾尔", "苗", "彝", "壮", "布依", "朝鲜", "满", "侗", "瑶", "白",
              "土家", "哈尼", "哈萨克", "傣", "黎", "傈僳", "佤", "畲", "高山", "拉祜", "水", "东乡", "纳西", "景颇",
@@ -229,6 +231,7 @@ class TestDataTab(QWidget):
         layout.addWidget(QLabel("身份证开头:"), row, 0)
         self.id_prefix_combo = NoWheelComboBox()
         self.id_prefix_combo.setFixedWidth(120)
+        self.id_prefix_combo.setStyleSheet(get_combobox_style())
         self.id_prefix_combo.addItems(["随机"] + list(self.parent_app.generator.area_codes.keys()))
         layout.addWidget(self.id_prefix_combo, row, 1)
         row += 1
@@ -245,6 +248,7 @@ class TestDataTab(QWidget):
         layout.addWidget(QLabel("银行:"), row, 0)
         self.bank_combo = NoWheelComboBox()
         self.bank_combo.setFixedWidth(120)
+        self.bank_combo.setStyleSheet(get_combobox_style())
         self.bank_combo.addItems(list(self.parent_app.generator.banks.keys()))
         layout.addWidget(self.bank_combo, row, 1)
         row += 1
@@ -279,6 +283,7 @@ class TestDataTab(QWidget):
         layout.addWidget(QLabel("公司类型:"), row, 0)
         self.company_type_combo = NoWheelComboBox()
         self.company_type_combo.setFixedWidth(120)
+        self.company_type_combo.setStyleSheet(get_combobox_style())
         self.company_type_combo.addItems(["随机", "有限责任公司", "股份有限公司", "个人独资企业", "合伙企业", "个体工商户"])
         layout.addWidget(self.company_type_combo, row, 1)
         row += 1
@@ -359,6 +364,7 @@ class TestDataTab(QWidget):
         layout.addWidget(QLabel("行业类型:"), row, 0)
         self.industry_combo = NoWheelComboBox()
         self.industry_combo.setFixedWidth(120)
+        self.industry_combo.setStyleSheet(get_combobox_style())
         self.industry_combo.addItems(["随机", "科技", "贸易", "制造", "服务", "金融", "教育", "医疗", "建筑", "餐饮"])
         layout.addWidget(self.industry_combo, row, 1)
         row += 1
