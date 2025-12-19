@@ -966,7 +966,7 @@ class GlobalToolsManager(QWidget):
             QLineEdit:focus {
                 border-color: #007bff;
                 outline: none;
-                box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+                border-width: 2px;
             }
             QLineEdit:hover:enabled {
                 border-color: #adb5bd;

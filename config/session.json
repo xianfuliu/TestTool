@@ -1,0 +1,8 @@
+{
+  "user_id": 1,
+  "username": "admin",
+  "email": "admin@example.com",
+  "session_token": "de035a09e10ba96f4e4d87c207556f32464e14578effacefd3dcb55042ebee3c",
+  "is_admin": 1,
+  "saved_at": "2025-12-18T17:06:46.993645"
+}

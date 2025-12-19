@@ -1,3 +1,24 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+数据库一键部署脚本
+
+功能说明：
+1. 包含数据库配置信息
+2. 提供数据库连接管理
+3. 支持一键创建数据库和表结构
+4. 自动插入默认管理员用户
+
+使用方法：
+1. 直接运行：python config/database.py
+2. 查看帮助：python config/database.py --help
+3. 查看状态：python config/database.py --status
+
+注意：
+- 请确保MySQL服务正在运行
+- 请根据实际情况修改数据库配置
+"""
+
 import pymysql
 from pymysql.cursors import DictCursor
 from datetime import datetime
@@ -5,91 +26,26 @@ import json
 from typing import Dict, Any, List, Optional
 import sys
 import os
+import hashlib
+import time
+import argparse
 
-# 添加项目根目录到Python路径，以便能够导入settings模块
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+# =============================================================================
+# 数据库配置 - 请根据实际情况修改
+# =============================================================================
 
+# 数据库配置
+DATABASE_CONFIG = {
+    'host': '192.168.0.73',
+    'port': 3306,
+    'user': 'root',
+    'password': 'root',
+    'database': 'interface_auto_platform'
+}
 
-class JSONEncoder(json.JSONEncoder):
-    """自定义JSON编码器，处理datetime对象"""
-
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        return super().default(obj)
-
-
-class Database:
-    """数据库连接管理类"""
-
-    def __init__(self):
-        from config.settings import DATABASE_CONFIG
-        self.config = DATABASE_CONFIG
-        self._connection_pool = []
-        self._max_pool_size = 5
-
-    def get_connection(self):
-        """获取数据库连接（带重连机制）"""
-        try:
-            conn = pymysql.connect(
-                host=self.config['host'],
-                port=self.config['port'],
-                user=self.config['user'],
-                password=self.config['password'],
-                database=self.config['database'],
-                charset='utf8mb4',
-                cursorclass=DictCursor,
-                connect_timeout=30,  # 连接超时30秒
-                read_timeout=60,     # 读取超时60秒
-                write_timeout=60,    # 写入超时60秒
-                autocommit=False     # 关闭自动提交，手动控制事务
-            )
-            
-            # 测试连接是否有效
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT 1")
-            
-            return conn
-        except pymysql.Error as e:
-            print(f"数据库连接失败: {e}")
-            # 等待1秒后重试
-            import time
-            time.sleep(1)
-            
-            # 重试连接
-            return pymysql.connect(
-                host=self.config['host'],
-                port=self.config['port'],
-                user=self.config['user'],
-                password=self.config['password'],
-                database=self.config['database'],
-                charset='utf8mb4',
-                cursorclass=DictCursor,
-                connect_timeout=30,
-                read_timeout=60,
-                write_timeout=60,
-                autocommit=False
-            )
-
-    def init_database(self):
-        """初始化数据库表结构"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    # 按依赖顺序创建表
-                    for table_name, create_sql in DB_TABLES.items():
-                        try:
-                            cursor.execute(create_sql)
-                            print(f"表 {table_name} 创建成功")
-                        except Exception as e:
-                            print(f"创建表 {table_name} 失败: {e}")
-                    conn.commit()
-                    print("数据库初始化完成")
-        except Exception as e:
-            print(f"数据库初始化失败: {e}")
-            raise e
-
+# =============================================================================
+# 数据库表结构定义
+# =============================================================================
 
 # 完整的数据库表结构定义
 DB_TABLES = {
@@ -100,62 +56,73 @@ DB_TABLES = {
             description TEXT,
             created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_name (name),
-            INDEX idx_created_at (created_at)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
     'projects': '''
         CREATE TABLE IF NOT EXISTS projects (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            group_id INT NOT NULL,
             name VARCHAR(100) NOT NULL,
             description TEXT,
+            business_group_id INT,
+            created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES business_groups(id) ON DELETE CASCADE,
-            UNIQUE KEY uk_group_project (group_id, name),
-            INDEX idx_group_id (group_id),
+            FOREIGN KEY (business_group_id) REFERENCES business_groups(id) ON DELETE SET NULL,
+            INDEX idx_business_group_id (business_group_id),
             INDEX idx_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
-    'environments': '''
-        CREATE TABLE IF NOT EXISTS environments (
+    'api_folders': '''
+        CREATE TABLE IF NOT EXISTS api_folders (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(50) NOT NULL UNIQUE,
-            base_url VARCHAR(255) NOT NULL,
+            project_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            parent_id INT DEFAULT 0,
             description TEXT,
-            headers JSON,
-            variables JSON,
+            created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_name (name)
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            INDEX idx_project_id (project_id),
+            INDEX idx_parent_id (parent_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
     'api_templates': '''
         CREATE TABLE IF NOT EXISTS api_templates (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            project_id INT NOT NULL,
             folder_id INT NOT NULL,
             name VARCHAR(100) NOT NULL,
-            method VARCHAR(10) NOT NULL,
-            url_path VARCHAR(500) NOT NULL,
-            headers JSON,
-            params JSON,
-            body JSON,
             description TEXT,
-            timeout INT DEFAULT 30 COMMENT '请求超时时间(秒)',
-            sort_order INT DEFAULT 0,
+            method ENUM('GET', 'POST', 'PUT', 'DELETE', 'PATCH') DEFAULT 'GET',
+            url VARCHAR(500) NOT NULL,
+            headers JSON,
+            body JSON,
+            created_by VARCHAR(50) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (folder_id) REFERENCES api_folders(id) ON DELETE CASCADE,
+            INDEX idx_folder_id (folder_id),
+            INDEX idx_name (name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
+
+    'case_folders': '''
+        CREATE TABLE IF NOT EXISTS case_folders (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            parent_id INT DEFAULT 0,
+            description TEXT,
+            created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
             INDEX idx_project_id (project_id),
-            INDEX idx_name (name),
-            INDEX idx_method (method),
-            INDEX idx_sort_order (sort_order)
+            INDEX idx_parent_id (parent_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
@@ -171,16 +138,14 @@ DB_TABLES = {
             enable_encryption BOOLEAN DEFAULT FALSE COMMENT '是否启用加解密',
             encrypt_url VARCHAR(500) COMMENT '加密接口URL',
             decrypt_url VARCHAR(500) COMMENT '解密接口URL',
-            sort_order INT DEFAULT 0,
             created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-            FOREIGN KEY (environment_id) REFERENCES environments(id) ON DELETE SET NULL,
+            FOREIGN KEY (folder_id) REFERENCES case_folders(id) ON DELETE CASCADE,
             INDEX idx_project_id (project_id),
-            INDEX idx_name (name),
-            INDEX idx_created_at (created_at),
-            INDEX idx_sort_order (sort_order)
+            INDEX idx_folder_id (folder_id),
+            INDEX idx_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
@@ -188,15 +153,14 @@ DB_TABLES = {
         CREATE TABLE IF NOT EXISTS test_case_steps (
             id INT AUTO_INCREMENT PRIMARY KEY,
             case_id INT NOT NULL,
+            step_order INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
             api_template_id INT,
-            step_order INT NOT NULL DEFAULT 0,
-            name VARCHAR(100),
-            enabled BOOLEAN DEFAULT TRUE,
-            enable_encryption BOOLEAN DEFAULT NULL COMMENT '是否启用加解密（NULL表示继承全局设置）',
-            pre_processing JSON COMMENT '前置处理配置',
-            post_processing JSON COMMENT '后置处理配置',
-            assertions JSON COMMENT '断言配置',
-            variables JSON COMMENT '步骤局部变量',
+            request_data JSON,
+            expected_response JSON,
+            variables_snapshot JSON,
+            created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (case_id) REFERENCES test_cases(id) ON DELETE CASCADE,
@@ -283,8 +247,10 @@ DB_TABLES = {
             error_message TEXT,
             start_time TIMESTAMP NULL,
             end_time TIMESTAMP NULL,
-            duration FLOAT DEFAULT 0,
+            duration FLOAT DEFAULT 0 COMMENT '执行时长(秒)',
+            variables_snapshot JSON COMMENT '变量快照',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (scheduler_id) REFERENCES test_schedulers(id) ON DELETE SET NULL,
             FOREIGN KEY (report_id) REFERENCES test_reports(id) ON DELETE CASCADE,
             FOREIGN KEY (case_id) REFERENCES test_cases(id) ON DELETE CASCADE,
             INDEX idx_scheduler_id (scheduler_id),
@@ -299,16 +265,13 @@ DB_TABLES = {
         CREATE TABLE IF NOT EXISTS global_tools (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL UNIQUE,
-            tool_type ENUM('sql', 'random', 'python', 'timer', 'http', 'custom') NOT NULL,
             description TEXT,
-            config JSON NOT NULL COMMENT '工具配置',
-            enabled BOOLEAN DEFAULT TRUE,
+            tool_type ENUM('function', 'script', 'api') DEFAULT 'function',
+            implementation TEXT COMMENT '实现代码或配置',
+            parameters JSON COMMENT '参数定义',
             created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_name (name),
-            INDEX idx_tool_type (tool_type),
-            INDEX idx_enabled (enabled)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
@@ -329,450 +292,497 @@ DB_TABLES = {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
-    'api_folders': '''
-        CREATE TABLE IF NOT EXISTS api_folders (
+    'environments': '''
+        CREATE TABLE IF NOT EXISTS environments (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
-            parent_id INT DEFAULT NULL,
             name VARCHAR(100) NOT NULL,
             description TEXT,
-            sort_order INT DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-            FOREIGN KEY (parent_id) REFERENCES api_folders(id) ON DELETE CASCADE,
-            INDEX idx_project_id (project_id),
-            INDEX idx_parent_id (parent_id),
-            INDEX idx_sort_order (sort_order)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'case_folders': '''
-        CREATE TABLE IF NOT EXISTS case_folders (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            project_id INT NOT NULL,
-            parent_id INT DEFAULT NULL,
-            name VARCHAR(100) NOT NULL,
-            description TEXT,
-            sort_order INT DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-            FOREIGN KEY (parent_id) REFERENCES case_folders(id) ON DELETE CASCADE,
-            INDEX idx_project_id (project_id),
-            INDEX idx_parent_id (parent_id),
-            INDEX idx_sort_order (sort_order)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'user_settings': '''
-        CREATE TABLE IF NOT EXISTS user_settings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id VARCHAR(50) NOT NULL,
-            setting_key VARCHAR(100) NOT NULL,
-            setting_value JSON,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uk_user_setting (user_id, setting_key),
-            INDEX idx_user_id (user_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'system_config': '''
-        CREATE TABLE IF NOT EXISTS system_config (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            config_key VARCHAR(100) NOT NULL UNIQUE COMMENT '配置键名',
-            config_value JSON COMMENT '配置值',
-            description TEXT COMMENT '配置描述',
+            base_url VARCHAR(500) NOT NULL,
+            variables JSON COMMENT '环境变量',
+            headers JSON COMMENT '默认请求头',
             created_by VARCHAR(50) DEFAULT 'admin',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_config_key (config_key)
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            INDEX idx_project_id (project_id),
+            INDEX idx_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
     'distributed_locks': '''
         CREATE TABLE IF NOT EXISTS distributed_locks (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            lock_key VARCHAR(100) NOT NULL COMMENT '锁键名',
-            instance_id VARCHAR(100) NOT NULL COMMENT '实例标识',
-            acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '获取时间',
-            expires_at TIMESTAMP NOT NULL COMMENT '过期时间',
+            lock_key VARCHAR(100) NOT NULL UNIQUE,
+            lock_value VARCHAR(100) NOT NULL,
+            expire_time TIMESTAMP NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uk_lock_key (lock_key),
-            INDEX idx_expires_at (expires_at),
-            INDEX idx_instance_id (instance_id)
+            INDEX idx_lock_key (lock_key),
+            INDEX idx_expire_time (expire_time)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ''',
 
+    'user_settings': '''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            setting_key VARCHAR(100) NOT NULL,
+            setting_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_user_key (user_id, setting_key),
+            INDEX idx_user_id (user_id),
+            INDEX idx_setting_key (setting_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
 
+    # =========================================================================
+    # 用户认证相关表
+    # =========================================================================
+    
+    'users': '''
+        CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(50) NOT NULL UNIQUE,
+            password_hash VARCHAR(32) NOT NULL COMMENT 'MD5哈希密码',
+            email VARCHAR(100) NOT NULL UNIQUE,
+            real_name VARCHAR(50) NOT NULL,
+            business_line VARCHAR(50) NOT NULL COMMENT '业务线',
+            is_admin BOOLEAN DEFAULT FALSE,
+            last_login_at TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_username (username),
+            INDEX idx_email (email),
+            INDEX idx_business_line (business_line),
+            INDEX idx_is_admin (is_admin)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
+
+    'email_verification_codes': '''
+        CREATE TABLE IF NOT EXISTS email_verification_codes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(100) NOT NULL,
+            verification_code VARCHAR(10) NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_email (email),
+            INDEX idx_expires_at (expires_at),
+            INDEX idx_used (used)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
+
+    'user_sessions': '''
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            session_token VARCHAR(64) NOT NULL UNIQUE,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_user_id (user_id),
+            INDEX idx_session_token (session_token),
+            INDEX idx_expires_at (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    '''
 }
 
-# 初始化数据
-INITIAL_DATA = {
-    'environments': [
-        {
-            'name': '开发环境',
-            'base_url': 'http://dev.example.com',
-            'description': '开发测试环境',
-            'headers': {'Content-Type': 'application/json'},
-            'variables': {}
-        },
-        {
-            'name': '测试环境',
-            'base_url': 'http://test.example.com',
-            'description': '测试环境',
-            'headers': {'Content-Type': 'application/json'},
-            'variables': {}
-        },
-        {
-            'name': '生产环境',
-            'base_url': 'https://api.example.com',
-            'description': '生产环境',
-            'headers': {'Content-Type': 'application/json'},
-            'variables': {}
-        }
-    ],
+# =============================================================================
+# 数据库连接管理类
+# =============================================================================
 
-    'global_tools': [
-        {
-            'name': 'SQL查询工具',
-            'tool_type': 'sql',
-            'description': '执行SQL查询并返回结果',
-            'config': {
-                'database_type': 'mysql',
-                'connection_params': {},
-                'result_type': 'single'  # single, multiple, count
-            },
-            'enabled': True
-        },
-        {
-            'name': '随机数生成器',
-            'tool_type': 'random',
-            'description': '生成指定范围的随机数',
-            'config': {
-                'min_value': 1,
-                'max_value': 100,
-                'type': 'integer'  # integer, float, string
-            },
-            'enabled': True
-        },
-        {
-            'name': 'Python脚本执行器',
-            'tool_type': 'python',
-            'description': '执行Python脚本代码',
-            'config': {
-                'timeout': 30,
-                'allowed_modules': ['random', 'datetime', 'json', 're']
-            },
-            'enabled': True
-        },
-        {
-            'name': '等待定时器',
-            'tool_type': 'timer',
-            'description': '等待指定时间后再执行下一步',
-            'config': {
-                'max_wait_time': 300  # 最大等待时间（秒）
-            },
-            'enabled': True
-        },
-        {
-            'name': 'HTTP请求工具',
-            'tool_type': 'http',
-            'description': '发送HTTP请求',
-            'config': {
-                'timeout': 30,
-                'max_redirects': 5
-            },
-            'enabled': True
-        }
-    ]
-}
+class JSONEncoder(json.JSONEncoder):
+    """自定义JSON编码器，处理datetime对象"""
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
-class DataModel:
-    """数据模型基类"""
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'DataModel':
-        """从字典创建数据模型实例"""
-        instance = cls()
-        for key, value in data.items():
-            if hasattr(instance, key):
-                setattr(instance, key, value)
-        return instance
-
-    def to_dict(self) -> Dict[str, Any]:
-        """将数据模型转换为字典"""
-        result = {}
-        for key in dir(self):
-            if not key.startswith('_') and not callable(getattr(self, key)):
-                value = getattr(self, key)
-                # 处理特殊类型
-                if isinstance(value, datetime):
-                    value = value.isoformat()
-                result[key] = value
-        return result
-
-
-class BusinessGroup(DataModel):
-    """业务分组模型"""
+class Database:
+    """数据库连接管理类"""
 
     def __init__(self):
-        self.id: Optional[int] = None
-        self.name: str = ""
-        self.description: str = ""
-        self.created_by: str = "admin"
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
+        self.config = DATABASE_CONFIG
+        self._connection_pool = []
+        self._max_pool_size = 5
 
+    def get_connection(self):
+        """获取数据库连接（带重连机制）"""
+        try:
+            conn = pymysql.connect(
+                host=self.config['host'],
+                port=self.config['port'],
+                user=self.config['user'],
+                password=self.config['password'],
+                database=self.config['database'],
+                charset='utf8mb4',
+                cursorclass=DictCursor,
+                connect_timeout=30,  # 连接超时30秒
+                read_timeout=60,     # 读取超时60秒
+                write_timeout=60,    # 写入超时60秒
+                autocommit=False     # 关闭自动提交，手动控制事务
+            )
+            
+            # 测试连接是否有效
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            
+            return conn
+        except pymysql.Error as e:
+            print(f"数据库连接失败: {e}")
+            # 等待1秒后重试
+            time.sleep(1)
+            
+            # 重试连接
+            return pymysql.connect(
+                host=self.config['host'],
+                port=self.config['port'],
+                user=self.config['user'],
+                password=self.config['password'],
+                database=self.config['database'],
+                charset='utf8mb4',
+                cursorclass=DictCursor,
+                connect_timeout=30,
+                read_timeout=60,
+                write_timeout=60,
+                autocommit=False
+            )
 
-class Project(DataModel):
-    """项目模型"""
+    def init_database(self):
+        """初始化数据库表结构"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    # 按依赖顺序创建表
+                    for table_name, create_sql in DB_TABLES.items():
+                        try:
+                            cursor.execute(create_sql)
+                            print(f"表 {table_name} 创建成功")
+                        except Exception as e:
+                            print(f"创建表 {table_name} 失败: {e}")
+                    conn.commit()
+                    print("数据库初始化完成")
+        except Exception as e:
+            print(f"数据库初始化失败: {e}")
+            raise e
 
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.group_id: int = 0
-        self.name: str = ""
-        self.description: str = ""
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
+# =============================================================================
+# 数据库部署功能
+# =============================================================================
 
-
-class Environment(DataModel):
-    """环境配置模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.name: str = ""
-        self.base_url: str = ""
-        self.description: str = ""
-        self.headers: Dict[str, Any] = {}
-        self.variables: Dict[str, Any] = {}
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class ApiTemplate(DataModel):
-    """接口模板模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.project_id: int = 0
-        self.folder_id: Optional[int] = None
-        self.name: str = ""
-        self.method: str = "GET"
-        self.url_path: str = ""
-        self.headers: Dict[str, Any] = {}
-        self.params: Dict[str, Any] = {}
-        self.body: Dict[str, Any] = {}
-        self.description: str = ""
-        self.sort_order: int = 0
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class TestCase(DataModel):
-    """测试用例模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.project_id: int = 0
-        self.folder_id: Optional[int] = None
-        self.name: str = ""
-        self.description: str = ""
-        self.environment_id: Optional[int] = None
-        self.global_vars: Dict[str, Any] = {}
-        self.created_by: str = "admin"
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class TestCaseStep(DataModel):
-    """测试用例步骤模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.case_id: int = 0
-        self.api_template_id: Optional[int] = None
-        self.step_order: int = 0
-        self.name: str = ""
-        self.enabled: bool = True
-        self.pre_processing: Dict[str, Any] = {}
-        self.post_processing: Dict[str, Any] = {}
-        self.assertions: Dict[str, Any] = {}
-        self.variables: Dict[str, Any] = {}
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class TestScheduler(DataModel):
-    """测试调度模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.name: str = ""
-        self.description: str = ""
-        self.cron_expression: str = ""
-        self.enabled: bool = True
-        self.case_ids: List[int] = []
-        self.notify_emails: List[str] = []
-        self.notify_wechat: Dict[str, Any] = {}
-        self.last_run_at: Optional[datetime] = None
-        self.next_run_at: Optional[datetime] = None
-        self.created_by: str = "admin"
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class TestReport(DataModel):
-    """测试报告模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.scheduler_id: Optional[int] = None
-        self.case_id: int = 0
-        self.report_name: str = ""
-        self.status: str = "running"  # success, failure, error, running
-        self.total_cases: int = 0
-        self.passed_cases: int = 0
-        self.failed_cases: int = 0
-        self.error_cases: int = 0
-        self.start_time: Optional[datetime] = None
-        self.end_time: Optional[datetime] = None
-        self.duration: float = 0.0
-        self.log_path: str = ""
-        self.created_at: Optional[datetime] = None
-
-
-class TestStepResult(DataModel):
-    """测试步骤结果模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.report_id: int = 0
-        self.step_id: int = 0
-        self.step_order: int = 0
-        self.status: str = "skipped"  # success, failure, error, skipped
-        self.request_data: Dict[str, Any] = {}
-        self.response_data: Dict[str, Any] = {}
-        self.assertions_result: Dict[str, Any] = {}
-        self.variables_snapshot: Dict[str, Any] = {}
-        self.error_message: str = ""
-        self.start_time: Optional[datetime] = None
-        self.end_time: Optional[datetime] = None
-        self.duration: float = 0.0
-        self.created_at: Optional[datetime] = None
-
-
-class GlobalTool(DataModel):
-    """全局工具模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.name: str = ""
-        self.tool_type: str = ""  # sql, random, python, timer, http, custom
-        self.description: str = ""
-        self.config: Dict[str, Any] = {}
-        self.enabled: bool = True
-        self.created_by: str = "admin"
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class GlobalVariable(DataModel):
-    """全局变量模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.name: str = ""
-        self.value: str = ""
-        self.variable_type: str = "string"  # string, number, boolean, json
-        self.description: str = ""
-        self.created_by: str = "admin"
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class ApiFolder(DataModel):
-    """接口文件夹模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.project_id: int = 0
-        self.parent_id: Optional[int] = None
-        self.name: str = ""
-        self.description: str = ""
-        self.sort_order: int = 0
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class CaseFolder(DataModel):
-    """用例文件夹模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.project_id: int = 0
-        self.parent_id: Optional[int] = None
-        self.name: str = ""
-        self.description: str = ""
-        self.sort_order: int = 0
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-class UserSetting(DataModel):
-    """用户设置模型"""
-
-    def __init__(self):
-        self.id: Optional[int] = None
-        self.user_id: str = ""
-        self.setting_key: str = ""
-        self.setting_value: Dict[str, Any] = {}
-        self.created_at: Optional[datetime] = None
-        self.updated_at: Optional[datetime] = None
-
-
-def initialize_database():
-    """初始化数据库"""
-    db = Database()
-
-    # 创建表结构
-    db.init_database()
-
-    # 插入初始数据
+def create_database():
+    """创建数据库"""
+    # 复制配置但不指定数据库名，用于连接到MySQL服务器
+    config_without_db = DATABASE_CONFIG.copy()
+    database_name = config_without_db.pop('database')
+    
     try:
+        # 连接到MySQL服务器（不指定数据库）
+        connection = pymysql.connect(**config_without_db)
+        
+        with connection.cursor() as cursor:
+            # 创建数据库
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            print(f"数据库 {database_name} 创建成功")
+            
+            # 显示所有数据库
+            cursor.execute("SHOW DATABASES")
+            databases = cursor.fetchall()
+            print("当前所有数据库:")
+            for db in databases:
+                print(f"  - {db[0]}")
+        
+        connection.commit()
+        connection.close()
+        print("数据库创建完成")
+        
+    except Exception as e:
+        print(f"创建数据库失败: {e}")
+        raise e
+
+
+def create_tables():
+    """创建数据库表结构并插入默认数据"""
+    try:
+        # 连接到数据库
+        connection = pymysql.connect(**DATABASE_CONFIG)
+        
+        with connection.cursor() as cursor:
+            print("开始创建数据库表...")
+            
+            # 创建所有表
+            for table_name, create_sql in DB_TABLES.items():
+                try:
+                    cursor.execute(create_sql)
+                    print(f"✓ {table_name}表创建成功")
+                except Exception as e:
+                    print(f"❌ 创建{table_name}表失败: {e}")
+            
+            # 插入默认的admin用户
+            print("\n开始插入默认admin用户...")
+            cursor.execute("SELECT id FROM users WHERE username = 'admin'")
+            existing_admin = cursor.fetchone()
+            
+            if existing_admin:
+                print("⚠ admin用户已存在，跳过插入")
+            else:
+                # 生成admin密码的MD5哈希
+                password = "admin"
+                password_hash = hashlib.md5(password.encode('utf-8')).hexdigest()
+                
+                # 插入admin用户
+                sql = """
+                    INSERT INTO users (username, password_hash, email, real_name, business_line, is_admin)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                
+                cursor.execute(sql, (
+                    'admin',
+                    password_hash,
+                    'admin@example.com',
+                    '系统管理员',
+                    '技术部',
+                    True  # 设置为管理员
+                ))
+                
+                # 验证插入结果
+                cursor.execute("SELECT id, username, is_admin FROM users WHERE username = 'admin'")
+                admin_user = cursor.fetchone()
+                
+                if admin_user:
+                    print(f"✅ admin用户插入成功")
+                    print(f"   用户ID: {admin_user[0]}")
+                    print(f"   用户名: {admin_user[1]}")
+                    print(f"   管理员: {'是' if admin_user[2] else '否'}")
+                    print(f"   密码: admin (MD5哈希存储)")
+                else:
+                    print("❌ admin用户插入失败")
+            
+            # 显示所有表
+            cursor.execute("SHOW TABLES")
+            tables = cursor.fetchall()
+            print("\n当前数据库中的所有表:")
+            for table in tables:
+                print(f"  - {table[0]}")
+        
+        connection.commit()
+        connection.close()
+        print("\n数据库表创建完成")
+        
+    except Exception as e:
+        print(f"创建数据库表失败: {e}")
+        raise e
+
+
+def deploy_database():
+    """一键部署数据库 - 创建数据库和表结构"""
+    
+    print("=" * 60)
+    print("开始数据库一键部署流程")
+    print("=" * 60)
+    
+    try:
+        # 第一步：创建数据库
+        print("\n[步骤1] 创建数据库...")
+        create_database()
+        print("✅ 数据库创建完成")
+        
+        # 等待1秒，确保数据库已创建
+        time.sleep(1)
+        
+        # 第二步：创建表结构和插入默认数据
+        print("\n[步骤2] 创建表结构和插入默认数据...")
+        create_tables()
+        print("✅ 表结构创建完成")
+        
+        # 第三步：验证部署结果
+        print("\n[步骤3] 验证部署结果...")
+        
+        db = Database()
         with db.get_connection() as conn:
             with conn.cursor() as cursor:
-                for table_name, data_list in INITIAL_DATA.items():
-                    # 检查表是否为空
-                    cursor.execute(f"SELECT COUNT(*) as count FROM {table_name}")
-                    count = cursor.fetchone()['count']
-
-                    if count == 0:
-                        print(f"插入初始数据到 {table_name}")
-                        for data in data_list:
-                            # 处理JSON字段
-                            processed_data = {}
-                            for key, value in data.items():
-                                if isinstance(value, (dict, list)):
-                                    processed_data[key] = json.dumps(value, cls=JSONEncoder)
-                                else:
-                                    processed_data[key] = value
-
-                            columns = ', '.join(processed_data.keys())
-                            placeholders = ', '.join(['%s'] * len(processed_data))
-                            sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-                            cursor.execute(sql, list(processed_data.values()))
-
-                conn.commit()
-                print("初始数据插入完成")
-
+                # 检查表是否存在
+                cursor.execute("SHOW TABLES")
+                tables = cursor.fetchall()
+                
+                print(f"✅ 数据库表数量: {len(tables)}")
+                print("已创建的表:")
+                for table in tables:
+                    # 处理不同的游标类型
+                    if isinstance(table, dict):
+                        table_name = list(table.values())[0]
+                    else:
+                        table_name = table[0]
+                    print(f"  - {table_name}")
+                
+                # 检查admin用户是否存在
+                cursor.execute("SELECT username, email, is_admin FROM users WHERE username = 'admin'")
+                admin_user = cursor.fetchone()
+                
+                if admin_user:
+                    print(f"✅ 默认admin用户已创建")
+                    # 处理不同的游标类型
+                    if isinstance(admin_user, dict):
+                        username = admin_user.get('username', '未知')
+                        email = admin_user.get('email', '未知')
+                        is_admin = admin_user.get('is_admin', False)
+                    else:
+                        username = admin_user[0] if len(admin_user) > 0 else '未知'
+                        email = admin_user[1] if len(admin_user) > 1 else '未知'
+                        is_admin = admin_user[2] if len(admin_user) > 2 else False
+                    
+                    print(f"   用户名: {username}")
+                    print(f"   邮箱: {email}")
+                    print(f"   管理员: {'是' if is_admin else '否'}")
+                else:
+                    print("❌ admin用户创建失败")
+        
+        print("\n" + "=" * 60)
+        print("✅ 数据库一键部署完成！")
+        print("=" * 60)
+        
+        # 显示部署完成后的使用说明
+        print("\n📋 部署完成后的使用说明:")
+        print("1. 默认管理员账号: admin")
+        print("2. 默认管理员密码: admin")
+        print("3. 请及时修改默认密码")
+        print("4. 应用程序可以正常启动使用了")
+        
     except Exception as e:
-        print(f"插入初始数据失败: {e}")
+        print(f"❌ 数据库部署失败: {e}")
+        print("\n💡 故障排除建议:")
+        print("1. 检查MySQL服务是否正在运行")
+        print("2. 检查数据库配置是否正确")
+        print("3. 检查数据库连接权限")
+        sys.exit(1)
 
 
-# 应用启动时自动初始化数据库
+def check_deployment_status():
+    """检查数据库部署状态"""
+    
+    print("=" * 60)
+    print("检查数据库部署状态")
+    print("=" * 60)
+    
+    try:
+        db = Database()
+        with db.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # 检查表是否存在
+                cursor.execute("SHOW TABLES")
+                tables = cursor.fetchall()
+                
+                print(f"📊 数据库表数量: {len(tables)}")
+                print("当前存在的表:")
+                for table in tables:
+                    # 处理不同的游标类型
+                    if isinstance(table, dict):
+                        table_name = list(table.values())[0]
+                    else:
+                        table_name = table[0]
+                    print(f"  - {table_name}")
+                
+                # 检查admin用户是否存在
+                cursor.execute("SELECT username, email, is_admin FROM users WHERE username = 'admin'")
+                admin_user = cursor.fetchone()
+                
+                if admin_user:
+                    print(f"✅ admin用户状态: 正常")
+                    # 处理不同的游标类型
+                    if isinstance(admin_user, dict):
+                        username = admin_user.get('username', '未知')
+                        email = admin_user.get('email', '未知')
+                        is_admin = admin_user.get('is_admin', False)
+                    else:
+                        username = admin_user[0] if len(admin_user) > 0 else '未知'
+                        email = admin_user[1] if len(admin_user) > 1 else '未知'
+                        is_admin = admin_user[2] if len(admin_user) > 2 else False
+                    
+                    print(f"   用户名: {username}")
+                    print(f"   邮箱: {email}")
+                    print(f"   管理员: {'是' if is_admin else '否'}")
+                else:
+                    print("❌ admin用户状态: 不存在")
+                
+                # 检查关键表是否存在
+                required_tables = ['users', 'email_verification_codes', 'user_sessions']
+                missing_tables = []
+                
+                # 构建现有表名列表
+                existing_tables = []
+                for table in tables:
+                    if isinstance(table, dict):
+                        existing_tables.append(list(table.values())[0])
+                    else:
+                        existing_tables.append(table[0])
+                
+                for table in required_tables:
+                    if table not in existing_tables:
+                        missing_tables.append(table)
+                
+                if missing_tables:
+                    print(f"❌ 缺失的表: {', '.join(missing_tables)}")
+                    print("建议重新运行部署脚本")
+                else:
+                    print("✅ 所有必需表都存在")
+        
+    except Exception as e:
+        print(f"❌ 检查部署状态失败: {e}")
+        import traceback
+        traceback.print_exc()
+        print("数据库可能尚未部署或配置有误")
+
+
+def show_usage():
+    """显示使用说明"""
+    
+    print("=" * 60)
+    print("数据库一键部署脚本使用说明")
+    print("=" * 60)
+    print("\n这是一个完整的数据库部署脚本，包含：")
+    print("1. 数据库配置信息")
+    print("2. 数据库连接管理")
+    print("3. 一键创建数据库和表结构")
+    print("4. 自动插入默认管理员用户")
+    print("\n使用方法:")
+    print("  python config/database.py [选项]")
+    print("\n选项:")
+    print("  deploy        - 执行完整的数据库部署（默认）")
+    print("  status        - 检查当前部署状态")
+    print("  help          - 显示此帮助信息")
+    print("\n示例:")
+    print("  python config/database.py deploy")
+    print("  python config/database.py status")
+    print("  python config/database.py help")
+    print("\n注意:")
+    print("  1. 确保MySQL服务正在运行")
+    print("  2. 请根据实际情况修改数据库配置")
+    print("  3. 部署完成后请及时修改默认管理员密码")
+
+# =============================================================================
+# 主程序入口
+# =============================================================================
+
 if __name__ == "__main__":
-    initialize_database()
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='数据库一键部署脚本')
+    parser.add_argument('command', nargs='?', default='deploy', 
+                       choices=['deploy', 'status', 'help'],
+                       help='要执行的命令 (deploy: 部署, status: 检查状态, help: 帮助)')
+    
+    args = parser.parse_args()
+    
+    # 根据命令执行相应操作
+    if args.command == 'deploy':
+        deploy_database()
+    elif args.command == 'status':
+        check_deployment_status()
+    elif args.command == 'help':
+        show_usage()
+    else:
+        print(f"❌ 未知命令: {args.command}")
+        show_usage()
+        sys.exit(1)
