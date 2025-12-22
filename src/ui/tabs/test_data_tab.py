@@ -1512,7 +1512,8 @@ class TestDataTab(QWidget):
 
         # 选择保存目录
         options = QFileDialog.Options()
-        save_dir = QFileDialog.getExistingDirectory(self, "选择保存目录", "", options=options)
+        # 使用上一次的保存目录
+        save_dir = QFileDialog.getExistingDirectory(self, "选择保存目录", self.last_save_dir, options=options)
 
         if not save_dir:
             return
@@ -1525,6 +1526,9 @@ class TestDataTab(QWidget):
             # 保存反面
             back_path = os.path.join(save_dir, "身份证反面.png")
             self.parent_app.back_image.save(back_path)
+            
+            # 更新保存目录
+            self.last_save_dir = save_dir
             Toast.information(self, '成功', '保存成功')
 
         except Exception as e:
@@ -1919,7 +1923,8 @@ class TestDataTab(QWidget):
 
         # 选择保存目录
         options = QFileDialog.Options()
-        save_dir = QFileDialog.getExistingDirectory(self, "选择保存目录", "", options=options)
+        # 使用上一次的保存目录
+        save_dir = QFileDialog.getExistingDirectory(self, "选择保存目录", self.last_save_dir, options=options)
 
         if not save_dir:
             return
@@ -1928,6 +1933,9 @@ class TestDataTab(QWidget):
             # 保存营业执照
             save_path = os.path.join(save_dir, "营业执照.png")
             self.parent_app.business_license_image.save(save_path)
+            
+            # 更新保存目录
+            self.last_save_dir = save_dir
             Toast.information(self, '成功', '营业执照保存成功')
 
         except Exception as e:
