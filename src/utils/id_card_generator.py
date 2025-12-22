@@ -190,12 +190,37 @@ class UserInfoGenerator:
         self.card_types = ["储蓄卡", "信用卡"]
 
         # 公司名称相关数据
-        self.company_types = ["科技", "信息", "网络", "软件", "数据", "智能", "数字", "创新", "互联", "电子"]
-        self.company_suffixes = ["有限公司", "有限责任公司", "股份有限公司", "集团", "科技发展有限公司"]
-        self.company_industries = ["科技", "信息", "网络", "软件", "数据", "智能", "数字", "创新", "互联", "电子", 
-                                 "金融", "投资", "咨询", "管理", "服务", "工程", "设计", "传媒", "文化", "教育"]
-        self.company_regions = ["北京", "上海", "广州", "深圳", "杭州", "南京", "成都", "武汉", "西安", "重庆", 
-                               "天津", "苏州", "宁波", "青岛", "大连", "厦门", "长沙", "郑州", "沈阳", "长春"]
+        self.company_types = ["科技", "信息", "网络", "软件", "数据", "智能", "数字", "创新", "互联", "电子",
+                             "智能", "智慧", "云端", "物联", "区块", "人工", "机器", "自动", "智能", "数字",
+                             "高新", "先进", "现代", "未来", "前沿", "尖端", "领先", "卓越", "优质", "专业"]
+        
+        self.company_suffixes = ["有限公司", "有限责任公司", "股份有限公司", "集团", "科技发展有限公司",
+                                "技术有限公司", "信息技术有限公司", "科技有限公司", "网络科技有限公司",
+                                "软件有限公司", "数据科技有限公司", "智能科技有限公司", "数字科技有限公司",
+                                "创新科技有限公司", "互联科技有限公司", "电子科技有限公司", "发展有限公司",
+                                "实业有限公司", "投资有限公司", "咨询有限公司", "服务有限公司", "工程有限公司"]
+        
+        self.company_industries = ["科技", "信息", "网络", "软件", "数据", "智能", "数字", "创新", "互联", "电子",
+                                 "金融", "投资", "咨询", "管理", "服务", "工程", "设计", "传媒", "文化", "教育",
+                                 "医疗", "健康", "环保", "能源", "物流", "电商", "零售", "制造", "建筑", "农业",
+                                 "旅游", "餐饮", "娱乐", "体育", "汽车", "房产", "家居", "服装", "食品", "饮料",
+                                 "化工", "机械", "电子", "电气", "通信", "互联网", "人工智能", "大数据", "云计算", "物联网"]
+        
+        self.company_regions = ["北京", "上海", "广州", "深圳", "杭州", "南京", "成都", "武汉", "西安", "重庆",
+                               "天津", "苏州", "宁波", "青岛", "大连", "厦门", "长沙", "郑州", "沈阳", "长春",
+                               "哈尔滨", "济南", "合肥", "福州", "南昌", "南宁", "贵阳", "昆明", "兰州", "西宁",
+                               "银川", "乌鲁木齐", "呼和浩特", "太原", "石家庄", "海口", "珠海", "佛山", "东莞", "中山",
+                               "惠州", "江门", "肇庆", "汕头", "湛江", "茂名", "韶关", "潮州", "揭阳", "汕尾"]
+        
+        # 公司名称前缀（用于增加多样性）
+        self.company_prefixes = ["新", "大", "中", "华", "国", "东", "南", "西", "北", "上", "下", "左", "右",
+                                "金", "银", "铜", "铁", "钢", "宝", "玉", "珠", "珍", "奇", "特", "优", "佳",
+                                "永", "恒", "久", "长", "远", "高", "深", "广", "阔", "宏", "伟", "大", "强"]
+        
+        # 公司名称中间词（用于增加多样性）
+        self.company_middle_words = ["时代", "世纪", "国际", "全球", "亚洲", "中国", "中华", "华夏", "神州", "大地",
+                                   "阳光", "星光", "月光", "风云", "雷霆", "闪电", "火焰", "冰雪", "海洋", "天空",
+                                   "大地", "山川", "河流", "森林", "草原", "沙漠", "绿洲", "花园", "乐园", "天堂"]
 
         # 统一社会信用代码相关数据
         self.organization_codes = ["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "T", "U", "W", "X", "Y"]
@@ -573,20 +598,78 @@ class UserInfoGenerator:
 
     def generate_company_name(self):
         """生成随机公司名称"""
-        region = random.choice(self.company_regions)
-        industry = random.choice(self.company_industries)
-        company_type = random.choice(self.company_types)
-        suffix = random.choice(self.company_suffixes)
+        # 增加组合的随机性，避免重复
+        max_attempts = 10  # 最大尝试次数，避免无限循环
         
-        # 随机选择公司名称格式
-        formats = [
-            f"{region}{industry}{company_type}{suffix}",
-            f"{region}{company_type}{industry}{suffix}",
-            f"{industry}{company_type}{suffix}",
-            f"{company_type}{industry}{suffix}"
-        ]
+        for attempt in range(max_attempts):
+            region = random.choice(self.company_regions)
+            industry = random.choice(self.company_industries)
+            company_type = random.choice(self.company_types)
+            suffix = random.choice(self.company_suffixes)
+            
+            # 随机决定是否添加前缀（增加概率）
+            use_prefix = random.random() > 0.5
+            prefix = random.choice(self.company_prefixes) if use_prefix else ""
+            
+            # 随机决定是否添加中间词（增加概率）
+            use_middle = random.random() > 0.6
+            middle_word = random.choice(self.company_middle_words) if use_middle else ""
+            
+            # 随机决定是否使用数字编号（进一步增加多样性）
+            use_number = random.random() > 0.8
+            number_suffix = ""
+            if use_number:
+                # 随机生成1-3位数字编号
+                number_suffix = str(random.randint(1, 999))
+            
+            # 随机选择公司名称格式（增加更多格式组合）
+            formats = [
+                f"{region}{industry}{company_type}{suffix}",
+                f"{region}{company_type}{industry}{suffix}",
+                f"{industry}{company_type}{suffix}",
+                f"{company_type}{industry}{suffix}",
+                f"{prefix}{region}{industry}{company_type}{suffix}",
+                f"{prefix}{region}{company_type}{industry}{suffix}",
+                f"{region}{industry}{middle_word}{company_type}{suffix}",
+                f"{region}{company_type}{middle_word}{industry}{suffix}",
+                f"{prefix}{region}{industry}{middle_word}{company_type}{suffix}",
+                f"{prefix}{region}{company_type}{middle_word}{industry}{suffix}",
+                f"{industry}{middle_word}{company_type}{suffix}",
+                f"{company_type}{middle_word}{industry}{suffix}",
+                f"{prefix}{industry}{company_type}{suffix}",
+                f"{prefix}{company_type}{industry}{suffix}",
+                f"{industry}{company_type}{middle_word}{suffix}",
+                f"{company_type}{industry}{middle_word}{suffix}",
+                f"{region}{industry}{company_type}{number_suffix}{suffix}",
+                f"{region}{company_type}{industry}{number_suffix}{suffix}",
+                f"{industry}{company_type}{number_suffix}{suffix}",
+                f"{company_type}{industry}{number_suffix}{suffix}",
+                f"{prefix}{region}{industry}{company_type}{number_suffix}{suffix}",
+                f"{prefix}{region}{company_type}{industry}{number_suffix}{suffix}",
+                f"{region}{industry}{middle_word}{company_type}{number_suffix}{suffix}",
+                f"{region}{company_type}{middle_word}{industry}{number_suffix}{suffix}",
+                f"{prefix}{region}{industry}{middle_word}{company_type}{number_suffix}{suffix}",
+                f"{prefix}{region}{company_type}{middle_word}{industry}{number_suffix}{suffix}",
+                f"{industry}{middle_word}{company_type}{number_suffix}{suffix}",
+                f"{company_type}{middle_word}{industry}{number_suffix}{suffix}",
+                f"{prefix}{industry}{company_type}{number_suffix}{suffix}",
+                f"{prefix}{company_type}{industry}{number_suffix}{suffix}",
+                f"{industry}{company_type}{middle_word}{number_suffix}{suffix}",
+                f"{company_type}{industry}{middle_word}{number_suffix}{suffix}"
+            ]
+            
+            # 随机选择一种格式
+            selected_format = random.choice(formats)
+            
+            # 清理格式中的空字符串（如果前缀或中间词为空）
+            selected_format = selected_format.replace(" ", "").strip()
+            
+            # 检查是否生成了有效的公司名称（不是空字符串）
+            if selected_format and len(selected_format) > 4:
+                return selected_format
         
-        return random.choice(formats)
+        # 如果所有尝试都失败，返回一个默认格式
+        return f"{random.choice(self.company_regions)}{random.choice(self.company_industries)}{random.choice(self.company_types)}{random.choice(self.company_suffixes)}"
 
     def generate_unified_social_credit_code(self):
         """生成符合规则的真实统一社会信用代码（18位）
