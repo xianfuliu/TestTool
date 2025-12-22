@@ -228,7 +228,7 @@ class LoadingPage(QWidget):
         
         # 设置窗口样式
         self.setStyleSheet("""
-            QWidget {
+            LoadingPage {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                                           stop:0 #1A237E, stop:0.3 #283593, stop:0.7 #303F9F, stop:1 #3949AB);
                 border-radius: 15px;

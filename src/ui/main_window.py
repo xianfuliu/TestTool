@@ -1,12 +1,24 @@
 import os
-from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox, QMenuBar, QMenu, QAction, QApplication)
+from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox, QMenuBar, QMenu, QAction, QApplication, 
+                             QHBoxLayout, QWidget, QPushButton, QLabel)
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from PyQt5.QtCore import Qt, QTimer, QEvent
 
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_filler import IDCardFiller
 from src.ui.tabs import TestDataTab, DataQueryTab, ApiToolTab  # 修改导入方式
+from src.core.services.user_service import UserService
+from src.core.services.session_service import SessionService
 from src.utils.resource_utils import resource_path
+from src.ui.widgets.toast_tips import Toast  # 导入Toast组件
+
+# 条件导入调度服务
+try:
+    from src.core.services.scheduler_service import UnifiedSchedulerService
+    SCHEDULER_SERVICE_AVAILABLE = True
+except ImportError as e:
+    print(f"调度服务模块不可用: {e}")
+    SCHEDULER_SERVICE_AVAILABLE = False
 
 # 条件导入接口自动化标签页
 try:
@@ -98,6 +110,10 @@ class MainWindow(QMainWindow):
         
         # 存储调度服务实例
         self.scheduler_service = None
+        
+        # 用户管理相关
+        self.current_user = None
+        self.user_service = UserService()
 
     def show_and_maximize(self):
         """显示窗口并根据屏幕尺寸调整，确保在屏幕尺寸可用后调用"""
@@ -321,6 +337,30 @@ class MainWindow(QMainWindow):
         # 设置Tab Widget为中心部件
         self.setCentralWidget(tab_widget)
         
+        # 创建退出按钮并添加到tab widget的右上角
+        self.logout_button = QPushButton()
+        self.logout_button.setIcon(QIcon(resource_path("src/resources/icons/logout.png")))
+        self.logout_button.setToolTip("退出登录")
+        self.logout_button.setFixedSize(30, 25)
+        self.logout_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 3px;
+                margin: 2px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+        """)
+        self.logout_button.clicked.connect(self.handle_logout)
+        
+        # 将退出按钮添加到tab widget的右上角
+        tab_widget.setCornerWidget(self.logout_button, Qt.TopRightCorner)
+        
         # 存储tab widget引用
         self.tab_widget = tab_widget
         
@@ -449,3 +489,108 @@ class MainWindow(QMainWindow):
                             
         except Exception as e:
             print(f"处理tab切换事件时出错: {e}")
+    
+    def set_current_user(self, user):
+        """设置当前登录用户"""
+        self.current_user = user
+        # 更新窗口标题
+        self.setWindowTitle(f"测试工具-{user.username}")
+        self.create_user_menu()
+    
+    def create_user_menu(self):
+        """创建用户菜单 - 已弃用，退出功能已移至tab菜单栏"""
+        # 不再创建用户菜单，退出功能已通过图标按钮实现
+        pass
+    
+    def restart_scheduler_service(self):
+        """重新启动调度服务"""
+        if not SCHEDULER_SERVICE_AVAILABLE:
+            print("调度服务模块不可用，跳过重启")
+            return
+            
+        try:
+            # 检查是否已经有调度服务实例
+            if self.scheduler_service:
+                # 如果服务正在运行，先停止
+                if hasattr(self.scheduler_service, 'running') and self.scheduler_service.running:
+                    print("调度服务正在运行，先停止...")
+                    self.scheduler_service.stop_service()
+                
+                # 重新创建调度服务实例
+                self.scheduler_service = UnifiedSchedulerService()
+            else:
+                # 创建新的调度服务实例
+                self.scheduler_service = UnifiedSchedulerService()
+            
+            # 启动调度服务
+            print("正在启动调度服务...")
+            if self.scheduler_service.start_service():
+                print("调度服务启动成功")
+                # 检查是否成功获取分布式锁
+                if hasattr(self.scheduler_service, 'running') and self.scheduler_service.running:
+                    print("当前实例持有调度锁，调度服务已启动")
+                else:
+                    print("检测到已有调度服务实例在运行，当前实例作为只读客户端")
+            else:
+                print("调度服务启动失败")
+                
+        except Exception as e:
+            print(f"重启调度服务时出错: {e}")
+    
+    def handle_logout(self):
+        """处理用户登出"""
+        if self.current_user:
+            # 创建自定义确认对话框，使用"确认"和"取消"按钮
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle('确认登出')
+            msg_box.setText(f'确定要登出用户 {self.current_user.username} 吗？')
+            msg_box.setIcon(QMessageBox.Question)
+            
+            # 添加自定义按钮
+            confirm_button = msg_box.addButton('确认', QMessageBox.YesRole)
+            cancel_button = msg_box.addButton('取消', QMessageBox.NoRole)
+            
+            # 设置默认按钮
+            msg_box.setDefaultButton(cancel_button)
+            
+            # 显示对话框并获取结果
+            msg_box.exec_()
+            
+            if msg_box.clickedButton() == confirm_button:
+                # 执行登出逻辑
+                self.perform_logout()
+    
+    def perform_logout(self):
+        """执行登出操作"""
+        try:
+            # 删除session文件
+            session_service = SessionService()
+            session_service.delete_session()
+            
+            # 关闭主窗口
+            self.close()
+            
+            # 重新启动认证页面
+            from src.ui.auth_page import AuthPage
+            auth_page = AuthPage()
+            auth_page.showMaximized()
+            
+            # 连接认证成功信号
+            def on_login_success(user):
+                auth_page.close()
+                # 重新设置当前用户并显示主窗口
+                self.set_current_user(user)
+                self.show_and_maximize()
+                # 重新启动调度服务（如果存在）
+                self.restart_scheduler_service()
+                # 显示登录成功Toast提示
+                Toast.success(self, f"欢迎回来，{user.username}！")
+            
+            auth_page.login_success.connect(on_login_success)
+            
+        except Exception as e:
+            QMessageBox.critical(self, '登出错误', f'登出过程中发生错误: {str(e)}')
+    
+    def get_current_user(self):
+        """获取当前用户"""
+        return self.current_user

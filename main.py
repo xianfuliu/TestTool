@@ -95,59 +95,139 @@ def initialize_application():
 
 
 def start_loading_page(app, config):
-    """启动加载页面"""
+    """启动加载页面，初始化完成后跳转到认证页面"""
+    from src.ui.auth_page import AuthPage
+    from src.core.services.token_service import TokenService
+    from src.core.services.session_service import SessionService
+    from src.core.services.user_service import UserService
+    
+    # 创建主窗口实例（但不显示）
+    window = MainWindow(config=config)
+    
+    # 创建加载页面，传入main_window实例
+    loading_page = LoadingPage(window)
+    loading_page.show()
+    
+    # 设置应用程序图标
+    app.setWindowIcon(window.create_icon())
+    
+    # 启动Token服务（每周清理任务）
+    try:
+        token_service = TokenService()
+        token_service.start_weekly_cleanup()
+        print("Token服务已启动，每周清理任务运行中")
+    except Exception as e:
+        print(f"启动Token服务失败: {e}")
+    
+    # 调度服务将在用户登录成功后启动
+    # 这里只创建服务实例，但不启动
+    try:
+        scheduler_service = UnifiedSchedulerService()
+        # 将调度服务实例传递给主窗口，但不启动
+        window.set_scheduler_service(scheduler_service)
+        print("调度服务实例已创建，将在用户登录后启动")
+    except Exception as e:
+        print(f"创建调度服务实例失败: {e}")
+    
+    # 创建认证页面（但不显示）
+    auth_page = AuthPage()
+    
+    # 连接加载完成信号
+    def on_loading_completed():
+        """加载完成后显示认证页面或直接登录"""
+        loading_page.close()
+        
+        # 检查是否有有效的session
+        session_service = SessionService()
+        user_service = UserService()
+        
+        session_data = session_service.validate_session(token_service)
+        if session_data:
+            # 有有效的session，直接登录
+            print(f"检测到有效session，自动登录用户: {session_data.get('username')}")
+            
+            # 获取完整的用户信息
+            user = user_service.get_user_by_id(session_data.get('user_id'))
+            if user:
+                # 直接显示主窗口
+                window.set_current_user(user)
+                window.show_and_maximize()
+                # 自动登录成功后启动调度服务
+                window.restart_scheduler_service()
+                return
+            else:
+                print("用户信息获取失败，显示登录页面")
+        
+        # 没有有效session，显示认证页面
+        print("未检测到有效session，显示登录页面")
+        auth_page.showMaximized()
+    
+    loading_page.loading_completed.connect(on_loading_completed)
+    
+    # 连接认证成功信号
+    def on_login_success(user):
+        auth_page.close()
+        # 显示主窗口（最大化模式）
+        window.set_current_user(user)
+        window.show_and_maximize()
+        # 登录成功后启动调度服务
+        window.restart_scheduler_service()
+    
+    auth_page.login_success.connect(on_login_success)
+    
+    # 开始加载过程
+    loading_page.start_loading()
+    
+    return window, auth_page, loading_page
+
+
+def start_auth_page(app, config):
+    """启动认证页面（兼容旧版本）"""
+    from src.ui.auth_page import AuthPage
+    from src.core.services.token_service import TokenService
+    
+    # 创建认证页面
+    auth_page = AuthPage()
+    auth_page.showMaximized()
+    
     # 创建主窗口实例（但不显示）
     window = MainWindow(config=config)
     
     # 设置应用程序图标
     app.setWindowIcon(window.create_icon())
     
-    # 创建加载页面
-    loading_page = LoadingPage(window)
-    loading_page.show()
+    # 启动Token服务（每周清理任务）
+    try:
+        token_service = TokenService()
+        token_service.start_weekly_cleanup()
+        print("Token服务已启动，每周清理任务运行中")
+    except Exception as e:
+        print(f"启动Token服务失败: {e}")
     
-    # 启动调度后台服务（使用分布式锁确保单实例运行）
+    # 调度服务将在用户登录成功后启动
+    # 这里只创建服务实例，但不启动
     try:
         scheduler_service = UnifiedSchedulerService()
-        
-        # 直接调用start_service()，它内部会处理分布式锁检查
-        if scheduler_service.start_service():
-            # 成功启动服务，启动服务主循环（在新线程中）
-            import threading
-            service_thread = threading.Thread(target=scheduler_service.run_service_loop, daemon=True)
-            service_thread.start()
-            
-            print("统一调度服务已启动（当前实例持有调度锁）")
-            
-            # 将调度服务实例传递给主窗口
-            window.set_scheduler_service(scheduler_service)
-        else:
-            # 无法启动服务，说明已有其他实例在运行
-            print("警告：检测到已有调度服务实例在运行，当前实例将作为只读客户端运行")
-            print("调度任务将由已运行的实例统一执行，避免重复执行")
-            
-            # 创建只读的调度服务实例（不启动调度循环）
-            scheduler_service.running = False
-            window.set_scheduler_service(scheduler_service)
-            
+        # 将调度服务实例传递给主窗口，但不启动
+        window.set_scheduler_service(scheduler_service)
+        print("调度服务实例已创建，将在用户登录后启动")
     except Exception as e:
-        print(f"启动统一调度服务失败: {e}")
+        print(f"创建调度服务实例失败: {e}")
     
-    # 连接加载完成信号
-    def on_loading_completed():
-        loading_page.close()
+    # 连接认证成功信号
+    def on_login_success(user):
+        auth_page.close()
         # 显示主窗口（最大化模式）
+        window.set_current_user(user)
         window.show_and_maximize()
     
-    loading_page.loading_completed.connect(on_loading_completed)
+    auth_page.login_success.connect(on_login_success)
     
-    # 开始加载
-    loading_page.start_loading()
-    
-    return window
+    return window, auth_page
 
 
 if __name__ == "__main__":
     app, config = initialize_application()
-    window = start_loading_page(app, config)
+    # 使用新的启动流程：先显示loading_page，再显示认证页面
+    window, auth_page, loading_page = start_loading_page(app, config)
     sys.exit(app.exec_())

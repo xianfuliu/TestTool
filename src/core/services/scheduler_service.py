@@ -130,6 +130,9 @@ class UnifiedSchedulerService:
             logger.info(f"服务启动时间: {self.start_time}")
             logger.info("当前实例持有调度锁")
             
+            # 启动服务主循环线程
+            self._start_service_loop()
+            
             return True
             
         except Exception as e:
@@ -145,6 +148,13 @@ class UnifiedSchedulerService:
             return
             
         self.running = False
+        
+        # 停止服务主循环线程
+        if hasattr(self, 'service_loop_thread') and self.service_loop_thread and self.service_loop_thread.is_alive():
+            logger.info("等待服务主循环线程退出...")
+            self.service_loop_thread.join(timeout=10)
+            if self.service_loop_thread.is_alive():
+                logger.warning("服务主循环线程未能在超时时间内退出")
         
         # 停止所有正在执行的调度
         for scheduler_id, thread in self.active_schedulers.items():
@@ -1610,6 +1620,20 @@ class UnifiedSchedulerService:
             logger.error(f"续期分布式锁失败: {e}")
             return False
 
+    def _start_service_loop(self):
+        """启动服务主循环线程"""
+        try:
+            # 创建并启动服务主循环线程
+            self.service_loop_thread = threading.Thread(
+                target=self.run_service_loop,
+                name="SchedulerServiceLoop"
+            )
+            self.service_loop_thread.daemon = True
+            self.service_loop_thread.start()
+            logger.info("服务主循环线程已启动")
+        except Exception as e:
+            logger.error(f"启动服务主循环线程失败: {e}")
+    
     def _release_distributed_lock(self):
         """释放分布式锁"""
         try:

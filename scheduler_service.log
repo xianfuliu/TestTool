@@ -1,0 +1,59 @@
+2025-12-22 16:28:31,839 - src.core.services.token_service - INFO - 每周清理任务工作线程启动
+2025-12-22 16:28:31,839 - src.core.services.token_service - INFO - 每周清理任务已启动
+2025-12-22 16:28:31,904 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-22 16:28:33,994 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-22 16:28:34,252 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-22 16:28:36,976 - src.core.services.session_service - INFO - Session加载成功: 用户 admin
+2025-12-22 16:28:37,073 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
+2025-12-22 16:28:37,296 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-22 16:28:37,442 - UnifiedSchedulerService - INFO - 成功获取分布式锁
+2025-12-22 16:28:37,443 - UnifiedSchedulerService - INFO - 统一调度服务已启动，检查间隔: 10秒
+2025-12-22 16:28:37,443 - UnifiedSchedulerService - INFO - 服务启动时间: 2025-12-22 16:28:37.443397
+2025-12-22 16:28:37,443 - UnifiedSchedulerService - INFO - 当前实例持有调度锁
+2025-12-22 16:28:37,444 - UnifiedSchedulerService - INFO - 服务主循环开始运行
+2025-12-22 16:28:37,444 - UnifiedSchedulerService - INFO - 服务主循环线程已启动
+2025-12-22 16:28:37,444 - UnifiedSchedulerService - INFO - 当前时间: 2025-12-22 16:28:37.444399, 等待 23 秒到整分钟再开始运行...
+2025-12-22 16:28:47,525 - UnifiedSchedulerService - INFO - 等待倒计时: 13秒
+2025-12-22 16:28:55,597 - UnifiedSchedulerService - INFO - 等待倒计时: 5秒
+2025-12-22 16:28:56,603 - UnifiedSchedulerService - INFO - 等待倒计时: 4秒
+2025-12-22 16:28:57,604 - UnifiedSchedulerService - INFO - 等待倒计时: 3秒
+2025-12-22 16:28:58,618 - UnifiedSchedulerService - INFO - 等待倒计时: 2秒
+2025-12-22 16:28:59,630 - UnifiedSchedulerService - INFO - 等待倒计时: 1秒
+2025-12-22 16:29:00,004 - UnifiedSchedulerService - INFO - 整分钟启动时间: 2025-12-22 16:29:00.004593
+2025-12-22 16:29:00,005 - UnifiedSchedulerService - INFO - === 第 1 次检查 ===
+2025-12-22 16:29:00,167 - UnifiedSchedulerService - INFO - 检查时间: 2025-12-22 16:29:00.167106, 启用的调度数量: 1
+2025-12-22 16:29:00,167 - UnifiedSchedulerService - INFO - 调度 这个测试调度很重要 - Cron: 00 0/50 * * * ?, 下次执行: 2025-12-22 16:50:00
+2025-12-22 16:29:00,167 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
+2025-12-22 16:29:00,167 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 1, 错误次数: 0, 运行时长: 23秒
+2025-12-22 16:29:00,172 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
+2025-12-22 16:29:04,864 - src.core.services.session_service - INFO - Session文件已删除
+2025-12-22 16:29:04,864 - UnifiedSchedulerService - INFO - 等待服务主循环线程退出...
+2025-12-22 16:29:04,900 - UnifiedSchedulerService - INFO - 服务主循环正常退出
+2025-12-22 16:29:04,901 - UnifiedSchedulerService - INFO - 等待所有执行线程完成...
+2025-12-22 16:29:04,991 - UnifiedSchedulerService - INFO - 分布式锁已释放
+2025-12-22 16:29:04,993 - UnifiedSchedulerService - INFO - 分布式锁释放完成
+2025-12-22 16:29:04,994 - UnifiedSchedulerService - INFO - 统一调度服务已停止
+2025-12-22 16:29:04,994 - UnifiedSchedulerService - INFO - 服务运行时长: 27.46秒
+2025-12-22 16:29:04,994 - UnifiedSchedulerService - INFO - 检查次数: 1, 错误次数: 0
+2025-12-22 16:29:12,302 - src.core.services.token_service - INFO - 会话创建成功: 用户ID 1
+2025-12-22 16:29:12,363 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
+2025-12-22 16:29:12,423 - src.core.services.user_service - INFO - 用户认证成功: admin
+2025-12-22 16:29:12,424 - src.core.services.session_service - INFO - Session保存成功: 用户 admin
+2025-12-22 16:29:12,504 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-22 16:29:12,641 - UnifiedSchedulerService - INFO - 成功获取分布式锁
+2025-12-22 16:29:12,641 - UnifiedSchedulerService - INFO - 统一调度服务已启动，检查间隔: 10秒
+2025-12-22 16:29:12,641 - UnifiedSchedulerService - INFO - 服务启动时间: 2025-12-22 16:29:12.641105
+2025-12-22 16:29:12,641 - UnifiedSchedulerService - INFO - 当前实例持有调度锁
+2025-12-22 16:29:12,641 - UnifiedSchedulerService - INFO - 服务主循环开始运行
+2025-12-22 16:29:12,641 - UnifiedSchedulerService - INFO - 服务主循环线程已启动
+2025-12-22 16:29:12,641 - UnifiedSchedulerService - INFO - 当前时间: 2025-12-22 16:29:12.641105, 等待 48 秒到整分钟再开始运行...
+2025-12-22 16:29:22,707 - UnifiedSchedulerService - INFO - 等待倒计时: 38秒
+2025-12-22 16:29:32,772 - UnifiedSchedulerService - INFO - 等待倒计时: 28秒
+2025-12-22 16:29:36,747 - UnifiedSchedulerService - INFO - 等待服务主循环线程退出...
+2025-12-22 16:29:36,797 - UnifiedSchedulerService - INFO - 服务在等待期间被停止
+2025-12-22 16:29:36,797 - UnifiedSchedulerService - INFO - 等待所有执行线程完成...
+2025-12-22 16:29:36,881 - UnifiedSchedulerService - INFO - 分布式锁已释放
+2025-12-22 16:29:36,881 - UnifiedSchedulerService - INFO - 分布式锁释放完成
+2025-12-22 16:29:36,881 - UnifiedSchedulerService - INFO - 统一调度服务已停止
+2025-12-22 16:29:36,881 - UnifiedSchedulerService - INFO - 服务运行时长: 24.16秒
+2025-12-22 16:29:36,881 - UnifiedSchedulerService - INFO - 检查次数: 0, 错误次数: 0

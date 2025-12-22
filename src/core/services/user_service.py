@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any
 
 from config.database import Database
 from src.core.models.user_model import User, EmailVerificationCode, UserSession
+from src.core.services.token_service import TokenService
+from src.core.services.session_service import SessionService
 
 
 logger = logging.getLogger(__name__)
@@ -19,6 +21,8 @@ class UserService:
     
     def __init__(self):
         self.db = Database()
+        self.token_service = TokenService()
+        self.session_service = SessionService()
     
     def hash_password(self, password: str) -> str:
         """对密码进行MD5哈希"""
@@ -171,6 +175,18 @@ class UserService:
             
             logger.info(f"用户认证成功: {username}")
             
+            # 保存session信息到文件
+            if session_token:
+                user_dict = {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'is_admin': user.is_admin,
+                    'real_name': user.real_name,
+                    'business_line': user.business_line
+                }
+                self.session_service.save_session(user_dict, session_token)
+            
             # 返回用户信息和会话令牌
             return {
                 'user': user,
@@ -317,27 +333,11 @@ class UserService:
     def create_session(self, user_id: int, expires_hours: int = 24 * 7) -> Optional[UserSession]:
         """创建用户会话"""
         try:
-            session_token = self.generate_session_token()
-            expires_at = datetime.now() + timedelta(hours=expires_hours)
-            
-            with self.db.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("""
-                        INSERT INTO user_sessions (user_id, session_token, expires_at)
-                        VALUES (%s, %s, %s)
-                    """, (user_id, session_token, expires_at))
-                    
-                    conn.commit()
-                    session_id = cursor.lastrowid
-                    
-                    logger.info(f"会话创建成功: 用户ID {user_id}")
-                    return UserSession(
-                        id=session_id,
-                        user_id=user_id,
-                        session_token=session_token,
-                        expires_at=expires_at,
-                        created_at=datetime.now()
-                    )
+            session_token = self.token_service.create_session(user_id, expires_hours)
+            if session_token:
+                # 获取会话信息
+                return self.get_session_by_token(session_token)
+            return None
         except Exception as e:
             logger.error(f"创建会话失败: {e}")
             return None
@@ -345,61 +345,28 @@ class UserService:
     def get_session_by_token(self, session_token: str) -> Optional[UserSession]:
         """根据令牌获取会话"""
         try:
-            with self.db.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("""
-                        SELECT id, user_id, session_token, expires_at, created_at
-                        FROM user_sessions 
-                        WHERE session_token = %s
-                    """, (session_token,))
-                    
-                    session_data = cursor.fetchone()
-                    if session_data:
-                        session = UserSession(**session_data)
-                        if session.is_valid():
-                            return session
-                        else:
-                            # 删除过期会话
-                            self.delete_session(session_token)
-                    return None
+            user_id = self.token_service.validate_session(session_token)
+            if user_id:
+                with self.db.get_connection() as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT id, user_id, session_token, expires_at, created_at
+                            FROM user_sessions 
+                            WHERE session_token = %s
+                        """, (session_token,))
+                        
+                        session_data = cursor.fetchone()
+                        if session_data:
+                            return UserSession(**session_data)
+            return None
         except Exception as e:
             logger.error(f"获取会话失败: {e}")
             return None
     
     def delete_session(self, session_token: str) -> bool:
         """删除会话"""
-        try:
-            with self.db.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("""
-                        DELETE FROM user_sessions 
-                        WHERE session_token = %s
-                    """, (session_token,))
-                    
-                    conn.commit()
-                    logger.info(f"会话删除成功: {session_token}")
-                    return True
-        except Exception as e:
-            logger.error(f"删除会话失败: {e}")
-            return False
+        return self.token_service.delete_session(session_token)
     
     def cleanup_expired_sessions(self) -> int:
         """清理过期会话"""
-        try:
-            with self.db.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("""
-                        DELETE FROM user_sessions 
-                        WHERE expires_at < CURRENT_TIMESTAMP
-                    """)
-                    
-                    deleted_count = cursor.rowcount
-                    conn.commit()
-                    
-                    if deleted_count > 0:
-                        logger.info(f"清理过期会话: {deleted_count} 条")
-                    
-                    return deleted_count
-        except Exception as e:
-            logger.error(f"清理过期会话失败: {e}")
-            return 0
+        return self.token_service.cleanup_expired_sessions()

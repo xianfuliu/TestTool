@@ -2,7 +2,7 @@
   "user_id": 1,
   "username": "admin",
   "email": "admin@example.com",
-  "session_token": "de035a09e10ba96f4e4d87c207556f32464e14578effacefd3dcb55042ebee3c",
+  "session_token": "6cc7fe3c890d5d6614dcfbfae787b85ef77bd12fe64d45bd8f1fdf3a4d57c5b8",
   "is_admin": 1,
-  "saved_at": "2025-12-18T17:06:46.993645"
+  "saved_at": "2025-12-22T16:29:12.424589"
 }
