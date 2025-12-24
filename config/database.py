@@ -385,6 +385,27 @@ DB_TABLES = {
             INDEX idx_session_token (session_token),
             INDEX idx_expires_at (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
+
+    'tool_cards': '''
+        CREATE TABLE IF NOT EXISTS tool_cards (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            title VARCHAR(100) NOT NULL,
+            description TEXT,
+            card_type ENUM('sql', 'sql_update', 'sql_delete', 'http', 'python') DEFAULT 'sql',
+            configuration JSON COMMENT '卡片配置（SQL语句、HTTP配置等）',
+            timeout INT DEFAULT 5000 COMMENT '超时时间（毫秒）',
+            locked BOOLEAN DEFAULT FALSE COMMENT '是否锁定',
+            sort_order INT DEFAULT 0 COMMENT '排序顺序',
+            created_by VARCHAR(50) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            INDEX idx_project_id (project_id),
+            INDEX idx_card_type (card_type),
+            INDEX idx_sort_order (sort_order)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     '''
 }
 

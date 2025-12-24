@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
                              QTabWidget, QPushButton, QLabel, QFrame, QMenu,
-                             QAction, QMessageBox)
+                             QAction, QMessageBox, QComboBox)
 from src.ui.widgets.toast_tips import Toast
 from PyQt5.QtCore import Qt
 import json
@@ -182,75 +182,61 @@ class ToolCardsTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.config_file = "config/tool_cards.json"
-        self.config_data = {}
-        self.current_business_line = ""
-        self.current_sub_business = ""
+        self.current_business_group_id = None
+        self.current_project_id = None
+        self.business_groups = []
+        self.projects = []
         self.init_ui()
-        self.load_config()
+        self.load_data()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 顶部业务线区域
-        self.create_business_line_bar(main_layout)
+        # 顶部筛选栏区域
+        self.create_filter_bar(main_layout)
 
-        # 子业务模块区域
-        self.create_sub_business_bar(main_layout)
+        # 项目Tab区域
+        self.create_projects_tab(main_layout)
 
-        # 卡片区域
+        # 卡片展示区域
         self.create_cards_area(main_layout)
 
-    def create_business_line_bar(self, parent_layout):
-        # 业务线容器
-        business_container = QWidget()
-        business_container.setStyleSheet("""
+    def create_filter_bar(self, parent_layout):
+        # 筛选栏容器
+        filter_container = QWidget()
+        filter_container.setStyleSheet("""
             QWidget {
                 background-color: #f8fafc;
                 border-bottom: 1px solid #e2e8f0;
                 padding: 8px 12px;
             }
         """)
-        business_container.setFixedHeight(50)
+        filter_container.setFixedHeight(50)
 
-        business_layout = QHBoxLayout(business_container)
-        business_layout.setContentsMargins(0, 0, 0, 0)
-        business_layout.setSpacing(10)
+        filter_layout = QHBoxLayout(filter_container)
+        filter_layout.setContentsMargins(0, 0, 0, 0)
+        filter_layout.setSpacing(10)
 
-        # 业务线标签
+        # 业务线筛选
         business_label = QLabel("业务线:")
         business_label.setStyleSheet("QLabel { font-weight: bold; color: #2d3748; }")
 
-        # 业务线Tab区域（可滚动）
-        self.business_tab_widget = QTabWidget()
-        self.business_tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: none;
-                background: transparent;
-            }
-            QTabBar::tab {
-                background: #e2e8f0;
+        self.business_combo = QComboBox()
+        self.business_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
                 border: 1px solid #cbd5e0;
-                border-bottom: none;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
+                border-radius: 4px;
                 padding: 6px 12px;
-                margin-right: 2px;
-                color: #4a5568;
+                min-width: 150px;
             }
-            QTabBar::tab:selected {
-                background: #4299e1;
-                color: white;
+            QComboBox:hover {
                 border-color: #4299e1;
             }
-            QTabBar::tab:hover:!selected {
-                background: #cbd5e0;
-            }
         """)
-        self.business_tab_widget.tabBar().setExpanding(False)
-        self.business_tab_widget.currentChanged.connect(self.on_business_line_changed)
+        self.business_combo.currentIndexChanged.connect(self.on_business_group_changed)
 
         # 配置按钮
         config_btn = QPushButton("配置")
@@ -270,35 +256,31 @@ class ToolCardsTab(QWidget):
         """)
         config_btn.clicked.connect(self.open_config_dialog)
 
-        business_layout.addWidget(business_label)
-        business_layout.addWidget(self.business_tab_widget, 1)
-        business_layout.addWidget(config_btn)
+        filter_layout.addWidget(business_label)
+        filter_layout.addWidget(self.business_combo)
+        filter_layout.addStretch()
+        filter_layout.addWidget(config_btn)
 
-        parent_layout.addWidget(business_container)
+        parent_layout.addWidget(filter_container)
 
-    def create_sub_business_bar(self, parent_layout):
-        # 子业务容器
-        sub_business_container = QWidget()
-        sub_business_container.setStyleSheet("""
+    def create_projects_tab(self, parent_layout):
+        # 项目Tab容器
+        projects_container = QWidget()
+        projects_container.setStyleSheet("""
             QWidget {
-                background-color: #f1f5f9;
+                background-color: #f7fafc;
                 border-bottom: 1px solid #e2e8f0;
-                padding: 6px 12px;
+                padding: 0px;
             }
         """)
-        sub_business_container.setFixedHeight(40)
 
-        sub_business_layout = QHBoxLayout(sub_business_container)
-        sub_business_layout.setContentsMargins(0, 0, 0, 0)
-        sub_business_layout.setSpacing(10)
+        projects_layout = QVBoxLayout(projects_container)
+        projects_layout.setContentsMargins(0, 0, 0, 0)
+        projects_layout.setSpacing(0)
 
-        # 子业务标签
-        sub_business_label = QLabel("子模块:")
-        sub_business_label.setStyleSheet("QLabel { font-weight: bold; color: #2d3748; }")
-
-        # 子业务Tab区域
-        self.sub_business_tab_widget = QTabWidget()
-        self.sub_business_tab_widget.setStyleSheet("""
+        # 项目Tab区域
+        self.projects_tab_widget = QTabWidget()
+        self.projects_tab_widget.setStyleSheet("""
             QTabWidget::pane {
                 border: none;
                 background: transparent;
@@ -306,27 +288,25 @@ class ToolCardsTab(QWidget):
             QTabBar::tab {
                 background: transparent;
                 border: none;
-                padding: 4px 12px;
-                margin-right: 8px;
+                padding: 8px 16px;
+                margin-right: 2px;
                 color: #4a5568;
-                border-radius: 12px;
+                border-radius: 0px;
             }
             QTabBar::tab:selected {
                 background: #4299e1;
                 color: white;
+                border-bottom: 2px solid #3182ce;
             }
             QTabBar::tab:hover:!selected {
                 background: #e2e8f0;
             }
         """)
-        self.sub_business_tab_widget.tabBar().setExpanding(False)
-        self.sub_business_tab_widget.currentChanged.connect(self.on_sub_business_changed)
+        self.projects_tab_widget.tabBar().setExpanding(False)
+        self.projects_tab_widget.currentChanged.connect(self.on_project_changed)
 
-        sub_business_layout.addWidget(sub_business_label)
-        sub_business_layout.addWidget(self.sub_business_tab_widget, 1)
-        sub_business_layout.addStretch()
-
-        parent_layout.addWidget(sub_business_container)
+        projects_layout.addWidget(self.projects_tab_widget)
+        parent_layout.addWidget(projects_container)
 
     def create_cards_area(self, parent_layout):
         # 卡片区域滚动区域
@@ -344,114 +324,115 @@ class ToolCardsTab(QWidget):
         scroll_area.setWidget(self.cards_container)
         parent_layout.addWidget(scroll_area, 1)
 
-    def load_config(self):
-        """加载配置文件"""
+    def load_data(self):
+        """从数据库加载数据"""
         try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    self.config_data = json.load(f)
-            else:
-                # 创建默认配置
-                self.config_data = {
-                    "business_lines": [],
-                    "default_business_line": ""
-                }
-                self.save_config()
+            # 加载业务线数据
+            self.business_groups = self.load_business_groups()
+            
+            # 加载业务线下拉框
+            self.business_combo.clear()
+            self.business_combo.addItem("全部业务线", None)
+            for business in self.business_groups:
+                self.business_combo.addItem(business['name'], business['id'])
+            
+            # 默认选择第一个业务线
+            if self.business_groups:
+                self.business_combo.setCurrentIndex(1)  # 跳过"全部业务线"
+                self.on_business_group_changed(1)
         except Exception as e:
-            print(f"加载配置文件失败: {e}")
-            self.config_data = {
-                "business_lines": [],
-                "default_business_line": ""
-            }
+            print(f"加载数据失败: {e}")
 
-    def save_config(self):
-        """保存配置文件"""
-        try:
-            os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(self.config_data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"保存配置文件失败: {e}")
+    def load_business_groups(self):
+        """从数据库加载业务线数据"""
+        # 这里需要实现数据库查询逻辑
+        # 暂时返回模拟数据
+        return [
+            {"id": 1, "name": "消费金融"},
+            {"id": 2, "name": "小微测试"},
+            {"id": 3, "name": "其他业务"}
+        ]
 
-    def refresh_ui(self):
-        """刷新UI显示"""
-        # 清空现有Tab
-        self.business_tab_widget.clear()
-        self.sub_business_tab_widget.clear()
+    def load_projects(self, business_group_id=None):
+        """根据业务线加载项目数据"""
+        # 这里需要实现数据库查询逻辑
+        # 暂时返回模拟数据
+        if business_group_id == 1:
+            return [
+                {"id": 1, "name": "消费金融项目A", "business_group_id": 1},
+                {"id": 2, "name": "消费金融项目B", "business_group_id": 1}
+            ]
+        elif business_group_id == 2:
+            return [
+                {"id": 3, "name": "小微测试项目A", "business_group_id": 2},
+                {"id": 4, "name": "小微测试项目B", "business_group_id": 2}
+            ]
+        elif business_group_id == 3:
+            return [
+                {"id": 5, "name": "其他项目A", "business_group_id": 3},
+                {"id": 6, "name": "其他项目B", "business_group_id": 3}
+            ]
+        else:
+            # 返回所有项目
+            return [
+                {"id": 1, "name": "消费金融项目A", "business_group_id": 1},
+                {"id": 2, "name": "消费金融项目B", "business_group_id": 1},
+                {"id": 3, "name": "小微测试项目A", "business_group_id": 2},
+                {"id": 4, "name": "小微测试项目B", "business_group_id": 2},
+                {"id": 5, "name": "其他项目A", "business_group_id": 3},
+                {"id": 6, "name": "其他项目B", "business_group_id": 3}
+            ]
 
-        # 清空卡片区域
-        for i in reversed(range(self.cards_layout.count())):
-            widget = self.cards_layout.itemAt(i).widget()
-            if widget is not None:
-                widget.deleteLater()
+    def load_tool_cards(self, project_id):
+        """根据项目ID加载卡片工具数据"""
+        # 这里需要实现数据库查询逻辑
+        # 暂时返回模拟数据
+        if project_id == 1:
+            return [
+                {"id": 1, "title": "用户查询", "description": "查询用户信息", "card_type": "sql"},
+                {"id": 2, "title": "订单统计", "description": "统计订单数据", "card_type": "sql"}
+            ]
+        elif project_id == 2:
+            return [
+                {"id": 3, "title": "API测试", "description": "测试HTTP接口", "card_type": "http"},
+                {"id": 4, "title": "数据处理", "description": "Python脚本处理", "card_type": "python"}
+            ]
+        else:
+            return []
 
-        business_lines = self.config_data.get('business_lines', [])
-
-        # 添加业务线Tab
-        for business in business_lines:
-            self.business_tab_widget.addTab(QWidget(), business.get('name', '未命名'))
-
-        # 设置默认业务线
-        default_business = self.config_data.get('default_business_line', '')
-        if business_lines and default_business:
-            for i in range(len(business_lines)):
-                if business_lines[i].get('name') == default_business:
-                    self.business_tab_widget.setCurrentIndex(i)
-                    break
-            else:
-                # 如果默认业务线不存在，选择第一个
-                if business_lines:
-                    self.business_tab_widget.setCurrentIndex(0)
-        elif business_lines:
-            self.business_tab_widget.setCurrentIndex(0)
-
-        # 触发业务线变更事件
-        if business_lines:
-            self.on_business_line_changed(self.business_tab_widget.currentIndex())
-
-    def on_business_line_changed(self, index):
+    def on_business_group_changed(self, index):
         """业务线变更事件"""
         if index < 0:
             return
 
-        business_lines = self.config_data.get('business_lines', [])
-        if index >= len(business_lines):
-            return
+        # 获取选中的业务线ID
+        business_group_id = self.business_combo.itemData(index)
+        self.current_business_group_id = business_group_id
 
-        current_business = business_lines[index]
-        self.current_business_line = current_business.get('name', '')
+        # 清空项目Tab
+        self.projects_tab_widget.clear()
 
-        # 清空子业务Tab
-        self.sub_business_tab_widget.clear()
+        # 加载项目数据
+        self.projects = self.load_projects(business_group_id)
 
-        # 添加子业务Tab
-        sub_businesses = current_business.get('sub_business', [])
-        for sub_business in sub_businesses:
-            self.sub_business_tab_widget.addTab(QWidget(), sub_business.get('name', '未命名'))
+        # 添加项目Tab
+        for project in self.projects:
+            self.projects_tab_widget.addTab(QWidget(), project['name'])
 
-        # 触发子业务变更事件
-        if sub_businesses:
-            self.on_sub_business_changed(0)
+        # 触发项目变更事件
+        if self.projects:
+            self.on_project_changed(0)
 
-    def on_sub_business_changed(self, index):
-        """子业务变更事件"""
+    def on_project_changed(self, index):
+        """项目变更事件"""
         if index < 0:
             return
 
-        business_lines = self.config_data.get('business_lines', [])
-        current_business_index = self.business_tab_widget.currentIndex()
-
-        if current_business_index < 0 or current_business_index >= len(business_lines):
+        if index >= len(self.projects):
             return
 
-        current_business = business_lines[current_business_index]
-        sub_businesses = current_business.get('sub_business', [])
-
-        if index >= len(sub_businesses):
-            return
-
-        current_sub_business = sub_businesses[index]
-        self.current_sub_business = current_sub_business.get('name', '')
+        current_project = self.projects[index]
+        self.current_project_id = current_project['id']
 
         # 清空卡片区域
         for i in reversed(range(self.cards_layout.count())):
@@ -459,8 +440,10 @@ class ToolCardsTab(QWidget):
             if item and item.widget():
                 item.widget().deleteLater()
 
+        # 加载卡片数据
+        cards = self.load_tool_cards(self.current_project_id)
+
         # 添加卡片 - 使用网格布局，每行最多3个卡片
-        cards = current_sub_business.get('cards', [])
         max_columns = 3  # 每行最多显示3个卡片
         
         for i, card_data in enumerate(cards):
@@ -476,23 +459,40 @@ class ToolCardsTab(QWidget):
 
     def open_config_dialog(self):
         """打开配置对话框"""
-        dialog = ToolCardsConfigDialog(self.config_data, self)
+        # 确保当前有选中的项目
+        if not self.current_project_id:
+            QMessageBox.warning(self, "配置失败", "请先选择项目")
+            return
+            
+        # 创建空的配置数据，因为我们不再使用JSON配置
+        empty_config = {
+            'business_lines': []
+        }
+        dialog = ToolCardsConfigDialog(empty_config, self)
         if dialog.exec_() == ToolCardsConfigDialog.Accepted:
-            self.config_data = dialog.get_config_data()
-            self.save_config()
+            # 配置保存逻辑需要更新为数据库操作
+            # 暂时只刷新UI
             self.refresh_ui()
 
     def view_card(self, card_data):
         """查看卡片"""
-        dialog = ToolCardsConfigDialog(self.config_data, self, card_data, view_mode=True)
+        # 创建空的配置数据，因为我们不再使用JSON配置
+        empty_config = {
+            'business_lines': []
+        }
+        dialog = ToolCardsConfigDialog(empty_config, self, card_data, view_mode=True)
         dialog.exec_()
 
     def edit_card(self, card_data):
         """编辑卡片"""
-        dialog = ToolCardsConfigDialog(self.config_data, self, card_data)
+        # 创建空的配置数据，因为我们不再使用JSON配置
+        empty_config = {
+            'business_lines': []
+        }
+        dialog = ToolCardsConfigDialog(empty_config, self, card_data)
         if dialog.exec_() == ToolCardsConfigDialog.Accepted:
-            self.config_data = dialog.get_config_data()
-            self.save_config()
+            # 配置保存逻辑需要更新为数据库操作
+            # 暂时只刷新UI
             self.refresh_ui()
 
     def copy_card(self, card_data):

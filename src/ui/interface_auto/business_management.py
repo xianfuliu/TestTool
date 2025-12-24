@@ -726,7 +726,14 @@ class BusinessManagement(QWidget):
             try:
                 self.business_service.create_group(data)
                 self.load_data()
+                
+                # 发射数据变化信号
                 self.data_changed.emit()
+                
+                # 如果新增的业务分组是第一个，触发业务切换信号
+                if len(self.business_groups) == 1:
+                    self.business_changed.emit(self.business_groups[0]['id'])
+                
                 Toast.success(self, "业务分组创建成功")
             except Exception as e:
                 Toast.error(self, f"创建业务分组失败: {str(e)}")
@@ -748,7 +755,10 @@ class BusinessManagement(QWidget):
                 self.load_data()
                 self.restore_tree_expanded_states(expanded_states)
                 
+                # 发射数据变化信号和业务切换信号（传递当前业务ID）
                 self.data_changed.emit()
+                if group_id:
+                    self.business_changed.emit(group_id)
                 Toast.success(self, "项目创建成功")
             except Exception as e:
                 Toast.error(self, f"创建项目失败: {str(e)}")
@@ -783,7 +793,9 @@ class BusinessManagement(QWidget):
                 # 恢复展开状态
                 self.restore_tree_expanded_states(expanded_states)
                 
+                # 发射数据变化信号和业务切换信号（传递当前业务ID）
                 self.data_changed.emit()
+                self.business_changed.emit(group_data['id'])
                 Toast.success(self, "业务分组更新成功")
             except Exception as e:
                 Toast.error(self, f"更新业务分组失败: {str(e)}")
@@ -799,6 +811,9 @@ class BusinessManagement(QWidget):
                 # 保存更新前的展开状态
                 expanded_states = self.get_tree_expanded_states()
                 
+                # 获取当前项目的业务分组ID
+                group_id = project_data.get('group_id')
+                
                 # 更新项目
                 self.project_service.update_project(project_data['id'], data)
                 
@@ -811,7 +826,10 @@ class BusinessManagement(QWidget):
                 # 恢复展开状态
                 self.restore_tree_expanded_states(expanded_states)
                 
+                # 发射数据变化信号和业务切换信号（传递当前业务ID）
                 self.data_changed.emit()
+                if group_id:
+                    self.business_changed.emit(group_id)
                 Toast.success(self, "项目更新成功")
             except Exception as e:
                 Toast.error(self, f"更新项目失败: {str(e)}")
@@ -845,7 +863,13 @@ class BusinessManagement(QWidget):
                 self.load_data()
                 self.restore_tree_expanded_states(expanded_states)
                 
+                # 发射数据变化信号
                 self.data_changed.emit()
+                
+                # 如果还有剩余的业务分组，切换到第一个业务分组
+                if self.business_groups:
+                    self.business_changed.emit(self.business_groups[0]['id'])
+                
                 self.info_label.show()
                 self.detail_container.hide()
                 Toast.success(self, "业务分组删除成功")
@@ -867,6 +891,9 @@ class BusinessManagement(QWidget):
                 # 保存更新前的展开状态
                 expanded_states = self.get_tree_expanded_states()
                 
+                # 获取当前项目的业务分组ID
+                group_id = project_data.get('group_id')
+                
                 # 删除项目
                 self.project_service.delete_project(project_data['id'])
                 
@@ -874,7 +901,10 @@ class BusinessManagement(QWidget):
                 self.load_data()
                 self.restore_tree_expanded_states(expanded_states)
                 
+                # 发射数据变化信号和业务切换信号（传递当前业务ID）
                 self.data_changed.emit()
+                if group_id:
+                    self.business_changed.emit(group_id)
                 self.info_label.show()
                 self.detail_container.hide()
                 Toast.success(self, "项目删除成功")

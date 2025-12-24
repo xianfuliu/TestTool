@@ -2,10 +2,11 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
                              QWidget, QLabel, QLineEdit, QTextEdit,
                              QSpinBox, QCheckBox, QPushButton, QGroupBox,
                              QFormLayout, QListWidget, QListWidgetItem,
-                             QMessageBox, QScrollArea, QGridLayout)
+                             QMessageBox, QScrollArea, QGridLayout, QInputDialog)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 import json
+import pymysql
 
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
@@ -29,17 +30,30 @@ class ToolCardsConfigDialog(QDialog):
         if edit_card_data:
             self.load_card_data(edit_card_data)
 
+    def get_db_connection(self):
+        """获取数据库连接"""
+        try:
+            conn = pymysql.connect(
+                host='192.168.0.73',
+                port=3306,
+                user='root',
+                password='root',
+                database='interface_auto_platform',
+                charset='utf8mb4',
+                cursorclass=pymysql.cursors.DictCursor
+            )
+            return conn
+        except pymysql.Error as e:
+            print(f"数据库连接失败: {e}")
+            return None
+
     def init_ui(self):
         layout = QVBoxLayout(self)
 
         # 创建选项卡
         tab_widget = QTabWidget()
 
-        # 业务线配置选项卡
-        business_tab = self.create_business_tab()
-        tab_widget.addTab(business_tab, "业务线配置")
-
-        # 卡片配置选项卡
+        # 卡片配置选项卡（移除业务线配置）
         cards_tab = self.create_cards_tab()
         tab_widget.addTab(cards_tab, "卡片配置")
 
@@ -60,100 +74,12 @@ class ToolCardsConfigDialog(QDialog):
 
         layout.addLayout(button_layout)
 
-    def create_business_tab(self):
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
 
-        # 业务线管理区域
-        business_group = QGroupBox("业务线管理")
-        business_layout = QVBoxLayout(business_group)
-
-        # 业务线列表
-        business_list_layout = QHBoxLayout()
-
-        self.business_list = QListWidget()
-        self.business_list.currentItemChanged.connect(self.on_business_selected)
-        business_list_layout.addWidget(self.business_list)
-
-        # 业务线操作按钮
-        business_btn_layout = QVBoxLayout()
-
-        self.add_business_btn = QPushButton("新增业务线")
-        self.add_business_btn.clicked.connect(self.add_business_line)
-        business_btn_layout.addWidget(self.add_business_btn)
-
-        self.edit_business_btn = QPushButton("编辑业务线")
-        self.edit_business_btn.clicked.connect(self.edit_business_line)
-        business_btn_layout.addWidget(self.edit_business_btn)
-
-        self.delete_business_btn = QPushButton("删除业务线")
-        self.delete_business_btn.clicked.connect(self.delete_business_line)
-        business_btn_layout.addWidget(self.delete_business_btn)
-
-        business_btn_layout.addStretch()
-        business_list_layout.addLayout(business_btn_layout)
-
-        business_layout.addLayout(business_list_layout)
-
-        # 子业务模块管理
-        sub_business_group = QGroupBox("子业务模块管理")
-        sub_business_layout = QVBoxLayout(sub_business_group)
-
-        sub_business_list_layout = QHBoxLayout()
-
-        self.sub_business_list = QListWidget()
-        sub_business_list_layout.addWidget(self.sub_business_list)
-
-        # 子业务操作按钮
-        sub_business_btn_layout = QVBoxLayout()
-
-        self.add_sub_business_btn = QPushButton("新增子模块")
-        self.add_sub_business_btn.clicked.connect(self.add_sub_business)
-        sub_business_btn_layout.addWidget(self.add_sub_business_btn)
-
-        self.edit_sub_business_btn = QPushButton("编辑子模块")
-        self.edit_sub_business_btn.clicked.connect(self.edit_sub_business)
-        sub_business_btn_layout.addWidget(self.edit_sub_business_btn)
-
-        self.delete_sub_business_btn = QPushButton("删除子模块")
-        self.delete_sub_business_btn.clicked.connect(self.delete_sub_business)
-        sub_business_btn_layout.addWidget(self.delete_sub_business_btn)
-
-        sub_business_btn_layout.addStretch()
-        sub_business_list_layout.addLayout(sub_business_btn_layout)
-
-        sub_business_layout.addLayout(sub_business_list_layout)
-
-        layout.addWidget(business_group)
-        layout.addWidget(sub_business_group)
-
-        # 刷新业务线列表
-        self.refresh_business_list()
-
-        return widget
+        # 业务线和子业务管理区域已移除，现在只管理卡片
 
     def create_cards_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-
-        # 卡片选择区域
-        card_selection_layout = QHBoxLayout()
-
-        card_selection_layout.addWidget(QLabel("选择业务线:"))
-        self.business_combo = NoWheelComboBox()
-        self.business_combo.currentTextChanged.connect(self.on_business_combo_changed)
-        self.business_combo.setStyleSheet(get_combobox_style())
-        card_selection_layout.addWidget(self.business_combo)
-
-        card_selection_layout.addWidget(QLabel("选择子模块:"))
-        self.sub_business_combo = NoWheelComboBox()
-        self.sub_business_combo.currentTextChanged.connect(self.on_sub_business_combo_changed)
-        self.sub_business_combo.setStyleSheet(get_combobox_style())
-        card_selection_layout.addWidget(self.sub_business_combo)
-
-        card_selection_layout.addStretch()
-
-        layout.addLayout(card_selection_layout)
 
         # 卡片列表
         cards_group = QGroupBox("卡片列表")
@@ -200,10 +126,81 @@ class ToolCardsConfigDialog(QDialog):
 
         layout.addWidget(self.card_details_group)
 
-        # 刷新业务线下拉框
-        self.refresh_business_combo()
+        # 刷新卡片列表
+        self.refresh_cards_list()
 
         return widget
+
+    def refresh_cards_list(self):
+        """刷新卡片列表（基于数据库）"""
+        # 清空现有卡片列表
+        self.cards_list.clear()
+        
+        # 从数据库加载卡片数据
+        conn = self.get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor(pymysql.cursors.DictCursor)
+                
+                # 获取当前项目ID（从父窗口传递）
+                current_project_id = getattr(self.parent(), 'current_project_id', None)
+                
+                if current_project_id:
+                    # 查询当前项目下的所有卡片
+                    query = """
+                        SELECT id, title, description, card_type, configuration, 
+                               timeout, locked, sort_order, created_by, created_at, updated_at
+                        FROM tool_cards 
+                        WHERE project_id = %s
+                        ORDER BY sort_order, created_at
+                    """
+                    cursor.execute(query, (current_project_id,))
+                    cards = cursor.fetchall()
+                    
+                    # 将数据库记录转换为卡片数据格式
+                    for card in cards:
+                        card_data = {
+                            'id': card['id'],
+                            'title': card['title'],
+                            'description': card['description'],
+                            'type': card['card_type'],
+                            'timeout': card['timeout'],
+                            'locked': bool(card['locked']),
+                            'configuration': json.loads(card['configuration']) if card['configuration'] else {}
+                        }
+                        
+                        # 根据卡片类型添加特定配置
+                        if card_data['type'].startswith('sql'):
+                            config = card_data['configuration']
+                            card_data.update({
+                                'database': config.get('database', ''),
+                                'sql': config.get('sql', '')
+                            })
+                        elif card_data['type'] == 'http':
+                            config = card_data['configuration']
+                            card_data.update({
+                                'url': config.get('url', ''),
+                                'method': config.get('method', ''),
+                                'headers': config.get('headers', ''),
+                                'body': config.get('body', '')
+                            })
+                        elif card_data['type'] == 'python':
+                            config = card_data['configuration']
+                            card_data.update({
+                                'class_name': config.get('class_name', ''),
+                                'method_name': config.get('method_name', ''),
+                                'parameters': config.get('parameters', '')
+                            })
+                        
+                        item = QListWidgetItem(card_data['title'])
+                        item.setData(Qt.UserRole, card_data)
+                        self.cards_list.addItem(item)
+                        
+                cursor.close()
+            except pymysql.Error as e:
+                print(f"数据库查询失败: {e}")
+            finally:
+                conn.close()
 
     def create_card_details_form(self):
         # 清空现有布局
@@ -399,78 +396,9 @@ class ToolCardsConfigDialog(QDialog):
         elif card_type == 'python':
             self.create_python_config()
 
-    def refresh_business_list(self):
-        """刷新业务线列表"""
-        self.business_list.clear()
-        business_lines = self.config_data.get('business_lines', [])
-        for business in business_lines:
-            item = QListWidgetItem(business.get('name', '未命名'))
-            item.setData(Qt.UserRole, business)
-            self.business_list.addItem(item)
 
-    def refresh_business_combo(self):
-        """刷新业务线下拉框"""
-        self.business_combo.clear()
-        business_lines = self.config_data.get('business_lines', [])
-        for business in business_lines:
-            self.business_combo.addItem(business.get('name', '未命名'))
 
-    def on_business_selected(self, current, previous):
-        """业务线选择事件"""
-        if current:
-            business_data = current.data(Qt.UserRole)
-            self.refresh_sub_business_list(business_data)
 
-    def refresh_sub_business_list(self, business_data):
-        """刷新子业务列表"""
-        self.sub_business_list.clear()
-        sub_businesses = business_data.get('sub_business', [])
-        for sub_business in sub_businesses:
-            item = QListWidgetItem(sub_business.get('name', '未命名'))
-            item.setData(Qt.UserRole, sub_business)
-            self.sub_business_list.addItem(item)
-
-    def on_business_combo_changed(self, business_name):
-        """业务线下拉框变更事件"""
-        if business_name:
-            # 刷新子业务下拉框
-            self.refresh_sub_business_combo(business_name)
-
-    def refresh_sub_business_combo(self, business_name):
-        """刷新子业务下拉框"""
-        self.sub_business_combo.clear()
-
-        business_lines = self.config_data.get('business_lines', [])
-        for business in business_lines:
-            if business.get('name') == business_name:
-                sub_businesses = business.get('sub_business', [])
-                for sub_business in sub_businesses:
-                    self.sub_business_combo.addItem(sub_business.get('name', '未命名'))
-                break
-
-    def on_sub_business_combo_changed(self, sub_business_name):
-        """子业务下拉框变更事件"""
-        if sub_business_name and self.business_combo.currentText():
-            # 刷新卡片列表
-            self.refresh_cards_list(self.business_combo.currentText(), sub_business_name)
-
-    def refresh_cards_list(self, business_name, sub_business_name):
-        """刷新卡片列表"""
-        self.cards_list.clear()
-
-        business_lines = self.config_data.get('business_lines', [])
-        for business in business_lines:
-            if business.get('name') == business_name:
-                sub_businesses = business.get('sub_business', [])
-                for sub_business in sub_businesses:
-                    if sub_business.get('name') == sub_business_name:
-                        cards = sub_business.get('cards', [])
-                        for card in cards:
-                            item = QListWidgetItem(card.get('title', '未命名'))
-                            item.setData(Qt.UserRole, card)
-                            self.cards_list.addItem(item)
-                        break
-                break
 
     def on_card_selected(self, current, previous):
         """卡片选择事件"""
@@ -537,177 +465,21 @@ class ToolCardsConfigDialog(QDialog):
         }
         return type_map.get(card_type, card_type)
 
-    def add_business_line(self):
-        """新增业务线"""
-        name, ok = QInputDialog.getText(self, "新增业务线", "请输入业务线名称:")
-        if ok and name:
-            # 检查名称是否已存在
-            business_lines = self.config_data.get('business_lines', [])
-            if any(business.get('name') == name for business in business_lines):
-                Toast.warn(self, "业务线名称已存在")
-                return
+    def generate_card_id(self):
+        """生成唯一的卡片ID"""
+        import uuid
+        return str(uuid.uuid4())
 
-            new_business = {
-                'name': name,
-                'sub_business': []
-            }
-            business_lines.append(new_business)
 
-            # 如果是第一个业务线，设置为默认
-            if len(business_lines) == 1:
-                self.config_data['default_business_line'] = name
 
-            self.refresh_business_list()
-            self.refresh_business_combo()
 
-    def edit_business_line(self):
-        """编辑业务线"""
-        current_item = self.business_list.currentItem()
-        if not current_item:
-            QMessageBox.warning(self, "编辑失败", "请选择要编辑的业务线")
-            return
-
-        old_name = current_item.text()
-        new_name, ok = QInputDialog.getText(self, "编辑业务线", "请输入新的业务线名称:", text=old_name)
-
-        if ok and new_name and new_name != old_name:
-            # 检查名称是否已存在
-            business_lines = self.config_data.get('business_lines', [])
-            if any(business.get('name') == new_name for business in business_lines):
-                Toast.warn(self, "业务线名称已存在")
-                return
-
-            # 更新业务线名称
-            for business in business_lines:
-                if business.get('name') == old_name:
-                    business['name'] = new_name
-
-                    # 如果这是默认业务线，也更新默认值
-                    if self.config_data.get('default_business_line') == old_name:
-                        self.config_data['default_business_line'] = new_name
-                    break
-
-            self.refresh_business_list()
-            self.refresh_business_combo()
-
-    def delete_business_line(self):
-        """删除业务线"""
-        current_item = self.business_list.currentItem()
-        if not current_item:
-            Toast.warn(self, "请选择要删除的业务线")
-            return
-
-        business_name = current_item.text()
-        reply = QMessageBox.question(self, "确认删除",
-                                     f"确定要删除业务线 '{business_name}' 吗？\n此操作将删除该业务线下所有子模块和卡片！",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
-            business_lines = self.config_data.get('business_lines', [])
-            for i, business in enumerate(business_lines):
-                if business.get('name') == business_name:
-                    business_lines.pop(i)
-
-                    # 如果删除的是默认业务线，重新设置默认值
-                    if self.config_data.get('default_business_line') == business_name:
-                        if business_lines:
-                            self.config_data['default_business_line'] = business_lines[0].get('name')
-                        else:
-                            self.config_data['default_business_line'] = ""
-                    break
-
-            self.refresh_business_list()
-            self.refresh_business_combo()
-
-    def add_sub_business(self):
-        """新增子业务模块"""
-        current_item = self.business_list.currentItem()
-        if not current_item:
-            Toast.warn(self, "请先选择业务线")
-            return
-
-        business_data = current_item.data(Qt.UserRole)
-        name, ok = QInputDialog.getText(self, "新增子模块", "请输入子模块名称:")
-
-        if ok and name:
-            sub_businesses = business_data.get('sub_business', [])
-
-            # 检查名称是否已存在
-            if any(sub.get('name') == name for sub in sub_businesses):
-                Toast.warn(self, "子模块名称已存在")
-                return
-
-            new_sub_business = {
-                'name': name,
-                'cards': []
-            }
-            sub_businesses.append(new_sub_business)
-
-            self.refresh_sub_business_list(business_data)
-
-    def edit_sub_business(self):
-        """编辑子业务模块"""
-        current_item = self.sub_business_list.currentItem()
-        if not current_item:
-            Toast.warn(self, "请选择要编辑的子模块")
-            return
-
-        business_item = self.business_list.currentItem()
-        if not business_item:
-            return
-
-        business_data = business_item.data(Qt.UserRole)
-        old_name = current_item.text()
-
-        new_name, ok = QInputDialog.getText(self, "编辑子模块", "请输入新的子模块名称:", text=old_name)
-
-        if ok and new_name and new_name != old_name:
-            sub_businesses = business_data.get('sub_business', [])
-
-            # 检查名称是否已存在
-            if any(sub.get('name') == new_name for sub in sub_businesses):
-                Toast.warn(self, "子模块名称已存在")
-                return
-
-            # 更新子模块名称
-            for sub_business in sub_businesses:
-                if sub_business.get('name') == old_name:
-                    sub_business['name'] = new_name
-                    break
-
-            self.refresh_sub_business_list(business_data)
-
-    def delete_sub_business(self):
-        """删除子业务模块"""
-        current_item = self.sub_business_list.currentItem()
-        if not current_item:
-            Toast.warn(self, "请选择要删除的子模块")
-            return
-
-        business_item = self.business_list.currentItem()
-        if not business_item:
-            return
-
-        business_data = business_item.data(Qt.UserRole)
-        sub_business_name = current_item.text()
-
-        reply = QMessageBox.question(self, "确认删除",
-                                     f"确定要删除子模块 '{sub_business_name}' 吗？\n此操作将删除该子模块下所有卡片！",
-                                     QMessageBox.Yes | QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
-            sub_businesses = business_data.get('sub_business', [])
-            for i, sub_business in enumerate(sub_businesses):
-                if sub_business.get('name') == sub_business_name:
-                    sub_businesses.pop(i)
-                    break
-
-            self.refresh_sub_business_list(business_data)
 
     def add_card(self):
         """新增卡片"""
-        if not self.business_combo.currentText() or not self.sub_business_combo.currentText():
-            Toast.warn(self, "请先选择业务线和子模块")
+        # 确保当前有选中的项目
+        current_project_id = getattr(self.parent(), 'current_project_id', None)
+        if not current_project_id:
+            Toast.warn(self, "请先选择项目")
             return
 
         # 创建新卡片数据
@@ -746,6 +518,12 @@ class ToolCardsConfigDialog(QDialog):
             Toast.warn(self, "请选择要复制的卡片")
             return
 
+        # 确保当前有选中的项目
+        current_project_id = getattr(self.parent(), 'current_project_id', None)
+        if not current_project_id:
+            Toast.warn(self, "请先选择项目")
+            return
+
         original_card = current_item.data(Qt.UserRole)
 
         # 创建副本
@@ -758,39 +536,94 @@ class ToolCardsConfigDialog(QDialog):
         new_title = f"{base_name}_cp{copy_count}"
 
         # 检查名称是否已存在
-        business_lines = self.config_data.get('business_lines', [])
-        for business in business_lines:
-            if business.get('name') == self.business_combo.currentText():
-                for sub_business in business.get('sub_business', []):
-                    if sub_business.get('name') == self.sub_business_combo.currentText():
-                        cards = sub_business.get('cards', [])
-                        while any(card.get('title') == new_title for card in cards):
-                            copy_count += 1
-                            new_title = f"{base_name}_cp{copy_count}"
-                        break
-                break
+        conn = self.get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                
+                # 检查相同项目下是否有相同名称的卡片
+                query = "SELECT COUNT(*) FROM tool_cards WHERE project_id = %s AND title LIKE %s"
+                cursor.execute(query, (current_project_id, f"{base_name}_cp%"))
+                count = cursor.fetchone()[0]
+                
+                if count > 0:
+                    new_title = f"{base_name}_cp{count + 1}"
+                
+                cursor.close()
+            except mysql.connector.Error as e:
+                print(f"数据库查询失败: {e}")
+            finally:
+                conn.close()
 
         new_card['title'] = new_title
         new_card['locked'] = False  # 副本默认不锁定
 
-        # 添加到当前子业务模块
-        business_lines = self.config_data.get('business_lines', [])
-        for business in business_lines:
-            if business.get('name') == self.business_combo.currentText():
-                for sub_business in business.get('sub_business', []):
-                    if sub_business.get('name') == self.sub_business_combo.currentText():
-                        sub_business['cards'].append(new_card)
+        # 保存到数据库
+        conn = self.get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                
+                # 准备配置数据
+                configuration = {}
+                if new_card['type'].startswith('sql'):
+                    configuration = {
+                        'database': new_card.get('database', ''),
+                        'sql': new_card.get('sql', '')
+                    }
+                elif new_card['type'] == 'http':
+                    configuration = {
+                        'url': new_card.get('url', ''),
+                        'method': new_card.get('method', ''),
+                        'headers': new_card.get('headers', ''),
+                        'body': new_card.get('body', '')
+                    }
+                elif new_card['type'] == 'python':
+                    configuration = {
+                        'class_name': new_card.get('class_name', ''),
+                        'method_name': new_card.get('method_name', ''),
+                        'parameters': new_card.get('parameters', '')
+                    }
+                
+                query = """
+                    INSERT INTO tool_cards 
+                    (id, project_id, title, description, card_type, configuration, timeout, locked, sort_order, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                values = (
+                    new_card['id'],
+                    current_project_id,
+                    new_card['title'],
+                    new_card.get('description', ''),
+                    new_card['type'],
+                    json.dumps(configuration),
+                    new_card.get('timeout', 5000),
+                    int(new_card.get('locked', False)),
+                    new_card.get('sort_order', 0),
+                    'admin'
+                )
+                cursor.execute(query, values)
+                
+                conn.commit()
+                cursor.close()
+                
+                # 刷新卡片列表
+                self.refresh_cards_list()
+                
+                # 选中新复制的卡片
+                for i in range(self.cards_list.count()):
+                    item = self.cards_list.item(i)
+                    if item.data(Qt.UserRole).get('id') == new_card['id']:
+                        self.cards_list.setCurrentItem(item)
                         break
-                break
-
-        self.refresh_cards_list(self.business_combo.currentText(), self.sub_business_combo.currentText())
-
-        # 选中新复制的卡片
-        for i in range(self.cards_list.count()):
-            item = self.cards_list.item(i)
-            if item.data(Qt.UserRole).get('id') == new_card['id']:
-                self.cards_list.setCurrentItem(item)
-                break
+                
+                Toast.information(self, "卡片复制成功")
+                
+            except pymysql.Error as e:
+                print(f"数据库插入失败: {e}")
+                Toast.warn(self, "卡片复制失败")
+            finally:
+                conn.close()
 
     def delete_card(self):
         """删除卡片"""
@@ -807,22 +640,32 @@ class ToolCardsConfigDialog(QDialog):
                                      QMessageBox.Yes | QMessageBox.No)
 
         if reply == QMessageBox.Yes:
-            business_lines = self.config_data.get('business_lines', [])
-            for business in business_lines:
-                if business.get('name') == self.business_combo.currentText():
-                    for sub_business in business.get('sub_business', []):
-                        if sub_business.get('name') == self.sub_business_combo.currentText():
-                            cards = sub_business.get('cards', [])
-                            for i, card in enumerate(cards):
-                                if card.get('id') == card_data.get('id'):
-                                    cards.pop(i)
-                                    break
-                            break
-                    break
-
-            self.refresh_cards_list(self.business_combo.currentText(), self.sub_business_combo.currentText())
-            self.current_card_data = None
-            self.create_card_details_form()
+            # 从数据库删除卡片
+            conn = self.get_db_connection()
+            if conn:
+                try:
+                    cursor = conn.cursor()
+                    
+                    query = "DELETE FROM tool_cards WHERE id = %s"
+                    cursor.execute(query, (card_data['id'],))
+                    
+                    conn.commit()
+                    cursor.close()
+                    
+                    # 刷新卡片列表
+                    self.refresh_cards_list()
+                    
+                    # 清空当前卡片数据
+                    self.current_card_data = None
+                    self.create_card_details_form()
+                    
+                    Toast.information(self, "卡片删除成功")
+                    
+                except pymysql.Error as e:
+                    print(f"数据库删除失败: {e}")
+                    Toast.warn(self, "卡片删除失败")
+                finally:
+                    conn.close()
 
     def save_current_card(self):
         """保存当前卡片"""
@@ -867,21 +710,93 @@ class ToolCardsConfigDialog(QDialog):
             self.current_card_data['method_name'] = self.method_name_edit.text()
             self.current_card_data['parameters'] = self.parameters_edit.toPlainText()
 
-        # 如果是新卡片，添加到当前子业务模块
-        if 'id' not in self.current_card_data or not self.current_card_data['id']:
-            self.current_card_data['id'] = self.generate_card_id()
+        # 获取当前项目ID
+        current_project_id = getattr(self.parent(), 'current_project_id', None)
+        if not current_project_id:
+            Toast.warn(self, "无法获取项目信息")
+            return
 
-            business_lines = self.config_data.get('business_lines', [])
-            for business in business_lines:
-                if business.get('name') == self.business_combo.currentText():
-                    for sub_business in business.get('sub_business', []):
-                        if sub_business.get('name') == self.sub_business_combo.currentText():
-                            sub_business['cards'].append(self.current_card_data)
-                            break
-                    break
+        # 准备配置数据
+        configuration = {}
+        if self.current_card_data['type'].startswith('sql'):
+            configuration = {
+                'database': self.current_card_data.get('database', ''),
+                'sql': self.current_card_data.get('sql', '')
+            }
+        elif self.current_card_data['type'] == 'http':
+            configuration = {
+                'url': self.current_card_data.get('url', ''),
+                'method': self.current_card_data.get('method', ''),
+                'headers': self.current_card_data.get('headers', ''),
+                'body': self.current_card_data.get('body', '')
+            }
+        elif self.current_card_data['type'] == 'python':
+            configuration = {
+                'class_name': self.current_card_data.get('class_name', ''),
+                'method_name': self.current_card_data.get('method_name', ''),
+                'parameters': self.current_card_data.get('parameters', '')
+            }
 
-        self.refresh_cards_list(self.business_combo.currentText(), self.sub_business_combo.currentText())
-        Toast.information(self, "卡片保存成功")
+        # 保存到数据库
+        conn = self.get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                
+                if 'id' not in self.current_card_data or not self.current_card_data['id']:
+                    # 新增卡片
+                    self.current_card_data['id'] = self.generate_card_id()
+                    
+                    query = """
+                        INSERT INTO tool_cards 
+                        (id, project_id, title, description, card_type, configuration, timeout, locked, sort_order, created_by)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    values = (
+                        self.current_card_data['id'],
+                        current_project_id,
+                        self.current_card_data['title'],
+                        self.current_card_data.get('description', ''),
+                        self.current_card_data['type'],
+                        json.dumps(configuration),
+                        self.current_card_data.get('timeout', 5000),
+                        int(self.current_card_data.get('locked', False)),
+                        self.current_card_data.get('sort_order', 0),
+                        'admin'
+                    )
+                    cursor.execute(query, values)
+                else:
+                    # 更新现有卡片
+                    query = """
+                        UPDATE tool_cards 
+                        SET title = %s, description = %s, card_type = %s, configuration = %s, 
+                            timeout = %s, locked = %s, sort_order = %s
+                        WHERE id = %s
+                    """
+                    values = (
+                        self.current_card_data['title'],
+                        self.current_card_data.get('description', ''),
+                        self.current_card_data['type'],
+                        json.dumps(configuration),
+                        self.current_card_data.get('timeout', 5000),
+                        int(self.current_card_data.get('locked', False)),
+                        self.current_card_data.get('sort_order', 0),
+                        self.current_card_data['id']
+                    )
+                    cursor.execute(query, values)
+                
+                conn.commit()
+                cursor.close()
+                
+                # 刷新卡片列表
+                self.refresh_cards_list()
+                Toast.information(self, "卡片保存成功")
+                
+            except pymysql.Error as e:
+                print(f"数据库操作失败: {e}")
+                Toast.warn(self, "卡片保存失败")
+            finally:
+                conn.close()
 
     def generate_card_id(self):
         """生成卡片ID"""
