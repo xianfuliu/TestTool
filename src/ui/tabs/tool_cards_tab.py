@@ -461,7 +461,7 @@ class ToolCardsTab(QWidget):
         """打开配置对话框"""
         # 确保当前有选中的项目
         if not self.current_project_id:
-            QMessageBox.warning(self, "配置失败", "请先选择项目")
+            Toast.warning(self, "配置失败", "请先选择项目")
             return
             
         # 创建空的配置数据，因为我们不再使用JSON配置

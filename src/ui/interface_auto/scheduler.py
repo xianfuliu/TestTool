@@ -287,8 +287,8 @@ class SchedulerDialog(QDialog):
         # 第三栏：已选用例区域
         selected_panel = QWidget()
         selected_layout = QVBoxLayout(selected_panel)
-        selected_layout.setSpacing(0)  # 移除内部间距
-        selected_layout.setContentsMargins(0, 0, 0, 0)  # 移除内容边距
+        selected_layout.setSpacing(0)
+        selected_layout.setContentsMargins(0, 0, 0, 0)
         
         selected_label = QLabel("已选用例")
         selected_label.setStyleSheet("font-weight: bold; color: #333; margin-bottom: 5px;")
@@ -307,7 +307,7 @@ class SchedulerDialog(QDialog):
             QListWidget::item {
                 padding: 8px 12px;
                 border-bottom: 1px solid #e9ecef;
-                background-color: #e8f5e8;
+                background-color: #ffffff;
             }
             QListWidget::item:selected {
                 background-color: #d4edda;
@@ -353,14 +353,39 @@ class SchedulerDialog(QDialog):
         self.load_folders()
 
     def get_icon(self, icon_name):
-        """获取图标文件"""
-        icon_path = os.path.join("src", "resources", "icons", icon_name)
-        if os.path.exists(icon_path):
-            return QIcon(icon_path)
-        else:
-            # 如果图标文件不存在，返回默认图标
-            logger.warning(f"图标文件不存在: {icon_path}")
-            return QIcon()
+        """获取图标"""
+        try:
+            # 首先尝试从 resources/icons 目录加载（开发环境）
+            icon_path = os.path.join("src", "resources", "icons", icon_name)
+            if os.path.exists(icon_path):
+                return QIcon(icon_path)
+            
+            # 如果不存在，尝试从 ui/interface_auto/icons 目录加载
+            icon_path = os.path.join("src", "ui", "interface_auto", "icons", icon_name)
+            if os.path.exists(icon_path):
+                return QIcon(icon_path)
+            
+            # 打包后路径处理：尝试从 PyInstaller 临时解压目录加载
+            if getattr(sys, 'frozen', False):
+                # 打包后的可执行文件路径
+                base_path = sys._MEIPASS
+                # 尝试从打包后的 resources/icons 目录加载
+                icon_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试直接加载图标文件
+                icon_path = os.path.join(base_path, icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+                
+                # 尝试从当前目录加载
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "resources", "icons", icon_name)
+                if os.path.exists(icon_path):
+                    return QIcon(icon_path)
+        except:
+            pass
+        return QIcon()
 
     def setup_next_runs_display(self, parent_layout):
         """设置最近5次运行时间展示区域"""
@@ -408,13 +433,13 @@ class SchedulerDialog(QDialog):
             cron_expression = self.cron_edit.text().strip()
             
             if not cron_expression:
-                QMessageBox.warning(self, "警告", "请输入Cron表达式")
+                Toast.warning(self, "警告", "请输入Cron表达式")
                 return
             
             # 校验Cron表达式格式
             is_valid, error_msg = self.validate_cron_expression(cron_expression)
             if not is_valid:
-                QMessageBox.warning(self, "Cron表达式错误", error_msg)
+                Toast.warning(self, "Cron表达式错误", error_msg)
                 return
             
             # 导入Cron解析器
@@ -439,22 +464,22 @@ class SchedulerDialog(QDialog):
                 else:
                     break
             
-            # 更新显示
+            # 更新下一次执行时间
             self.update_next_runs_display(next_runs)
             
             # 只在解析失败时显示警告
             if not next_runs:
-                QMessageBox.warning(self, "解析失败", "无法计算运行时间，请检查Cron表达式")
+                Toast.warning(self, "解析失败", "无法计算运行时间，请检查Cron表达式")
                 
         except Exception as e:
-            QMessageBox.critical(self, "解析错误", f"解析Cron表达式时发生错误：{str(e)}")
+            Toast.critical(self, "解析错误", f"解析Cron表达式时发生错误：{str(e)}")
 
     def setup_schedule_tab(self, parent):
         layout = QVBoxLayout(parent)
-        layout.setSpacing(20)  # 增加区域间距
+        layout.setSpacing(20)  # 区域间距
         layout.setContentsMargins(20, 20, 20, 20)  # 设置边距
 
-        # Cron表达式配置区域 - 重构为Tab栏形式
+        # Cron表达式配置区域
         cron_widget = QWidget()
         cron_layout = QVBoxLayout(cron_widget)
         cron_layout.setSpacing(12)
@@ -500,7 +525,7 @@ class SchedulerDialog(QDialog):
         self.cron_edit.setFixedWidth(400)  # 设置固定宽度
         cron_input_layout.addWidget(self.cron_edit)
 
-        # 解析按钮（放在输入框右侧）
+        # 解析按钮
         self.parse_button = QPushButton("解析")
         self.parse_button.setFixedSize(60, 32)
         self.parse_button.setStyleSheet("""
@@ -1197,11 +1222,11 @@ class SchedulerDialog(QDialog):
         layout.setAlignment(Qt.AlignLeft)  # 设置整体靠左对齐
 
         # 邮件通知配置
-        email_group = QGroupBox("邮件通知配置")
+        email_group = QGroupBox("邮件通知")
         email_layout = QVBoxLayout(email_group)
         
         # 启用邮件通知
-        self.email_enabled_check = QCheckBox("启用邮件通知")
+        self.email_enabled_check = QCheckBox("启用")
         email_layout.addWidget(self.email_enabled_check)
         
         # SMTP服务器配置
@@ -1250,17 +1275,17 @@ class SchedulerDialog(QDialog):
         
         # 测试连接按钮
         test_button_layout = QHBoxLayout()
-        self.test_email_connection_btn = QPushButton("测试邮件连接")
+        self.test_email_connection_btn = QPushButton("测试发送")
         self.test_email_connection_btn.setFixedWidth(120)
         test_button_layout.addWidget(self.test_email_connection_btn)
         test_button_layout.addStretch()
         email_layout.addLayout(test_button_layout)
 
         # 企业微信通知配置
-        wechat_group = QGroupBox("企业微信通知配置")
+        wechat_group = QGroupBox("企业微信通知")
         wechat_layout = QVBoxLayout(wechat_group)
         
-        self.wechat_enabled_check = QCheckBox("启用企业微信通知")
+        self.wechat_enabled_check = QCheckBox("启用")
         wechat_layout.addWidget(self.wechat_enabled_check)
         
         wechat_form_layout = QFormLayout()
@@ -1287,15 +1312,15 @@ class SchedulerDialog(QDialog):
         try:
             # 检查是否填写了必要的配置
             if not self.smtp_server_edit.text().strip():
-                QMessageBox.warning(self, "警告", "请输入SMTP服务器地址")
+                Toast.warning(self, "警告", "请输入SMTP服务器地址")
                 return
             
             if not self.sender_email_edit.text().strip():
-                QMessageBox.warning(self, "警告", "请输入发件人邮箱地址")
+                Toast.warning(self, "警告", "请输入发件人邮箱地址")
                 return
             
             if not self.sender_password_edit.text().strip():
-                QMessageBox.warning(self, "警告", "请输入邮箱密码或授权码")
+                Toast.warning(self, "警告", "请输入邮箱密码或授权码")
                 return
             
             # 导入邮件配置服务和模型
@@ -1317,12 +1342,12 @@ class SchedulerDialog(QDialog):
             success = email_service.test_email_connection(email_config)
             
             if success:
-                QMessageBox.information(self, "测试成功", "邮件连接测试成功！")
+                Toast.information(self, "测试成功", "邮件连接测试成功！")
             else:
-                QMessageBox.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
+                Toast.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
                 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"测试邮件连接时发生错误：{str(e)}")
+            Toast.critical(self, "错误", f"测试邮件连接时发生错误：{str(e)}")
 
     def delayed_load_data(self):
         """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
@@ -1459,7 +1484,7 @@ class SchedulerDialog(QDialog):
         """导入选中的测试用例到已选用例区域"""
         selected_items = self.case_list.selectedItems()
         if not selected_items:
-            QMessageBox.information(self, "提示", "请先选择要导入的测试用例")
+            Toast.warning(self, "提示", "请先选择要导入的测试用例")
             return
             
         for item in selected_items:
@@ -1482,7 +1507,7 @@ class SchedulerDialog(QDialog):
         """从已选用例区域移除选中的用例（支持多选）"""
         selected_items = self.selected_case_list.selectedItems()
         if not selected_items:
-            QMessageBox.information(self, "提示", "请先选择要移除的测试用例")
+            Toast.warning(self, "提示", "请先选择要移除的测试用例")
             return
             
         # 批量移除选中的用例（按行号从大到小排序，避免索引变化问题）
@@ -3928,15 +3953,15 @@ class SchedulerManager(QWidget):
         try:
             # 检查是否填写了必要的配置
             if not self.smtp_server_edit.text().strip():
-                QMessageBox.warning(self, "警告", "请输入SMTP服务器地址")
+                Toast.warning(self, "警告", "请输入SMTP服务器地址")
                 return
             
             if not self.sender_email_edit.text().strip():
-                QMessageBox.warning(self, "警告", "请输入发件人邮箱地址")
+                Toast.warning(self, "警告", "请输入发件人邮箱地址")
                 return
             
             if not self.sender_password_edit.text().strip():
-                QMessageBox.warning(self, "警告", "请输入邮箱密码或授权码")
+                Toast.warning(self, "警告", "请输入邮箱密码或授权码")
                 return
             
             # 导入邮件配置服务和模型
@@ -3958,16 +3983,16 @@ class SchedulerManager(QWidget):
             success = email_service.test_email_connection(email_config)
             
             if success:
-                QMessageBox.information(self, "测试成功", "邮件连接测试成功！")
+                Toast.information(self, "测试成功", "邮件连接测试成功！")
             else:
-                QMessageBox.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
+                Toast.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
                 
         except Exception as e:
             # 处理编码错误
             error_msg = str(e)
             if "utf-8" in error_msg and "codec" in error_msg:
                 error_msg = "邮件连接测试失败：编码错误，请检查输入内容是否包含特殊字符"
-            QMessageBox.critical(self, "错误", f"测试邮件连接时发生错误：{error_msg}")
+            Toast.critical(self, "错误", f"测试邮件连接时发生错误：{error_msg}")
 
     def update_pagination_info(self):
         """更新分页信息显示"""
@@ -4019,9 +4044,9 @@ class SchedulerManager(QWidget):
                     self.current_page = page
                     self.load_schedulers()
             else:
-                QMessageBox.warning(self, "警告", f"页码必须在 1 到 {self.total_pages} 之间")
+                Toast.warning(self, "警告", f"页码必须在 1 到 {self.total_pages} 之间")
         except ValueError:
-            QMessageBox.warning(self, "警告", "请输入有效的页码")
+            Toast.warning(self, "警告", "请输入有效的页码")
 
     def on_page_size_changed(self, page_size_text):
         """页面大小改变事件"""

@@ -574,7 +574,7 @@ class HttpRequestDialog(QDialog):
 
 注意：表达式必须以$开头，使用点号.访问对象属性，使用方括号[]访问数组元素。"""
         
-        QMessageBox.information(self, "JSONPath表达式帮助", help_text)
+        Toast.information(self, "JSONPath表达式帮助", help_text)
     
     def add_table_row(self, table, key="", value=""):
         """为表格添加一行"""
@@ -688,7 +688,7 @@ class HttpRequestDialog(QDialog):
             headers = self.get_headers_from_rows()
             
             if not url:
-                QMessageBox.warning(self, "警告", "请输入请求URL")
+                Toast.warning(self, "警告", "请输入请求URL")
                 return
             
             # 获取请求体
@@ -698,7 +698,7 @@ class HttpRequestDialog(QDialog):
                 try:
                     body = json.loads(body_text)
                 except json.JSONDecodeError:
-                    QMessageBox.warning(self, "警告", "请求体不是有效的JSON格式")
+                    Toast.warning(self, "警告", "请求体不是有效的JSON格式")
                     return
             
             # 执行测试请求
@@ -792,7 +792,7 @@ class HttpRequestDialog(QDialog):
             result_dialog.exec_()
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"请求测试失败: {str(e)}")
+            Toast.critical(self, "错误", f"请求测试失败: {str(e)}")
     
     def _get_current_data(self):
         """获取当前对话框的数据状态"""
@@ -873,11 +873,11 @@ class HttpRequestDialog(QDialog):
             url = self.url_edit.text().strip()
             
             if not name:
-                QMessageBox.warning(self, "警告", "请输入HTTP请求名称")
+                Toast.warning(self, "警告", "请输入HTTP请求名称")
                 return
                 
             if not url:
-                QMessageBox.warning(self, "警告", "请输入请求URL")
+                Toast.warning(self, "警告", "请输入请求URL")
                 return
             
             # 获取请求配置
@@ -891,7 +891,7 @@ class HttpRequestDialog(QDialog):
                 try:
                     body = json.loads(body_text)
                 except json.JSONDecodeError:
-                    QMessageBox.warning(self, "警告", "请求体不是有效的JSON格式")
+                    Toast.warning(self, "警告", "请求体不是有效的JSON格式")
                     return
             
             # 获取变量配置
@@ -914,4 +914,4 @@ class HttpRequestDialog(QDialog):
             self.accept()
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存失败: {str(e)}")
+            Toast.critical(self, "错误", f"保存失败: {str(e)}")

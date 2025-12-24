@@ -233,7 +233,7 @@ class ApiToolTab(QWidget):
                 json.dump(self.products_config, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            QMessageBox.critical(self, "保存失败", f"保存产品配置失败: {str(e)}")
+            Toast.critical(self, "保存失败", f"保存产品配置失败: {str(e)}")
             return False
 
     def create_default_product_config(self, product_name):
@@ -568,7 +568,7 @@ class ApiToolTab(QWidget):
 
         # 确保产品存在于配置中
         if product_name not in self.api_config.get("products", {}):
-            QMessageBox.warning(self, "错误", f"产品 '{product_name}' 不存在于配置中")
+            Toast.warning(self, "错误", f"产品 '{product_name}' 不存在于配置中")
             return
 
         # 清空当前产品的条件字段变量池
@@ -1128,7 +1128,7 @@ class ApiToolTab(QWidget):
     def on_interface_clicked(self, interface_name):
         """接口按钮点击事件 - 优化：点击时清空响应体"""
         if not self.current_product:
-            QMessageBox.warning(self, "警告", "请先选择产品")
+            Toast.warning(self, "警告", "请先选择产品")
             return
 
         # 清空响应体内容
@@ -1168,7 +1168,7 @@ class ApiToolTab(QWidget):
     def on_sql_clicked(self, sql_name):
         """SQL按钮点击事件 - 优化：点击时清空响应体"""
         if not self.current_product:
-            QMessageBox.warning(self, "警告", "请先选择产品")
+            Toast.warning(self, "警告", "请先选择产品")
             return
 
         try:
@@ -1184,7 +1184,7 @@ class ApiToolTab(QWidget):
             self.execute_sql_query(sql_name, sql_config)
 
         except KeyError as e:
-            QMessageBox.warning(self, "错误", f"SQL配置不存在: {sql_name}")
+            Toast.warning(self, "错误", f"SQL配置不存在: {sql_name}")
             # 错误时也清空响应体
             self.response_body_edit.setPlainText("")
             self.response_body_edit.setPlaceholderText("响应内容将显示在这里...")
@@ -1629,7 +1629,7 @@ class ApiToolTab(QWidget):
         try:
             request_body = json.loads(request_body_text)
         except json.JSONDecodeError as e:
-            QMessageBox.warning(self, "格式错误", f"请求体格式错误: {str(e)}")
+            Toast.warning(self, "格式错误", f"请求体格式错误: {str(e)}")
             return
 
         # 判断是产品接口请求还是独立手动请求

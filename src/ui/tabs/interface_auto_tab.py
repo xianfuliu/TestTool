@@ -343,7 +343,7 @@ class InterfaceAutoTab(QWidget):
                 
         except Exception as e:
             print(f"跳转到测试报告详情页面失败: {str(e)}")
-            QMessageBox.critical(self, "错误", f"打开报告详情失败: {str(e)}")
+            Toast.critical(self, "错误", f"打开报告详情失败: {str(e)}")
     
     def on_report_tab_requested(self, jump_data):
         """处理测试报告tab跳转请求，自动筛选调度相关的报告
@@ -365,7 +365,7 @@ class InterfaceAutoTab(QWidget):
                 
         except Exception as e:
             print(f"跳转到测试报告tab并筛选失败: {str(e)}")
-            QMessageBox.critical(self, "错误", f"跳转到测试报告tab失败: {str(e)}")
+            Toast.critical(self, "错误", f"跳转到测试报告tab失败: {str(e)}")
     
     def _handle_report_tab_fallback(self, jump_data):
         """处理测试报告tab跳转的备用方案"""

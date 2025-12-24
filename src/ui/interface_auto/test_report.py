@@ -3489,7 +3489,7 @@ class TestReportManager(QWidget):
         """查看报告详情"""
         report_data = self.get_selected_report_data()
         if not report_data:
-            QMessageBox.warning(self, "提示", "请先选择一个测试报告")
+            Toast.warning(self, "提示", "请先选择一个测试报告")
             return
 
         # 创建详情页（如果不存在）
@@ -3508,7 +3508,7 @@ class TestReportManager(QWidget):
     def view_report_detail_by_id(self, report_id):
         """根据报告ID查看详情"""
         if not report_id:
-            QMessageBox.warning(self, "提示", "无效的报告ID")
+            Toast.warning(self, "提示", "无效的报告ID")
             return
 
         try:
@@ -3527,9 +3527,9 @@ class TestReportManager(QWidget):
                 # 切换到详情页
                 self.stack_layout.setCurrentWidget(self.detail_page)
             else:
-                QMessageBox.warning(self, "提示", "报告数据不存在")
+                Toast.warning(self, "提示", "报告数据不存在")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"加载报告详情失败: {str(e)}")
+            Toast.critical(self, "错误", f"加载报告详情失败: {str(e)}")
     
     def show_list_page(self):
         """显示列表页"""
@@ -3709,10 +3709,10 @@ class TestReportManager(QWidget):
                     deleted_count = self.report_service.delete_old_reports(days)
                     self.load_reports()
                     self.data_changed.emit()
-                    QMessageBox.information(self, "成功", f"已清理 {deleted_count} 个旧报告")
+                    Toast.information(self, "成功", f"已清理 {deleted_count} 个旧报告")
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"清理报告失败: {str(e)}")
+            Toast.critical(self, "错误", f"清理报告失败: {str(e)}")
 
     def toggle_scheduler_status(self, scheduler_id, enable):
         """切换调度任务状态"""
@@ -3722,14 +3722,14 @@ class TestReportManager(QWidget):
             
             if success:
                 action_text = "启用" if enable else "禁用"
-                QMessageBox.information(self, "成功", f"调度任务{action_text}成功")
+                Toast.information(self, "成功", f"调度任务{action_text}成功")
                 # 刷新调度任务列表
                 self.load_schedulers()
             else:
-                QMessageBox.warning(self, "警告", "操作失败，请重试")
+                Toast.warning(self, "警告", "操作失败，请重试")
                 
         except Exception as e:
             print(f"切换调度状态失败: {e}")
-            QMessageBox.critical(self, "错误", f"操作失败: {str(e)}")
+            Toast.critical(self, "错误", f"操作失败: {str(e)}")
 
 

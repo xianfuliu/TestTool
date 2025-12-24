@@ -6,11 +6,11 @@ from PyQt5.QtCore import Qt, QTimer, QEvent
 
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_filler import IDCardFiller
-from src.ui.tabs import TestDataTab, DataQueryTab, ApiToolTab  # 修改导入方式
+from src.ui.tabs import TestDataTab, DataQueryTab, ApiToolTab
 from src.core.services.user_service import UserService
 from src.core.services.session_service import SessionService
 from src.utils.resource_utils import resource_path
-from src.ui.widgets.toast_tips import Toast  # 导入Toast组件
+from src.ui.widgets.toast_tips import Toast
 
 # 条件导入调度服务
 try:
@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
             if os.path.exists(static_template):
                 template_path = static_template
             else:
-                QMessageBox.critical(self, "文件缺失", "无法找到身份证模板文件")
+                Toast.critical(self, "文件缺失", "无法找到身份证模板文件")
                 return
 
         print(f"最终使用的模板路径: {template_path}")
@@ -434,7 +434,7 @@ class MainWindow(QMainWindow):
     def open_variable_management(self):
         """打开变量管理对话框"""
         if not VARIABLE_MANAGEMENT_AVAILABLE:
-            QMessageBox.warning(self, "功能不可用", "变量管理模块不可用，请检查模块依赖")
+            Toast.warning(self, "功能不可用", "变量管理模块不可用，请检查模块依赖")
             return
 
         try:
@@ -442,7 +442,7 @@ class MainWindow(QMainWindow):
             dialog = VariableManagement(self)
             dialog.exec_()
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"打开变量管理失败: {str(e)}")
+            Toast.critical(self, "错误", f"打开变量管理失败: {str(e)}")
     
     def set_scheduler_service(self, scheduler_service):
         """设置调度服务实例"""
@@ -589,7 +589,7 @@ class MainWindow(QMainWindow):
             auth_page.login_success.connect(on_login_success)
             
         except Exception as e:
-            QMessageBox.critical(self, '登出错误', f'登出过程中发生错误: {str(e)}')
+            Toast.critical(self, '登出错误', f'登出过程中发生错误: {str(e)}')
     
     def get_current_user(self):
         """获取当前用户"""

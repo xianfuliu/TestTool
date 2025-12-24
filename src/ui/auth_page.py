@@ -13,6 +13,7 @@ from src.core.services.user_service import UserService
 from src.core.services.email_service import EmailService
 from src.core.models.email_config_model import EmailConfig
 from src.utils.resource_utils import resource_path
+from src.ui.widgets.toast_tips import Toast  # 导入Toast组件
 
 
 class EmailWorker(QThread):
@@ -445,7 +446,7 @@ class AuthPage(QWidget):
         password = self.password_input.text().strip()
         
         if not username or not password:
-            QMessageBox.warning(self, "输入错误", "请输入用户名和密码")
+            Toast.warning(self, "输入错误", "请输入用户名和密码")
             return
         
         # 禁用登录按钮
@@ -461,7 +462,7 @@ class AuthPage(QWidget):
             # 直接发送登录成功信号，Toast提示将在主窗口显示
             self.login_success.emit(result['user'])
         else:
-            QMessageBox.warning(self, "登录失败", "用户名或密码错误")
+            Toast.warning(self, "登录失败", "用户名或密码错误")
             self.login_btn.setEnabled(True)
             self.login_btn.setText("登录")
     
@@ -470,17 +471,17 @@ class AuthPage(QWidget):
         email = self.email_input.text().strip()
         
         if not email:
-            QMessageBox.warning(self, "输入错误", "请输入邮箱地址")
+            Toast.warning(self, "输入错误", "请输入邮箱地址")
             return
         
         # 验证邮箱格式
         if "@" not in email or "." not in email:
-            QMessageBox.warning(self, "输入错误", "请输入有效的邮箱地址")
+            Toast.warning(self, "输入错误", "请输入有效的邮箱地址")
             return
         
         # 检查邮箱是否已注册
         if self.user_service.get_user_by_email(email):
-            QMessageBox.warning(self, "注册错误", "该邮箱已被注册")
+            Toast.warning(self, "注册错误", "该邮箱已被注册")
             return
         
         # 生成验证码
@@ -490,7 +491,7 @@ class AuthPage(QWidget):
         
         # 保存验证码到数据库
         if not self.user_service.save_verification_code(email, code):
-            QMessageBox.warning(self, "发送失败", "验证码保存失败，请重试")
+            Toast.warning(self, "发送失败", "验证码保存失败，请重试")
             return
         
         # 发送邮件（异步）
@@ -503,7 +504,7 @@ class AuthPage(QWidget):
         """发送验证码邮件"""
         # 这里需要根据您的邮件配置发送邮件
         # 暂时使用模拟发送
-        QMessageBox.information(self, "发送成功", f"验证码已发送到 {email}\n验证码: {code}")
+        Toast.information(self, "发送成功", f"验证码已发送到 {email}\n验证码: {code}")
         
         # 实际实现应该使用您的邮件服务
         # 示例代码：
@@ -546,28 +547,28 @@ class AuthPage(QWidget):
         
         # 验证输入
         if not all([username, password, confirm_password, email, code]):
-            QMessageBox.warning(self, "输入错误", "请填写所有必填字段")
+            Toast.warning(self, "输入错误", "请填写所有必填字段")
             return
         
         if len(username) < 4 or len(username) > 20:
-            QMessageBox.warning(self, "输入错误", "用户名长度应为4-20位")
+            Toast.warning(self, "输入错误", "用户名长度应为4-20位")
             return
         
         if len(password) < 6 or len(password) > 20:
-            QMessageBox.warning(self, "输入错误", "密码长度应为6-20位")
+            Toast.warning(self, "输入错误", "密码长度应为6-20位")
             return
         
         if password != confirm_password:
-            QMessageBox.warning(self, "输入错误", "两次输入的密码不一致")
+            Toast.warning(self, "输入错误", "两次输入的密码不一致")
             return
         
         if "@" not in email or "." not in email:
-            QMessageBox.warning(self, "输入错误", "请输入有效的邮箱地址")
+            Toast.warning(self, "输入错误", "请输入有效的邮箱地址")
             return
         
         # 检查admin用户是否存在
         if not self.user_service.check_admin_user_exists():
-            QMessageBox.warning(self, "注册失败", "请联系管理员添加admin用户")
+            Toast.warning(self, "注册失败", "请联系管理员添加admin用户")
             return
         
         # 禁用注册按钮
@@ -585,13 +586,13 @@ class AuthPage(QWidget):
         )
         
         if success:
-            QMessageBox.information(self, "注册成功", message)
+            Toast.information(self, "注册成功", message)
             # 注册成功后切换到登录页面
             self.show_login_page()
             # 清空注册表单
             self.clear_register_form()
         else:
-            QMessageBox.warning(self, "注册失败", message)
+            Toast.warning(self, "注册失败", message)
         
         # 重新启用注册按钮
         self.register_btn.setEnabled(True)

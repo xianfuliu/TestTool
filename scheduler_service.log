@@ -1,0 +1,16 @@
+2025-12-24 17:29:11,775 - src.core.services.token_service - INFO - 每周清理任务工作线程启动
+2025-12-24 17:29:11,775 - src.core.services.token_service - INFO - 每周清理任务已启动
+2025-12-24 17:29:11,831 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-24 17:29:13,831 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-24 17:29:14,121 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-24 17:29:16,837 - src.core.services.session_service - INFO - Session加载成功: 用户 admin
+2025-12-24 17:29:16,911 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
+2025-12-24 17:29:17,208 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-24 17:29:17,349 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
+2025-12-24 17:37:46,577 - src.core.services.session_service - INFO - Session文件已删除
+2025-12-24 17:37:56,426 - src.core.services.token_service - INFO - 会话创建成功: 用户ID 1
+2025-12-24 17:37:56,496 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
+2025-12-24 17:37:56,567 - src.core.services.user_service - INFO - 用户认证成功: admin
+2025-12-24 17:37:56,568 - src.core.services.session_service - INFO - Session保存成功: 用户 admin
+2025-12-24 17:37:56,674 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-24 17:37:56,807 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
