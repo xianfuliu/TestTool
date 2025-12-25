@@ -337,7 +337,34 @@ class MainWindow(QMainWindow):
         # 设置Tab Widget为中心部件
         self.setCentralWidget(tab_widget)
         
-        # 创建退出按钮并添加到tab widget的右上角
+        # 创建右上角按钮容器
+        corner_widget = QWidget()
+        corner_layout = QHBoxLayout(corner_widget)
+        corner_layout.setContentsMargins(0, 0, 0, 0)
+        corner_layout.setSpacing(2)
+        
+        # 创建设置按钮（仅admin用户可见）
+        self.settings_button = QPushButton()
+        self.settings_button.setIcon(QIcon(resource_path("src/resources/icons/settings.png")))
+        self.settings_button.setToolTip("全局设置")
+        self.settings_button.setFixedSize(30, 25)
+        self.settings_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 3px;
+                margin: 2px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+        """)
+        self.settings_button.clicked.connect(self.handle_settings)
+        
+        # 创建退出按钮
         self.logout_button = QPushButton()
         self.logout_button.setIcon(QIcon(resource_path("src/resources/icons/logout.png")))
         self.logout_button.setToolTip("退出登录")
@@ -358,8 +385,12 @@ class MainWindow(QMainWindow):
         """)
         self.logout_button.clicked.connect(self.handle_logout)
         
-        # 将退出按钮添加到tab widget的右上角
-        tab_widget.setCornerWidget(self.logout_button, Qt.TopRightCorner)
+        # 将按钮添加到布局
+        corner_layout.addWidget(self.settings_button)
+        corner_layout.addWidget(self.logout_button)
+        
+        # 将按钮容器添加到tab widget的右上角
+        tab_widget.setCornerWidget(corner_widget, Qt.TopRightCorner)
         
         # 存储tab widget引用
         self.tab_widget = tab_widget
@@ -496,6 +527,10 @@ class MainWindow(QMainWindow):
         # 更新窗口标题
         self.setWindowTitle(f"测试工具-{user.username}")
         self.create_user_menu()
+        
+        # 控制设置按钮的可见性（仅admin用户可见）
+        if hasattr(self, 'settings_button'):
+            self.settings_button.setVisible(user.is_admin)
     
     def create_user_menu(self):
         """创建用户菜单 - 已弃用，退出功能已移至tab菜单栏"""
@@ -537,6 +572,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"重启调度服务时出错: {e}")
     
+    def handle_settings(self):
+        """处理设置按钮点击"""
+        if self.current_user and self.current_user.is_admin:
+            # 只有admin用户可以打开全局设置
+            from src.ui.dialogs.global_email_config_dialog import GlobalEmailConfigDialog
+            dialog = GlobalEmailConfigDialog(self)
+            dialog.exec_()
+        else:
+            Toast.warning(self, "权限不足", "只有管理员可以访问全局设置")
+
     def handle_logout(self):
         """处理用户登出"""
         if self.current_user:

@@ -873,7 +873,10 @@ class UnifiedSchedulerService:
             # 发送邮件通知（如果配置了收件人且启用了邮件通知）
             notify_emails = scheduler_data.get('notify_emails', [])
             email_config = scheduler_data.get('email_config', {})
-            email_enabled = email_config.get('enabled', True)  # 默认为启用状态
+            # 检查邮件通知是否启用（如果email_config为空或包含enabled字段为True）
+            email_enabled = True  # 默认启用
+            if email_config and 'enabled' in email_config:
+                email_enabled = email_config.get('enabled', True)
             
             if notify_emails and email_enabled:
                 try:

@@ -179,36 +179,96 @@ class VerificationEmailService:
     
     def _send_email(self, recipients: List[str], subject: str, html_content: str, text_content: str) -> bool:
         """发送邮件"""
+        import os
+        import socket
+        
+        # 保存原始getfqdn函数
+        original_getfqdn = socket.getfqdn
+        
+        def patched_getfqdn(name=''):
+            """修补的getfqdn函数，返回固定的localhost"""
+            return 'localhost'
+        
         try:
+            # 应用猴子补丁
+            socket.getfqdn = patched_getfqdn
+            
             # 创建邮件消息
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = Header(subject, 'utf-8')
-            msg['From'] = Header(f"{self.config.sender_name} <{self.config.sender_email}>", 'utf-8')
+            msg['Subject'] = str(Header(subject, 'utf-8'))
+            
+            # 修复From头：使用简单的邮箱格式，避免编码问题
+            msg['From'] = self.config.sender_email
             msg['To'] = ', '.join(recipients)
             
             # 添加文本和HTML版本
             msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
             msg.attach(MIMEText(html_content, 'html', 'utf-8'))
             
-            # 连接SMTP服务器
-            if self.config.use_tls:
-                server = smtplib.SMTP(self.config.smtp_server, self.config.smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP(self.config.smtp_server, self.config.smtp_port)
-            
-            # 登录
-            server.login(self.config.smtp_username, self.config.smtp_password)
-            
-            # 发送邮件
-            server.send_message(msg)
-            
-            # 关闭连接
-            server.quit()
-            
-            logger.info(f"验证码邮件发送成功: {recipients}")
-            return True
+            # 方法1: 尝试使用简单的SMTP连接
+            try:
+                # 直接使用SMTP连接，并显式设置local_hostname参数
+                server = smtplib.SMTP(
+                    self.config.smtp_server, 
+                    self.config.smtp_port, 
+                    local_hostname='localhost',
+                    timeout=30
+                )
+                
+                # 如果配置了TLS，启动STARTTLS
+                if self.config.use_tls:
+                    server.starttls()
+                
+                # 设置编码处理
+                server.set_debuglevel(0)
+                
+                # 登录
+                server.login(self.config.smtp_username, self.config.smtp_password)
+                
+                # 发送邮件
+                server.send_message(msg)
+                
+                # 关闭连接
+                server.quit()
+                
+                logger.info(f"验证码邮件发送成功: {recipients}")
+                return True
+                
+            except Exception as e:
+                logger.warning(f"方法1失败: {str(e)}，尝试方法2")
+                
+                # 方法2: 使用socket连接绕过主机名解析
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(30)
+                sock.connect((self.config.smtp_server, self.config.smtp_port))
+                
+                # 创建SMTP对象，使用已有的socket连接
+                server = smtplib.SMTP(local_hostname='localhost')
+                server.sock = sock
+                
+                # 如果配置了TLS，启动STARTTLS
+                if self.config.use_tls:
+                    server.starttls()
+                
+                # 设置编码处理
+                server.set_debuglevel(0)
+                
+                # 登录
+                server.login(self.config.smtp_username, self.config.smtp_password)
+                
+                # 发送邮件
+                server.send_message(msg)
+                
+                # 关闭连接
+                server.quit()
+                
+                logger.info(f"验证码邮件发送成功(方法2): {recipients}")
+                return True
             
         except Exception as e:
             logger.error(f"发送邮件失败: {str(e)}")
             return False
+            
+        finally:
+            # 恢复原始getfqdn函数
+            socket.getfqdn = original_getfqdn

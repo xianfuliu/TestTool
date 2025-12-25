@@ -13,9 +13,7 @@ class User:
                  username: str = "",
                  password_hash: str = "",
                  email: str = "",
-                 real_name: str = "",
                  business_line: str = "",
-                 is_active: bool = True,
                  is_admin: bool = False,
                  last_login_at: Optional[datetime] = None,
                  created_at: Optional[datetime] = None,
@@ -24,9 +22,7 @@ class User:
         self.username = username
         self.password_hash = password_hash
         self.email = email
-        self.real_name = real_name
         self.business_line = business_line
-        self.is_active = is_active
         self.is_admin = is_admin
         self.last_login_at = last_login_at
         self.created_at = created_at
@@ -39,9 +35,7 @@ class User:
             'username': self.username,
             'password_hash': self.password_hash,
             'email': self.email,
-            'real_name': self.real_name,
             'business_line': self.business_line,
-            'is_active': self.is_active,
             'is_admin': self.is_admin,
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -56,7 +50,6 @@ class User:
             username=data.get('username', ''),
             password_hash=data.get('password_hash', ''),
             email=data.get('email', ''),
-            real_name=data.get('real_name', ''),
             business_line=data.get('business_line', ''),
             is_active=data.get('is_active', True),
             is_admin=data.get('is_admin', False),

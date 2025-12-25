@@ -57,10 +57,10 @@ class UserService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT id, username, password_hash, email, real_name, business_line, 
-                               is_active, is_admin, last_login_at, created_at, updated_at
+                        SELECT id, username, password_hash, email, business_line, 
+                               is_admin, last_login_at, created_at, updated_at
                         FROM users 
-                        WHERE username = %s AND is_active = TRUE
+                        WHERE username = %s
                     """, (username,))
                     user_data = cursor.fetchone()
                     
@@ -77,10 +77,10 @@ class UserService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT id, username, password_hash, email, real_name, business_line, 
-                               is_active, is_admin, last_login_at, created_at, updated_at
+                        SELECT id, username, password_hash, email, business_line, 
+                               is_admin, last_login_at, created_at, updated_at
                         FROM users 
-                        WHERE email = %s AND is_active = TRUE
+                        WHERE email = %s
                     """, (email,))
                     user_data = cursor.fetchone()
                     
@@ -97,10 +97,10 @@ class UserService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT id, username, password_hash, email, real_name, business_line, 
-                               is_active, is_admin, last_login_at, created_at, updated_at
+                        SELECT id, username, password_hash, email, business_line, 
+                               is_admin, last_login_at, created_at, updated_at
                         FROM users 
-                        WHERE id = %s AND is_active = TRUE
+                        WHERE id = %s
                     """, (user_id,))
                     user_data = cursor.fetchone()
                     
@@ -130,13 +130,12 @@ class UserService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        INSERT INTO users (username, password_hash, email, real_name, business_line, is_admin)
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        INSERT INTO users (username, password_hash, email, business_line, is_admin)
+                        VALUES (%s, %s, %s, %s, %s)
                     """, (
                         user_data['username'],
                         password_hash,
                         user_data['email'],
-                        user_data.get('real_name', ''),
                         user_data.get('business_line', ''),
                         user_data.get('is_admin', False)
                     ))
@@ -182,7 +181,6 @@ class UserService:
                     'username': user.username,
                     'email': user.email,
                     'is_admin': user.is_admin,
-                    'real_name': user.real_name,
                     'business_line': user.business_line
                 }
                 self.session_service.save_session(user_dict, session_token)
@@ -222,8 +220,8 @@ class UserService:
                     # 先标记该邮箱的旧验证码为已使用
                     cursor.execute("""
                         UPDATE email_verification_codes 
-                        SET is_used = TRUE 
-                        WHERE email = %s AND is_used = FALSE
+                        SET used = TRUE 
+                        WHERE email = %s AND used = FALSE
                     """, (email,))
                     
                     # 插入新验证码
@@ -245,9 +243,9 @@ class UserService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT id, email, verification_code, is_used, expires_at, created_at
+                        SELECT id, email, verification_code, used as is_used, expires_at, created_at
                         FROM email_verification_codes 
-                        WHERE email = %s AND verification_code = %s AND is_used = FALSE
+                        WHERE email = %s AND verification_code = %s AND used = FALSE
                         ORDER BY created_at DESC 
                         LIMIT 1
                     """, (email, code))
@@ -266,7 +264,7 @@ class UserService:
                     # 标记验证码为已使用
                     cursor.execute("""
                         UPDATE email_verification_codes 
-                        SET is_used = TRUE 
+                        SET used = TRUE 
                         WHERE id = %s
                     """, (verification_code.id,))
                     
@@ -278,7 +276,7 @@ class UserService:
             return False
     
     def register_user(self, username: str, password: str, email: str, 
-                     verification_code: str, real_name: str, business_line: str) -> tuple[bool, str]:
+                     verification_code: str, business_line: str) -> tuple[bool, str]:
         """
         注册用户
         
@@ -287,7 +285,6 @@ class UserService:
             password: 密码
             email: 邮箱
             verification_code: 验证码
-            real_name: 真实姓名
             business_line: 业务线
             
         Returns:
@@ -315,7 +312,6 @@ class UserService:
                 'username': username,
                 'password': password,
                 'email': email,
-                'real_name': real_name,
                 'business_line': business_line,
                 'is_admin': False
             }

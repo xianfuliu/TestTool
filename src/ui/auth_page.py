@@ -3,8 +3,9 @@
 """
 import sys
 import os
+import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-                             QPushButton, QStackedWidget, QFrame, QMessageBox, QCheckBox)
+                             QPushButton, QStackedWidget, QFrame, QMessageBox, QCheckBox, QComboBox)
 from PyQt5.QtGui import QFont, QPixmap, QIcon
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -14,6 +15,9 @@ from src.core.services.email_service import EmailService
 from src.core.models.email_config_model import EmailConfig
 from src.utils.resource_utils import resource_path
 from src.ui.widgets.toast_tips import Toast  # 导入Toast组件
+
+# 配置日志
+logger = logging.getLogger("AuthPage")
 
 
 class EmailWorker(QThread):
@@ -51,14 +55,38 @@ class AuthPage(QWidget):
         super().__init__()
         self.user_service = UserService()
         self.email_service = None
+        self.verification_email_service = None
         self.current_email = ""
         self.verification_code = ""
         self.countdown_timer = QTimer()
         self.countdown_seconds = 60
         
+        # 初始化邮箱服务
+        self._init_email_services()
+        
         self.init_ui()
         self.init_connections()
         self.load_saved_credentials()  # 加载保存的凭据
+        self.load_business_lines()     # 加载业务线数据
+    
+    def _init_email_services(self):
+        """初始化邮箱服务"""
+        try:
+            # 加载全局邮箱配置
+            from src.core.services.email_config_service import EmailConfigService
+            email_config_service = EmailConfigService()
+            email_config = email_config_service.get_email_config()
+            
+            if email_config:
+                # 初始化验证码邮件服务
+                from src.core.services.verification_email_service import VerificationEmailService
+                self.verification_email_service = VerificationEmailService(email_config)
+                logger.info("验证码邮件服务初始化成功")
+            else:
+                logger.warning("全局邮箱配置未设置，验证码邮件发送功能将不可用")
+                
+        except Exception as e:
+            logger.error(f"初始化邮箱服务失败: {str(e)}")
     
     def init_ui(self):
         """初始化UI - 全屏展示，登录注册在右侧"""
@@ -263,14 +291,25 @@ class AuthPage(QWidget):
         username_label = QLabel("用户名:")
         username_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("请输入用户名")
+        self.username_input.setPlaceholderText("请输入用户名（4-20位英文字母数字）")
+        self.username_input.setMaxLength(20)  # 设置最大长度限制
+        # 设置输入验证器，只允许英文字母和数字
+        import re
+        from PyQt5.QtGui import QRegExpValidator
+        from PyQt5.QtCore import QRegExp
+        reg_exp = QRegExp("^[a-zA-Z0-9]*$")
+        validator = QRegExpValidator(reg_exp)
+        self.username_input.setValidator(validator)
+        # 连接文本变化信号，检测中文输入并清空
+        self.username_input.textChanged.connect(self.check_login_username_input)
         
         # 密码输入
         password_label = QLabel("密码:")
         password_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("请输入密码")
+        self.password_input.setPlaceholderText("请输入密码（6-20位）")
         self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setMaxLength(20)  # 设置最大长度限制
         
         # 记住我
         self.remember_me = QCheckBox("记住我")
@@ -281,7 +320,7 @@ class AuthPage(QWidget):
         self.login_btn.setMinimumHeight(45)
         self.login_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
+                background-color: #27ae60;
                 color: white;
                 border: none;
                 border-radius: 6px;
@@ -289,10 +328,10 @@ class AuthPage(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #229954;
             }
             QPushButton:pressed {
-                background-color: #21618c;
+                background-color: #1e8449;
             }
         """)
         
@@ -319,7 +358,17 @@ class AuthPage(QWidget):
         username_label = QLabel("用户名:")
         username_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         self.reg_username_input = QLineEdit()
-        self.reg_username_input.setPlaceholderText("请输入用户名（4-20位字母数字）")
+        self.reg_username_input.setPlaceholderText("请输入用户名（4-20位英文字母数字）")
+        self.reg_username_input.setMaxLength(20)  # 设置最大长度限制
+        # 设置输入验证器，只允许英文字母和数字
+        import re
+        from PyQt5.QtGui import QRegExpValidator
+        from PyQt5.QtCore import QRegExp
+        reg_exp = QRegExp("^[a-zA-Z0-9]*$")
+        validator = QRegExpValidator(reg_exp)
+        self.reg_username_input.setValidator(validator)
+        # 连接文本变化信号，检测中文输入并清空
+        self.reg_username_input.textChanged.connect(self.check_username_input)
         
         # 密码输入
         password_label = QLabel("密码:")
@@ -327,6 +376,7 @@ class AuthPage(QWidget):
         self.reg_password_input = QLineEdit()
         self.reg_password_input.setPlaceholderText("请输入密码（6-20位）")
         self.reg_password_input.setEchoMode(QLineEdit.Password)
+        self.reg_password_input.setMaxLength(20)  # 设置最大长度限制
         
         # 确认密码
         confirm_password_label = QLabel("确认密码:")
@@ -334,6 +384,7 @@ class AuthPage(QWidget):
         self.reg_confirm_password_input = QLineEdit()
         self.reg_confirm_password_input.setPlaceholderText("请再次输入密码")
         self.reg_confirm_password_input.setEchoMode(QLineEdit.Password)
+        self.reg_confirm_password_input.setMaxLength(20)  # 设置最大长度限制
         
         # 邮箱输入
         email_label = QLabel("邮箱:")
@@ -346,24 +397,85 @@ class AuthPage(QWidget):
         code_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
         code_layout = QHBoxLayout()
         self.code_input = QLineEdit()
-        self.code_input.setPlaceholderText("请输入验证码")
+        self.code_input.setPlaceholderText("请输入验证码（6位）")
+        self.code_input.setMaxLength(6)  # 设置最大长度限制为6位
         self.send_code_btn = QPushButton("发送验证码")
         self.send_code_btn.setMinimumHeight(40)
+        self.send_code_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 100px;
+            }
+            QPushButton:hover {
+                background-color: #229954;
+            }
+            QPushButton:pressed {
+                background-color: #1e8449;
+            }
+            QPushButton:disabled {
+                background-color: #bdc3c7;
+                color: #7f8c8d;
+            }
+        """)
         
         code_layout.addWidget(self.code_input)
         code_layout.addWidget(self.send_code_btn)
         
-        # 真实姓名
-        real_name_label = QLabel("真实姓名:")
-        real_name_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
-        self.real_name_input = QLineEdit()
-        self.real_name_input.setPlaceholderText("请输入真实姓名（可选）")
-        
         # 业务线
         business_line_label = QLabel("业务线:")
         business_line_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
-        self.business_line_input = QLineEdit()
-        self.business_line_input.setPlaceholderText("请输入业务线（可选）")
+        self.business_line_combo = QComboBox()
+        self.business_line_combo.setEditable(False)  # 设置为不可编辑，纯下拉选择
+        # 设置自定义下拉图标
+        combobox_icon_path = resource_path("src/resources/icons/combobox.png")
+        if os.path.exists(combobox_icon_path):
+            # 将Windows路径分隔符转换为URL兼容格式
+            icon_url_path = combobox_icon_path.replace("\\", "/")
+            self.business_line_combo.setStyleSheet(f"""
+                QComboBox {{
+                    border: 1px solid #bdc3c7;
+                    border-radius: 4px;
+                    padding: 8px;
+                    min-height: 40px;
+                    background-color: white;
+                }}
+                QComboBox::drop-down {{
+                    border: none;
+                    width: 30px;
+                }}
+                QComboBox::down-arrow {{
+                    image: url({icon_url_path});
+                    width: 16px;
+                    height: 16px;
+                }}
+            """)
+        else:
+            self.business_line_combo.setStyleSheet("""
+                QComboBox {
+                    border: 1px solid #bdc3c7;
+                    border-radius: 4px;
+                    padding: 8px;
+                    min-height: 40px;
+                    background-color: white;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                }
+                QComboBox::down-arrow {
+                    image: none;
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-top: 6px solid #7f8c8d;
+                    width: 0px;
+                    height: 0px;
+                    margin-right: 8px;
+                }
+            """)
         
         # 注册按钮
         self.register_btn = QPushButton("注册")
@@ -395,10 +507,8 @@ class AuthPage(QWidget):
         layout.addWidget(self.email_input)
         layout.addWidget(code_label)
         layout.addLayout(code_layout)
-        layout.addWidget(real_name_label)
-        layout.addWidget(self.real_name_input)
         layout.addWidget(business_line_label)
-        layout.addWidget(self.business_line_input)
+        layout.addWidget(self.business_line_combo)
         layout.addWidget(self.register_btn)
         layout.addStretch()
         
@@ -502,16 +612,25 @@ class AuthPage(QWidget):
     
     def send_verification_email(self, email, code):
         """发送验证码邮件"""
-        # 这里需要根据您的邮件配置发送邮件
-        # 暂时使用模拟发送
-        Toast.information(self, "发送成功", f"验证码已发送到 {email}\n验证码: {code}")
-        
-        # 实际实现应该使用您的邮件服务
-        # 示例代码：
-        # if self.email_service:
-        #     success = self.email_service.send_verification_email(email, code)
-        #     if not success:
-        #         QMessageBox.warning(self, "发送失败", "验证码发送失败，请检查邮箱配置")
+        try:
+            # 检查邮箱服务是否可用
+            if not self.verification_email_service:
+                Toast.warning(self, "发送失败", "邮箱服务未初始化，请检查全局邮箱配置")
+                return
+            
+            # 使用验证码邮件服务发送真实邮件
+            success = self.verification_email_service.send_verification_code(email, code)
+            
+            if success:
+                Toast.information(self, "发送成功", f"发送成功")
+                logger.info(f"验证码邮件发送成功: {email}")
+            else:
+                Toast.warning(self, "发送失败", "验证码发送失败，请检查邮箱配置或网络连接")
+                logger.error(f"验证码邮件发送失败: {email}")
+                
+        except Exception as e:
+            Toast.warning(self, "发送失败", f"验证码发送失败: {str(e)}")
+            logger.error(f"发送验证码邮件异常: {str(e)}")
     
     def start_countdown(self):
         """开始倒计时"""
@@ -542,8 +661,7 @@ class AuthPage(QWidget):
         confirm_password = self.reg_confirm_password_input.text().strip()
         email = self.email_input.text().strip()
         code = self.code_input.text().strip()
-        real_name = self.real_name_input.text().strip()
-        business_line = self.business_line_input.text().strip()
+        business_line = self.business_line_combo.currentText().strip()
         
         # 验证输入
         if not all([username, password, confirm_password, email, code]):
@@ -581,7 +699,6 @@ class AuthPage(QWidget):
             password=password,
             email=email,
             verification_code=code,
-            real_name=real_name,
             business_line=business_line
         )
         
@@ -598,6 +715,22 @@ class AuthPage(QWidget):
         self.register_btn.setEnabled(True)
         self.register_btn.setText("注册")
     
+    def check_username_input(self, text):
+        """检查注册页面用户名输入，如果包含中文则清空"""
+        # 检查是否包含中文字符
+        if any('\u4e00' <= char <= '\u9fff' for char in text):
+            # 如果包含中文，清空输入框并显示提示
+            self.reg_username_input.clear()
+            Toast.warning(self, "输入错误", "用户名只能包含英文字母和数字")
+    
+    def check_login_username_input(self, text):
+        """检查登录页面用户名输入，如果包含中文则清空"""
+        # 检查是否包含中文字符
+        if any('\u4e00' <= char <= '\u9fff' for char in text):
+            # 如果包含中文，清空输入框并显示提示
+            self.username_input.clear()
+            Toast.warning(self, "输入错误", "用户名只能包含英文字母和数字")
+    
     def clear_register_form(self):
         """清空注册表单"""
         self.reg_username_input.clear()
@@ -605,8 +738,45 @@ class AuthPage(QWidget):
         self.reg_confirm_password_input.clear()
         self.email_input.clear()
         self.code_input.clear()
-        self.real_name_input.clear()
-        self.business_line_input.clear()
+        self.business_line_combo.setCurrentIndex(-1)  # 清空下拉框选择
+    
+    def load_business_lines(self):
+        """从数据库加载业务线数据"""
+        try:
+            from config.database import Database
+            db = Database()
+            
+            with db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT name FROM business_groups ORDER BY name")
+                    results = cursor.fetchall()
+                    
+                    business_lines = [result['name'] for result in results]
+                    
+                    # 清空并重新填充下拉框
+                    self.business_line_combo.clear()
+                    
+                    # 如果有业务线数据，添加选项并设置默认选择第一个
+                    if business_lines:
+                        for business_line in business_lines:
+                            self.business_line_combo.addItem(business_line, business_line)
+                        # 设置默认选择第一个选项
+                        self.business_line_combo.setCurrentIndex(0)
+                        logger.info(f"成功加载 {len(business_lines)} 条业务线数据，默认选择第一个选项")
+                    else:
+                        # 如果没有业务线数据，添加默认选项
+                        self.business_line_combo.addItem("请选择业务线（可选）", "")
+                        logger.info("数据库中没有业务线数据，使用默认选项")
+                    
+        except Exception as e:
+            logger.warning(f"加载业务线数据失败: {str(e)}")
+            # 如果数据库查询失败，使用默认的业务线选项
+            self.business_line_combo.clear()
+            self.business_line_combo.addItem("消费金融", "消费金融")
+            self.business_line_combo.addItem("小微测试", "小微测试")
+            self.business_line_combo.addItem("其他业务", "其他业务")
+            # 设置默认选择第一个选项
+            self.business_line_combo.setCurrentIndex(0)
     
     def save_credentials(self, username, password):
         """保存用户名和密码到本地存储"""

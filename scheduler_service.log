@@ -1,16 +1,31 @@
-2025-12-24 17:29:11,775 - src.core.services.token_service - INFO - 每周清理任务工作线程启动
-2025-12-24 17:29:11,775 - src.core.services.token_service - INFO - 每周清理任务已启动
-2025-12-24 17:29:11,831 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-24 17:29:13,831 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-24 17:29:14,121 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-24 17:29:16,837 - src.core.services.session_service - INFO - Session加载成功: 用户 admin
-2025-12-24 17:29:16,911 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
-2025-12-24 17:29:17,208 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-24 17:29:17,349 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
-2025-12-24 17:37:46,577 - src.core.services.session_service - INFO - Session文件已删除
-2025-12-24 17:37:56,426 - src.core.services.token_service - INFO - 会话创建成功: 用户ID 1
-2025-12-24 17:37:56,496 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
-2025-12-24 17:37:56,567 - src.core.services.user_service - INFO - 用户认证成功: admin
-2025-12-24 17:37:56,568 - src.core.services.session_service - INFO - Session保存成功: 用户 admin
-2025-12-24 17:37:56,674 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2025-12-24 17:37:56,807 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
+2025-12-25 17:35:57,808 - src.core.services.token_service - INFO - 每周清理任务工作线程启动
+2025-12-25 17:35:57,808 - src.core.services.token_service - INFO - 每周清理任务已启动
+2025-12-25 17:35:57,858 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-25 17:35:57,916 - AuthPage - INFO - 验证码邮件服务初始化成功
+2025-12-25 17:35:57,998 - AuthPage - INFO - 成功加载 2 条业务线数据，默认选择第一个选项
+2025-12-25 17:35:59,828 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-25 17:36:00,096 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-25 17:36:20,156 - src.core.services.user_service - INFO - 验证码保存成功: 372515631@qq.com
+2025-12-25 17:36:20,918 - src.core.services.verification_email_service - INFO - 验证码邮件发送成功: ['372515631@qq.com']
+2025-12-25 17:36:20,942 - AuthPage - INFO - 验证码邮件发送成功: 372515631@qq.com
+2025-12-25 17:36:40,757 - src.core.services.user_service - INFO - 验证码验证成功: 372515631@qq.com
+2025-12-25 17:36:41,106 - src.core.services.user_service - INFO - 用户创建成功: liuxianfu, ID: 4
+2025-12-25 17:36:52,677 - src.core.services.token_service - INFO - 会话创建成功: 用户ID 4
+2025-12-25 17:36:52,738 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 4
+2025-12-25 17:36:52,876 - src.core.services.user_service - INFO - 用户认证成功: liuxianfu
+2025-12-25 17:36:52,877 - src.core.services.session_service - INFO - Session保存成功: 用户 liuxianfu
+2025-12-25 17:36:53,050 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-25 17:36:53,157 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
+2025-12-25 17:37:02,659 - src.core.services.session_service - INFO - Session文件已删除
+2025-12-25 17:37:02,717 - AuthPage - INFO - 验证码邮件服务初始化成功
+2025-12-25 17:37:02,808 - AuthPage - INFO - 成功加载 2 条业务线数据，默认选择第一个选项
+2025-12-25 17:37:09,117 - src.core.services.token_service - INFO - 会话创建成功: 用户ID 1
+2025-12-25 17:37:09,177 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
+2025-12-25 17:37:09,239 - src.core.services.user_service - INFO - 用户认证成功: admin
+2025-12-25 17:37:09,240 - src.core.services.session_service - INFO - Session保存成功: 用户 admin
+2025-12-25 17:37:09,349 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2025-12-25 17:37:09,456 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行
+2025-12-25 17:37:12,656 - src.core.services.email_config_service - INFO - 邮件配置保存成功
+2025-12-25 17:37:45,895 - src.core.services.session_service - INFO - Session文件已删除
+2025-12-25 17:37:45,969 - AuthPage - INFO - 验证码邮件服务初始化成功
+2025-12-25 17:37:46,060 - AuthPage - INFO - 成功加载 2 条业务线数据，默认选择第一个选项

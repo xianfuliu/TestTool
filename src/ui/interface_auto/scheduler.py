@@ -1229,38 +1229,6 @@ class SchedulerDialog(QDialog):
         self.email_enabled_check = QCheckBox("启用")
         email_layout.addWidget(self.email_enabled_check)
         
-        # SMTP服务器配置
-        smtp_layout = QFormLayout()
-        smtp_layout.setLabelAlignment(Qt.AlignLeft)
-        smtp_layout.setFormAlignment(Qt.AlignLeft)
-        
-        self.smtp_server_edit = QLineEdit()
-        self.smtp_server_edit.setPlaceholderText("例如：smtp.qq.com")
-        self.smtp_server_edit.setFixedWidth(300)
-        smtp_layout.addRow("SMTP服务器:", self.smtp_server_edit)
-        
-        self.smtp_port_edit = QSpinBox()
-        self.smtp_port_edit.setRange(1, 65535)
-        self.smtp_port_edit.setValue(587)
-        self.smtp_port_edit.setFixedWidth(100)
-        smtp_layout.addRow("SMTP端口:", self.smtp_port_edit)
-        
-        self.smtp_ssl_check = QCheckBox("使用SSL/TLS")
-        smtp_layout.addRow("安全连接:", self.smtp_ssl_check)
-        
-        self.sender_email_edit = QLineEdit()
-        self.sender_email_edit.setPlaceholderText("发件人邮箱地址")
-        self.sender_email_edit.setFixedWidth(300)
-        smtp_layout.addRow("发件人邮箱:", self.sender_email_edit)
-        
-        self.sender_password_edit = QLineEdit()
-        self.sender_password_edit.setPlaceholderText("发件人邮箱密码或授权码")
-        self.sender_password_edit.setEchoMode(QLineEdit.Password)
-        self.sender_password_edit.setFixedWidth(300)
-        smtp_layout.addRow("邮箱密码:", self.sender_password_edit)
-        
-        email_layout.addLayout(smtp_layout)
-        
         # 收件人配置
         recipient_layout = QFormLayout()
         recipient_layout.setLabelAlignment(Qt.AlignLeft)
@@ -1273,13 +1241,11 @@ class SchedulerDialog(QDialog):
         
         email_layout.addLayout(recipient_layout)
         
-        # 测试连接按钮
-        test_button_layout = QHBoxLayout()
-        self.test_email_connection_btn = QPushButton("测试发送")
-        self.test_email_connection_btn.setFixedWidth(120)
-        test_button_layout.addWidget(self.test_email_connection_btn)
-        test_button_layout.addStretch()
-        email_layout.addLayout(test_button_layout)
+        # 说明文本
+        info_label = QLabel("注意：邮件发送将使用全局邮箱配置，请先在系统设置中配置SMTP服务器。")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; font-size: 12px; margin-top: 10px;")
+        email_layout.addWidget(info_label)
 
         # 企业微信通知配置
         wechat_group = QGroupBox("企业微信通知")
@@ -1303,51 +1269,6 @@ class SchedulerDialog(QDialog):
         layout.addWidget(email_group)
         layout.addWidget(wechat_group)
         layout.addStretch()
-        
-        # 连接信号
-        self.test_email_connection_btn.clicked.connect(self.test_email_connection)
-
-    def test_email_connection(self):
-        """测试邮件连接配置"""
-        try:
-            # 检查是否填写了必要的配置
-            if not self.smtp_server_edit.text().strip():
-                Toast.warning(self, "警告", "请输入SMTP服务器地址")
-                return
-            
-            if not self.sender_email_edit.text().strip():
-                Toast.warning(self, "警告", "请输入发件人邮箱地址")
-                return
-            
-            if not self.sender_password_edit.text().strip():
-                Toast.warning(self, "警告", "请输入邮箱密码或授权码")
-                return
-            
-            # 导入邮件配置服务和模型
-            from src.core.services.email_config_service import EmailConfigService
-            from src.core.models.email_config_model import EmailConfig
-            
-            # 创建邮件配置对象
-            email_config = EmailConfig(
-                smtp_server=self.smtp_server_edit.text().strip(),
-                smtp_port=self.smtp_port_edit.value(),
-                smtp_username=self.sender_email_edit.text().strip(),  # 使用邮箱地址作为用户名
-                smtp_password=self.sender_password_edit.text().strip(),
-                use_tls=True,  # 默认使用TLS
-                sender_email=self.sender_email_edit.text().strip()
-            )
-            
-            # 测试连接
-            email_service = EmailConfigService()
-            success = email_service.test_email_connection(email_config)
-            
-            if success:
-                Toast.information(self, "测试成功", "邮件连接测试成功！")
-            else:
-                Toast.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
-                
-        except Exception as e:
-            Toast.critical(self, "错误", f"测试邮件连接时发生错误：{str(e)}")
 
     def delayed_load_data(self):
         """延迟加载数据，避免启动时数据库连接失败导致弹窗"""
@@ -1579,11 +1500,6 @@ class SchedulerDialog(QDialog):
 
         # 邮件服务器配置
         email_config = self.scheduler_data.get('email_config', {})
-        self.smtp_server_edit.setText(email_config.get('smtp_server', ''))
-        self.smtp_port_edit.setValue(email_config.get('smtp_port', 587))
-        self.smtp_ssl_check.setChecked(email_config.get('use_ssl', True))
-        self.sender_email_edit.setText(email_config.get('sender_email', ''))
-        self.sender_password_edit.setText(email_config.get('sender_password', ''))
         
         # 设置邮件通知启用状态
         # 直接使用数据库中保存的启用状态
@@ -1678,21 +1594,11 @@ class SchedulerDialog(QDialog):
             data['notify_emails'] = []
 
         # 邮件服务器配置
-        # 只要用户填写了任何邮件配置信息，就保存邮件配置
-        smtp_server = self.smtp_server_edit.text().strip()
-        sender_email = self.sender_email_edit.text().strip()
-        sender_password = self.sender_password_edit.text().strip()
-        
         # 记录邮件通知启用状态
         email_enabled = self.email_enabled_check.isChecked()
         
-        if smtp_server or sender_email or sender_password or email_enabled:
+        if email_enabled:
             data['email_config'] = {
-                'smtp_server': smtp_server,
-                'smtp_port': self.smtp_port_edit.value(),
-                'use_ssl': self.smtp_ssl_check.isChecked(),
-                'sender_email': sender_email,
-                'sender_password': sender_password,
                 'enabled': email_enabled  # 记录邮件通知启用状态
             }
         else:
@@ -3948,51 +3854,7 @@ class SchedulerManager(QWidget):
         except Exception as e:
             Toast.error(self, f"打开报告详情失败: {str(e)}")
 
-    def test_email_connection(self):
-        """测试邮件连接配置"""
-        try:
-            # 检查是否填写了必要的配置
-            if not self.smtp_server_edit.text().strip():
-                Toast.warning(self, "警告", "请输入SMTP服务器地址")
-                return
-            
-            if not self.sender_email_edit.text().strip():
-                Toast.warning(self, "警告", "请输入发件人邮箱地址")
-                return
-            
-            if not self.sender_password_edit.text().strip():
-                Toast.warning(self, "警告", "请输入邮箱密码或授权码")
-                return
-            
-            # 导入邮件配置服务和模型
-            from src.core.services.email_config_service import EmailConfigService
-            from src.core.models.email_config_model import EmailConfig
-            
-            # 创建邮件配置对象（正确处理编码）
-            email_config = EmailConfig(
-                smtp_server=self.smtp_server_edit.text().strip(),
-                smtp_port=self.smtp_port_edit.value(),
-                use_tls=self.smtp_ssl_check.isChecked(),  # 注意：这里应该是use_tls而不是use_ssl
-                smtp_username=self.sender_email_edit.text().strip(),  # 使用邮箱作为用户名
-                smtp_password=self.sender_password_edit.text().strip(),
-                sender_email=self.sender_email_edit.text().strip()
-            )
-            
-            # 测试连接
-            email_service = EmailConfigService()
-            success = email_service.test_email_connection(email_config)
-            
-            if success:
-                Toast.information(self, "测试成功", "邮件连接测试成功！")
-            else:
-                Toast.critical(self, "测试失败", "邮件连接测试失败，请检查配置信息")
-                
-        except Exception as e:
-            # 处理编码错误
-            error_msg = str(e)
-            if "utf-8" in error_msg and "codec" in error_msg:
-                error_msg = "邮件连接测试失败：编码错误，请检查输入内容是否包含特殊字符"
-            Toast.critical(self, "错误", f"测试邮件连接时发生错误：{error_msg}")
+
 
     def update_pagination_info(self):
         """更新分页信息显示"""
