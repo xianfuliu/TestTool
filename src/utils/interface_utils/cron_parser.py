@@ -95,10 +95,8 @@ class CronParser:
                     # 月份不匹配，跳到下个月
                     next_month = current_time.month + 1
                     if next_month > 12:
-                        current_time = current_time.replace(
-                            year=current_time.year + 1,
-                            month=1, day=1, hour=0, minute=0, second=0
-                        )
+                        # 使用timedelta安全地增加年份，避免月份值超出范围
+                        current_time = current_time.replace(month=1, day=1, hour=0, minute=0, second=0) + timedelta(days=365)
                     else:
                         current_time = current_time.replace(
                             month=next_month, day=1, hour=0, minute=0, second=0
@@ -110,16 +108,12 @@ class CronParser:
                     # 如果日字段和周字段都指定了具体值，优先使用日字段
                     if not self._match_field(day_field, current_time.day):
                         # 日期不匹配，跳到下一天
-                        current_time = current_time.replace(
-                            day=current_time.day + 1, hour=0, minute=0, second=0
-                        )
+                        current_time = current_time.replace(hour=0, minute=0, second=0) + timedelta(days=1)
                         continue
                 elif day_field != '?':
                     # 只使用日字段
                     if not self._match_field(day_field, current_time.day):
-                        current_time = current_time.replace(
-                            day=current_time.day + 1, hour=0, minute=0, second=0
-                        )
+                        current_time = current_time.replace(hour=0, minute=0, second=0) + timedelta(days=1)
                         continue
                 elif week_field != '?':
                     # 只使用周字段
@@ -135,9 +129,8 @@ class CronParser:
                     # 小时不匹配，跳到下一小时
                     next_hour = current_time.hour + 1
                     if next_hour > 23:
-                        current_time = current_time.replace(
-                            day=current_time.day + 1, hour=0, minute=0, second=0
-                        )
+                        # 使用timedelta安全地增加天数，避免小时值超出范围
+                        current_time = current_time.replace(hour=0, minute=0, second=0) + timedelta(days=1)
                     else:
                         current_time = current_time.replace(
                             hour=next_hour, minute=0, second=0
@@ -149,9 +142,8 @@ class CronParser:
                     # 分钟不匹配，跳到下一分钟
                     next_minute = current_time.minute + 1
                     if next_minute > 59:
-                        current_time = current_time.replace(
-                            hour=current_time.hour + 1, minute=0, second=0
-                        )
+                        # 使用timedelta安全地增加小时，避免分钟值超出范围
+                        current_time = current_time.replace(minute=0, second=0) + timedelta(hours=1)
                     else:
                         current_time = current_time.replace(minute=next_minute, second=0)
                     continue
@@ -161,9 +153,8 @@ class CronParser:
                     # 秒不匹配，跳到下一秒
                     next_second = current_time.second + 1
                     if next_second > 59:
-                        current_time = current_time.replace(
-                            minute=current_time.minute + 1, second=0
-                        )
+                        # 使用timedelta安全地增加分钟，避免秒值超出范围
+                        current_time = current_time.replace(second=0) + timedelta(minutes=1)
                     else:
                         current_time = current_time.replace(second=next_second)
                     continue

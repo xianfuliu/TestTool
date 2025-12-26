@@ -1,8 +1,0 @@
-{
-  "user_id": 1,
-  "username": "admin",
-  "email": "admin@example.com",
-  "session_token": "bdd6025a7ab93434c9ee7ebfc4a4e0c8459256dbfc2396cc192bbbd9100be58a",
-  "is_admin": 1,
-  "saved_at": "2025-12-24T17:37:56.567907"
-}

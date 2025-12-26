@@ -336,8 +336,7 @@ DB_TABLES = {
         CREATE TABLE IF NOT EXISTS distributed_locks (
             id INT AUTO_INCREMENT PRIMARY KEY,
             lock_key VARCHAR(100) NOT NULL UNIQUE,
-            lock_value VARCHAR(100) NOT NULL,
-            instance_id VARCHAR(100) COMMENT '实例ID',
+            instance_id VARCHAR(100) NOT NULL COMMENT '实例ID',
             expires_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '过期时间',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_lock_key (lock_key),

@@ -8,3 +8,6 @@ TestTool.spec
 README_TRAE.md
 test_env.py
 activate_trae_env.py
+session.json
+credentials.json
+
