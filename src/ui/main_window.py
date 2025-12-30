@@ -608,30 +608,44 @@ class MainWindow(QMainWindow):
     def perform_logout(self):
         """执行登出操作"""
         try:
-            # 删除session文件
-            session_service = SessionService()
-            session_service.delete_session()
+            # 检查登录开关配置
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            from main import load_config
+            config = load_config()
+            enable_login = config.get("auth", {}).get("enable_login", True)
+            
+            # 只有在启用登录功能时才删除session文件
+            if enable_login:
+                session_service = SessionService()
+                session_service.delete_session()
             
             # 关闭主窗口
             self.close()
             
-            # 重新启动认证页面
-            from src.ui.auth_page import AuthPage
-            auth_page = AuthPage()
-            auth_page.showMaximized()
-            
-            # 连接认证成功信号
-            def on_login_success(user):
-                auth_page.close()
-                # 重新设置当前用户并显示主窗口
-                self.set_current_user(user)
-                self.show_and_maximize()
-                # 重新启动调度服务（如果存在）
-                self.restart_scheduler_service()
-                # 显示登录成功Toast提示
-                Toast.success(self, f"欢迎回来，{user.username}！")
-            
-            auth_page.login_success.connect(on_login_success)
+            # 只有在启用登录功能时才重新启动认证页面
+            if enable_login:
+                from src.ui.auth_page import AuthPage
+                auth_page = AuthPage(enable_login=enable_login)
+                auth_page.showMaximized()
+                
+                # 连接认证成功信号
+                def on_login_success(user):
+                    auth_page.close()
+                    # 重新设置当前用户并显示主窗口
+                    self.set_current_user(user)
+                    self.show_and_maximize()
+                    # 重新启动调度服务（如果存在）
+                    self.restart_scheduler_service()
+                    # 显示登录成功Toast提示
+                    Toast.success(self, f"欢迎回来，{user.username}!")
+                
+                auth_page.login_success.connect(on_login_success)
+            else:
+                # 登录功能已关闭，直接退出应用程序
+                print("登录功能已关闭，应用程序将退出")
+                QApplication.quit()
             
         except Exception as e:
             Toast.critical(self, '登出错误', f'登出过程中发生错误: {str(e)}')

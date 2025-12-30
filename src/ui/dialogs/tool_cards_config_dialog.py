@@ -11,6 +11,8 @@ import pymysql
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
 from src.utils.css_utils import get_combobox_style
+from src.utils.db_config import get_db_connection
+from src.ui.dialogs.database_config_dialog import DatabaseConfigDialog
 
 
 class ToolCardsConfigDialog(QDialog):
@@ -29,23 +31,6 @@ class ToolCardsConfigDialog(QDialog):
 
         if edit_card_data:
             self.load_card_data(edit_card_data)
-
-    def get_db_connection(self):
-        """获取数据库连接"""
-        try:
-            conn = pymysql.connect(
-                host='192.168.0.73',
-                port=3306,
-                user='root',
-                password='root',
-                database='interface_auto_platform',
-                charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor
-            )
-            return conn
-        except pymysql.Error as e:
-            print(f"数据库连接失败: {e}")
-            return None
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -94,6 +79,11 @@ class ToolCardsConfigDialog(QDialog):
         # 卡片操作按钮
         cards_btn_layout = QVBoxLayout()
 
+        # 库表配置按钮
+        self.db_config_btn = QPushButton("库表配置")
+        self.db_config_btn.clicked.connect(self.show_db_config_dialog)
+        cards_btn_layout.addWidget(self.db_config_btn)
+
         self.add_card_btn = QPushButton("新增卡片")
         self.add_card_btn.clicked.connect(self.add_card)
         cards_btn_layout.addWidget(self.add_card_btn)
@@ -137,7 +127,7 @@ class ToolCardsConfigDialog(QDialog):
         self.cards_list.clear()
         
         # 从数据库加载卡片数据
-        conn = self.get_db_connection()
+        conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor(pymysql.cursors.DictCursor)
@@ -240,7 +230,7 @@ class ToolCardsConfigDialog(QDialog):
         config_layout = QFormLayout(config_group)
 
         card_type = self.current_card_data.get('type', 'sql')
-        if card_type.startswith('sql'):
+        if card_type == 'sql':
             config_layout.addRow("数据库连接:", QLabel(self.current_card_data.get('database', '')))
             config_layout.addRow("SQL语句:", QLabel(self.current_card_data.get('sql', '')))
         elif card_type == 'http':
@@ -380,16 +370,14 @@ class ToolCardsConfigDialog(QDialog):
             return
 
         type_map = {
-            "SQL查询": "sql",
-            "SQL更新": "sql_update",
-            "SQL删除": "sql_delete",
+            "SQL工具": "sql",
             "HTTP接口": "http",
             "Python类": "python"
         }
 
         card_type = type_map.get(type_text, "sql")
 
-        if card_type.startswith('sql'):
+        if card_type == 'sql':
             self.create_sql_config()
         elif card_type == 'http':
             self.create_http_config()
@@ -423,13 +411,11 @@ class ToolCardsConfigDialog(QDialog):
         # 设置卡片类型
         card_type = card_data.get('type', 'sql')
         type_map = {
-            'sql': 'SQL查询',
-            'sql_update': 'SQL更新',
-            'sql_delete': 'SQL删除',
+            'sql': 'SQL工具',
             'http': 'HTTP接口',
             'python': 'Python类'
         }
-        type_text = type_map.get(card_type, 'SQL查询')
+        type_text = type_map.get(card_type, 'SQL工具')
         self.card_type_combo.setCurrentText(type_text)
 
         self.card_desc_edit.setPlainText(card_data.get('description', ''))
@@ -437,7 +423,7 @@ class ToolCardsConfigDialog(QDialog):
         self.locked_check.setChecked(card_data.get('locked', False))
 
         # 填充类型特定的配置
-        if card_type.startswith('sql'):
+        if card_type == 'sql':
             self.database_combo.setCurrentText(card_data.get('database', ''))
             self.sql_editor.setPlainText(card_data.get('sql', ''))
         elif card_type == 'http':
@@ -457,9 +443,7 @@ class ToolCardsConfigDialog(QDialog):
 
         card_type = self.current_card_data.get('type', 'sql')
         type_map = {
-            'sql': 'SQL查询',
-            'sql_update': 'SQL更新',
-            'sql_delete': 'SQL删除',
+            'sql': 'SQL工具',
             'http': 'HTTP接口',
             'python': 'Python类'
         }
@@ -536,7 +520,7 @@ class ToolCardsConfigDialog(QDialog):
         new_title = f"{base_name}_cp{copy_count}"
 
         # 检查名称是否已存在
-        conn = self.get_db_connection()
+        conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor()
@@ -559,7 +543,7 @@ class ToolCardsConfigDialog(QDialog):
         new_card['locked'] = False  # 副本默认不锁定
 
         # 保存到数据库
-        conn = self.get_db_connection()
+        conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor()
@@ -641,7 +625,7 @@ class ToolCardsConfigDialog(QDialog):
 
         if reply == QMessageBox.Yes:
             # 从数据库删除卡片
-            conn = self.get_db_connection()
+            conn = get_db_connection()
             if conn:
                 try:
                     cursor = conn.cursor()
@@ -687,9 +671,7 @@ class ToolCardsConfigDialog(QDialog):
         # 获取卡片类型
         type_text = self.card_type_combo.currentText()
         type_map = {
-            'SQL查询': 'sql',
-            'SQL更新': 'sql_update',
-            'SQL删除': 'sql_delete',
+            'SQL工具': 'sql',
             'HTTP接口': 'http',
             'Python类': 'python'
         }
@@ -697,7 +679,7 @@ class ToolCardsConfigDialog(QDialog):
 
         # 保存类型特定的配置
         card_type = self.current_card_data['type']
-        if card_type.startswith('sql'):
+        if card_type == 'sql':
             self.current_card_data['database'] = self.database_combo.currentText()
             self.current_card_data['sql'] = self.sql_editor.toPlainText()
         elif card_type == 'http':
@@ -738,7 +720,7 @@ class ToolCardsConfigDialog(QDialog):
             }
 
         # 保存到数据库
-        conn = self.get_db_connection()
+        conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor()
@@ -797,6 +779,17 @@ class ToolCardsConfigDialog(QDialog):
                 Toast.warn(self, "卡片保存失败")
             finally:
                 conn.close()
+
+    def show_db_config_dialog(self):
+        """显示数据库配置对话框"""
+        dialog = DatabaseConfigDialog(self)
+        dialog.config_updated.connect(self.on_db_config_updated)
+        dialog.exec_()
+
+    def on_db_config_updated(self):
+        """数据库配置更新后的回调"""
+        # 可以在这里添加刷新逻辑，比如重新加载数据库配置相关的数据
+        Toast.information(self, "数据库配置已更新")
 
     def generate_card_id(self):
         """生成卡片ID"""

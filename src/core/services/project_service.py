@@ -14,9 +14,9 @@ class ProjectService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT id, group_id, name, description, created_at, updated_at
+                        SELECT id, business_group_id as group_id, name, description, created_at, updated_at
                         FROM projects 
-                        WHERE group_id = %s
+                        WHERE business_group_id = %s
                         ORDER BY created_at DESC
                     """, (group_id,))
                     return cursor.fetchall()
@@ -30,7 +30,7 @@ class ProjectService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT id, group_id, name, description, created_at, updated_at
+                        SELECT id, business_group_id as group_id, name, description, created_at, updated_at
                         FROM projects 
                         WHERE id = %s
                     """, (project_id,))
@@ -45,7 +45,7 @@ class ProjectService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        INSERT INTO projects (group_id, name, description)
+                        INSERT INTO projects (business_group_id, name, description)
                         VALUES (%s, %s, %s)
                     """, (data['group_id'], data['name'], data['description']))
                     conn.commit()
@@ -109,11 +109,11 @@ class ProjectService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("""
-                        SELECT p.id, p.group_id, p.name, p.description, 
+                        SELECT p.id, p.business_group_id as group_id, p.name, p.description, 
                                p.created_at, p.updated_at,
                                bg.name as group_name
                         FROM projects p
-                        LEFT JOIN business_groups bg ON p.group_id = bg.id
+                        LEFT JOIN business_groups bg ON p.business_group_id = bg.id
                         ORDER BY p.created_at DESC
                     """)
                     return cursor.fetchall()

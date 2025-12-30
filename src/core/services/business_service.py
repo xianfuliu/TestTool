@@ -87,7 +87,7 @@ class BusinessService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 先删除关联的项目
-                    cursor.execute("DELETE FROM projects WHERE group_id = %s", (group_id,))
+                    cursor.execute("DELETE FROM projects WHERE business_group_id = %s", (group_id,))
                     # 再删除业务分组
                     cursor.execute("DELETE FROM business_groups WHERE id = %s", (group_id,))
                     conn.commit()
@@ -102,14 +102,14 @@ class BusinessService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 项目数量
-                    cursor.execute("SELECT COUNT(*) as count FROM projects WHERE group_id = %s", (group_id,))
+                    cursor.execute("SELECT COUNT(*) as count FROM projects WHERE business_group_id = %s", (group_id,))
                     project_count = cursor.fetchone()['count']
 
                     # 接口数量（通过项目关联）
                     cursor.execute("""
                         SELECT COUNT(*) as count 
                         FROM api_templates 
-                        WHERE project_id IN (SELECT id FROM projects WHERE group_id = %s)
+                        WHERE project_id IN (SELECT id FROM projects WHERE business_group_id = %s)
                     """, (group_id,))
                     api_count = cursor.fetchone()['count']
 
@@ -117,7 +117,7 @@ class BusinessService:
                     cursor.execute("""
                         SELECT COUNT(*) as count 
                         FROM test_cases 
-                        WHERE project_id IN (SELECT id FROM projects WHERE group_id = %s)
+                        WHERE project_id IN (SELECT id FROM projects WHERE business_group_id = %s)
                     """, (group_id,))
                     case_count = cursor.fetchone()['count']
 

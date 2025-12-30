@@ -434,7 +434,8 @@ class BusinessManagement(QWidget):
         
         # 清空并重新填充下拉框
         self.business_combo.clear()
-        self.business_groups.clear()
+        # 将 business_groups 重置为空列表，而不是调用 clear() 方法
+        self.business_groups = []
 
         # 检查服务对象是否已初始化
         if self.business_service is None or self.project_service is None:
@@ -443,7 +444,8 @@ class BusinessManagement(QWidget):
         try:
             # 加载业务分组
             groups = self.business_service.get_all_groups()
-            self.business_groups = groups  # 存储业务分组列表
+            # 将元组转换为列表，确保可以调用 clear() 方法
+            self.business_groups = list(groups)  # 存储业务分组列表
             
             for group in groups:
                 # 添加到树形结构

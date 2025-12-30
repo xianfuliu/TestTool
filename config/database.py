@@ -41,7 +41,7 @@ DATABASE_CONFIG = {
     'port': 3306,
     'user': 'root',
     'password': 'root',
-    'database': 'interface_auto_platform'
+    'database': 'test_platform'
 }
 
 # =============================================================================
@@ -414,7 +414,7 @@ DB_TABLES = {
             project_id INT NOT NULL,
             title VARCHAR(100) NOT NULL,
             description TEXT,
-            card_type ENUM('sql', 'sql_update', 'sql_delete', 'http', 'python') DEFAULT 'sql',
+            card_type ENUM('sql', 'http', 'python') DEFAULT 'sql',
             configuration JSON COMMENT '卡片配置（SQL语句、HTTP配置等）',
             timeout INT DEFAULT 5000 COMMENT '超时时间（毫秒）',
             locked BOOLEAN DEFAULT FALSE COMMENT '是否锁定',
@@ -439,6 +439,28 @@ DB_TABLES = {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_config_key (config_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''',
+
+    'database_configs': '''
+        CREATE TABLE IF NOT EXISTS database_configs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL UNIQUE COMMENT '配置名称',
+            host VARCHAR(100) NOT NULL COMMENT '数据库主机',
+            port INT NOT NULL DEFAULT 3306 COMMENT '数据库端口',
+            user VARCHAR(50) NOT NULL COMMENT '用户名',
+            password VARCHAR(100) NOT NULL COMMENT '密码',
+            database_name VARCHAR(100) NOT NULL COMMENT '数据库名',
+            charset VARCHAR(20) DEFAULT 'utf8mb4' COMMENT '字符集',
+            description TEXT COMMENT '配置描述',
+            is_default BOOLEAN DEFAULT FALSE COMMENT '是否为默认配置',
+            enabled BOOLEAN DEFAULT TRUE COMMENT '是否启用',
+            created_by VARCHAR(50) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_name (name),
+            INDEX idx_is_default (is_default),
+            INDEX idx_enabled (enabled)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     '''
 }
@@ -921,6 +943,47 @@ def create_tables():
                 else:
                     print("❌ admin用户插入失败")
             
+            # 插入默认的数据库配置
+            print("\n开始插入默认数据库配置...")
+            cursor.execute("SELECT id FROM database_configs WHERE name = '默认配置'")
+            existing_config = cursor.fetchone()
+            
+            if existing_config:
+                print("⚠ 默认数据库配置已存在，跳过插入")
+            else:
+                # 插入默认数据库配置
+                sql = """
+                    INSERT INTO database_configs (name, host, port, user, password, database_name, charset, description, is_default, enabled)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                cursor.execute(sql, (
+                    '默认配置',
+                    DATABASE_CONFIG['host'],
+                    DATABASE_CONFIG['port'],
+                    DATABASE_CONFIG['user'],
+                    DATABASE_CONFIG['password'],
+                    DATABASE_CONFIG['database'],
+                    'utf8mb4',
+                    '系统默认数据库配置',
+                    True,  # 设置为默认配置
+                    True   # 启用
+                ))
+                
+                # 验证插入结果
+                cursor.execute("SELECT id, name, host, database_name, is_default FROM database_configs WHERE name = '默认配置'")
+                db_config = cursor.fetchone()
+                
+                if db_config:
+                    print(f"✅ 默认数据库配置插入成功")
+                    print(f"   配置ID: {db_config[0]}")
+                    print(f"   配置名称: {db_config[1]}")
+                    print(f"   数据库主机: {db_config[2]}")
+                    print(f"   数据库名: {db_config[3]}")
+                    print(f"   是否默认: {'是' if db_config[4] else '否'}")
+                else:
+                    print("❌ 默认数据库配置插入失败")
+            
             # 显示所有表
             cursor.execute("SHOW TABLES")
             tables = cursor.fetchall()
@@ -1068,6 +1131,34 @@ def deploy_database():
                     print(f"   管理员: {'是' if is_admin else '否'}")
                 else:
                     print("❌ admin用户创建失败")
+        
+                # 检查数据库配置是否存在
+                cursor.execute("SELECT id, name, host, database_name, is_default FROM database_configs WHERE name = '默认配置'")
+                db_config = cursor.fetchone()
+                
+                if db_config:
+                    print(f"✅ 默认数据库配置已创建")
+                    # 处理不同的游标类型
+                    if isinstance(db_config, dict):
+                        config_id = db_config.get('id', '未知')
+                        config_name = db_config.get('name', '未知')
+                        config_host = db_config.get('host', '未知')
+                        config_db = db_config.get('database_name', '未知')
+                        is_default = db_config.get('is_default', False)
+                    else:
+                        config_id = db_config[0] if len(db_config) > 0 else '未知'
+                        config_name = db_config[1] if len(db_config) > 1 else '未知'
+                        config_host = db_config[2] if len(db_config) > 2 else '未知'
+                        config_db = db_config[3] if len(db_config) > 3 else '未知'
+                        is_default = db_config[4] if len(db_config) > 4 else False
+                    
+                    print(f"   配置ID: {config_id}")
+                    print(f"   配置名称: {config_name}")
+                    print(f"   数据库主机: {config_host}")
+                    print(f"   数据库名: {config_db}")
+                    print(f"   是否默认: {'是' if is_default else '否'}")
+                else:
+                    print("❌ 默认数据库配置创建失败")
         
         print("\n" + "=" * 60)
         print("✅ 数据库一键部署完成！")

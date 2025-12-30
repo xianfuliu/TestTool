@@ -2,6 +2,7 @@ import os
 import json
 import re
 import traceback
+import math
 from datetime import datetime
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QTimer
@@ -2969,7 +2970,7 @@ class ApiToolTab(QWidget):
             self.set_formula_value(formula_key, "")
 
     def evaluate_numeric_expression(self, expression):
-        """计算数值表达式 - 仅处理数值运算"""
+        """计算数值表达式 - 仅处理数值运算，支持向上保留两位小数"""
         try:
             # 移除空格
             expression = expression.replace(" ", "")
@@ -2988,7 +2989,23 @@ class ApiToolTab(QWidget):
 
             # 使用 eval 计算（在生产环境中应考虑更安全的替代方案）
             result = eval(expression)
-            return round(result, 2)  # 保留2位小数
+            
+            # 向上保留两位小数：当第三位小数≥5时向上进位，否则舍去
+            # 例如：0.015 -> 0.02，0.014 -> 0.01
+            if isinstance(result, (int, float)):
+                # 将结果乘以1000，检查第三位小数
+                multiplied = result * 1000
+                # 获取第三位小数
+                third_decimal = multiplied % 10
+                
+                if third_decimal >= 5:
+                    # 第三位小数≥5，向上进位
+                    result = math.ceil(result * 100) / 100
+                else:
+                    # 第三位小数<5，舍去
+                    result = math.floor(result * 100) / 100
+            
+            return result
 
         except Exception as e:
             raise ValueError(f"数值公式计算错误: {str(e)}")

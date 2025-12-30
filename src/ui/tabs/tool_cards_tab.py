@@ -141,8 +141,6 @@ class ToolCardWidget(QFrame):
         card_type = self.card_data.get('type', 'sql')
         type_map = {
             'sql': 'SQL工具',
-            'sql_update': 'SQL更新',
-            'sql_delete': 'SQL删除',
             'http': 'HTTP接口',
             'python': 'Python类'
         }
@@ -556,7 +554,7 @@ class ToolCardsTab(QWidget):
         # 根据卡片类型调用相应的执行器
         card_type = card_data.get('type', 'sql')
 
-        if card_type.startswith('sql'):
+        if card_type == 'sql':
             self.execute_sql_card(card_data)
         elif card_type == 'http':
             self.execute_http_card(card_data)

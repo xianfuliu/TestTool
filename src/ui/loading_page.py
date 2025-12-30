@@ -200,9 +200,10 @@ class LoadingPage(QWidget):
     
     loading_completed = pyqtSignal()  # 加载完成信号
     
-    def __init__(self, main_window):
+    def __init__(self, main_window, config=None):
         super().__init__()
         self.main_window = main_window
+        self.config = config or {}
         self.tasks = []
         self.worker = None
         self.init_ui()
@@ -349,17 +350,29 @@ class LoadingPage(QWidget):
         
     def setup_tasks(self):
         """设置加载任务"""
-        # 简化任务列表，移除不必要的任务
+        # 检查登录开关配置
+        enable_login = self.config.get("auth", {}).get("enable_login", True)
+        
+        # 基础任务列表
         self.tasks = [
             LoadingTask("加载配置文件", weight=5, delay=0),
             LoadingTask("初始化UI框架", weight=15, delay=100),
             LoadingTask("启动调度服务", weight=10, delay=200),
-            LoadingTask("初始化测试数据模块", weight=15, delay=300),
-            LoadingTask("初始化数据查询模块", weight=15, delay=400),
-            LoadingTask("初始化接口工具模块", weight=15, delay=500),
-            LoadingTask("初始化接口自动化模块", weight=20, delay=600),
-            LoadingTask("完成最终配置", weight=5, delay=800)
         ]
+        
+        # 只有在启用登录功能时才添加数据库相关任务
+        if enable_login:
+            self.tasks.extend([
+                LoadingTask("初始化测试数据模块", weight=15, delay=300),
+                LoadingTask("初始化数据查询模块", weight=15, delay=400),
+                LoadingTask("初始化接口工具模块", weight=15, delay=500),
+                LoadingTask("初始化接口自动化模块", weight=20, delay=600),
+            ])
+        else:
+            print("登录功能已关闭，跳过数据库相关模块初始化")
+            
+        # 添加最终配置任务
+        self.tasks.append(LoadingTask("完成最终配置", weight=5, delay=800))
 
             
 

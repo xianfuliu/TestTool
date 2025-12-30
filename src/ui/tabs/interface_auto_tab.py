@@ -146,6 +146,16 @@ class InterfaceAutoTab(QWidget):
             print("initial_business_ready属性不存在，跳过业务切换")
             return
             
+        # 检查是否有业务数据，如果没有业务数据，停止循环检查
+        if not hasattr(self.business_management, 'business_groups'):
+            print("business_groups属性不存在，跳过业务切换")
+            return
+            
+        # 如果没有业务数据，停止循环检查
+        if not self.business_management.business_groups:
+            print("没有业务数据，停止循环检查")
+            return
+            
         # 如果数据尚未准备好，继续延迟检查
         if not self.business_management.initial_business_ready:
             print("数据尚未准备好，继续延迟检查")

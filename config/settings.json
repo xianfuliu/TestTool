@@ -1,10 +1,13 @@
 {
   "features": {
     "interface_automation": true,
-    "tool_cards": false
+    "tool_cards": true
   },
   "app": {
     "name": "测试工具",
     "version": "1.0.0"
+  },
+  "auth": {
+    "enable_login": true
   }
 }

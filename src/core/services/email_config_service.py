@@ -17,10 +17,29 @@ class EmailConfigService:
     
     def __init__(self):
         """初始化邮件配置服务"""
-        self.db = Database()
+        self.db = None
+        self._initialize_database()
+    
+    def _initialize_database(self):
+        """初始化数据库连接"""
+        try:
+            self.db = Database()
+            # 测试连接是否可用
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+            logger.info("邮件配置服务数据库连接成功")
+        except Exception as e:
+            logger.warning(f"邮件配置服务数据库连接失败: {str(e)}")
+            self.db = None
     
     def get_email_config(self) -> Optional[EmailConfig]:
         """获取邮件配置"""
+        # 检查数据库连接是否可用
+        if self.db is None:
+            logger.warning("数据库连接不可用，无法获取邮件配置")
+            return None
+            
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:

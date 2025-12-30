@@ -51,7 +51,7 @@ class AuthPage(QWidget):
     
     login_success = pyqtSignal(object)  # 登录成功信号，传递用户信息
     
-    def __init__(self):
+    def __init__(self, enable_login=True):
         super().__init__()
         self.user_service = UserService()
         self.email_service = None
@@ -60,14 +60,21 @@ class AuthPage(QWidget):
         self.verification_code = ""
         self.countdown_timer = QTimer()
         self.countdown_seconds = 60
+        self.enable_login = enable_login
         
-        # 初始化邮箱服务
-        self._init_email_services()
+        # 只有在启用登录功能时才初始化邮箱服务
+        if enable_login:
+            self._init_email_services()
+        else:
+            logger.info("登录功能已关闭，跳过邮箱服务初始化")
         
         self.init_ui()
         self.init_connections()
-        self.load_saved_credentials()  # 加载保存的凭据
-        self.load_business_lines()     # 加载业务线数据
+        
+        # 只有在启用登录功能时才加载凭据和业务线数据
+        if enable_login:
+            self.load_saved_credentials()  # 加载保存的凭据
+            self.load_business_lines()     # 加载业务线数据
     
     def _init_email_services(self):
         """初始化邮箱服务"""
