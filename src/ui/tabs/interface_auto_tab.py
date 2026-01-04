@@ -208,6 +208,7 @@ class InterfaceAutoTab(QWidget):
                 background-color: #f5f5f5;
                 border: none;
                 font-size: 14px;
+                outline: none;
             }
             QListWidget::item {
                 padding: 10px;
@@ -216,6 +217,14 @@ class InterfaceAutoTab(QWidget):
             QListWidget::item:selected {
                 background-color: #4CAF50;
                 color: white;
+            }
+            QListWidget::item:focus {
+                outline: none;
+                border: none;
+            }
+            QListWidget::item:selected:focus {
+                outline: none;
+                border: none;
             }
         """)
 

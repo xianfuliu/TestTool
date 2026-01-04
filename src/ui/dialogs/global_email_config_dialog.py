@@ -32,7 +32,7 @@ class GlobalEmailConfigDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         
         # 邮箱配置组
-        email_group = QGroupBox("SMTP服务器配置")
+        email_group = QGroupBox()
         email_layout = QVBoxLayout(email_group)
         
         # SMTP服务器配置表单

@@ -988,15 +988,20 @@ class ConfigManagementDialog(QDialog):
 
             product_name = current_text.replace(" (默认)", "")
 
-            # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
-            reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除产品 '{product_name}' 吗？\n此操作将删除产品配置文件，且不可恢复！",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No  # 默认选择"No"更安全
-        )
+            # 创建自定义确认对话框，显示中文按钮
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("确认删除")
+            msg_box.setText(f"确定要删除产品 '{product_name}' 吗？\n此操作将删除产品配置文件，且不可恢复！")
+            msg_box.setIcon(QMessageBox.Question)
+            
+            # 设置中文按钮文本
+            yes_btn = msg_box.addButton("确定", QMessageBox.YesRole)
+            no_btn = msg_box.addButton("取消", QMessageBox.NoRole)
+            msg_box.setDefaultButton(no_btn)
+            
+            msg_box.exec_()
 
-            if reply == QMessageBox.Yes:
+            if msg_box.clickedButton() == yes_btn:
                 # 删除产品配置文件
                 config_path = self.products_config["products"][product_name]
                 product_config_file = resource_path(f"{config_path}")
@@ -1013,6 +1018,15 @@ class ConfigManagementDialog(QDialog):
                 # 如果删除的是默认产品，清空默认产品设置
                 if self.products_config.get("default_product") == product_name:
                     self.products_config["default_product"] = ""
+
+                # 保存更新后的配置到文件
+                try:
+                    products_config_file = resource_path("config/products_config.json")
+                    with open(products_config_file, 'w', encoding='utf-8') as f:
+                        json.dump(self.products_config, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    Toast.critical(self, "错误", f"保存产品配置失败: {str(e)}")
+                    return
 
                 self.refresh_product_list()
                 self.refresh_detail_product_combo()
@@ -1055,9 +1069,39 @@ class ConfigManagementDialog(QDialog):
                     "default": ""
                 },
                 {
+                    "type": "field",
+                    "key": "phone",
+                    "label": "手机号",
+                    "priority": 3,
+                    "default": ""
+                },
+                {
+                    "type": "field",
+                    "key": "bank_card_no",
+                    "label": "银行卡号",
+                    "priority": 4,
+                    "default": ""
+                },
+                {
+                    "type": "field",
+                    "key": "id_card_start_time",
+                    "label": "有效期开始",
+                    "priority": 5,
+                    "default": "",
+                    "show_in_ui": False
+                },
+                {
+                    "type": "field",
+                    "key": "id_card_end_time",
+                    "label": "有效期结束",
+                    "priority": 6,
+                    "default": "",
+                    "show_in_ui": False
+                },
+                {
                     "type": "interface",
                     "name": "默认接口",
-                    "priority": 3
+                    "priority": 7
                 }
             ],
             "interfaces": {

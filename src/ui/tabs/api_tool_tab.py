@@ -267,9 +267,32 @@ class ApiToolTab(QWidget):
                     "default": ""
                 },
                 {
+                    "type": "field",
+                    "key": "bank_card_no",
+                    "label": "银行卡号",
+                    "priority": 4,
+                    "default": ""
+                },
+                {
+                    "type": "field",
+                    "key": "id_card_start_time",
+                    "label": "有效期开始",
+                    "priority": 5,
+                    "default": "",
+                    "show_in_ui": False
+                },
+                {
+                    "type": "field",
+                    "key": "id_card_end_time",
+                    "label": "有效期结束",
+                    "priority": 6,
+                    "default": "",
+                    "show_in_ui": False
+                },
+                {
                     "type": "interface",
                     "name": "默认接口",
-                    "priority": 4
+                    "priority": 7
                 }
             ],
             "interfaces": {
