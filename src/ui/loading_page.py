@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, 
                              QFrame, QApplication)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot
-from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor
+from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QPen, QLinearGradient
 from src.utils.resource_utils import resource_path
 import os
 import time
@@ -229,12 +229,6 @@ class LoadingPage(QWidget):
         
         # 设置窗口样式
         self.setStyleSheet("""
-            LoadingPage {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                          stop:0 #1A237E, stop:0.3 #283593, stop:0.7 #303F9F, stop:1 #3949AB);
-                border-radius: 15px;
-                border: none;
-            }
             QLabel {
                 color: white;
                 background: transparent;
@@ -260,6 +254,9 @@ class LoadingPage(QWidget):
         
         # 设置窗口标志，使其看起来更像启动窗口
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        
+        # 设置透明背景
+        self.setAttribute(Qt.WA_TranslucentBackground)
         
         # 主布局
         layout = QVBoxLayout(self)
@@ -292,14 +289,14 @@ class LoadingPage(QWidget):
                 icon_label = QLabel()
                 icon_label.setPixmap(pixmap)
                 icon_label.setAlignment(Qt.AlignCenter)
-                icon_label.setStyleSheet("padding: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 12px; border: none;")
+                icon_label.setStyleSheet("padding: 8px; background: transparent; border-radius: 0px; border: none;")
                 header_layout.addWidget(icon_label)
         except Exception:
             # 如果没有图标，创建一个占位图标
             icon_label = QLabel("⚡")
             icon_label.setAlignment(Qt.AlignCenter)
             icon_label.setFont(QFont("Microsoft YaHei", 42, QFont.Bold))
-            icon_label.setStyleSheet("color: rgba(255, 255, 255, 0.9); padding: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 12px; border: none;")
+            icon_label.setStyleSheet("color: rgba(255, 255, 255, 0.9); padding: 8px; background: transparent; border-radius: 0px; border: none;")
             header_layout.addWidget(icon_label)
         
         # 应用标题
@@ -308,13 +305,6 @@ class LoadingPage(QWidget):
         title_label.setFont(QFont("Microsoft YaHei", 26, QFont.Bold))
         title_label.setStyleSheet("color: white; margin: 0; padding: 0; letter-spacing: 1px;")
         header_layout.addWidget(title_label)
-        
-        # 版本信息
-        version_label = QLabel("正在初始化应用...")
-        version_label.setAlignment(Qt.AlignCenter)
-        version_label.setFont(QFont("Microsoft YaHei", 12))
-        version_label.setStyleSheet("color: rgba(255, 255, 255, 0.8); margin: 0; padding: 0; font-weight: normal;")
-        header_layout.addWidget(version_label)
         
         # 将标题容器添加到主布局
         layout.addWidget(header_container)
@@ -328,12 +318,7 @@ class LoadingPage(QWidget):
         progress_layout.setSpacing(12)
         progress_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 进度文本（放在进度条上方）
-        self.progress_text = QLabel("准备启动...")
-        self.progress_text.setAlignment(Qt.AlignCenter)
-        self.progress_text.setFont(QFont("Microsoft YaHei", 11, QFont.Normal))
-        self.progress_text.setStyleSheet("color: rgba(255, 255, 255, 0.85); margin: 0; padding: 0; font-weight: 500;")
-        progress_layout.addWidget(self.progress_text)
+
         
         # 主进度条
         self.main_progress = QProgressBar()
@@ -395,14 +380,13 @@ class LoadingPage(QWidget):
     @pyqtSlot(str)
     def on_task_completed(self, task_name):
         """处理任务完成"""
-        # 更新进度文本
-        self.progress_text.setText(f"{task_name} 完成")
+        # 进度文本已移除，无需更新
+        pass
         
     @pyqtSlot()
     def on_all_completed(self):
         """所有任务完成"""
         self.main_progress.setValue(100)
-        self.progress_text.setText("应用初始化完成")
         
         # 延迟500ms后发出完成信号
         QTimer.singleShot(500, self.loading_completed.emit)
@@ -431,3 +415,30 @@ class LoadingPage(QWidget):
         """关闭事件处理"""
         self.stop_loading()
         super().closeEvent(event)
+        
+    def paintEvent(self, event):
+        """绘制窗口圆角效果"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 创建圆角矩形路径
+        rect = self.rect()
+        radius = 25  # 圆角半径
+        
+        # 先绘制透明背景
+        painter.setBrush(QBrush(QColor(0, 0, 0, 0)))
+        painter.setPen(Qt.NoPen)
+        painter.drawRect(rect)
+        
+        # 设置渐变背景
+        gradient = QLinearGradient(0, 0, 0, rect.height())
+        gradient.setColorAt(0, QColor(26, 35, 126))   # #1A237E
+        gradient.setColorAt(0.3, QColor(40, 53, 147)) # #283593
+        gradient.setColorAt(0.7, QColor(48, 63, 159)) # #303F9F
+        gradient.setColorAt(1, QColor(57, 73, 171))   # #3949AB
+        
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(Qt.NoPen)
+        
+        # 绘制圆角矩形
+        painter.drawRoundedRect(rect, radius, radius)
