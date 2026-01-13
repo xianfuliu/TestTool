@@ -7,6 +7,14 @@ from PyQt5.QtCore import Qt, QTimer, QEvent
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_filler import IDCardFiller
 from src.ui.tabs import TestDataTab, DataQueryTab, ApiToolTab
+
+# 条件导入API管理标签页
+try:
+    from src.ui.tabs.api_management_tab import ApiManagementTab
+    API_MANAGEMENT_AVAILABLE = True
+except ImportError as e:
+    print(f"API管理模块不可用: {e}")
+    API_MANAGEMENT_AVAILABLE = False
 from src.core.services.user_service import UserService
 from src.core.services.session_service import SessionService
 from src.utils.resource_utils import resource_path
@@ -58,6 +66,7 @@ class MainWindow(QMainWindow):
         # 获取功能开关状态
         self.enable_interface_auto = self.config.get("features", {}).get("interface_automation", False)
         self.enable_tool_cards = self.config.get("features", {}).get("tool_cards", False)
+        self.enable_api_management = self.config.get("features", {}).get("api_management", True)
 
 
         self.setWindowTitle("测试工具")
@@ -330,6 +339,17 @@ class MainWindow(QMainWindow):
                 print(f"加载接口自动化标签页失败: {e}")
         else:
             print("接口自动化功能已禁用或模块不可用")
+        
+        # 条件加载API管理标签页
+        if self.enable_api_management and API_MANAGEMENT_AVAILABLE:
+            try:
+                self.api_management_tab = ApiManagementTab(self)
+                tab_widget.addTab(self.api_management_tab, "API管理")
+                print("API管理标签页已加载")
+            except Exception as e:
+                print(f"加载API管理标签页失败: {e}")
+        else:
+            print("API管理功能已禁用或模块不可用")
         
         # 数据查询放到最后
         tab_widget.addTab(self.data_query_tab, "数据查询")

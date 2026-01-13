@@ -1,0 +1,26 @@
+{
+  "api": {
+    "title": "TestTool API",
+    "version": "1.0.0",
+    "description": "接口自动化平台API服务",
+    "docs_url": "/docs",
+    "redoc_url": "/redoc"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "reload": false,
+    "workers": 1,
+    "access_log": true
+  },
+  "security": {
+    "cors_origins": ["*"],
+    "cors_methods": ["*"],
+    "cors_headers": ["*"],
+    "trusted_hosts": ["*"]
+  },
+  "rate_limit": {
+    "enabled": true,
+    "max_requests": 100,
+    "window_seconds": 60
+  }
+}

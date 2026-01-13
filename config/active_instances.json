@@ -1,0 +1,11 @@
+[
+  {
+    "instance_id": "7bf8a74a-9b05-4b2e-a53b-c85f34889d4f",
+    "port": 8000,
+    "status": "running",
+    "start_time": "2026-01-08T09:18:46.796721",
+    "active_connections": 0,
+    "hostname": "刘仙福",
+    "pid": 25252
+  }
+]
