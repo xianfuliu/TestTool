@@ -1,6 +1,18 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-                             QTabWidget, QPushButton, QLabel, QFrame, QMenu,
-                             QAction, QMessageBox, QComboBox)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QScrollArea,
+    QTabWidget,
+    QPushButton,
+    QLabel,
+    QFrame,
+    QMenu,
+    QAction,
+    QMessageBox,
+    QComboBox,
+)
 from src.ui.widgets.toast_tips import Toast
 from PyQt5.QtCore import Qt
 import json
@@ -21,7 +33,8 @@ class ToolCardWidget(QFrame):
     def init_ui(self):
         self.setFrameStyle(QFrame.Box)
         self.setLineWidth(1)
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QFrame {
                 background-color: white;
                 border: 1px solid #e0e6ed;
@@ -31,7 +44,8 @@ class ToolCardWidget(QFrame):
             QFrame:hover {
                 border: 2px solid #4299e1;
             }
-        """)
+        """
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -39,7 +53,8 @@ class ToolCardWidget(QFrame):
 
         # 卡片头部
         header = QWidget()
-        header.setStyleSheet("""
+        header.setStyleSheet(
+            """
             QWidget {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                                           stop:0 #4299e1, stop:1 #3182ce);
@@ -47,22 +62,26 @@ class ToolCardWidget(QFrame):
                 border-top-right-radius: 8px;
                 padding: 8px 12px;
             }
-        """)
+        """
+        )
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        title_label = QLabel(self.card_data.get('title', '未命名卡片'))
-        title_label.setStyleSheet("""
+        title_label = QLabel(self.card_data.get("title", "未命名卡片"))
+        title_label.setStyleSheet(
+            """
             QLabel {
                 color: white;
                 font-weight: bold;
                 font-size: 14px;
             }
-        """)
+        """
+        )
 
         # 菜单按钮（三个点）
         self.menu_btn = QPushButton("⋯")
-        self.menu_btn.setStyleSheet("""
+        self.menu_btn.setStyleSheet(
+            """
             QPushButton {
                 background: rgba(255, 255, 255, 0.2);
                 border: none;
@@ -76,7 +95,8 @@ class ToolCardWidget(QFrame):
             QPushButton:hover {
                 background: rgba(255, 255, 255, 0.3);
             }
-        """)
+        """
+        )
         self.menu_btn.setCursor(Qt.PointingHandCursor)
         self.menu_btn.clicked.connect(self.show_card_menu)
 
@@ -86,28 +106,34 @@ class ToolCardWidget(QFrame):
 
         # 卡片主体
         body = QWidget()
-        body.setStyleSheet("""
+        body.setStyleSheet(
+            """
             QWidget {
                 background-color: white;
                 border-bottom-left-radius: 8px;
                 border-bottom-right-radius: 8px;
                 padding: 12px;
             }
-        """)
+        """
+        )
         body_layout = QVBoxLayout(body)
 
         # 显示卡片类型和描述
         type_label = QLabel(f"类型: {self.get_type_display()}")
         type_label.setStyleSheet("QLabel { color: #666; font-size: 12px; }")
 
-        desc_label = QLabel(self.card_data.get('description', '暂无描述'))
-        desc_label.setStyleSheet("QLabel { color: #333; font-size: 12px; margin-top: 8px; }")
+        desc_label = QLabel(self.card_data.get("description", "暂无描述"))
+        desc_label.setStyleSheet(
+            "QLabel { color: #333; font-size: 12px; margin-top: 8px; }"
+        )
         desc_label.setWordWrap(True)
 
         # 锁定状态显示
-        if self.card_data.get('locked', False):
+        if self.card_data.get("locked", False):
             lock_label = QLabel("🔒 已锁定")
-            lock_label.setStyleSheet("QLabel { color: #e53e3e; font-size: 11px; margin-top: 8px; }")
+            lock_label.setStyleSheet(
+                "QLabel { color: #e53e3e; font-size: 11px; margin-top: 8px; }"
+            )
             body_layout.addWidget(lock_label)
 
         body_layout.addWidget(type_label)
@@ -116,7 +142,8 @@ class ToolCardWidget(QFrame):
 
         # 执行按钮
         execute_btn = QPushButton("执行")
-        execute_btn.setStyleSheet("""
+        execute_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #48bb78;
                 color: white;
@@ -129,7 +156,8 @@ class ToolCardWidget(QFrame):
             QPushButton:hover {
                 background-color: #38a169;
             }
-        """)
+        """
+        )
         execute_btn.clicked.connect(self.execute_card)
 
         body_layout.addWidget(execute_btn)
@@ -138,12 +166,8 @@ class ToolCardWidget(QFrame):
         layout.addWidget(body)
 
     def get_type_display(self):
-        card_type = self.card_data.get('type', 'sql')
-        type_map = {
-            'sql': 'SQL工具',
-            'http': 'HTTP接口',
-            'python': 'Python类'
-        }
+        card_type = self.card_data.get("type", "sql")
+        type_map = {"sql": "SQL工具", "http": "HTTP接口", "python": "Python类"}
         return type_map.get(card_type, card_type)
 
     def show_card_menu(self):
@@ -154,9 +178,11 @@ class ToolCardWidget(QFrame):
         menu.addAction(view_action)
 
         # 如果卡片未锁定，显示编辑选项
-        if not self.card_data.get('locked', False):
+        if not self.card_data.get("locked", False):
             edit_action = QAction("✏️ 编辑", self)
-            edit_action.triggered.connect(lambda: self.parent_tab.edit_card(self.card_data))
+            edit_action.triggered.connect(
+                lambda: self.parent_tab.edit_card(self.card_data)
+            )
             menu.addAction(edit_action)
 
         copy_action = QAction("📋 复制", self)
@@ -164,9 +190,11 @@ class ToolCardWidget(QFrame):
         menu.addAction(copy_action)
 
         # 如果卡片未锁定，显示删除选项
-        if not self.card_data.get('locked', False):
+        if not self.card_data.get("locked", False):
             delete_action = QAction("🗑️ 删除", self)
-            delete_action.triggered.connect(lambda: self.parent_tab.delete_card(self.card_data))
+            delete_action.triggered.connect(
+                lambda: self.parent_tab.delete_card(self.card_data)
+            )
             menu.addAction(delete_action)
 
         menu.exec_(self.menu_btn.mapToGlobal(self.menu_btn.rect().bottomLeft()))
@@ -204,13 +232,15 @@ class ToolCardsTab(QWidget):
     def create_filter_bar(self, parent_layout):
         # 筛选栏容器
         filter_container = QWidget()
-        filter_container.setStyleSheet("""
+        filter_container.setStyleSheet(
+            """
             QWidget {
                 background-color: #f8fafc;
                 border-bottom: 1px solid #e2e8f0;
                 padding: 8px 12px;
             }
-        """)
+        """
+        )
         filter_container.setFixedHeight(50)
 
         filter_layout = QHBoxLayout(filter_container)
@@ -222,7 +252,8 @@ class ToolCardsTab(QWidget):
         business_label.setStyleSheet("QLabel { font-weight: bold; color: #2d3748; }")
 
         self.business_combo = QComboBox()
-        self.business_combo.setStyleSheet("""
+        self.business_combo.setStyleSheet(
+            """
             QComboBox {
                 background-color: white;
                 border: 1px solid #cbd5e0;
@@ -233,12 +264,14 @@ class ToolCardsTab(QWidget):
             QComboBox:hover {
                 border-color: #4299e1;
             }
-        """)
+        """
+        )
         self.business_combo.currentIndexChanged.connect(self.on_business_group_changed)
 
         # 配置按钮
         config_btn = QPushButton("配置")
-        config_btn.setStyleSheet("""
+        config_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #4299e1;
                 color: white;
@@ -251,7 +284,8 @@ class ToolCardsTab(QWidget):
             QPushButton:hover {
                 background-color: #3182ce;
             }
-        """)
+        """
+        )
         config_btn.clicked.connect(self.open_config_dialog)
 
         filter_layout.addWidget(business_label)
@@ -264,13 +298,15 @@ class ToolCardsTab(QWidget):
     def create_projects_tab(self, parent_layout):
         # 项目Tab容器
         projects_container = QWidget()
-        projects_container.setStyleSheet("""
+        projects_container.setStyleSheet(
+            """
             QWidget {
                 background-color: #f7fafc;
                 border-bottom: 1px solid #e2e8f0;
                 padding: 0px;
             }
-        """)
+        """
+        )
 
         projects_layout = QVBoxLayout(projects_container)
         projects_layout.setContentsMargins(0, 0, 0, 0)
@@ -278,7 +314,8 @@ class ToolCardsTab(QWidget):
 
         # 项目Tab区域
         self.projects_tab_widget = QTabWidget()
-        self.projects_tab_widget.setStyleSheet("""
+        self.projects_tab_widget.setStyleSheet(
+            """
             QTabWidget::pane {
                 border: none;
                 background: transparent;
@@ -299,7 +336,8 @@ class ToolCardsTab(QWidget):
             QTabBar::tab:hover:!selected {
                 background: #e2e8f0;
             }
-        """)
+        """
+        )
         self.projects_tab_widget.tabBar().setExpanding(False)
         self.projects_tab_widget.currentChanged.connect(self.on_project_changed)
 
@@ -327,13 +365,13 @@ class ToolCardsTab(QWidget):
         try:
             # 加载业务线数据
             self.business_groups = self.load_business_groups()
-            
+
             # 加载业务线下拉框
             self.business_combo.clear()
             self.business_combo.addItem("全部业务线", None)
             for business in self.business_groups:
-                self.business_combo.addItem(business['name'], business['id'])
-            
+                self.business_combo.addItem(business["name"], business["id"])
+
             # 默认选择第一个业务线
             if self.business_groups:
                 self.business_combo.setCurrentIndex(1)  # 跳过"全部业务线"
@@ -348,7 +386,7 @@ class ToolCardsTab(QWidget):
         return [
             {"id": 1, "name": "消费金融"},
             {"id": 2, "name": "小微测试"},
-            {"id": 3, "name": "其他业务"}
+            {"id": 3, "name": "其他业务"},
         ]
 
     def load_projects(self, business_group_id=None):
@@ -358,17 +396,17 @@ class ToolCardsTab(QWidget):
         if business_group_id == 1:
             return [
                 {"id": 1, "name": "消费金融项目A", "business_group_id": 1},
-                {"id": 2, "name": "消费金融项目B", "business_group_id": 1}
+                {"id": 2, "name": "消费金融项目B", "business_group_id": 1},
             ]
         elif business_group_id == 2:
             return [
                 {"id": 3, "name": "小微测试项目A", "business_group_id": 2},
-                {"id": 4, "name": "小微测试项目B", "business_group_id": 2}
+                {"id": 4, "name": "小微测试项目B", "business_group_id": 2},
             ]
         elif business_group_id == 3:
             return [
                 {"id": 5, "name": "其他项目A", "business_group_id": 3},
-                {"id": 6, "name": "其他项目B", "business_group_id": 3}
+                {"id": 6, "name": "其他项目B", "business_group_id": 3},
             ]
         else:
             # 返回所有项目
@@ -378,7 +416,7 @@ class ToolCardsTab(QWidget):
                 {"id": 3, "name": "小微测试项目A", "business_group_id": 2},
                 {"id": 4, "name": "小微测试项目B", "business_group_id": 2},
                 {"id": 5, "name": "其他项目A", "business_group_id": 3},
-                {"id": 6, "name": "其他项目B", "business_group_id": 3}
+                {"id": 6, "name": "其他项目B", "business_group_id": 3},
             ]
 
     def load_tool_cards(self, project_id):
@@ -387,13 +425,33 @@ class ToolCardsTab(QWidget):
         # 暂时返回模拟数据
         if project_id == 1:
             return [
-                {"id": 1, "title": "用户查询", "description": "查询用户信息", "card_type": "sql"},
-                {"id": 2, "title": "订单统计", "description": "统计订单数据", "card_type": "sql"}
+                {
+                    "id": 1,
+                    "title": "用户查询",
+                    "description": "查询用户信息",
+                    "card_type": "sql",
+                },
+                {
+                    "id": 2,
+                    "title": "订单统计",
+                    "description": "统计订单数据",
+                    "card_type": "sql",
+                },
             ]
         elif project_id == 2:
             return [
-                {"id": 3, "title": "API测试", "description": "测试HTTP接口", "card_type": "http"},
-                {"id": 4, "title": "数据处理", "description": "Python脚本处理", "card_type": "python"}
+                {
+                    "id": 3,
+                    "title": "API测试",
+                    "description": "测试HTTP接口",
+                    "card_type": "http",
+                },
+                {
+                    "id": 4,
+                    "title": "数据处理",
+                    "description": "Python脚本处理",
+                    "card_type": "python",
+                },
             ]
         else:
             return []
@@ -415,7 +473,7 @@ class ToolCardsTab(QWidget):
 
         # 添加项目Tab
         for project in self.projects:
-            self.projects_tab_widget.addTab(QWidget(), project['name'])
+            self.projects_tab_widget.addTab(QWidget(), project["name"])
 
         # 触发项目变更事件
         if self.projects:
@@ -430,7 +488,7 @@ class ToolCardsTab(QWidget):
             return
 
         current_project = self.projects[index]
-        self.current_project_id = current_project['id']
+        self.current_project_id = current_project["id"]
 
         # 清空卡片区域
         for i in reversed(range(self.cards_layout.count())):
@@ -443,16 +501,16 @@ class ToolCardsTab(QWidget):
 
         # 添加卡片 - 使用网格布局，每行最多3个卡片
         max_columns = 3  # 每行最多显示3个卡片
-        
+
         for i, card_data in enumerate(cards):
             card_widget = ToolCardWidget(card_data, self)
             # 设置卡片固定大小
             card_widget.setFixedSize(280, 180)  # 固定卡片大小
-            
+
             # 计算网格位置
             row = i // max_columns
             column = i % max_columns
-            
+
             self.cards_layout.addWidget(card_widget, row, column)
 
     def open_config_dialog(self):
@@ -461,11 +519,9 @@ class ToolCardsTab(QWidget):
         if not self.current_project_id:
             Toast.warning(self, "配置失败", "请先选择项目")
             return
-            
+
         # 创建空的配置数据，因为我们不再使用JSON配置
-        empty_config = {
-            'business_lines': []
-        }
+        empty_config = {"business_lines": []}
         dialog = ToolCardsConfigDialog(empty_config, self)
         if dialog.exec_() == ToolCardsConfigDialog.Accepted:
             # 配置保存逻辑需要更新为数据库操作
@@ -475,18 +531,14 @@ class ToolCardsTab(QWidget):
     def view_card(self, card_data):
         """查看卡片"""
         # 创建空的配置数据，因为我们不再使用JSON配置
-        empty_config = {
-            'business_lines': []
-        }
+        empty_config = {"business_lines": []}
         dialog = ToolCardsConfigDialog(empty_config, self, card_data, view_mode=True)
         dialog.exec_()
 
     def edit_card(self, card_data):
         """编辑卡片"""
         # 创建空的配置数据，因为我们不再使用JSON配置
-        empty_config = {
-            'business_lines': []
-        }
+        empty_config = {"business_lines": []}
         dialog = ToolCardsConfigDialog(empty_config, self, card_data)
         if dialog.exec_() == ToolCardsConfigDialog.Accepted:
             # 配置保存逻辑需要更新为数据库操作
@@ -496,28 +548,28 @@ class ToolCardsTab(QWidget):
     def copy_card(self, card_data):
         """复制卡片"""
         # 找到卡片所在位置
-        business_lines = self.config_data.get('business_lines', [])
+        business_lines = self.config_data.get("business_lines", [])
         for business in business_lines:
-            for sub_business in business.get('sub_business', []):
-                cards = sub_business.get('cards', [])
+            for sub_business in business.get("sub_business", []):
+                cards = sub_business.get("cards", [])
                 for i, card in enumerate(cards):
-                    if card.get('id') == card_data.get('id'):
+                    if card.get("id") == card_data.get("id"):
                         # 创建副本
                         new_card = card_data.copy()
-                        new_card['id'] = self.generate_card_id()
+                        new_card["id"] = self.generate_card_id()
 
                         # 生成副本名称
-                        base_name = card_data.get('title', '卡片')
+                        base_name = card_data.get("title", "卡片")
                         copy_count = 1
                         new_title = f"{base_name}_cp{copy_count}"
 
                         # 检查名称是否已存在
-                        while any(c.get('title') == new_title for c in cards):
+                        while any(c.get("title") == new_title for c in cards):
                             copy_count += 1
                             new_title = f"{base_name}_cp{copy_count}"
 
-                        new_card['title'] = new_title
-                        new_card['locked'] = False  # 副本默认不锁定
+                        new_card["title"] = new_title
+                        new_card["locked"] = False  # 副本默认不锁定
 
                         # 添加到同一子业务模块
                         cards.append(new_card)
@@ -530,17 +582,20 @@ class ToolCardsTab(QWidget):
 
     def delete_card(self, card_data):
         """删除卡片"""
-        reply = QMessageBox.question(self, "确认删除",
-                                     f"确定要删除卡片 '{card_data.get('title')}' 吗？",
-                                     QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除卡片 '{card_data.get('title')}' 吗？",
+            QMessageBox.Yes | QMessageBox.No,
+        )
 
         if reply == QMessageBox.Yes:
-            business_lines = self.config_data.get('business_lines', [])
+            business_lines = self.config_data.get("business_lines", [])
             for business in business_lines:
-                for sub_business in business.get('sub_business', []):
-                    cards = sub_business.get('cards', [])
+                for sub_business in business.get("sub_business", []):
+                    cards = sub_business.get("cards", [])
                     for i, card in enumerate(cards):
-                        if card.get('id') == card_data.get('id'):
+                        if card.get("id") == card_data.get("id"):
                             cards.pop(i)
                             self.save_config()
                             self.refresh_ui()
@@ -552,13 +607,13 @@ class ToolCardsTab(QWidget):
         """执行卡片"""
         # 这里实现卡片执行逻辑
         # 根据卡片类型调用相应的执行器
-        card_type = card_data.get('type', 'sql')
+        card_type = card_data.get("type", "sql")
 
-        if card_type == 'sql':
+        if card_type == "sql":
             self.execute_sql_card(card_data)
-        elif card_type == 'http':
+        elif card_type == "http":
             self.execute_http_card(card_data)
-        elif card_type == 'python':
+        elif card_type == "python":
             self.execute_python_card(card_data)
 
     def execute_sql_card(self, card_data):
@@ -579,4 +634,5 @@ class ToolCardsTab(QWidget):
     def generate_card_id(self):
         """生成卡片ID"""
         import time
+
         return f"card_{int(time.time() * 1000)}"

@@ -11,17 +11,17 @@ class HTMLReportGenerator:
         """生成HTML测试报告"""
 
         # 报告数据
-        report_name = report_data.get('report_name', '测试报告')
-        case_name = report_data.get('case_name', '未知用例')
-        status = report_data.get('status', 'unknown')
-        start_time = report_data.get('start_time')
-        end_time = report_data.get('end_time')
-        duration = report_data.get('duration', 0)
+        report_name = report_data.get("report_name", "测试报告")
+        case_name = report_data.get("case_name", "未知用例")
+        status = report_data.get("status", "unknown")
+        start_time = report_data.get("start_time")
+        end_time = report_data.get("end_time")
+        duration = report_data.get("duration", 0)
 
-        total_cases = report_data.get('total_cases', 0)
-        passed_cases = report_data.get('passed_cases', 0)
-        failed_cases = report_data.get('failed_cases', 0)
-        error_cases = report_data.get('error_cases', 0)
+        total_cases = report_data.get("total_cases", 0)
+        passed_cases = report_data.get("passed_cases", 0)
+        failed_cases = report_data.get("failed_cases", 0)
+        error_cases = report_data.get("error_cases", 0)
 
         if total_cases > 0:
             success_rate = (passed_cases / total_cases) * 100
@@ -30,18 +30,18 @@ class HTMLReportGenerator:
 
         # 状态颜色
         status_color = {
-            'success': '#4CAF50',
-            'failure': '#F44336',
-            'error': '#FF9800',
-            'running': '#2196F3'
-        }.get(status, '#9E9E9E')
+            "success": "#4CAF50",
+            "failure": "#F44336",
+            "error": "#FF9800",
+            "running": "#2196F3",
+        }.get(status, "#9E9E9E")
 
         status_text = {
-            'success': '成功',
-            'failure': '失败',
-            'error': '错误',
-            'running': '执行中'
-        }.get(status, '未知')
+            "success": "成功",
+            "failure": "失败",
+            "error": "错误",
+            "running": "执行中",
+        }.get(status, "未知")
 
         # 生成HTML内容
         html_content = f"""
@@ -243,7 +243,7 @@ class HTMLReportGenerator:
         """
 
         # 写入文件
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
         return output_path
@@ -251,39 +251,39 @@ class HTMLReportGenerator:
     def _format_datetime(self, dt_value):
         """格式化日期时间，支持字符串和datetime对象"""
         if not dt_value:
-            return 'N/A'
-        
+            return "N/A"
+
         try:
             from datetime import datetime
-            
+
             # 如果是字符串，尝试解析
             if isinstance(dt_value, str):
                 # 尝试常见的时间格式
                 formats = [
-                    '%Y-%m-%d %H:%M:%S',
-                    '%Y-%m-%d %H:%M',
-                    '%Y-%m-%d',
-                    '%H:%M:%S'
+                    "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d %H:%M",
+                    "%Y-%m-%d",
+                    "%H:%M:%S",
                 ]
-                
+
                 for fmt in formats:
                     try:
                         dt_obj = datetime.strptime(dt_value, fmt)
-                        return dt_obj.strftime('%Y-%m-%d %H:%M:%S')
+                        return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
                     except ValueError:
                         continue
-                
+
                 # 如果无法解析，返回原字符串
                 return dt_value
-            
+
             # 如果是datetime对象，直接格式化
-            elif hasattr(dt_value, 'strftime'):
-                return dt_value.strftime('%Y-%m-%d %H:%M:%S')
-            
+            elif hasattr(dt_value, "strftime"):
+                return dt_value.strftime("%Y-%m-%d %H:%M:%S")
+
             # 其他类型返回字符串表示
             else:
                 return str(dt_value)
-                
+
         except Exception:
             return str(dt_value)
 
@@ -291,33 +291,34 @@ class HTMLReportGenerator:
         """生成步骤表格内容"""
         try:
             from src.core.services.test_report_service import TestReportService
+
             service = TestReportService()
-            steps = service.get_step_results_by_report(report_data['id'])
+            steps = service.get_step_results_by_report(report_data["id"])
 
             rows = []
             for step in steps:
-                step_order = step.get('step_order', 0)
-                api_name = step.get('api_name', '未知接口')
+                step_order = step.get("step_order", 0)
+                api_name = step.get("api_name", "未知接口")
 
-                status = step.get('status', 'skipped')
+                status = step.get("status", "skipped")
                 status_class = f"status-{status}"
                 status_text = {
-                    'success': '成功',
-                    'failure': '失败',
-                    'error': '错误',
-                    'skipped': '跳过'
+                    "success": "成功",
+                    "failure": "失败",
+                    "error": "错误",
+                    "skipped": "跳过",
                 }.get(status, status)
 
-                start_time = step.get('start_time')
-                start_text = self._format_datetime(start_time) if start_time else 'N/A'
+                start_time = step.get("start_time")
+                start_text = self._format_datetime(start_time) if start_time else "N/A"
 
-                end_time = step.get('end_time')
-                end_text = self._format_datetime(end_time) if end_time else 'N/A'
+                end_time = step.get("end_time")
+                end_text = self._format_datetime(end_time) if end_time else "N/A"
 
-                duration = step.get('duration', 0)
-                duration_text = f"{duration:.3f}" if duration > 0 else 'N/A'
+                duration = step.get("duration", 0)
+                duration_text = f"{duration:.3f}" if duration > 0 else "N/A"
 
-                error_msg = step.get('error_message', '')
+                error_msg = step.get("error_message", "")
 
                 row = f"""
                 <tr>
@@ -332,7 +333,7 @@ class HTMLReportGenerator:
                 """
                 rows.append(row)
 
-            return ''.join(rows)
+            return "".join(rows)
 
         except Exception as e:
             return f"<tr><td colspan='7'>加载步骤数据失败: {str(e)}</td></tr>"

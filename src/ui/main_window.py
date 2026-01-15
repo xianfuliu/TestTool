@@ -1,6 +1,17 @@
 import os
-from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QMessageBox, QMenuBar, QMenu, QAction, QApplication, 
-                             QHBoxLayout, QWidget, QPushButton, QLabel)
+from PyQt5.QtWidgets import (
+    QMainWindow,
+    QTabWidget,
+    QMessageBox,
+    QMenuBar,
+    QMenu,
+    QAction,
+    QApplication,
+    QHBoxLayout,
+    QWidget,
+    QPushButton,
+    QLabel,
+)
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from PyQt5.QtCore import Qt, QTimer, QEvent
 
@@ -11,6 +22,7 @@ from src.ui.tabs import TestDataTab, DataQueryTab, ApiToolTab
 # 条件导入API管理标签页
 try:
     from src.ui.tabs.api_management_tab import ApiManagementTab
+
     API_MANAGEMENT_AVAILABLE = True
 except ImportError as e:
     print(f"API管理模块不可用: {e}")
@@ -23,6 +35,7 @@ from src.ui.widgets.toast_tips import Toast
 # 条件导入调度服务
 try:
     from src.core.services.scheduler_service import UnifiedSchedulerService
+
     SCHEDULER_SERVICE_AVAILABLE = True
 except ImportError as e:
     print(f"调度服务模块不可用: {e}")
@@ -31,6 +44,7 @@ except ImportError as e:
 # 条件导入接口自动化标签页
 try:
     from src.ui.tabs.interface_auto_tab import InterfaceAutoTab
+
     INTERFACE_AUTO_AVAILABLE = True
 except ImportError as e:
     print(f"接口自动化模块不可用: {e}")
@@ -39,6 +53,7 @@ except ImportError as e:
 # 条件导入卡片工具标签页
 try:
     from src.ui.tabs.tool_cards_tab import ToolCardsTab
+
     TOOL_CARDS_AVAILABLE = True
 except ImportError as e:
     print(f"卡片工具模块不可用: {e}")
@@ -47,6 +62,7 @@ except ImportError as e:
 # 条件导入变量管理对话框
 try:
     from src.ui.interface_auto.variable_management import VariableManagement
+
     VARIABLE_MANAGEMENT_AVAILABLE = True
 except ImportError as e:
     print(f"变量管理模块不可用: {e}")
@@ -64,10 +80,15 @@ class MainWindow(QMainWindow):
         self.config = config or {}
 
         # 获取功能开关状态
-        self.enable_interface_auto = self.config.get("features", {}).get("interface_automation", False)
-        self.enable_tool_cards = self.config.get("features", {}).get("tool_cards", False)
-        self.enable_api_management = self.config.get("features", {}).get("api_management", True)
-
+        self.enable_interface_auto = self.config.get("features", {}).get(
+            "interface_automation", False
+        )
+        self.enable_tool_cards = self.config.get("features", {}).get(
+            "tool_cards", False
+        )
+        self.enable_api_management = self.config.get("features", {}).get(
+            "api_management", True
+        )
 
         self.setWindowTitle("测试工具")
         # 设置更合适的初始窗口大小，避免全屏时界面元素显示不全
@@ -116,10 +137,10 @@ class MainWindow(QMainWindow):
 
         # 标记为已初始化
         self._initialized = True
-        
+
         # 存储调度服务实例
         self.scheduler_service = None
-        
+
         # 用户管理相关
         self.current_user = None
         self.user_service = UserService()
@@ -130,7 +151,7 @@ class MainWindow(QMainWindow):
         screen_geometry = QApplication.desktop().screenGeometry()
         screen_width = screen_geometry.width()
         screen_height = screen_geometry.height()
-        
+
         # 根据屏幕尺寸设置窗口大小
         if screen_width >= 1920 and screen_height >= 1080:
             # 大屏幕可以直接最大化
@@ -139,22 +160,25 @@ class MainWindow(QMainWindow):
             # 对于小屏幕，先设置合适尺寸再显示
             window_width = min(self.initial_width, screen_width - 50)
             window_height = min(self.initial_height, screen_height - 50)
-            
+
             # 确保不低于最小尺寸
             window_width = max(window_width, 1200)
             window_height = max(window_height, 600)
-            
+
             self.resize(window_width, window_height)
-            self.move((screen_width - window_width) // 2, (screen_height - window_height) // 2)
+            self.move(
+                (screen_width - window_width) // 2, (screen_height - window_height) // 2
+            )
             self.show()
 
     def init_ui(self):
         """初始化UI，确保只执行一次"""
-        if hasattr(self, '_ui_initialized') and self._ui_initialized:
+        if hasattr(self, "_ui_initialized") and self._ui_initialized:
             return
 
         # 设置应用样式
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QMainWindow {
                 background-color: #f8f9fa;
             }
@@ -295,7 +319,8 @@ class MainWindow(QMainWindow):
                 padding: 4px;
                 font-size: 12px;
             }
-        """)
+        """
+        )
 
         # 创建Tab Widget
         tab_widget = QTabWidget()
@@ -312,18 +337,18 @@ class MainWindow(QMainWindow):
 
         # 添加Tab到Tab Widget
         tab_widget.addTab(self.test_data_tab, "测试数据")
-        
+
         # 条件加载卡片工具标签页
         if self.enable_tool_cards and TOOL_CARDS_AVAILABLE:
             try:
                 self.tool_cards_tab = ToolCardsTab(self)
-                tab_widget.addTab(self.tool_cards_tab, '卡片工具')
+                tab_widget.addTab(self.tool_cards_tab, "卡片工具")
                 print("卡片工具标签页已加载")
             except Exception as e:
                 print(f"加载卡片工具标签页失败: {e}")
         else:
             print("卡片工具功能已禁用或模块不可用")
-        
+
         tab_widget.addTab(self.api_tool_tab, "接口工具")
 
         # 条件加载接口自动化标签页
@@ -332,14 +357,14 @@ class MainWindow(QMainWindow):
                 self.interface_auto_tab = InterfaceAutoTab(self)
                 tab_widget.addTab(self.interface_auto_tab, "接口自动化")
                 print("接口自动化标签页已加载")
-                
+
                 # 延迟初始化接口自动化标签页，避免启动时出现短暂小窗口
                 QTimer.singleShot(800, self.interface_auto_tab.delayed_init)
             except Exception as e:
                 print(f"加载接口自动化标签页失败: {e}")
         else:
             print("接口自动化功能已禁用或模块不可用")
-        
+
         # 条件加载API管理标签页
         if self.enable_api_management and API_MANAGEMENT_AVAILABLE:
             try:
@@ -350,25 +375,28 @@ class MainWindow(QMainWindow):
                 print(f"加载API管理标签页失败: {e}")
         else:
             print("API管理功能已禁用或模块不可用")
-        
+
         # 数据查询放到最后
         tab_widget.addTab(self.data_query_tab, "数据查询")
 
         # 设置Tab Widget为中心部件
         self.setCentralWidget(tab_widget)
-        
+
         # 创建右上角按钮容器
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(0, 0, 0, 0)
         corner_layout.setSpacing(2)
-        
+
         # 创建设置按钮（仅admin用户可见）
         self.settings_button = QPushButton()
-        self.settings_button.setIcon(QIcon(resource_path("src/resources/icons/settings.png")))
+        self.settings_button.setIcon(
+            QIcon(resource_path("src/resources/icons/settings.png"))
+        )
         self.settings_button.setToolTip("全局设置")
         self.settings_button.setFixedSize(30, 25)
-        self.settings_button.setStyleSheet("""
+        self.settings_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -381,15 +409,19 @@ class MainWindow(QMainWindow):
             QPushButton:pressed {
                 background-color: #d0d0d0;
             }
-        """)
+        """
+        )
         self.settings_button.clicked.connect(self.handle_settings)
-        
+
         # 创建退出按钮
         self.logout_button = QPushButton()
-        self.logout_button.setIcon(QIcon(resource_path("src/resources/icons/logout.png")))
+        self.logout_button.setIcon(
+            QIcon(resource_path("src/resources/icons/logout.png"))
+        )
         self.logout_button.setToolTip("退出登录")
         self.logout_button.setFixedSize(30, 25)
-        self.logout_button.setStyleSheet("""
+        self.logout_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -402,19 +434,20 @@ class MainWindow(QMainWindow):
             QPushButton:pressed {
                 background-color: #d0d0d0;
             }
-        """)
+        """
+        )
         self.logout_button.clicked.connect(self.handle_logout)
-        
+
         # 将按钮添加到布局
         corner_layout.addWidget(self.settings_button)
         corner_layout.addWidget(self.logout_button)
-        
+
         # 将按钮容器添加到tab widget的右上角
         tab_widget.setCornerWidget(corner_widget, Qt.TopRightCorner)
-        
+
         # 存储tab widget引用
         self.tab_widget = tab_widget
-        
+
         # 连接tab切换信号
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
 
@@ -427,19 +460,34 @@ class MainWindow(QMainWindow):
             if pil_image.mode == "RGB":
                 # 直接使用RGB格式，不需要交换通道
                 data = pil_image.tobytes()
-                qimage = QImage(data, pil_image.width, pil_image.height,
-                                pil_image.width * 3, QImage.Format_RGB888)
+                qimage = QImage(
+                    data,
+                    pil_image.width,
+                    pil_image.height,
+                    pil_image.width * 3,
+                    QImage.Format_RGB888,
+                )
             elif pil_image.mode == "RGBA":
                 # 直接使用RGBA格式，不需要交换通道
                 data = pil_image.tobytes()
-                qimage = QImage(data, pil_image.width, pil_image.height,
-                                pil_image.width * 4, QImage.Format_RGBA8888)
+                qimage = QImage(
+                    data,
+                    pil_image.width,
+                    pil_image.height,
+                    pil_image.width * 4,
+                    QImage.Format_RGBA8888,
+                )
             else:
                 # 其他模式转换为RGB
                 pil_image_rgb = pil_image.convert("RGB")
                 data = pil_image_rgb.tobytes()
-                qimage = QImage(data, pil_image_rgb.width, pil_image_rgb.height,
-                                pil_image_rgb.width * 3, QImage.Format_RGB888)
+                qimage = QImage(
+                    data,
+                    pil_image_rgb.width,
+                    pil_image_rgb.height,
+                    pil_image_rgb.width * 3,
+                    QImage.Format_RGB888,
+                )
 
             return qimage
         except Exception as e:
@@ -481,7 +529,6 @@ class MainWindow(QMainWindow):
 
         return QIcon(pixmap)
 
-
     def open_variable_management(self):
         """打开变量管理对话框"""
         if not VARIABLE_MANAGEMENT_AVAILABLE:
@@ -494,11 +541,11 @@ class MainWindow(QMainWindow):
             dialog.exec_()
         except Exception as e:
             Toast.critical(self, "错误", f"打开变量管理失败: {str(e)}")
-    
+
     def set_scheduler_service(self, scheduler_service):
         """设置调度服务实例"""
         self.scheduler_service = scheduler_service
-    
+
     def closeEvent(self, event):
         """重写关闭事件，确保调度服务正确停止"""
         try:
@@ -508,95 +555,111 @@ class MainWindow(QMainWindow):
                 print("调度后台服务已停止")
         except Exception as e:
             print(f"停止调度服务时出错: {e}")
-        
+
         # 接受关闭事件
         event.accept()
-    
+
     def on_tab_changed(self, index):
         """Tab切换事件处理
-        
+
         Args:
             index: 新选中的tab索引
         """
         try:
             # 获取当前tab的widget
             current_widget = self.tab_widget.widget(index)
-            
+
             # 如果切换到接口自动化tab，隐藏业务管理页面的操作按钮
-            if (self.enable_interface_auto and INTERFACE_AUTO_AVAILABLE and 
-                hasattr(self, 'interface_auto_tab') and current_widget == self.interface_auto_tab):
-                
+            if (
+                self.enable_interface_auto
+                and INTERFACE_AUTO_AVAILABLE
+                and hasattr(self, "interface_auto_tab")
+                and current_widget == self.interface_auto_tab
+            ):
+
                 # 检查接口自动化tab是否已经初始化
-                if hasattr(self.interface_auto_tab, 'business_management'):
+                if hasattr(self.interface_auto_tab, "business_management"):
                     business_management = self.interface_auto_tab.business_management
-                    
+
                     # 如果业务管理页面存在，隐藏操作按钮
                     if business_management:
                         # 调用业务管理页面的按钮隐藏方法
-                        if hasattr(business_management, 'hide_all_operation_buttons_except_current'):
+                        if hasattr(
+                            business_management,
+                            "hide_all_operation_buttons_except_current",
+                        ):
                             business_management.hide_all_operation_buttons_except_current()
-                        
+
                         print("Tab切换：已隐藏业务管理页面的操作按钮")
-                            
+
         except Exception as e:
             print(f"处理tab切换事件时出错: {e}")
-    
+
     def set_current_user(self, user):
         """设置当前登录用户"""
         self.current_user = user
         # 更新窗口标题
         self.setWindowTitle(f"测试工具-{user.username}")
         self.create_user_menu()
-        
+
         # 控制设置按钮的可见性（仅admin用户可见）
-        if hasattr(self, 'settings_button'):
+        if hasattr(self, "settings_button"):
             self.settings_button.setVisible(user.is_admin)
-    
+
     def create_user_menu(self):
         """创建用户菜单 - 已弃用，退出功能已移至tab菜单栏"""
         # 不再创建用户菜单，退出功能已通过图标按钮实现
         pass
-    
+
     def restart_scheduler_service(self):
         """重新启动调度服务"""
         if not SCHEDULER_SERVICE_AVAILABLE:
             print("调度服务模块不可用，跳过重启")
             return
-            
+
         try:
             # 检查是否已经有调度服务实例
             if self.scheduler_service:
                 # 如果服务正在运行，先停止
-                if hasattr(self.scheduler_service, 'running') and self.scheduler_service.running:
+                if (
+                    hasattr(self.scheduler_service, "running")
+                    and self.scheduler_service.running
+                ):
                     print("调度服务正在运行，先停止...")
                     self.scheduler_service.stop_service()
-                
+
                 # 重新创建调度服务实例
                 self.scheduler_service = UnifiedSchedulerService()
             else:
                 # 创建新的调度服务实例
                 self.scheduler_service = UnifiedSchedulerService()
-            
+
             # 启动调度服务
             print("正在启动调度服务...")
             if self.scheduler_service.start_service():
                 print("调度服务启动成功")
                 # 检查是否成功获取分布式锁
-                if hasattr(self.scheduler_service, 'running') and self.scheduler_service.running:
+                if (
+                    hasattr(self.scheduler_service, "running")
+                    and self.scheduler_service.running
+                ):
                     print("当前实例持有调度锁，调度服务已启动")
                 else:
                     print("检测到已有调度服务实例在运行，当前实例作为只读客户端")
             else:
                 print("调度服务启动失败")
-                
+
         except Exception as e:
             print(f"重启调度服务时出错: {e}")
-    
+
     def handle_settings(self):
         """处理设置按钮点击"""
         if self.current_user and self.current_user.is_admin:
             # 只有admin用户可以打开全局设置
-            from src.ui.dialogs.global_email_config_dialog import GlobalEmailConfigDialog
+            from src.ui.dialogs.global_email_config_dialog import (
+                GlobalEmailConfigDialog,
+            )
+
             dialog = GlobalEmailConfigDialog(self)
             dialog.exec_()
         else:
@@ -607,49 +670,56 @@ class MainWindow(QMainWindow):
         if self.current_user:
             # 创建自定义确认对话框，使用"确认"和"取消"按钮
             msg_box = QMessageBox(self)
-            msg_box.setWindowTitle('确认登出')
-            msg_box.setText(f'确定要登出用户 {self.current_user.username} 吗？')
+            msg_box.setWindowTitle("确认登出")
+            msg_box.setText(f"确定要登出用户 {self.current_user.username} 吗？")
             msg_box.setIcon(QMessageBox.Question)
-            
+
             # 添加自定义按钮
-            confirm_button = msg_box.addButton('确认', QMessageBox.YesRole)
-            cancel_button = msg_box.addButton('取消', QMessageBox.NoRole)
-            
+            confirm_button = msg_box.addButton("确认", QMessageBox.YesRole)
+            cancel_button = msg_box.addButton("取消", QMessageBox.NoRole)
+
             # 设置默认按钮
             msg_box.setDefaultButton(cancel_button)
-            
+
             # 显示对话框并获取结果
             msg_box.exec_()
-            
+
             if msg_box.clickedButton() == confirm_button:
                 # 执行登出逻辑
                 self.perform_logout()
-    
+
     def perform_logout(self):
         """执行登出操作"""
         try:
             # 检查登录开关配置
             import sys
             import os
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+            sys.path.append(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                )
+            )
             from main import load_config
+
             config = load_config()
             enable_login = config.get("auth", {}).get("enable_login", True)
-            
+
             # 只有在启用登录功能时才删除session文件
             if enable_login:
                 session_service = SessionService()
                 session_service.delete_session()
-            
+
             # 关闭主窗口
             self.close()
-            
+
             # 只有在启用登录功能时才重新启动认证页面
             if enable_login:
                 from src.ui.auth_page import AuthPage
+
                 auth_page = AuthPage(enable_login=enable_login)
                 auth_page.showMaximized()
-                
+
                 # 连接认证成功信号
                 def on_login_success(user):
                     auth_page.close()
@@ -660,16 +730,16 @@ class MainWindow(QMainWindow):
                     self.restart_scheduler_service()
                     # 显示登录成功Toast提示
                     Toast.success(self, f"欢迎回来，{user.username}!")
-                
+
                 auth_page.login_success.connect(on_login_success)
             else:
                 # 登录功能已关闭，直接退出应用程序
                 print("登录功能已关闭，应用程序将退出")
                 QApplication.quit()
-            
+
         except Exception as e:
-            Toast.critical(self, '登出错误', f'登出过程中发生错误: {str(e)}')
-    
+            Toast.critical(self, "登出错误", f"登出过程中发生错误: {str(e)}")
+
     def get_current_user(self):
         """获取当前用户"""
         return self.current_user

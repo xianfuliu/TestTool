@@ -1,6 +1,22 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                             QTableWidget, QTableWidgetItem, QTextEdit, QMessageBox, QTabWidget, QListWidget,
-                             QListWidgetItem, QDialog, QFormLayout, QCompleter, QSizePolicy)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QMessageBox,
+    QTabWidget,
+    QListWidget,
+    QListWidgetItem,
+    QDialog,
+    QFormLayout,
+    QCompleter,
+    QSizePolicy,
+)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import pymysql
@@ -119,7 +135,9 @@ class DatabaseConfigDialog(QDialog):
         input_field_edit_layout.addRow("条件名称:", self.input_field_label)
 
         self.input_field_placeholder = QLineEdit()
-        self.input_field_placeholder.setPlaceholderText("输入提示文本（如：请输入手机号）")
+        self.input_field_placeholder.setPlaceholderText(
+            "输入提示文本（如：请输入手机号）"
+        )
         self.input_field_placeholder.setMaximumWidth(200)
         self.input_field_placeholder.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         input_field_edit_layout.addRow("输入提示:", self.input_field_placeholder)
@@ -374,7 +392,9 @@ class DatabaseConfigDialog(QDialog):
         self.selected_params_list.setMaximumHeight(100)
         self.selected_params_list.setMinimumWidth(500)  # 设置最小宽度
         self.selected_params_list.setMaximumWidth(600)  # 增加最大宽度
-        self.selected_params_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.selected_params_list.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
         selected_params_row_layout.addWidget(self.selected_params_list)
 
         # 移除选中按钮
@@ -475,11 +495,11 @@ class DatabaseConfigDialog(QDialog):
 
         try:
             if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
+                with open(config_file, "r", encoding="utf-8") as f:
                     config_data = json.load(f)
-                    self.db_configs = config_data.get('database_connections', {})
-                    self.sql_configs = config_data.get('sql_queries', {})
-                    self.input_fields = config_data.get('input_fields', {})
+                    self.db_configs = config_data.get("database_connections", {})
+                    self.sql_configs = config_data.get("sql_queries", {})
+                    self.input_fields = config_data.get("input_fields", {})
 
             self.refresh_input_fields_list()
             self.refresh_db_list()
@@ -532,8 +552,8 @@ class DatabaseConfigDialog(QDialog):
         if param_name and param_name in self.input_fields:
             config = self.input_fields[param_name]
             self.input_field_name.setText(param_name)
-            self.input_field_label.setText(config.get('label', ''))
-            self.input_field_placeholder.setText(config.get('placeholder', ''))
+            self.input_field_label.setText(config.get("label", ""))
+            self.input_field_placeholder.setText(config.get("placeholder", ""))
 
     def add_input_field(self):
         """新增查询条件"""
@@ -554,10 +574,7 @@ class DatabaseConfigDialog(QDialog):
             Toast.warning(self, "警告", f"条件字段 '{param_name}' 已存在")
             return
 
-        self.input_fields[param_name] = {
-            'label': label,
-            'placeholder': placeholder
-        }
+        self.input_fields[param_name] = {"label": label, "placeholder": placeholder}
 
         self.refresh_input_fields_list()
         self.refresh_required_param_combo()  # 刷新查询条件下拉框
@@ -604,10 +621,7 @@ class DatabaseConfigDialog(QDialog):
             self.input_fields[new_param_name] = self.input_fields.pop(old_param_name)
 
         # 更新配置内容
-        self.input_fields[new_param_name] = {
-            'label': label,
-            'placeholder': placeholder
-        }
+        self.input_fields[new_param_name] = {"label": label, "placeholder": placeholder}
 
         self.refresh_input_fields_list()
         self.refresh_required_param_combo()
@@ -627,9 +641,12 @@ class DatabaseConfigDialog(QDialog):
 
         param_name = self.input_fields_combo.currentData()
 
-        reply = QMessageBox.question(self, "确认删除",
-                                     f"确定要删除参数 '{param_name}' 吗？",
-                                     QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除参数 '{param_name}' 吗？",
+            QMessageBox.Yes | QMessageBox.No,
+        )
 
         if reply == QMessageBox.Yes:
             del self.input_fields[param_name]
@@ -652,7 +669,7 @@ class DatabaseConfigDialog(QDialog):
 
             # 尝试从配置中获取默认数据库配置
             if connection_name in self.db_configs:
-                default_db = self.db_configs[connection_name].get('database', '')
+                default_db = self.db_configs[connection_name].get("database", "")
                 if default_db:
                     self.database_combo.setCurrentText(default_db)
         else:
@@ -675,11 +692,11 @@ class DatabaseConfigDialog(QDialog):
         try:
             db_config = self.db_configs[connection_name]
             connection_params = {
-                'host': db_config.get('host'),
-                'port': int(db_config.get('port', 3306)),
-                'user': db_config.get('username'),
-                'password': db_config.get('password'),
-                'charset': 'utf8mb4'
+                "host": db_config.get("host"),
+                "port": int(db_config.get("port", 3306)),
+                "user": db_config.get("username"),
+                "password": db_config.get("password"),
+                "charset": "utf8mb4",
             }
 
             conn = pymysql.connect(**connection_params)
@@ -695,7 +712,12 @@ class DatabaseConfigDialog(QDialog):
             for database in databases:
                 db_name = database[0]
                 # 过滤掉系统数据库配置
-                if db_name not in ['information_schema', 'mysql', 'performance_schema', 'sys']:
+                if db_name not in [
+                    "information_schema",
+                    "mysql",
+                    "performance_schema",
+                    "sys",
+                ]:
                     self.database_combo.addItem(db_name)
 
             # 恢复之前选中的数据库配置
@@ -722,18 +744,22 @@ class DatabaseConfigDialog(QDialog):
         """刷新表列表"""
         connection_name = self.sql_db_connection.currentText()
         database_name = self.database_combo.currentText()
-        if not connection_name or connection_name not in self.db_configs or not database_name:
+        if (
+            not connection_name
+            or connection_name not in self.db_configs
+            or not database_name
+        ):
             return
 
         try:
             db_config = self.db_configs[connection_name]
             connection_params = {
-                'host': db_config.get('host'),
-                'port': int(db_config.get('port', 3306)),
-                'user': db_config.get('username'),
-                'password': db_config.get('password'),
-                'database': database_name,
-                'charset': 'utf8mb4'
+                "host": db_config.get("host"),
+                "port": int(db_config.get("port", 3306)),
+                "user": db_config.get("username"),
+                "password": db_config.get("password"),
+                "database": database_name,
+                "charset": "utf8mb4",
             }
 
             conn = pymysql.connect(**connection_params)
@@ -771,18 +797,22 @@ class DatabaseConfigDialog(QDialog):
 
         connection_name = self.sql_db_connection.currentText()
         database_name = self.database_combo.currentText()
-        if not connection_name or connection_name not in self.db_configs or not database_name:
+        if (
+            not connection_name
+            or connection_name not in self.db_configs
+            or not database_name
+        ):
             return
 
         try:
             db_config = self.db_configs[connection_name]
             connection_params = {
-                'host': db_config.get('host'),
-                'port': int(db_config.get('port', 3306)),
-                'user': db_config.get('username'),
-                'password': db_config.get('password'),
-                'database': database_name,
-                'charset': 'utf8mb4'
+                "host": db_config.get("host"),
+                "port": int(db_config.get("port", 3306)),
+                "user": db_config.get("username"),
+                "password": db_config.get("password"),
+                "database": database_name,
+                "charset": "utf8mb4",
             }
 
             conn = pymysql.connect(**connection_params)
@@ -806,7 +836,7 @@ class DatabaseConfigDialog(QDialog):
                 self.fields_table.setItem(row, 2, QTableWidgetItem(field[1]))
 
                 # 字段注释
-                comment = field[8] if len(field) > 8 else ''
+                comment = field[8] if len(field) > 8 else ""
                 self.fields_table.setItem(row, 3, QTableWidgetItem(comment))
 
             cursor.close()
@@ -907,10 +937,10 @@ class DatabaseConfigDialog(QDialog):
         if name in self.sql_configs:
             config = self.sql_configs[name]
             self.sql_name.setText(name)
-            self.sql_display_name.setText(config.get('display_name', ''))
+            self.sql_display_name.setText(config.get("display_name", ""))
 
             # 设置数据库配置
-            db_connection = config.get('db_connection', '')
+            db_connection = config.get("db_connection", "")
             if db_connection:
                 index = self.sql_db_connection.findText(db_connection)
                 if index >= 0:
@@ -920,14 +950,14 @@ class DatabaseConfigDialog(QDialog):
                     self.refresh_databases()
 
                     # 尝试从SQL中解析数据库配置和表名
-                    sql = config.get('sql', '')
+                    sql = config.get("sql", "")
                     if sql:
                         # 简单的SQL解析来获取数据库配置和表名
-                        from_match = re.search(r'FROM\s+([\w\.]+)', sql, re.IGNORECASE)
+                        from_match = re.search(r"FROM\s+([\w\.]+)", sql, re.IGNORECASE)
                         if from_match:
                             table_ref = from_match.group(1)
-                            if '.' in table_ref:
-                                db_name, table_name = table_ref.split('.')
+                            if "." in table_ref:
+                                db_name, table_name = table_ref.split(".")
                                 # 设置数据库配置
                                 db_index = self.database_combo.findText(db_name)
                                 if db_index >= 0:
@@ -940,11 +970,11 @@ class DatabaseConfigDialog(QDialog):
                                         self.table_combo.setCurrentIndex(table_index)
 
             # 设置SQL语句
-            self.sql_editor.setPlainText(config.get('sql', ''))
+            self.sql_editor.setPlainText(config.get("sql", ""))
 
             # 设置查询条件
             self.selected_params_list.clear()
-            required_params = config.get('required_params', [])
+            required_params = config.get("required_params", [])
             for param in required_params:
                 # 查找对应的参数项并添加到已选查询条件列表
                 for i in range(self.required_param_combo.count()):
@@ -980,11 +1010,11 @@ class DatabaseConfigDialog(QDialog):
             required_params.append(item.data(Qt.UserRole))
 
         self.sql_configs[name] = {
-            'display_name': self.sql_display_name.text().strip(),
-            'db_connection': self.sql_db_connection.currentText(),
-            'sql': self.sql_editor.toPlainText().strip(),
-            'required_params': required_params,
-            'output_fields': output_fields
+            "display_name": self.sql_display_name.text().strip(),
+            "db_connection": self.sql_db_connection.currentText(),
+            "sql": self.sql_editor.toPlainText().strip(),
+            "required_params": required_params,
+            "output_fields": output_fields,
         }
 
         self.refresh_sql_combo()
@@ -1026,11 +1056,11 @@ class DatabaseConfigDialog(QDialog):
             del self.sql_configs[old_name]
 
         self.sql_configs[new_name] = {
-            'display_name': self.sql_display_name.text().strip(),
-            'db_connection': self.sql_db_connection.currentText(),
-            'sql': self.sql_editor.toPlainText().strip(),
-            'required_params': required_params,
-            'output_fields': output_fields
+            "display_name": self.sql_display_name.text().strip(),
+            "db_connection": self.sql_db_connection.currentText(),
+            "sql": self.sql_editor.toPlainText().strip(),
+            "required_params": required_params,
+            "output_fields": output_fields,
         }
 
         self.refresh_sql_combo()
@@ -1046,11 +1076,11 @@ class DatabaseConfigDialog(QDialog):
         if name and name in self.db_configs:
             config = self.db_configs[name]
             self.db_name.setText(name)
-            self.db_host.setText(config.get('host', ''))
-            self.db_port.setText(config.get('port', ''))
-            self.db_username.setText(config.get('username', ''))
-            self.db_password.setText(config.get('password', ''))
-            self.db_database.setText(config.get('database', ''))
+            self.db_host.setText(config.get("host", ""))
+            self.db_port.setText(config.get("port", ""))
+            self.db_username.setText(config.get("username", ""))
+            self.db_password.setText(config.get("password", ""))
+            self.db_database.setText(config.get("database", ""))
 
     def add_db_config(self):
         """新增数据库配置配置"""
@@ -1060,11 +1090,11 @@ class DatabaseConfigDialog(QDialog):
             return
 
         self.db_configs[name] = {
-            'host': self.db_host.text().strip(),
-            'port': self.db_port.text().strip(),
-            'username': self.db_username.text().strip(),
-            'password': self.db_password.text().strip(),
-            'database': self.db_database.text().strip()
+            "host": self.db_host.text().strip(),
+            "port": self.db_port.text().strip(),
+            "username": self.db_username.text().strip(),
+            "password": self.db_password.text().strip(),
+            "database": self.db_database.text().strip(),
         }
 
         self.refresh_db_list()
@@ -1097,11 +1127,11 @@ class DatabaseConfigDialog(QDialog):
 
         # 更新配置内容
         self.db_configs[new_name] = {
-            'host': self.db_host.text().strip(),
-            'port': self.db_port.text().strip(),
-            'username': self.db_username.text().strip(),
-            'password': self.db_password.text().strip(),
-            'database': self.db_database.text().strip()
+            "host": self.db_host.text().strip(),
+            "port": self.db_port.text().strip(),
+            "username": self.db_username.text().strip(),
+            "password": self.db_password.text().strip(),
+            "database": self.db_database.text().strip(),
         }
 
         self.refresh_db_list()
@@ -1122,9 +1152,12 @@ class DatabaseConfigDialog(QDialog):
             return
 
         name = current_name
-        reply = QMessageBox.question(self, "确认删除",
-                                     f"确定要删除数据库配置 '{name}' 吗？",
-                                     QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除数据库配置 '{name}' 吗？",
+            QMessageBox.Yes | QMessageBox.No,
+        )
 
         if reply == QMessageBox.Yes:
             del self.db_configs[name]
@@ -1150,12 +1183,12 @@ class DatabaseConfigDialog(QDialog):
 
         try:
             connection_params = {
-                'host': self.db_host.text().strip(),
-                'port': int(self.db_port.text().strip()),
-                'user': self.db_username.text().strip(),
-                'password': self.db_password.text().strip(),
-                'database': self.db_database.text().strip(),
-                'charset': 'utf8mb4'
+                "host": self.db_host.text().strip(),
+                "port": int(self.db_port.text().strip()),
+                "user": self.db_username.text().strip(),
+                "password": self.db_password.text().strip(),
+                "database": self.db_database.text().strip(),
+                "charset": "utf8mb4",
             }
 
             # 测试连接
@@ -1174,9 +1207,12 @@ class DatabaseConfigDialog(QDialog):
             return
 
         name = current_name
-        reply = QMessageBox.question(self, "确认删除",
-                                     f"确定要删除操作配置 '{name}' 吗？",
-                                     QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除操作配置 '{name}' 吗？",
+            QMessageBox.Yes | QMessageBox.No,
+        )
 
         if reply == QMessageBox.Yes:
             del self.sql_configs[name]
@@ -1194,12 +1230,12 @@ class DatabaseConfigDialog(QDialog):
         try:
             os.makedirs(os.path.dirname(config_file), exist_ok=True)
             config_data = {
-                'database_connections': self.db_configs,
-                'sql_queries': self.sql_configs,
-                'input_fields': self.input_fields
+                "database_connections": self.db_configs,
+                "sql_queries": self.sql_configs,
+                "input_fields": self.input_fields,
             }
 
-            with open(config_file, 'w', encoding='utf-8') as f:
+            with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, ensure_ascii=False, indent=2)
 
             # 发送配置保存信号

@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
 import json
 
+
 @dataclass
 class ApiTemplate:
     """接口模板数据模型"""
@@ -24,24 +25,24 @@ class ApiTemplate:
     updated_at: Optional[datetime] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ApiTemplate':
+    def from_dict(cls, data: Dict[str, Any]) -> "ApiTemplate":
         """从字典创建对象"""
         # 处理JSON字段
-        headers = data.get('headers', {})
+        headers = data.get("headers", {})
         if isinstance(headers, str):
             try:
                 headers = json.loads(headers) if headers else {}
             except json.JSONDecodeError:
                 headers = {}
 
-        params = data.get('params', {})
+        params = data.get("params", {})
         if isinstance(params, str):
             try:
                 params = json.loads(params) if params else {}
             except json.JSONDecodeError:
                 params = {}
 
-        body = data.get('body', {})
+        body = data.get("body", {})
         if isinstance(body, str):
             try:
                 body = json.loads(body) if body else {}
@@ -49,36 +50,36 @@ class ApiTemplate:
                 body = {}
 
         # 处理时间字段
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
-        updated_at = data.get('updated_at')
+        updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             try:
-                updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 updated_at = None
 
         return cls(
-            id=data.get('id'),
-            project_id=data.get('project_id', 0),
-            folder_id=data.get('folder_id'),
-            name=data.get('name', ''),
-            method=data.get('method', 'GET'),
-            url_path=data.get('url_path', ''),
+            id=data.get("id"),
+            project_id=data.get("project_id", 0),
+            folder_id=data.get("folder_id"),
+            name=data.get("name", ""),
+            method=data.get("method", "GET"),
+            url_path=data.get("url_path", ""),
             headers=headers,
             params=params,
             body=body,
-            description=data.get('description', ''),
-            timeout=data.get('timeout', 30),
-            retry_enabled=bool(data.get('retry_enabled', False)),
-            retry_count=data.get('retry_count', 3),
+            description=data.get("description", ""),
+            timeout=data.get("timeout", 30),
+            retry_enabled=bool(data.get("retry_enabled", False)),
+            retry_count=data.get("retry_count", 3),
             created_at=created_at,
-            updated_at=updated_at
+            updated_at=updated_at,
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -88,30 +89,30 @@ class ApiTemplate:
             for_db: 如果为True，则转换为数据库存储格式（JSON字段转为字符串）
         """
         result = {
-            'id': self.id,
-            'project_id': self.project_id,
-            'folder_id': self.folder_id,
-            'name': self.name,
-            'method': self.method,
-            'url_path': self.url_path,
-            'headers': self.headers,
-            'params': self.params,
-            'body': self.body,
-            'description': self.description,
-            'timeout': self.timeout,
-            'retry_enabled': self.retry_enabled,
-            'retry_count': self.retry_count,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            "id": self.id,
+            "project_id": self.project_id,
+            "folder_id": self.folder_id,
+            "name": self.name,
+            "method": self.method,
+            "url_path": self.url_path,
+            "headers": self.headers,
+            "params": self.params,
+            "body": self.body,
+            "description": self.description,
+            "timeout": self.timeout,
+            "retry_enabled": self.retry_enabled,
+            "retry_count": self.retry_count,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
         if for_db:
             # 将JSON字段转换为字符串
-            for field in ['headers', 'params', 'body']:
+            for field in ["headers", "params", "body"]:
                 if result[field]:
                     result[field] = json.dumps(result[field], ensure_ascii=False)
                 else:
-                    result[field] = '{}'
+                    result[field] = "{}"
 
         return result
 
@@ -127,7 +128,15 @@ class ApiTemplate:
         if not self.url_path.strip():
             return False, "URL路径不能为空"
 
-        if self.method.upper() not in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']:
+        if self.method.upper() not in [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "PATCH",
+            "HEAD",
+            "OPTIONS",
+        ]:
             return False, f"不支持的HTTP方法: {self.method}"
 
         if self.timeout <= 0:
@@ -137,7 +146,7 @@ class ApiTemplate:
             return False, "重试次数必须在1-10之间"
 
         # 验证URL路径格式
-        if not self.url_path.startswith('/'):
+        if not self.url_path.startswith("/"):
             return False, "URL路径必须以/开头"
 
         # 验证JSON字段
@@ -161,13 +170,13 @@ class ApiTemplate:
         """
         if base_url:
             # 移除base_url末尾的/和url_path开头的/，避免双斜杠
-            base_url = base_url.rstrip('/')
-            url_path = self.url_path.lstrip('/')
+            base_url = base_url.rstrip("/")
+            url_path = self.url_path.lstrip("/")
             return f"{base_url}/{url_path}"
         else:
             return self.url_path
 
-    def clone(self) -> 'ApiTemplate':
+    def clone(self) -> "ApiTemplate":
         """创建副本"""
         return ApiTemplate(
             id=None,  # 新副本没有ID
@@ -184,7 +193,7 @@ class ApiTemplate:
             retry_enabled=self.retry_enabled,
             retry_count=self.retry_count,
             created_at=None,
-            updated_at=None
+            updated_at=None,
         )
 
     def __str__(self) -> str:
@@ -206,38 +215,38 @@ class ApiFolder:
     sort_order: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    children: List['ApiFolder'] = field(default_factory=list)  # 子文件夹
+    children: List["ApiFolder"] = field(default_factory=list)  # 子文件夹
     templates: List[ApiTemplate] = field(default_factory=list)  # 包含的接口模板
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ApiFolder':
+    def from_dict(cls, data: Dict[str, Any]) -> "ApiFolder":
         """从字典创建对象"""
         # 处理时间字段
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
-        updated_at = data.get('updated_at')
+        updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             try:
-                updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 updated_at = None
 
         return cls(
-            id=data.get('id'),
-            project_id=data.get('project_id', 0),
-            parent_id=data.get('parent_id'),
-            name=data.get('name', ''),
-            description=data.get('description', ''),
-            sort_order=data.get('sort_order', 0),
+            id=data.get("id"),
+            project_id=data.get("project_id", 0),
+            parent_id=data.get("parent_id"),
+            name=data.get("name", ""),
+            description=data.get("description", ""),
+            sort_order=data.get("sort_order", 0),
             created_at=created_at,
             updated_at=updated_at,
             children=[],
-            templates=[]
+            templates=[],
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -247,22 +256,22 @@ class ApiFolder:
             for_db: 如果为True，则转换为数据库存储格式
         """
         result = {
-            'id': self.id,
-            'project_id': self.project_id,
-            'parent_id': self.parent_id,
-            'name': self.name,
-            'description': self.description,
-            'sort_order': self.sort_order,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            "id": self.id,
+            "project_id": self.project_id,
+            "parent_id": self.parent_id,
+            "name": self.name,
+            "description": self.description,
+            "sort_order": self.sort_order,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
         if not for_db:
             # 添加嵌套数据
-            result['children'] = [child.to_dict() for child in self.children]
-            result['templates'] = [template.to_dict() for template in self.templates]
-            result['template_count'] = len(self.templates)
-            result['child_folder_count'] = len(self.children)
+            result["children"] = [child.to_dict() for child in self.children]
+            result["templates"] = [template.to_dict() for template in self.templates]
+            result["template_count"] = len(self.templates)
+            result["child_folder_count"] = len(self.children)
 
         return result
 
@@ -283,7 +292,7 @@ class ApiFolder:
 
         return True, ""
 
-    def add_child(self, child_folder: 'ApiFolder') -> None:
+    def add_child(self, child_folder: "ApiFolder") -> None:
         """添加子文件夹"""
         self.children.append(child_folder)
 
@@ -298,7 +307,7 @@ class ApiFolder:
             all_templates.extend(child.get_all_templates())
         return all_templates
 
-    def get_all_children(self) -> List['ApiFolder']:
+    def get_all_children(self) -> List["ApiFolder"]:
         """获取所有子文件夹（包括嵌套子文件夹）"""
         all_children = self.children.copy()
         for child in self.children:
@@ -316,7 +325,7 @@ class ApiFolder:
                 return found
         return None
 
-    def find_folder_by_id(self, folder_id: int) -> Optional['ApiFolder']:
+    def find_folder_by_id(self, folder_id: int) -> Optional["ApiFolder"]:
         """根据ID查找文件夹"""
         if self.id == folder_id:
             return self
@@ -326,7 +335,7 @@ class ApiFolder:
                 return found
         return None
 
-    def get_path(self, folder_map: Dict[int, 'ApiFolder'] = None) -> str:
+    def get_path(self, folder_map: Dict[int, "ApiFolder"] = None) -> str:
         """获取文件夹路径"""
         if folder_map is None:
             return self.name
@@ -338,10 +347,12 @@ class ApiFolder:
             current = folder_map[current.parent_id]
             path_parts.insert(0, current.name)
 
-        return '/'.join(path_parts)
+        return "/".join(path_parts)
 
     def __str__(self) -> str:
-        return f"ApiFolder(id={self.id}, name='{self.name}', project_id={self.project_id})"
+        return (
+            f"ApiFolder(id={self.id}, name='{self.name}', project_id={self.project_id})"
+        )
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -355,7 +366,9 @@ class ApiTemplateManager:
         self.templates: List[ApiTemplate] = []
         self.folder_map: Dict[int, ApiFolder] = {}  # ID到文件夹的映射
 
-    def build_tree(self, folders_data: List[Dict], templates_data: List[Dict]) -> List[ApiFolder]:
+    def build_tree(
+        self, folders_data: List[Dict], templates_data: List[Dict]
+    ) -> List[ApiFolder]:
         """构建文件夹树结构
 
         Args:
@@ -487,10 +500,10 @@ class GlobalTool:
     updated_at: Optional[datetime] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'GlobalTool':
+    def from_dict(cls, data: Dict[str, Any]) -> "GlobalTool":
         """从字典创建对象"""
         # 处理JSON字段
-        config = data.get('config', {})
+        config = data.get("config", {})
         if isinstance(config, str):
             try:
                 config = json.loads(config) if config else {}
@@ -498,30 +511,30 @@ class GlobalTool:
                 config = {}
 
         # 处理时间字段
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
-        updated_at = data.get('updated_at')
+        updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             try:
-                updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 updated_at = None
 
         return cls(
-            id=data.get('id'),
-            name=data.get('name', ''),
-            tool_type=data.get('tool_type', ''),
-            description=data.get('description', ''),
+            id=data.get("id"),
+            name=data.get("name", ""),
+            tool_type=data.get("tool_type", ""),
+            description=data.get("description", ""),
             config=config,
-            enabled=bool(data.get('enabled', True)),
-            created_by=data.get('created_by', 'admin'),
+            enabled=bool(data.get("enabled", True)),
+            created_by=data.get("created_by", "admin"),
             created_at=created_at,
-            updated_at=updated_at
+            updated_at=updated_at,
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -531,23 +544,23 @@ class GlobalTool:
             for_db: 如果为True，则转换为数据库存储格式（JSON字段转为字符串）
         """
         result = {
-            'id': self.id,
-            'name': self.name,
-            'tool_type': self.tool_type,
-            'description': self.description,
-            'config': self.config,
-            'enabled': self.enabled,
-            'created_by': self.created_by,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            "id": self.id,
+            "name": self.name,
+            "tool_type": self.tool_type,
+            "description": self.description,
+            "config": self.config,
+            "enabled": self.enabled,
+            "created_by": self.created_by,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
         if for_db:
             # 将JSON字段转换为字符串
-            if result['config']:
-                result['config'] = json.dumps(result['config'], ensure_ascii=False)
+            if result["config"]:
+                result["config"] = json.dumps(result["config"], ensure_ascii=False)
             else:
-                result['config'] = '{}'
+                result["config"] = "{}"
 
         return result
 
@@ -560,7 +573,7 @@ class GlobalTool:
         if not self.name.strip():
             return False, "工具名称不能为空"
 
-        if self.tool_type not in ['sql', 'random', 'python', 'timer', 'http', 'custom']:
+        if self.tool_type not in ["sql", "random", "python", "timer", "http", "custom"]:
             return False, f"不支持的工具类型: {self.tool_type}"
 
         if len(self.name) > 100:
@@ -580,16 +593,16 @@ class GlobalTool:
     def get_tool_type_display(self) -> str:
         """获取工具类型显示名称"""
         type_map = {
-            'sql': 'SQL查询工具',
-            'random': '随机数生成器',
-            'python': 'Python脚本执行器',
-            'timer': '等待定时器',
-            'http': 'HTTP请求工具',
-            'custom': '自定义工具'
+            "sql": "SQL查询工具",
+            "random": "随机数生成器",
+            "python": "Python脚本执行器",
+            "timer": "等待定时器",
+            "http": "HTTP请求工具",
+            "custom": "自定义工具",
         }
         return type_map.get(self.tool_type, self.tool_type)
 
-    def clone(self) -> 'GlobalTool':
+    def clone(self) -> "GlobalTool":
         """创建副本"""
         return GlobalTool(
             id=None,  # 新副本没有ID
@@ -600,7 +613,7 @@ class GlobalTool:
             enabled=self.enabled,
             created_by=self.created_by,
             created_at=None,
-            updated_at=None
+            updated_at=None,
         )
 
     def __str__(self) -> str:
@@ -632,55 +645,55 @@ class TestReport:
     # 关联数据（非数据库字段）
     case_name: str = ""
     scheduler_name: str = ""
-    steps: List['TestStepResult'] = field(default_factory=list)
+    steps: List["TestStepResult"] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TestReport':
+    def from_dict(cls, data: Dict[str, Any]) -> "TestReport":
         """从字典创建对象"""
         # 处理时间字段
-        start_time = data.get('start_time')
+        start_time = data.get("start_time")
         if isinstance(start_time, str):
             try:
-                start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 start_time = None
 
-        end_time = data.get('end_time')
+        end_time = data.get("end_time")
         if isinstance(end_time, str):
             try:
-                end_time = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                end_time = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 end_time = None
 
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
         # 处理步骤数据
-        steps_data = data.get('steps', [])
+        steps_data = data.get("steps", [])
         steps = [TestStepResult.from_dict(step_data) for step_data in steps_data]
 
         return cls(
-            id=data.get('id'),
-            scheduler_id=data.get('scheduler_id'),
-            case_id=data.get('case_id', 0),
-            report_name=data.get('report_name', ''),
-            status=data.get('status', 'running'),
-            total_cases=data.get('total_cases', 0),
-            passed_cases=data.get('passed_cases', 0),
-            failed_cases=data.get('failed_cases', 0),
-            error_cases=data.get('error_cases', 0),
+            id=data.get("id"),
+            scheduler_id=data.get("scheduler_id"),
+            case_id=data.get("case_id", 0),
+            report_name=data.get("report_name", ""),
+            status=data.get("status", "running"),
+            total_cases=data.get("total_cases", 0),
+            passed_cases=data.get("passed_cases", 0),
+            failed_cases=data.get("failed_cases", 0),
+            error_cases=data.get("error_cases", 0),
             start_time=start_time,
             end_time=end_time,
-            duration=data.get('duration', 0.0),
-            log_path=data.get('log_path', ''),
+            duration=data.get("duration", 0.0),
+            log_path=data.get("log_path", ""),
             created_at=created_at,
-            case_name=data.get('case_name', ''),
-            scheduler_name=data.get('scheduler_name', ''),
-            steps=steps
+            case_name=data.get("case_name", ""),
+            scheduler_name=data.get("scheduler_name", ""),
+            steps=steps,
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -690,27 +703,27 @@ class TestReport:
             for_db: 如果为True，则转换为数据库存储格式
         """
         result = {
-            'id': self.id,
-            'scheduler_id': self.scheduler_id,
-            'case_id': self.case_id,
-            'report_name': self.report_name,
-            'status': self.status,
-            'total_cases': self.total_cases,
-            'passed_cases': self.passed_cases,
-            'failed_cases': self.failed_cases,
-            'error_cases': self.error_cases,
-            'start_time': self.start_time,
-            'end_time': self.end_time,
-            'duration': self.duration,
-            'log_path': self.log_path,
-            'created_at': self.created_at
+            "id": self.id,
+            "scheduler_id": self.scheduler_id,
+            "case_id": self.case_id,
+            "report_name": self.report_name,
+            "status": self.status,
+            "total_cases": self.total_cases,
+            "passed_cases": self.passed_cases,
+            "failed_cases": self.failed_cases,
+            "error_cases": self.error_cases,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration": self.duration,
+            "log_path": self.log_path,
+            "created_at": self.created_at,
         }
 
         if not for_db:
             # 添加关联数据
-            result['case_name'] = self.case_name
-            result['scheduler_name'] = self.scheduler_name
-            result['steps'] = [step.to_dict() for step in self.steps]
+            result["case_name"] = self.case_name
+            result["scheduler_name"] = self.scheduler_name
+            result["steps"] = [step.to_dict() for step in self.steps]
 
         return result
 
@@ -719,7 +732,7 @@ class TestReport:
         if not self.report_name.strip():
             return False, "报告名称不能为空"
 
-        if self.status not in ['success', 'failure', 'error', 'running']:
+        if self.status not in ["success", "failure", "error", "running"]:
             return False, f"无效的状态: {self.status}"
 
         if self.total_cases < 0:
@@ -728,7 +741,9 @@ class TestReport:
         if self.passed_cases < 0 or self.failed_cases < 0 or self.error_cases < 0:
             return False, "用例统计数不能为负数"
 
-        if self.total_cases != (self.passed_cases + self.failed_cases + self.error_cases):
+        if self.total_cases != (
+            self.passed_cases + self.failed_cases + self.error_cases
+        ):
             return False, "用例统计数不匹配"
 
         if self.duration < 0:
@@ -739,10 +754,10 @@ class TestReport:
     def get_status_display(self) -> str:
         """获取状态显示名称"""
         status_map = {
-            'success': '成功',
-            'failure': '失败',
-            'error': '错误',
-            'running': '执行中'
+            "success": "成功",
+            "failure": "失败",
+            "error": "错误",
+            "running": "执行中",
         }
         return status_map.get(self.status, self.status)
 
@@ -754,7 +769,7 @@ class TestReport:
 
     def is_completed(self) -> bool:
         """检查是否已完成"""
-        return self.status in ['success', 'failure', 'error']
+        return self.status in ["success", "failure", "error"]
 
     def get_execution_time(self) -> str:
         """获取执行时间字符串"""
@@ -765,7 +780,7 @@ class TestReport:
         else:
             return "未开始"
 
-    def add_step_result(self, step_result: 'TestStepResult'):
+    def add_step_result(self, step_result: "TestStepResult"):
         """添加步骤结果"""
         self.steps.append(step_result)
         # 更新统计信息
@@ -778,7 +793,9 @@ class TestReport:
         # 目前保持为空，由外部服务来设置用例统计信息
         pass
 
-    def update_case_stats(self, total_cases: int, passed_cases: int, failed_cases: int, error_cases: int):
+    def update_case_stats(
+        self, total_cases: int, passed_cases: int, failed_cases: int, error_cases: int
+    ):
         """更新用例统计信息"""
         self.total_cases = total_cases
         self.passed_cases = passed_cases
@@ -787,13 +804,13 @@ class TestReport:
 
         # 更新总体状态
         if self.error_cases > 0:
-            self.status = 'error'
+            self.status = "error"
         elif self.failed_cases > 0:
-            self.status = 'failure'
+            self.status = "failure"
         elif self.passed_cases == self.total_cases:
-            self.status = 'success'
+            self.status = "success"
         else:
-            self.status = 'running'
+            self.status = "running"
 
     def __str__(self) -> str:
         return f"TestReport(id={self.id}, name='{self.report_name}', status='{self.status}')"
@@ -825,75 +842,79 @@ class TestStepResult:
     api_name: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TestStepResult':
+    def from_dict(cls, data: Dict[str, Any]) -> "TestStepResult":
         """从字典创建对象"""
         # 处理JSON字段
-        request_data = data.get('request_data', {})
+        request_data = data.get("request_data", {})
         if isinstance(request_data, str):
             try:
                 request_data = json.loads(request_data) if request_data else {}
             except json.JSONDecodeError:
                 request_data = {}
 
-        response_data = data.get('response_data', {})
+        response_data = data.get("response_data", {})
         if isinstance(response_data, str):
             try:
                 response_data = json.loads(response_data) if response_data else {}
             except json.JSONDecodeError:
                 response_data = {}
 
-        assertions_result = data.get('assertions_result', {})
+        assertions_result = data.get("assertions_result", {})
         if isinstance(assertions_result, str):
             try:
-                assertions_result = json.loads(assertions_result) if assertions_result else {}
+                assertions_result = (
+                    json.loads(assertions_result) if assertions_result else {}
+                )
             except json.JSONDecodeError:
                 assertions_result = {}
 
-        variables_snapshot = data.get('variables_snapshot', {})
+        variables_snapshot = data.get("variables_snapshot", {})
         if isinstance(variables_snapshot, str):
             try:
-                variables_snapshot = json.loads(variables_snapshot) if variables_snapshot else {}
+                variables_snapshot = (
+                    json.loads(variables_snapshot) if variables_snapshot else {}
+                )
             except json.JSONDecodeError:
                 variables_snapshot = {}
 
         # 处理时间字段
-        start_time = data.get('start_time')
+        start_time = data.get("start_time")
         if isinstance(start_time, str):
             try:
-                start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 start_time = None
 
-        end_time = data.get('end_time')
+        end_time = data.get("end_time")
         if isinstance(end_time, str):
             try:
-                end_time = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                end_time = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 end_time = None
 
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
         return cls(
-            id=data.get('id'),
-            report_id=data.get('report_id', 0),
-            step_id=data.get('step_id', 0),
-            step_order=data.get('step_order', 0),
-            status=data.get('status', 'skipped'),
+            id=data.get("id"),
+            report_id=data.get("report_id", 0),
+            step_id=data.get("step_id", 0),
+            step_order=data.get("step_order", 0),
+            status=data.get("status", "skipped"),
             request_data=request_data,
             response_data=response_data,
             assertions_result=assertions_result,
             variables_snapshot=variables_snapshot,
-            error_message=data.get('error_message', ''),
+            error_message=data.get("error_message", ""),
             start_time=start_time,
             end_time=end_time,
-            duration=data.get('duration', 0.0),
+            duration=data.get("duration", 0.0),
             created_at=created_at,
-            api_name=data.get('api_name', '')
+            api_name=data.get("api_name", ""),
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -903,40 +924,45 @@ class TestStepResult:
             for_db: 如果为True，则转换为数据库存储格式（JSON字段转为字符串）
         """
         result = {
-            'id': self.id,
-            'report_id': self.report_id,
-            'step_id': self.step_id,
-            'step_order': self.step_order,
-            'status': self.status,
-            'request_data': self.request_data,
-            'response_data': self.response_data,
-            'assertions_result': self.assertions_result,
-            'variables_snapshot': self.variables_snapshot,
-            'error_message': self.error_message,
-            'start_time': self.start_time,
-            'end_time': self.end_time,
-            'duration': self.duration,
-            'created_at': self.created_at
+            "id": self.id,
+            "report_id": self.report_id,
+            "step_id": self.step_id,
+            "step_order": self.step_order,
+            "status": self.status,
+            "request_data": self.request_data,
+            "response_data": self.response_data,
+            "assertions_result": self.assertions_result,
+            "variables_snapshot": self.variables_snapshot,
+            "error_message": self.error_message,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration": self.duration,
+            "created_at": self.created_at,
         }
 
         if for_db:
             # 将JSON字段转换为字符串
-            json_fields = ['request_data', 'response_data', 'assertions_result', 'variables_snapshot']
+            json_fields = [
+                "request_data",
+                "response_data",
+                "assertions_result",
+                "variables_snapshot",
+            ]
             for field in json_fields:
                 if result[field]:
                     result[field] = json.dumps(result[field], ensure_ascii=False)
                 else:
-                    result[field] = '{}'
+                    result[field] = "{}"
 
         if not for_db:
             # 添加关联数据
-            result['api_name'] = self.api_name
+            result["api_name"] = self.api_name
 
         return result
 
     def validate(self) -> tuple[bool, str]:
         """验证数据有效性"""
-        if self.status not in ['success', 'failure', 'error', 'skipped']:
+        if self.status not in ["success", "failure", "error", "skipped"]:
             return False, f"无效的状态: {self.status}"
 
         if self.duration < 0:
@@ -959,16 +985,16 @@ class TestStepResult:
     def get_status_display(self) -> str:
         """获取状态显示名称"""
         status_map = {
-            'success': '成功',
-            'failure': '失败',
-            'error': '错误',
-            'skipped': '跳过'
+            "success": "成功",
+            "failure": "失败",
+            "error": "错误",
+            "skipped": "跳过",
         }
         return status_map.get(self.status, self.status)
 
     def is_completed(self) -> bool:
         """检查是否已完成"""
-        return self.status in ['success', 'failure', 'error']
+        return self.status in ["success", "failure", "error"]
 
     def get_execution_time(self) -> str:
         """获取执行时间字符串"""
@@ -979,9 +1005,13 @@ class TestStepResult:
         else:
             return "未开始"
 
-    def set_success(self, response_data: Dict[str, Any] = None, assertions_result: Dict[str, Any] = None):
+    def set_success(
+        self,
+        response_data: Dict[str, Any] = None,
+        assertions_result: Dict[str, Any] = None,
+    ):
         """设置为成功状态"""
-        self.status = 'success'
+        self.status = "success"
         self.end_time = datetime.now()
         if response_data:
             self.response_data = response_data
@@ -989,9 +1019,11 @@ class TestStepResult:
             self.assertions_result = assertions_result
         self._calculate_duration()
 
-    def set_failure(self, error_message: str = "", assertions_result: Dict[str, Any] = None):
+    def set_failure(
+        self, error_message: str = "", assertions_result: Dict[str, Any] = None
+    ):
         """设置为失败状态"""
-        self.status = 'failure'
+        self.status = "failure"
         self.end_time = datetime.now()
         self.error_message = error_message
         if assertions_result:
@@ -1000,14 +1032,14 @@ class TestStepResult:
 
     def set_error(self, error_message: str = ""):
         """设置为错误状态"""
-        self.status = 'error'
+        self.status = "error"
         self.end_time = datetime.now()
         self.error_message = error_message
         self._calculate_duration()
 
     def set_skipped(self, reason: str = ""):
         """设置为跳过状态"""
-        self.status = 'skipped'
+        self.status = "skipped"
         self.end_time = datetime.now()
         self.error_message = reason
         self._calculate_duration()
@@ -1044,27 +1076,27 @@ class TestScheduler:
     updated_at: Optional[datetime] = None
 
     # 关联数据（非数据库字段）
-    cases: List['TestCase'] = field(default_factory=list)
+    cases: List["TestCase"] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TestScheduler':
+    def from_dict(cls, data: Dict[str, Any]) -> "TestScheduler":
         """从字典创建对象"""
         # 处理JSON字段
-        case_ids = data.get('case_ids', [])
+        case_ids = data.get("case_ids", [])
         if isinstance(case_ids, str):
             try:
                 case_ids = json.loads(case_ids) if case_ids else []
             except json.JSONDecodeError:
                 case_ids = []
 
-        notify_emails = data.get('notify_emails', [])
+        notify_emails = data.get("notify_emails", [])
         if isinstance(notify_emails, str):
             try:
                 notify_emails = json.loads(notify_emails) if notify_emails else []
             except json.JSONDecodeError:
                 notify_emails = []
 
-        notify_wechat = data.get('notify_wechat', {})
+        notify_wechat = data.get("notify_wechat", {})
         if isinstance(notify_wechat, str):
             try:
                 notify_wechat = json.loads(notify_wechat) if notify_wechat else {}
@@ -1072,54 +1104,54 @@ class TestScheduler:
                 notify_wechat = {}
 
         # 处理时间字段
-        last_run_at = data.get('last_run_at')
+        last_run_at = data.get("last_run_at")
         if isinstance(last_run_at, str):
             try:
-                last_run_at = datetime.fromisoformat(last_run_at.replace('Z', '+00:00'))
+                last_run_at = datetime.fromisoformat(last_run_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 last_run_at = None
 
-        next_run_at = data.get('next_run_at')
+        next_run_at = data.get("next_run_at")
         if isinstance(next_run_at, str):
             try:
-                next_run_at = datetime.fromisoformat(next_run_at.replace('Z', '+00:00'))
+                next_run_at = datetime.fromisoformat(next_run_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 next_run_at = None
 
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
-        updated_at = data.get('updated_at')
+        updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             try:
-                updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 updated_at = None
 
         # 处理关联数据
-        cases_data = data.get('cases', [])
+        cases_data = data.get("cases", [])
         cases = [TestCase.from_dict(case_data) for case_data in cases_data]
 
         return cls(
-            id=data.get('id'),
-            name=data.get('name', ''),
-            description=data.get('description', ''),
-            cron_expression=data.get('cron_expression', ''),
-            enabled=bool(data.get('enabled', True)),
+            id=data.get("id"),
+            name=data.get("name", ""),
+            description=data.get("description", ""),
+            cron_expression=data.get("cron_expression", ""),
+            enabled=bool(data.get("enabled", True)),
             case_ids=case_ids,
             notify_emails=notify_emails,
             notify_wechat=notify_wechat,
             last_run_at=last_run_at,
             next_run_at=next_run_at,
-            project_id=data.get('project_id'),
-            created_by=data.get('created_by', 'admin'),
+            project_id=data.get("project_id"),
+            created_by=data.get("created_by", "admin"),
             created_at=created_at,
             updated_at=updated_at,
-            cases=cases
+            cases=cases,
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -1129,35 +1161,37 @@ class TestScheduler:
             for_db: 如果为True，则转换为数据库存储格式（JSON字段转为字符串）
         """
         result = {
-            'id': self.id,
-            'name': self.name,
-            'description': self.description,
-            'cron_expression': self.cron_expression,
-            'enabled': self.enabled,
-            'case_ids': self.case_ids,
-            'notify_emails': self.notify_emails,
-            'notify_wechat': self.notify_wechat,
-            'last_run_at': self.last_run_at,
-            'next_run_at': self.next_run_at,
-            'project_id': self.project_id,
-            'created_by': self.created_by,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "cron_expression": self.cron_expression,
+            "enabled": self.enabled,
+            "case_ids": self.case_ids,
+            "notify_emails": self.notify_emails,
+            "notify_wechat": self.notify_wechat,
+            "last_run_at": self.last_run_at,
+            "next_run_at": self.next_run_at,
+            "project_id": self.project_id,
+            "created_by": self.created_by,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
         if for_db:
             # 将JSON字段转换为字符串
-            json_fields = ['case_ids', 'notify_emails', 'notify_wechat']
+            json_fields = ["case_ids", "notify_emails", "notify_wechat"]
             for field in json_fields:
                 if result[field]:
                     result[field] = json.dumps(result[field], ensure_ascii=False)
                 else:
-                    result[field] = '[]' if field in ['case_ids', 'notify_emails'] else '{}'
+                    result[field] = (
+                        "[]" if field in ["case_ids", "notify_emails"] else "{}"
+                    )
 
         if not for_db:
             # 添加关联数据
-            result['cases'] = [case.to_dict() for case in self.cases]
-            result['case_count'] = len(self.case_ids)
+            result["cases"] = [case.to_dict() for case in self.cases]
+            result["case_count"] = len(self.case_ids)
 
         return result
 
@@ -1208,7 +1242,9 @@ class TestScheduler:
         return self.next_run_at <= datetime.now()
 
     def __str__(self) -> str:
-        return f"TestScheduler(id={self.id}, name='{self.name}', enabled={self.enabled})"
+        return (
+            f"TestScheduler(id={self.id}, name='{self.name}', enabled={self.enabled})"
+        )
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -1243,16 +1279,16 @@ class TestCase:
         self.global_vars = value
 
     # 关联数据（非数据库字段）
-    steps: List['TestCaseStep'] = field(default_factory=list)
+    steps: List["TestCaseStep"] = field(default_factory=list)
     environment_name: str = ""
     project_name: str = ""
     folder_name: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TestCase':
+    def from_dict(cls, data: Dict[str, Any]) -> "TestCase":
         """从字典创建对象"""
         # 处理JSON字段
-        global_vars = data.get('global_vars', {})
+        global_vars = data.get("global_vars", {})
         if isinstance(global_vars, str):
             try:
                 global_vars = json.loads(global_vars) if global_vars else {}
@@ -1260,42 +1296,42 @@ class TestCase:
                 global_vars = {}
 
         # 处理时间字段
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
-        updated_at = data.get('updated_at')
+        updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             try:
-                updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 updated_at = None
 
         # 处理步骤数据
-        steps_data = data.get('steps', [])
+        steps_data = data.get("steps", [])
         steps = [TestCaseStep.from_dict(step_data) for step_data in steps_data]
 
         return cls(
-            id=data.get('id'),
-            project_id=data.get('project_id', 0),
-            folder_id=data.get('folder_id'),
-            name=data.get('name', ''),
-            description=data.get('description', ''),
-            environment_id=data.get('environment_id'),
+            id=data.get("id"),
+            project_id=data.get("project_id", 0),
+            folder_id=data.get("folder_id"),
+            name=data.get("name", ""),
+            description=data.get("description", ""),
+            environment_id=data.get("environment_id"),
             global_vars=global_vars,
-            enable_encryption=bool(data.get('enable_encryption', False)),
-            encrypt_url=data.get('encrypt_url', ''),
-            decrypt_url=data.get('decrypt_url', ''),
-            created_by=data.get('created_by', 'admin'),
+            enable_encryption=bool(data.get("enable_encryption", False)),
+            encrypt_url=data.get("encrypt_url", ""),
+            decrypt_url=data.get("decrypt_url", ""),
+            created_by=data.get("created_by", "admin"),
             created_at=created_at,
             updated_at=updated_at,
             steps=steps,
-            environment_name=data.get('environment_name', ''),
-            project_name=data.get('project_name', ''),
-            folder_name=data.get('folder_name', '')
+            environment_name=data.get("environment_name", ""),
+            project_name=data.get("project_name", ""),
+            folder_name=data.get("folder_name", ""),
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -1305,35 +1341,37 @@ class TestCase:
             for_db: 如果为True，则转换为数据库存储格式（JSON字段转为字符串）
         """
         result = {
-            'id': self.id,
-            'project_id': self.project_id,
-            'folder_id': self.folder_id,
-            'name': self.name,
-            'description': self.description,
-            'environment_id': self.environment_id,
-            'global_vars': self.global_vars,
-            'enable_encryption': self.enable_encryption,
-            'encrypt_url': self.encrypt_url,
-            'decrypt_url': self.decrypt_url,
-            'created_by': self.created_by,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            "id": self.id,
+            "project_id": self.project_id,
+            "folder_id": self.folder_id,
+            "name": self.name,
+            "description": self.description,
+            "environment_id": self.environment_id,
+            "global_vars": self.global_vars,
+            "enable_encryption": self.enable_encryption,
+            "encrypt_url": self.encrypt_url,
+            "decrypt_url": self.decrypt_url,
+            "created_by": self.created_by,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
         if for_db:
             # 将JSON字段转换为字符串
-            if result['global_vars']:
-                result['global_vars'] = json.dumps(result['global_vars'], ensure_ascii=False)
+            if result["global_vars"]:
+                result["global_vars"] = json.dumps(
+                    result["global_vars"], ensure_ascii=False
+                )
             else:
-                result['global_vars'] = '{}'
+                result["global_vars"] = "{}"
 
         if not for_db:
             # 添加关联数据
-            result['steps'] = [step.to_dict() for step in self.steps]
-            result['environment_name'] = self.environment_name
-            result['project_name'] = self.project_name
-            result['folder_name'] = self.folder_name
-            result['step_count'] = len(self.steps)
+            result["steps"] = [step.to_dict() for step in self.steps]
+            result["environment_name"] = self.environment_name
+            result["project_name"] = self.project_name
+            result["folder_name"] = self.folder_name
+            result["step_count"] = len(self.steps)
 
         return result
 
@@ -1356,7 +1394,7 @@ class TestCase:
 
         return True, ""
 
-    def add_step(self, step: 'TestCaseStep'):
+    def add_step(self, step: "TestCaseStep"):
         """添加测试步骤"""
         step.step_order = len(self.steps)
         self.steps.append(step)
@@ -1372,7 +1410,7 @@ class TestCase:
         """获取步骤数量"""
         return len(self.steps)
 
-    def get_enabled_steps(self) -> List['TestCaseStep']:
+    def get_enabled_steps(self) -> List["TestCaseStep"]:
         """获取启用的步骤"""
         return [step for step in self.steps if step.enabled]
 
@@ -1385,7 +1423,7 @@ class TestCase:
             for i, step in enumerate(self.steps):
                 step.step_order = i
 
-    def clone(self) -> 'TestCase':
+    def clone(self) -> "TestCase":
         """创建副本"""
         return TestCase(
             id=None,  # 新副本没有ID
@@ -1398,7 +1436,7 @@ class TestCase:
             created_by=self.created_by,
             created_at=None,
             updated_at=None,
-            steps=[step.clone() for step in self.steps]
+            steps=[step.clone() for step in self.steps],
         )
 
     def __str__(self) -> str:
@@ -1432,31 +1470,31 @@ class TestCaseStep:
     api_url_path: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TestCaseStep':
+    def from_dict(cls, data: Dict[str, Any]) -> "TestCaseStep":
         """从字典创建对象"""
         # 处理JSON字段
-        pre_processing = data.get('pre_processing', {})
+        pre_processing = data.get("pre_processing", {})
         if isinstance(pre_processing, str):
             try:
                 pre_processing = json.loads(pre_processing) if pre_processing else {}
             except json.JSONDecodeError:
                 pre_processing = {}
 
-        post_processing = data.get('post_processing', {})
+        post_processing = data.get("post_processing", {})
         if isinstance(post_processing, str):
             try:
                 post_processing = json.loads(post_processing) if post_processing else {}
             except json.JSONDecodeError:
                 post_processing = {}
 
-        assertions = data.get('assertions', {})
+        assertions = data.get("assertions", {})
         if isinstance(assertions, str):
             try:
                 assertions = json.loads(assertions) if assertions else {}
             except json.JSONDecodeError:
                 assertions = {}
 
-        variables = data.get('variables', {})
+        variables = data.get("variables", {})
         if isinstance(variables, str):
             try:
                 variables = json.loads(variables) if variables else {}
@@ -1464,37 +1502,41 @@ class TestCaseStep:
                 variables = {}
 
         # 处理时间字段
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             try:
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 created_at = None
 
-        updated_at = data.get('updated_at')
+        updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             try:
-                updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 updated_at = None
 
         return cls(
-            id=data.get('id'),
-            case_id=data.get('case_id', 0),
-            api_template_id=data.get('api_template_id'),
-            step_order=data.get('step_order', 0),
-            name=data.get('name', ''),
-            enabled=bool(data.get('enabled', True)),
-            enable_encryption=bool(data.get('enable_encryption')) if data.get('enable_encryption') is not None else None,
+            id=data.get("id"),
+            case_id=data.get("case_id", 0),
+            api_template_id=data.get("api_template_id"),
+            step_order=data.get("step_order", 0),
+            name=data.get("name", ""),
+            enabled=bool(data.get("enabled", True)),
+            enable_encryption=(
+                bool(data.get("enable_encryption"))
+                if data.get("enable_encryption") is not None
+                else None
+            ),
             pre_processing=pre_processing,
             post_processing=post_processing,
             assertions=assertions,
             variables=variables,
             created_at=created_at,
             updated_at=updated_at,
-            api_name=data.get('api_name', ''),
-            api_method=data.get('api_method', ''),
-            api_url_path=data.get('api_url_path', '')
+            api_name=data.get("api_name", ""),
+            api_method=data.get("api_method", ""),
+            api_url_path=data.get("api_url_path", ""),
         )
 
     def to_dict(self, for_db: bool = False) -> Dict[str, Any]:
@@ -1504,35 +1546,40 @@ class TestCaseStep:
             for_db: 如果为True，则转换为数据库存储格式（JSON字段转为字符串）
         """
         result = {
-            'id': self.id,
-            'case_id': self.case_id,
-            'api_template_id': self.api_template_id,
-            'step_order': self.step_order,
-            'name': self.name,
-            'enabled': self.enabled,
-            'enable_encryption': self.enable_encryption,
-            'pre_processing': self.pre_processing,
-            'post_processing': self.post_processing,
-            'assertions': self.assertions,
-            'variables': self.variables,
-            'created_at': self.created_at,
-            'updated_at': self.updated_at
+            "id": self.id,
+            "case_id": self.case_id,
+            "api_template_id": self.api_template_id,
+            "step_order": self.step_order,
+            "name": self.name,
+            "enabled": self.enabled,
+            "enable_encryption": self.enable_encryption,
+            "pre_processing": self.pre_processing,
+            "post_processing": self.post_processing,
+            "assertions": self.assertions,
+            "variables": self.variables,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
         if for_db:
             # 将JSON字段转换为字符串
-            json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
+            json_fields = [
+                "pre_processing",
+                "post_processing",
+                "assertions",
+                "variables",
+            ]
             for field in json_fields:
                 if result[field]:
                     result[field] = json.dumps(result[field], ensure_ascii=False)
                 else:
-                    result[field] = '{}'
+                    result[field] = "{}"
 
         if not for_db:
             # 添加关联数据
-            result['api_name'] = self.api_name
-            result['api_method'] = self.api_method
-            result['api_url_path'] = self.api_url_path
+            result["api_name"] = self.api_name
+            result["api_method"] = self.api_method
+            result["api_url_path"] = self.api_url_path
 
         return result
 
@@ -1578,51 +1625,59 @@ class TestCaseStep:
 
     def update_from_dict(self, data: Dict[str, Any]):
         """从字典更新对象属性"""
-        if 'name' in data:
-            self.name = data['name']
-        if 'enabled' in data:
-            self.enabled = bool(data['enabled'])
-        if 'enable_encryption' in data:
-            self.enable_encryption = bool(data['enable_encryption']) if data['enable_encryption'] is not None else None
-        if 'pre_processing' in data:
-            pre_processing = data['pre_processing']
+        if "name" in data:
+            self.name = data["name"]
+        if "enabled" in data:
+            self.enabled = bool(data["enabled"])
+        if "enable_encryption" in data:
+            self.enable_encryption = (
+                bool(data["enable_encryption"])
+                if data["enable_encryption"] is not None
+                else None
+            )
+        if "pre_processing" in data:
+            pre_processing = data["pre_processing"]
             if isinstance(pre_processing, str):
                 try:
-                    pre_processing = json.loads(pre_processing) if pre_processing else {}
+                    pre_processing = (
+                        json.loads(pre_processing) if pre_processing else {}
+                    )
                 except json.JSONDecodeError:
                     pre_processing = {}
             self.pre_processing = pre_processing
-        if 'post_processing' in data:
-            post_processing = data['post_processing']
+        if "post_processing" in data:
+            post_processing = data["post_processing"]
             if isinstance(post_processing, str):
                 try:
-                    post_processing = json.loads(post_processing) if post_processing else {}
+                    post_processing = (
+                        json.loads(post_processing) if post_processing else {}
+                    )
                 except json.JSONDecodeError:
                     post_processing = {}
             self.post_processing = post_processing
-        if 'assertions' in data:
-            assertions = data['assertions']
+        if "assertions" in data:
+            assertions = data["assertions"]
             if isinstance(assertions, str):
                 try:
                     assertions = json.loads(assertions) if assertions else {}
                 except json.JSONDecodeError:
                     assertions = {}
             self.assertions = assertions
-        if 'variables' in data:
-            variables = data['variables']
+        if "variables" in data:
+            variables = data["variables"]
             if isinstance(variables, str):
                 try:
                     variables = json.loads(variables) if variables else {}
                 except json.JSONDecodeError:
                     variables = {}
             self.variables = variables
-        if 'api_template' in data:
-            self.api_template_id = data['api_template'].get('id')
-            self.api_name = data['api_template'].get('name', '')
-            self.api_method = data['api_template'].get('method', '')
-            self.api_url_path = data['api_template'].get('url_path', '')
+        if "api_template" in data:
+            self.api_template_id = data["api_template"].get("id")
+            self.api_name = data["api_template"].get("name", "")
+            self.api_method = data["api_template"].get("method", "")
+            self.api_url_path = data["api_template"].get("url_path", "")
 
-    def clone(self) -> 'TestCaseStep':
+    def clone(self) -> "TestCaseStep":
         """创建副本"""
         return TestCaseStep(
             id=None,  # 新副本没有ID
@@ -1637,7 +1692,7 @@ class TestCaseStep:
             assertions=self.assertions.copy(),
             variables=self.variables.copy(),
             created_at=None,
-            updated_at=None
+            updated_at=None,
         )
 
     def __str__(self) -> str:

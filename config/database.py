@@ -37,11 +37,11 @@ import re
 
 # 数据库配置
 DATABASE_CONFIG = {
-    'host': '192.168.0.73',
-    'port': 3306,
-    'user': 'root',
-    'password': 'root',
-    'database': 'test_platform'
+    "host": "192.168.0.73",
+    "port": 3306,
+    "user": "root",
+    "password": "root",
+    "database": "test_platform",
 }
 
 # =============================================================================
@@ -50,7 +50,7 @@ DATABASE_CONFIG = {
 
 # 完整的数据库表结构定义
 DB_TABLES = {
-    'business_groups': '''
+    "business_groups": """
         CREATE TABLE IF NOT EXISTS business_groups (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL UNIQUE,
@@ -59,9 +59,8 @@ DB_TABLES = {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'projects': '''
+    """,
+    "projects": """
         CREATE TABLE IF NOT EXISTS projects (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
@@ -74,9 +73,8 @@ DB_TABLES = {
             INDEX idx_business_group_id (business_group_id),
             INDEX idx_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'api_folders': '''
+    """,
+    "api_folders": """
         CREATE TABLE IF NOT EXISTS api_folders (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
@@ -92,9 +90,8 @@ DB_TABLES = {
             INDEX idx_parent_id (parent_id),
             INDEX idx_sort_order (sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'api_templates': '''
+    """,
+    "api_templates": """
         CREATE TABLE IF NOT EXISTS api_templates (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
@@ -118,9 +115,8 @@ DB_TABLES = {
             INDEX idx_name (name),
             INDEX idx_sort_order (sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'case_folders': '''
+    """,
+    "case_folders": """
         CREATE TABLE IF NOT EXISTS case_folders (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
@@ -136,9 +132,8 @@ DB_TABLES = {
             INDEX idx_parent_id (parent_id),
             INDEX idx_sort_order (sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'test_cases': '''
+    """,
+    "test_cases": """
         CREATE TABLE IF NOT EXISTS test_cases (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
@@ -161,9 +156,8 @@ DB_TABLES = {
             INDEX idx_name (name),
             INDEX idx_sort_order (sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'test_case_steps': '''
+    """,
+    "test_case_steps": """
         CREATE TABLE IF NOT EXISTS test_case_steps (
             id INT AUTO_INCREMENT PRIMARY KEY,
             case_id INT NOT NULL,
@@ -190,9 +184,8 @@ DB_TABLES = {
             INDEX idx_api_template_id (api_template_id),
             INDEX idx_step_order (step_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'test_schedulers': '''
+    """,
+    "test_schedulers": """
         CREATE TABLE IF NOT EXISTS test_schedulers (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
@@ -215,9 +208,8 @@ DB_TABLES = {
             INDEX idx_next_run_at (next_run_at),
             INDEX idx_project_id (project_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'test_reports': '''
+    """,
+    "test_reports": """
         CREATE TABLE IF NOT EXISTS test_reports (
             id INT AUTO_INCREMENT PRIMARY KEY,
             scheduler_id INT,
@@ -250,9 +242,8 @@ DB_TABLES = {
             INDEX idx_start_time (start_time DESC),
             INDEX idx_end_time (end_time DESC)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'test_step_results': '''
+    """,
+    "test_step_results": """
         CREATE TABLE IF NOT EXISTS test_step_results (
             id INT AUTO_INCREMENT PRIMARY KEY,
             scheduler_id INT COMMENT '调度任务ID',
@@ -279,9 +270,8 @@ DB_TABLES = {
             INDEX idx_step_id (step_id),
             INDEX idx_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'global_tools': '''
+    """,
+    "global_tools": """
         CREATE TABLE IF NOT EXISTS global_tools (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL UNIQUE,
@@ -295,9 +285,8 @@ DB_TABLES = {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'global_variables': '''
+    """,
+    "global_variables": """
         CREATE TABLE IF NOT EXISTS global_variables (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL DEFAULT 0,
@@ -312,9 +301,8 @@ DB_TABLES = {
             INDEX idx_project_id (project_id),
             INDEX idx_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'environments': '''
+    """,
+    "environments": """
         CREATE TABLE IF NOT EXISTS environments (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
@@ -330,9 +318,8 @@ DB_TABLES = {
             INDEX idx_project_id (project_id),
             INDEX idx_name (name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'distributed_locks': '''
+    """,
+    "distributed_locks": """
         CREATE TABLE IF NOT EXISTS distributed_locks (
             id INT AUTO_INCREMENT PRIMARY KEY,
             lock_key VARCHAR(100) NOT NULL UNIQUE,
@@ -342,9 +329,8 @@ DB_TABLES = {
             INDEX idx_lock_key (lock_key),
             INDEX idx_expires_at (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'user_settings': '''
+    """,
+    "user_settings": """
         CREATE TABLE IF NOT EXISTS user_settings (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
@@ -356,13 +342,11 @@ DB_TABLES = {
             INDEX idx_user_id (user_id),
             INDEX idx_setting_key (setting_key)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
+    """,
     # =========================================================================
     # 用户认证相关表
     # =========================================================================
-    
-    'users': '''
+    "users": """
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             username VARCHAR(50) NOT NULL UNIQUE,
@@ -378,9 +362,8 @@ DB_TABLES = {
             INDEX idx_business_line (business_line),
             INDEX idx_is_admin (is_admin)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'email_verification_codes': '''
+    """,
+    "email_verification_codes": """
         CREATE TABLE IF NOT EXISTS email_verification_codes (
             id INT AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(100) NOT NULL,
@@ -392,9 +375,8 @@ DB_TABLES = {
             INDEX idx_expires_at (expires_at),
             INDEX idx_used (used)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'user_sessions': '''
+    """,
+    "user_sessions": """
         CREATE TABLE IF NOT EXISTS user_sessions (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
@@ -406,9 +388,8 @@ DB_TABLES = {
             INDEX idx_session_token (session_token),
             INDEX idx_expires_at (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'tool_cards': '''
+    """,
+    "tool_cards": """
         CREATE TABLE IF NOT EXISTS tool_cards (
             id INT AUTO_INCREMENT PRIMARY KEY,
             project_id INT NOT NULL,
@@ -427,9 +408,8 @@ DB_TABLES = {
             INDEX idx_card_type (card_type),
             INDEX idx_sort_order (sort_order)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'system_config': '''
+    """,
+    "system_config": """
         CREATE TABLE IF NOT EXISTS system_config (
             id INT AUTO_INCREMENT PRIMARY KEY,
             config_key VARCHAR(100) NOT NULL UNIQUE COMMENT '配置键名',
@@ -440,9 +420,8 @@ DB_TABLES = {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_config_key (config_key)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ''',
-
-    'database_configs': '''
+    """,
+    "database_configs": """
         CREATE TABLE IF NOT EXISTS database_configs (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL UNIQUE COMMENT '配置名称',
@@ -462,12 +441,13 @@ DB_TABLES = {
             INDEX idx_is_default (is_default),
             INDEX idx_enabled (enabled)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    '''
+    """,
 }
 
 # =============================================================================
 # 数据库连接管理类
 # =============================================================================
+
 
 class JSONEncoder(json.JSONEncoder):
     """自定义JSON编码器，处理datetime对象"""
@@ -490,42 +470,42 @@ class Database:
         """获取数据库连接（带重连机制）"""
         try:
             conn = pymysql.connect(
-                host=self.config['host'],
-                port=self.config['port'],
-                user=self.config['user'],
-                password=self.config['password'],
-                database=self.config['database'],
-                charset='utf8mb4',
+                host=self.config["host"],
+                port=self.config["port"],
+                user=self.config["user"],
+                password=self.config["password"],
+                database=self.config["database"],
+                charset="utf8mb4",
                 cursorclass=DictCursor,
                 connect_timeout=30,  # 连接超时30秒
-                read_timeout=60,     # 读取超时60秒
-                write_timeout=60,    # 写入超时60秒
-                autocommit=False     # 关闭自动提交，手动控制事务
+                read_timeout=60,  # 读取超时60秒
+                write_timeout=60,  # 写入超时60秒
+                autocommit=False,  # 关闭自动提交，手动控制事务
             )
-            
+
             # 测试连接是否有效
             with conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
-            
+
             return conn
         except pymysql.Error as e:
             print(f"数据库连接失败: {e}")
             # 等待1秒后重试
             time.sleep(1)
-            
+
             # 重试连接
             return pymysql.connect(
-                host=self.config['host'],
-                port=self.config['port'],
-                user=self.config['user'],
-                password=self.config['password'],
-                database=self.config['database'],
-                charset='utf8mb4',
+                host=self.config["host"],
+                port=self.config["port"],
+                user=self.config["user"],
+                password=self.config["password"],
+                database=self.config["database"],
+                charset="utf8mb4",
                 cursorclass=DictCursor,
                 connect_timeout=30,
                 read_timeout=60,
                 write_timeout=60,
-                autocommit=False
+                autocommit=False,
             )
 
     def init_database(self):
@@ -546,75 +526,74 @@ class Database:
             print(f"数据库初始化失败: {e}")
             raise e
 
+
 # =============================================================================
 # 表结构解析器
 # =============================================================================
 
+
 class TableStructureParser:
     """表结构解析器 - 解析CREATE TABLE语句中的字段和索引信息"""
-    
+
     @staticmethod
     def parse_create_table_sql(create_sql: str) -> Dict[str, Any]:
         """
         解析CREATE TABLE语句，提取字段和索引信息
-        
+
         Args:
             create_sql: CREATE TABLE语句
-            
+
         Returns:
             Dict包含字段和索引信息
         """
-        result = {
-            'fields': {},
-            'indexes': {},
-            'primary_key': None,
-            'foreign_keys': {}
-        }
-        
+        result = {"fields": {}, "indexes": {}, "primary_key": None, "foreign_keys": {}}
+
         # 提取表定义部分（去掉CREATE TABLE IF NOT EXISTS和表名）
         sql_lower = create_sql.lower()
-        start_idx = sql_lower.find('(')
-        end_idx = sql_lower.rfind(')')
-        
+        start_idx = sql_lower.find("(")
+        end_idx = sql_lower.rfind(")")
+
         if start_idx == -1 or end_idx == -1:
             return result
-            
-        table_def = create_sql[start_idx + 1:end_idx].strip()
-        
+
+        table_def = create_sql[start_idx + 1 : end_idx].strip()
+
         # 按逗号分割字段和约束定义
         lines = []
         current_line = ""
         paren_count = 0
-        
+
         for char in table_def:
-            if char == '(':
+            if char == "(":
                 paren_count += 1
-            elif char == ')':
+            elif char == ")":
                 paren_count -= 1
-            
-            if char == ',' and paren_count == 0:
+
+            if char == "," and paren_count == 0:
                 lines.append(current_line.strip())
                 current_line = ""
             else:
                 current_line += char
-        
+
         if current_line.strip():
             lines.append(current_line.strip())
-        
+
         # 解析每个定义行
         for line in lines:
             line_lower = line.lower().strip()
-            
+
             # 解析字段定义
-            if line_lower.startswith(('primary key', 'foreign key', 'unique key', 'index', 'key')):
+            if line_lower.startswith(
+                ("primary key", "foreign key", "unique key", "index", "key")
+            ):
                 # 解析约束和索引
                 TableStructureParser._parse_constraint(line, result)
             else:
                 # 解析字段定义
                 TableStructureParser._parse_field(line, result)
-        
+
         return result
-    
+
     @staticmethod
     def _parse_field(line: str, result: Dict[str, Any]):
         """解析字段定义"""
@@ -622,66 +601,73 @@ class TableStructureParser:
         parts = line.strip().split()
         if not parts:
             return
-            
-        field_name = parts[0].strip('`')
-        
+
+        field_name = parts[0].strip("`")
+
         # 检查是否是主键
-        if 'primary key' in line.lower():
-            result['primary_key'] = field_name
+        if "primary key" in line.lower():
+            result["primary_key"] = field_name
             return
-        
+
         # 存储字段定义
-        result['fields'][field_name] = line.strip()
-    
+        result["fields"][field_name] = line.strip()
+
     @staticmethod
     def _parse_constraint(line: str, result: Dict[str, Any]):
         """解析约束和索引定义"""
         line_lower = line.lower()
-        
+
         # 解析主键
-        if line_lower.startswith('primary key'):
+        if line_lower.startswith("primary key"):
             # 提取主键字段名
-            match = re.search(r'\(\s*`?(\w+)`?\s*\)', line)
+            match = re.search(r"\(\s*`?(\w+)`?\s*\)", line)
             if match:
-                result['primary_key'] = match.group(1)
-        
+                result["primary_key"] = match.group(1)
+
         # 解析索引
-        elif line_lower.startswith(('index', 'key', 'unique key')):
+        elif line_lower.startswith(("index", "key", "unique key")):
             # 提取索引名和字段
-            if line_lower.startswith('unique key'):
+            if line_lower.startswith("unique key"):
                 # UNIQUE KEY uk_name (field)
-                match = re.search(r'unique\s+key\s+`?(\w+)`?\s*\(\s*`?(\w+)`?\s*\)', line_lower)
+                match = re.search(
+                    r"unique\s+key\s+`?(\w+)`?\s*\(\s*`?(\w+)`?\s*\)", line_lower
+                )
                 if match:
                     index_name = match.group(1)
                     field_name = match.group(2)
-                    result['indexes'][index_name] = {
-                        'type': 'UNIQUE',
-                        'fields': [field_name],
-                        'definition': line.strip()
+                    result["indexes"][index_name] = {
+                        "type": "UNIQUE",
+                        "fields": [field_name],
+                        "definition": line.strip(),
                     }
-            elif line_lower.startswith(('index', 'key')):
+            elif line_lower.startswith(("index", "key")):
                 # INDEX idx_name (field) 或 KEY idx_name (field)
-                match = re.search(r'(?:index|key)\s+`?(\w+)`?\s*\(\s*`?(\w+)`?\s*\)', line_lower)
+                match = re.search(
+                    r"(?:index|key)\s+`?(\w+)`?\s*\(\s*`?(\w+)`?\s*\)", line_lower
+                )
                 if match:
                     index_name = match.group(1)
                     field_name = match.group(2)
-                    result['indexes'][index_name] = {
-                        'type': 'INDEX',
-                        'fields': [field_name],
-                        'definition': line.strip()
+                    result["indexes"][index_name] = {
+                        "type": "INDEX",
+                        "fields": [field_name],
+                        "definition": line.strip(),
                     }
-        
+
         # 解析外键
-        elif line_lower.startswith('foreign key'):
-            match = re.search(r'foreign\s+key\s*\(\s*`?(\w+)`?\s*\)\s*references\s+`?(\w+)`?\s*\(\s*`?(\w+)`?\s*\)', line_lower)
+        elif line_lower.startswith("foreign key"):
+            match = re.search(
+                r"foreign\s+key\s*\(\s*`?(\w+)`?\s*\)\s*references\s+`?(\w+)`?\s*\(\s*`?(\w+)`?\s*\)",
+                line_lower,
+            )
             if match:
                 field_name = match.group(1)
                 ref_table = match.group(2)
                 ref_field = match.group(3)
-                result['foreign_keys'][field_name] = {
-                    'reference_table': ref_table,
-                    'reference_field': ref_field,
-                    'definition': line.strip()
+                result["foreign_keys"][field_name] = {
+                    "reference_table": ref_table,
+                    "reference_field": ref_field,
+                    "definition": line.strip(),
                 }
 
 
@@ -689,166 +675,188 @@ class TableStructureParser:
 # 表结构同步器
 # =============================================================================
 
+
 class TableStructureSynchronizer:
     """表结构同步器 - 比对代码和数据库中的表结构并生成同步DDL"""
-    
+
     def __init__(self, database: Database):
         self.db = database
         self.parser = TableStructureParser()
-    
-    def sync_table_structure(self, table_name: str, code_structure: Dict[str, Any]) -> List[str]:
+
+    def sync_table_structure(
+        self, table_name: str, code_structure: Dict[str, Any]
+    ) -> List[str]:
         """
         同步单个表的结构
-        
+
         Args:
             table_name: 表名
             code_structure: 代码中定义的表结构
-            
+
         Returns:
             需要执行的DDL语句列表
         """
         ddl_statements = []
-        
+
         # 获取数据库中的实际表结构
         db_structure = self._get_database_table_structure(table_name)
-        
+
         if not db_structure:
             # 表不存在，直接创建
             ddl_statements.append(DB_TABLES[table_name])
             return ddl_statements
-        
+
         # 比对字段
         field_ddl = self._compare_fields(table_name, code_structure, db_structure)
         ddl_statements.extend(field_ddl)
-        
+
         # 比对索引
         index_ddl = self._compare_indexes(table_name, code_structure, db_structure)
         ddl_statements.extend(index_ddl)
-        
+
         return ddl_statements
-    
+
     def _get_database_table_structure(self, table_name: str) -> Dict[str, Any]:
         """获取数据库中表的实际结构"""
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 获取字段信息
-                    cursor.execute(f"""
+                    cursor.execute(
+                        f"""
                         SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, 
                                EXTRA, COLUMN_COMMENT
                         FROM INFORMATION_SCHEMA.COLUMNS 
                         WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
                         ORDER BY ORDINAL_POSITION
-                    """, (self.db.config['database'], table_name))
-                    
+                    """,
+                        (self.db.config["database"], table_name),
+                    )
+
                     fields = {}
                     for row in cursor.fetchall():
-                        field_name = row['COLUMN_NAME']
+                        field_name = row["COLUMN_NAME"]
                         fields[field_name] = {
-                            'type': row['COLUMN_TYPE'],
-                            'nullable': row['IS_NULLABLE'] == 'YES',
-                            'default': row['COLUMN_DEFAULT'],
-                            'extra': row['EXTRA'],
-                            'comment': row['COLUMN_COMMENT']
+                            "type": row["COLUMN_TYPE"],
+                            "nullable": row["IS_NULLABLE"] == "YES",
+                            "default": row["COLUMN_DEFAULT"],
+                            "extra": row["EXTRA"],
+                            "comment": row["COLUMN_COMMENT"],
                         }
-                    
+
                     # 获取索引信息
-                    cursor.execute(f"""
+                    cursor.execute(
+                        f"""
                         SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE, INDEX_TYPE
                         FROM INFORMATION_SCHEMA.STATISTICS 
                         WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
                         ORDER BY INDEX_NAME, SEQ_IN_INDEX
-                    """, (self.db.config['database'], table_name))
-                    
+                    """,
+                        (self.db.config["database"], table_name),
+                    )
+
                     indexes = {}
                     for row in cursor.fetchall():
-                        index_name = row['INDEX_NAME']
-                        if index_name == 'PRIMARY':
+                        index_name = row["INDEX_NAME"]
+                        if index_name == "PRIMARY":
                             continue
-                            
+
                         if index_name not in indexes:
                             indexes[index_name] = {
-                                'fields': [],
-                                'unique': row['NON_UNIQUE'] == 0,
-                                'type': row['INDEX_TYPE']
+                                "fields": [],
+                                "unique": row["NON_UNIQUE"] == 0,
+                                "type": row["INDEX_TYPE"],
                             }
-                        
-                        indexes[index_name]['fields'].append(row['COLUMN_NAME'])
-                    
-                    return {
-                        'fields': fields,
-                        'indexes': indexes
-                    }
-        
+
+                        indexes[index_name]["fields"].append(row["COLUMN_NAME"])
+
+                    return {"fields": fields, "indexes": indexes}
+
         except Exception as e:
             print(f"获取表 {table_name} 结构失败: {e}")
             return None
-    
-    def _compare_fields(self, table_name: str, code_structure: Dict[str, Any], db_structure: Dict[str, Any]) -> List[str]:
+
+    def _compare_fields(
+        self,
+        table_name: str,
+        code_structure: Dict[str, Any],
+        db_structure: Dict[str, Any],
+    ) -> List[str]:
         """比对字段并生成DDL"""
         ddl_statements = []
-        code_fields = set(code_structure['fields'].keys())
-        db_fields = set(db_structure['fields'].keys())
-        
+        code_fields = set(code_structure["fields"].keys())
+        db_fields = set(db_structure["fields"].keys())
+
         # 找出需要添加的字段（代码中有但数据库中没有）
         fields_to_add = code_fields - db_fields
         for field_name in fields_to_add:
-            field_def = code_structure['fields'][field_name]
+            field_def = code_structure["fields"][field_name]
             ddl = f"ALTER TABLE {table_name} ADD COLUMN {field_def}"
             ddl_statements.append(ddl)
-        
+
         # 找出需要删除的字段（数据库中有但代码中没有）
         fields_to_drop = db_fields - code_fields
         for field_name in fields_to_drop:
             # 跳过主键字段
-            if field_name == code_structure.get('primary_key'):
+            if field_name == code_structure.get("primary_key"):
                 continue
             ddl = f"ALTER TABLE {table_name} DROP COLUMN {field_name}"
             ddl_statements.append(ddl)
-        
+
         # 找出需要修改的字段（字段定义不一致）
         common_fields = code_fields & db_fields
         for field_name in common_fields:
             # 这里可以添加更详细的字段定义比对逻辑
             # 暂时只处理字段存在性，不处理类型变更
             pass
-        
+
         return ddl_statements
-    
-    def _compare_indexes(self, table_name: str, code_structure: Dict[str, Any], db_structure: Dict[str, Any]) -> List[str]:
+
+    def _compare_indexes(
+        self,
+        table_name: str,
+        code_structure: Dict[str, Any],
+        db_structure: Dict[str, Any],
+    ) -> List[str]:
         """比对索引并生成DDL"""
         ddl_statements = []
-        code_indexes = set(code_structure['indexes'].keys())
-        db_indexes = set(db_structure['indexes'].keys())
-        
+        code_indexes = set(code_structure["indexes"].keys())
+        db_indexes = set(db_structure["indexes"].keys())
+
         # 找出需要删除的索引（数据库中有但代码中没有）
         indexes_to_drop = db_indexes - code_indexes
         for index_name in indexes_to_drop:
             ddl = f"ALTER TABLE {table_name} DROP INDEX {index_name}"
             ddl_statements.append(ddl)
-        
+
         # 找出需要添加的索引（代码中有但数据库中没有）
         indexes_to_add = code_indexes - db_indexes
         for index_name in indexes_to_add:
-            index_def = code_structure['indexes'][index_name]
+            index_def = code_structure["indexes"][index_name]
             ddl = f"ALTER TABLE {table_name} ADD {index_def['definition']}"
             ddl_statements.append(ddl)
-        
+
         # 找出需要重建的索引（索引定义不一致）
         common_indexes = code_indexes & db_indexes
         for index_name in common_indexes:
-            code_index = code_structure['indexes'][index_name]
-            db_index = db_structure['indexes'][index_name]
-            
+            code_index = code_structure["indexes"][index_name]
+            db_index = db_structure["indexes"][index_name]
+
             # 检查索引字段是否一致
-            code_fields = set(code_index['fields'])
-            db_fields = set(db_index['fields'])
-            
-            if code_fields != db_fields or code_index['type'] != ('UNIQUE' if db_index['unique'] else 'INDEX'):
+            code_fields = set(code_index["fields"])
+            db_fields = set(db_index["fields"])
+
+            if code_fields != db_fields or code_index["type"] != (
+                "UNIQUE" if db_index["unique"] else "INDEX"
+            ):
                 # 先删除再添加
-                ddl_statements.append(f"ALTER TABLE {table_name} DROP INDEX {index_name}")
-                ddl_statements.append(f"ALTER TABLE {table_name} ADD {code_index['definition']}")
-        
+                ddl_statements.append(
+                    f"ALTER TABLE {table_name} DROP INDEX {index_name}"
+                )
+                ddl_statements.append(
+                    f"ALTER TABLE {table_name} ADD {code_index['definition']}"
+                )
+
         return ddl_statements
 
 
@@ -856,32 +864,35 @@ class TableStructureSynchronizer:
 # 数据库部署功能
 # =============================================================================
 
+
 def create_database():
     """创建数据库"""
     # 复制配置但不指定数据库名，用于连接到MySQL服务器
     config_without_db = DATABASE_CONFIG.copy()
-    database_name = config_without_db.pop('database')
-    
+    database_name = config_without_db.pop("database")
+
     try:
         # 连接到MySQL服务器（不指定数据库）
         connection = pymysql.connect(**config_without_db)
-        
+
         with connection.cursor() as cursor:
             # 创建数据库
-            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            cursor.execute(
+                f"CREATE DATABASE IF NOT EXISTS {database_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
             print(f"数据库 {database_name} 创建成功")
-            
+
             # 显示所有数据库
             cursor.execute("SHOW DATABASES")
             databases = cursor.fetchall()
             print("当前所有数据库:")
             for db in databases:
                 print(f"  - {db[0]}")
-        
+
         connection.commit()
         connection.close()
         print("数据库创建完成")
-        
+
     except Exception as e:
         print(f"创建数据库失败: {e}")
         raise e
@@ -892,10 +903,10 @@ def create_tables():
     try:
         # 连接到数据库
         connection = pymysql.connect(**DATABASE_CONFIG)
-        
+
         with connection.cursor() as cursor:
             print("开始创建数据库表...")
-            
+
             # 创建所有表
             for table_name, create_sql in DB_TABLES.items():
                 try:
@@ -903,37 +914,42 @@ def create_tables():
                     print(f"✓ {table_name}表创建成功")
                 except Exception as e:
                     print(f"❌ 创建{table_name}表失败: {e}")
-            
+
             # 插入默认的admin用户
             print("\n开始插入默认admin用户...")
             cursor.execute("SELECT id FROM users WHERE username = 'admin'")
             existing_admin = cursor.fetchone()
-            
+
             if existing_admin:
                 print("⚠ admin用户已存在，跳过插入")
             else:
                 # 生成admin密码的MD5哈希
                 password = "admin"
-                password_hash = hashlib.md5(password.encode('utf-8')).hexdigest()
-                
+                password_hash = hashlib.md5(password.encode("utf-8")).hexdigest()
+
                 # 插入admin用户
                 sql = """
                     INSERT INTO users (username, password_hash, email, business_line, is_admin)
                     VALUES (%s, %s, %s, %s, %s)
                 """
-                
-                cursor.execute(sql, (
-                    'admin',
-                    password_hash,
-                    'admin@example.com',
-                    '技术部',
-                    True  # 设置为管理员
-                ))
-                
+
+                cursor.execute(
+                    sql,
+                    (
+                        "admin",
+                        password_hash,
+                        "admin@example.com",
+                        "技术部",
+                        True,  # 设置为管理员
+                    ),
+                )
+
                 # 验证插入结果
-                cursor.execute("SELECT id, username, is_admin FROM users WHERE username = 'admin'")
+                cursor.execute(
+                    "SELECT id, username, is_admin FROM users WHERE username = 'admin'"
+                )
                 admin_user = cursor.fetchone()
-                
+
                 if admin_user:
                     print(f"✅ admin用户插入成功")
                     print(f"   用户ID: {admin_user[0]}")
@@ -942,12 +958,12 @@ def create_tables():
                     print(f"   密码: admin (MD5哈希存储)")
                 else:
                     print("❌ admin用户插入失败")
-            
+
             # 插入默认的数据库配置
             print("\n开始插入默认数据库配置...")
             cursor.execute("SELECT id FROM database_configs WHERE name = '默认配置'")
             existing_config = cursor.fetchone()
-            
+
             if existing_config:
                 print("⚠ 默认数据库配置已存在，跳过插入")
             else:
@@ -956,24 +972,29 @@ def create_tables():
                     INSERT INTO database_configs (name, host, port, user, password, database_name, charset, description, is_default, enabled)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                
-                cursor.execute(sql, (
-                    '默认配置',
-                    DATABASE_CONFIG['host'],
-                    DATABASE_CONFIG['port'],
-                    DATABASE_CONFIG['user'],
-                    DATABASE_CONFIG['password'],
-                    DATABASE_CONFIG['database'],
-                    'utf8mb4',
-                    '系统默认数据库配置',
-                    True,  # 设置为默认配置
-                    True   # 启用
-                ))
-                
+
+                cursor.execute(
+                    sql,
+                    (
+                        "默认配置",
+                        DATABASE_CONFIG["host"],
+                        DATABASE_CONFIG["port"],
+                        DATABASE_CONFIG["user"],
+                        DATABASE_CONFIG["password"],
+                        DATABASE_CONFIG["database"],
+                        "utf8mb4",
+                        "系统默认数据库配置",
+                        True,  # 设置为默认配置
+                        True,  # 启用
+                    ),
+                )
+
                 # 验证插入结果
-                cursor.execute("SELECT id, name, host, database_name, is_default FROM database_configs WHERE name = '默认配置'")
+                cursor.execute(
+                    "SELECT id, name, host, database_name, is_default FROM database_configs WHERE name = '默认配置'"
+                )
                 db_config = cursor.fetchone()
-                
+
                 if db_config:
                     print(f"✅ 默认数据库配置插入成功")
                     print(f"   配置ID: {db_config[0]}")
@@ -983,18 +1004,18 @@ def create_tables():
                     print(f"   是否默认: {'是' if db_config[4] else '否'}")
                 else:
                     print("❌ 默认数据库配置插入失败")
-            
+
             # 显示所有表
             cursor.execute("SHOW TABLES")
             tables = cursor.fetchall()
             print("\n当前数据库中的所有表:")
             for table in tables:
                 print(f"  - {table[0]}")
-        
+
         connection.commit()
         connection.close()
         print("\n数据库表创建完成")
-        
+
     except Exception as e:
         print(f"创建数据库表失败: {e}")
         raise e
@@ -1002,51 +1023,57 @@ def create_tables():
 
 def sync_table_structures():
     """同步表结构 - 以代码中的表结构为准，自动添加/删除字段和索引"""
-    
+
     print("=" * 60)
     print("开始表结构同步流程")
     print("=" * 60)
-    
+
     try:
         db = Database()
         synchronizer = TableStructureSynchronizer(db)
         parser = TableStructureParser()
-        
+
         total_ddl_count = 0
-        
+
         with db.get_connection() as conn:
             with conn.cursor() as cursor:
                 # 检查数据库连接
                 cursor.execute("SELECT DATABASE()")
                 current_db = cursor.fetchone()
                 print(f"📊 当前数据库: {current_db}")
-                
+
                 # 检查表是否存在
                 cursor.execute("SHOW TABLES")
-                existing_tables = [list(table.values())[0] if isinstance(table, dict) else table[0] 
-                                 for table in cursor.fetchall()]
-                
+                existing_tables = [
+                    list(table.values())[0] if isinstance(table, dict) else table[0]
+                    for table in cursor.fetchall()
+                ]
+
                 print(f"📊 数据库中现有表数量: {len(existing_tables)}")
-                
+
                 # 解析代码中的表结构
                 code_structures = {}
                 for table_name, create_sql in DB_TABLES.items():
-                    code_structures[table_name] = parser.parse_create_table_sql(create_sql)
-                
+                    code_structures[table_name] = parser.parse_create_table_sql(
+                        create_sql
+                    )
+
                 print(f"📊 代码中定义的表数量: {len(code_structures)}")
-                
+
                 # 同步每个表的结构
                 for table_name, code_structure in code_structures.items():
                     print(f"\n🔄 同步表: {table_name}")
-                    
-                    ddl_statements = synchronizer.sync_table_structure(table_name, code_structure)
-                    
+
+                    ddl_statements = synchronizer.sync_table_structure(
+                        table_name, code_structure
+                    )
+
                     if ddl_statements:
                         print(f"   📝 需要执行的DDL语句数量: {len(ddl_statements)}")
-                        
+
                         for i, ddl in enumerate(ddl_statements, 1):
                             print(f"   {i}. {ddl}")
-                            
+
                             try:
                                 cursor.execute(ddl)
                                 print(f"      ✅ 执行成功")
@@ -1055,51 +1082,52 @@ def sync_table_structures():
                                 print(f"      ❌ 执行失败: {e}")
                     else:
                         print(f"   ✅ 表结构已是最新，无需同步")
-                
+
                 conn.commit()
-        
+
         print("\n" + "=" * 60)
         print(f"✅ 表结构同步完成！")
         print(f"   共执行了 {total_ddl_count} 条DDL语句")
         print("=" * 60)
-        
+
     except Exception as e:
         print(f"❌ 表结构同步失败: {e}")
         import traceback
+
         traceback.print_exc()
 
 
 def deploy_database():
     """一键部署数据库 - 创建数据库和表结构"""
-    
+
     print("=" * 60)
     print("开始数据库一键部署流程")
     print("=" * 60)
-    
+
     try:
         # 第一步：创建数据库
         print("\n[步骤1] 创建数据库...")
         create_database()
         print("✅ 数据库创建完成")
-        
+
         # 等待1秒，确保数据库已创建
         time.sleep(1)
-        
+
         # 第二步：创建表结构和插入默认数据
         print("\n[步骤2] 创建表结构和插入默认数据...")
         create_tables()
         print("✅ 表结构创建完成")
-        
+
         # 第三步：验证部署结果
         print("\n[步骤3] 验证部署结果...")
-        
+
         db = Database()
         with db.get_connection() as conn:
             with conn.cursor() as cursor:
                 # 检查表是否存在
                 cursor.execute("SHOW TABLES")
                 tables = cursor.fetchall()
-                
+
                 print(f"✅ 数据库表数量: {len(tables)}")
                 print("已创建的表:")
                 for table in tables:
@@ -1109,49 +1137,53 @@ def deploy_database():
                     else:
                         table_name = table[0]
                     print(f"  - {table_name}")
-                
+
                 # 检查admin用户是否存在
-                cursor.execute("SELECT username, email, is_admin FROM users WHERE username = 'admin'")
+                cursor.execute(
+                    "SELECT username, email, is_admin FROM users WHERE username = 'admin'"
+                )
                 admin_user = cursor.fetchone()
-                
+
                 if admin_user:
                     print(f"✅ 默认admin用户已创建")
                     # 处理不同的游标类型
                     if isinstance(admin_user, dict):
-                        username = admin_user.get('username', '未知')
-                        email = admin_user.get('email', '未知')
-                        is_admin = admin_user.get('is_admin', False)
+                        username = admin_user.get("username", "未知")
+                        email = admin_user.get("email", "未知")
+                        is_admin = admin_user.get("is_admin", False)
                     else:
-                        username = admin_user[0] if len(admin_user) > 0 else '未知'
-                        email = admin_user[1] if len(admin_user) > 1 else '未知'
+                        username = admin_user[0] if len(admin_user) > 0 else "未知"
+                        email = admin_user[1] if len(admin_user) > 1 else "未知"
                         is_admin = admin_user[2] if len(admin_user) > 2 else False
-                    
+
                     print(f"   用户名: {username}")
                     print(f"   邮箱: {email}")
                     print(f"   管理员: {'是' if is_admin else '否'}")
                 else:
                     print("❌ admin用户创建失败")
-        
+
                 # 检查数据库配置是否存在
-                cursor.execute("SELECT id, name, host, database_name, is_default FROM database_configs WHERE name = '默认配置'")
+                cursor.execute(
+                    "SELECT id, name, host, database_name, is_default FROM database_configs WHERE name = '默认配置'"
+                )
                 db_config = cursor.fetchone()
-                
+
                 if db_config:
                     print(f"✅ 默认数据库配置已创建")
                     # 处理不同的游标类型
                     if isinstance(db_config, dict):
-                        config_id = db_config.get('id', '未知')
-                        config_name = db_config.get('name', '未知')
-                        config_host = db_config.get('host', '未知')
-                        config_db = db_config.get('database_name', '未知')
-                        is_default = db_config.get('is_default', False)
+                        config_id = db_config.get("id", "未知")
+                        config_name = db_config.get("name", "未知")
+                        config_host = db_config.get("host", "未知")
+                        config_db = db_config.get("database_name", "未知")
+                        is_default = db_config.get("is_default", False)
                     else:
-                        config_id = db_config[0] if len(db_config) > 0 else '未知'
-                        config_name = db_config[1] if len(db_config) > 1 else '未知'
-                        config_host = db_config[2] if len(db_config) > 2 else '未知'
-                        config_db = db_config[3] if len(db_config) > 3 else '未知'
+                        config_id = db_config[0] if len(db_config) > 0 else "未知"
+                        config_name = db_config[1] if len(db_config) > 1 else "未知"
+                        config_host = db_config[2] if len(db_config) > 2 else "未知"
+                        config_db = db_config[3] if len(db_config) > 3 else "未知"
                         is_default = db_config[4] if len(db_config) > 4 else False
-                    
+
                     print(f"   配置ID: {config_id}")
                     print(f"   配置名称: {config_name}")
                     print(f"   数据库主机: {config_host}")
@@ -1159,18 +1191,18 @@ def deploy_database():
                     print(f"   是否默认: {'是' if is_default else '否'}")
                 else:
                     print("❌ 默认数据库配置创建失败")
-        
+
         print("\n" + "=" * 60)
         print("✅ 数据库一键部署完成！")
         print("=" * 60)
-        
+
         # 显示部署完成后的使用说明
         print("\n📋 部署完成后的使用说明:")
         print("1. 默认管理员账号: admin")
         print("2. 默认管理员密码: admin")
         print("3. 请及时修改默认密码")
         print("4. 应用程序可以正常启动使用了")
-        
+
     except Exception as e:
         print(f"❌ 数据库部署失败: {e}")
         print("\n💡 故障排除建议:")
@@ -1182,11 +1214,11 @@ def deploy_database():
 
 def check_deployment_status():
     """检查数据库部署状态"""
-    
+
     print("=" * 60)
     print("检查数据库部署状态")
     print("=" * 60)
-    
+
     try:
         db = Database()
         with db.get_connection() as conn:
@@ -1194,7 +1226,7 @@ def check_deployment_status():
                 # 检查表是否存在
                 cursor.execute("SHOW TABLES")
                 tables = cursor.fetchall()
-                
+
                 print(f"📊 数据库表数量: {len(tables)}")
                 print("当前存在的表:")
                 for table in tables:
@@ -1204,33 +1236,35 @@ def check_deployment_status():
                     else:
                         table_name = table[0]
                     print(f"  - {table_name}")
-                
+
                 # 检查admin用户是否存在
-                cursor.execute("SELECT username, email, is_admin FROM users WHERE username = 'admin'")
+                cursor.execute(
+                    "SELECT username, email, is_admin FROM users WHERE username = 'admin'"
+                )
                 admin_user = cursor.fetchone()
-                
+
                 if admin_user:
                     print(f"✅ admin用户状态: 正常")
                     # 处理不同的游标类型
                     if isinstance(admin_user, dict):
-                        username = admin_user.get('username', '未知')
-                        email = admin_user.get('email', '未知')
-                        is_admin = admin_user.get('is_admin', False)
+                        username = admin_user.get("username", "未知")
+                        email = admin_user.get("email", "未知")
+                        is_admin = admin_user.get("is_admin", False)
                     else:
-                        username = admin_user[0] if len(admin_user) > 0 else '未知'
-                        email = admin_user[1] if len(admin_user) > 1 else '未知'
+                        username = admin_user[0] if len(admin_user) > 0 else "未知"
+                        email = admin_user[1] if len(admin_user) > 1 else "未知"
                         is_admin = admin_user[2] if len(admin_user) > 2 else False
-                    
+
                     print(f"   用户名: {username}")
                     print(f"   邮箱: {email}")
                     print(f"   管理员: {'是' if is_admin else '否'}")
                 else:
                     print("❌ admin用户状态: 不存在")
-                
+
                 # 检查关键表是否存在
-                required_tables = ['users', 'email_verification_codes', 'user_sessions']
+                required_tables = ["users", "email_verification_codes", "user_sessions"]
                 missing_tables = []
-                
+
                 # 构建现有表名列表
                 existing_tables = []
                 for table in tables:
@@ -1238,27 +1272,28 @@ def check_deployment_status():
                         existing_tables.append(list(table.values())[0])
                     else:
                         existing_tables.append(table[0])
-                
+
                 for table in required_tables:
                     if table not in existing_tables:
                         missing_tables.append(table)
-                
+
                 if missing_tables:
                     print(f"❌ 缺失的表: {', '.join(missing_tables)}")
                     print("建议重新运行部署脚本")
                 else:
                     print("✅ 所有必需表都存在")
-        
+
     except Exception as e:
         print(f"❌ 检查部署状态失败: {e}")
         import traceback
+
         traceback.print_exc()
         print("数据库可能尚未部署或配置有误")
 
 
 def show_usage():
     """显示使用说明"""
-    
+
     print("=" * 60)
     print("数据库一键部署脚本使用说明")
     print("=" * 60)
@@ -1291,27 +1326,32 @@ def show_usage():
     print("  3. 部署完成后请及时修改默认管理员密码")
     print("  4. 表结构同步会修改数据库结构，请谨慎操作")
 
+
 # =============================================================================
 # 主程序入口
 # =============================================================================
 
 if __name__ == "__main__":
     # 解析命令行参数
-    parser = argparse.ArgumentParser(description='数据库一键部署脚本')
-    parser.add_argument('command', nargs='?', default='deploy', 
-                       choices=['deploy', 'status', 'sync', 'help'],
-                       help='要执行的命令 (deploy: 部署, status: 检查状态, sync: 同步表结构, help: 帮助)')
-    
+    parser = argparse.ArgumentParser(description="数据库一键部署脚本")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="deploy",
+        choices=["deploy", "status", "sync", "help"],
+        help="要执行的命令 (deploy: 部署, status: 检查状态, sync: 同步表结构, help: 帮助)",
+    )
+
     args = parser.parse_args()
-    
+
     # 根据命令执行相应操作
-    if args.command == 'deploy':
+    if args.command == "deploy":
         deploy_database()
-    elif args.command == 'status':
+    elif args.command == "status":
         check_deployment_status()
-    elif args.command == 'sync':
+    elif args.command == "sync":
         sync_table_structures()
-    elif args.command == 'help':
+    elif args.command == "help":
         show_usage()
     else:
         print(f"❌ 未知命令: {args.command}")

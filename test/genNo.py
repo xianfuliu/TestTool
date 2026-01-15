@@ -1,5 +1,6 @@
 import socket
 
+
 def get_local_ip():
     """获取本机IP地址"""
     try:
@@ -11,5 +12,6 @@ def get_local_ip():
         return ip
     except Exception as e:
         return "127.0.0.1"  # 失败则返回本地回环地址
+
 
 print("本机IP地址:", get_local_ip())

@@ -3,21 +3,42 @@ import json
 import sys
 import random
 import string
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
-                             QTextEdit, QDialog, QDialogButtonBox, QMessageBox,
-                             QGroupBox, QFormLayout,QCheckBox, QSpinBox,
-                             QScrollArea, QSizePolicy,QTreeWidget, QTreeWidgetItem, QComboBox)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QLineEdit,
+    QTextEdit,
+    QDialog,
+    QDialogButtonBox,
+    QMessageBox,
+    QGroupBox,
+    QFormLayout,
+    QCheckBox,
+    QSpinBox,
+    QScrollArea,
+    QSizePolicy,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QComboBox,
+)
 from src.ui.widgets.toast_tips import Toast
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
 from PyQt5.QtGui import QIcon, QColor, QTextCursor
 from src.utils.interface_utils.database_utils import DatabaseUtils
 from src.utils.interface_utils.script_engine import ScriptEngine
-from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
+from src.ui.interface_auto.components.no_wheel_widgets import (
+    NoWheelComboBox,
+    NoWheelTabWidget,
+)
 from src.utils.css_utils import get_combobox_style
 
 
 class ToolTestThread(QThread):
     """工具测试线程"""
+
     test_finished = Signal(dict)  # 测试结果信号
 
     def __init__(self, tool_data, test_params=None):
@@ -31,31 +52,25 @@ class ToolTestThread(QThread):
             result = self.test_tool()
             self.test_finished.emit(result)
         except Exception as e:
-            self.test_finished.emit({
-                'success': False,
-                'error': str(e)
-            })
+            self.test_finished.emit({"success": False, "error": str(e)})
 
     def test_tool(self):
         """测试工具"""
-        tool_type = self.tool_data.get('tool_type')
-        config = self.tool_data.get('config', {})
+        tool_type = self.tool_data.get("tool_type")
+        config = self.tool_data.get("config", {})
 
-        if tool_type == 'sql':
+        if tool_type == "sql":
             return self.test_sql_tool(config)
-        elif tool_type == 'random':
+        elif tool_type == "random":
             return self.test_random_tool(config)
-        elif tool_type == 'python':
+        elif tool_type == "python":
             return self.test_python_tool(config)
-        elif tool_type == 'timer':
+        elif tool_type == "timer":
             return self.test_timer_tool(config)
-        elif tool_type == 'http':
+        elif tool_type == "http":
             return self.test_http_tool(config)
         else:
-            return {
-                'success': False,
-                'error': f'未知工具类型: {tool_type}'
-            }
+            return {"success": False, "error": f"未知工具类型: {tool_type}"}
 
     def test_sql_tool(self, config):
         """测试SQL工具"""
@@ -65,46 +80,36 @@ class ToolTestThread(QThread):
             connection = db_utils.get_connection(config)
             if connection:
                 connection.close()
-                return {
-                    'success': True,
-                    'message': '数据库连接测试成功'
-                }
+                return {"success": True, "message": "数据库连接测试成功"}
             else:
-                return {
-                    'success': False,
-                    'error': '数据库连接失败'
-                }
+                return {"success": False, "error": "数据库连接失败"}
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'数据库连接测试失败: {str(e)}'
-            }
+            return {"success": False, "error": f"数据库连接测试失败: {str(e)}"}
 
     def test_random_tool(self, config):
         """测试随机数工具"""
         try:
-            min_val = config.get('min_value', 1)
-            max_val = config.get('max_value', 100)
-            rand_type = config.get('type', 'integer')
+            min_val = config.get("min_value", 1)
+            max_val = config.get("max_value", 100)
+            rand_type = config.get("type", "integer")
 
-            if rand_type == 'integer':
+            if rand_type == "integer":
                 result = random.randint(min_val, max_val)
-            elif rand_type == 'float':
+            elif rand_type == "float":
                 result = random.uniform(min_val, max_val)
             else:  # string
                 length = random.randint(min_val, max_val)
-                result = ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+                result = "".join(
+                    random.choices(string.ascii_letters + string.digits, k=length)
+                )
 
             return {
-                'success': True,
-                'message': f'随机数生成测试成功: {result}',
-                'data': result
+                "success": True,
+                "message": f"随机数生成测试成功: {result}",
+                "data": result,
             }
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'随机数生成测试失败: {str(e)}'
-            }
+            return {"success": False, "error": f"随机数生成测试失败: {str(e)}"}
 
     def test_python_tool(self, config):
         """测试Python脚本工具"""
@@ -115,59 +120,45 @@ class ToolTestThread(QThread):
             result = script_engine.execute_script(test_script, {}, timeout=5)
 
             return {
-                'success': True,
-                'message': 'Python脚本执行测试成功',
-                'data': result
+                "success": True,
+                "message": "Python脚本执行测试成功",
+                "data": result,
             }
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'Python脚本执行测试失败: {str(e)}'
-            }
+            return {"success": False, "error": f"Python脚本执行测试失败: {str(e)}"}
 
     def test_timer_tool(self, config):
         """测试定时器工具"""
         try:
-            max_wait = config.get('max_wait_time', 300)
+            max_wait = config.get("max_wait_time", 300)
             if max_wait <= 0 or max_wait > 3600:
-                return {
-                    'success': False,
-                    'error': '等待时间必须在1-3600秒之间'
-                }
+                return {"success": False, "error": "等待时间必须在1-3600秒之间"}
 
             return {
-                'success': True,
-                'message': f'定时器配置验证成功，最大等待时间: {max_wait}秒'
+                "success": True,
+                "message": f"定时器配置验证成功，最大等待时间: {max_wait}秒",
             }
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'定时器配置验证失败: {str(e)}'
-            }
+            return {"success": False, "error": f"定时器配置验证失败: {str(e)}"}
 
     def test_http_tool(self, config):
         """测试HTTP工具"""
         try:
             import requests
-            timeout = config.get('timeout', 30)
+
+            timeout = config.get("timeout", 30)
 
             # 简单的HTTP测试（访问百度）
-            response = requests.get('https://www.baidu.com', timeout=timeout)
+            response = requests.get("https://www.baidu.com", timeout=timeout)
             if response.status_code == 200:
-                return {
-                    'success': True,
-                    'message': 'HTTP请求测试成功'
-                }
+                return {"success": True, "message": "HTTP请求测试成功"}
             else:
                 return {
-                    'success': False,
-                    'error': f'HTTP请求测试失败，状态码: {response.status_code}'
+                    "success": False,
+                    "error": f"HTTP请求测试失败，状态码: {response.status_code}",
                 }
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'HTTP请求测试失败: {str(e)}'
-            }
+            return {"success": False, "error": f"HTTP请求测试失败: {str(e)}"}
 
 
 class GlobalToolDialog(QDialog):
@@ -182,9 +173,10 @@ class GlobalToolDialog(QDialog):
     def init_ui(self):
         self.setWindowTitle("编辑全局工具" if self.is_edit else "新增全局工具")
         self.setMinimumSize(700, 600)
-        
+
         # 设置弹窗样式，确保按钮可见
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QDialogButtonBox QPushButton {
                 font-size: 14px;
                 font-weight: bold;
@@ -205,7 +197,8 @@ class GlobalToolDialog(QDialog):
                 background-color: #cccccc;
                 color: #666666;
             }
-        """)
+        """
+        )
 
         layout = QVBoxLayout(self)
 
@@ -257,10 +250,16 @@ class GlobalToolDialog(QDialog):
         self.name_edit.setPlaceholderText("请输入工具名称")
 
         self.type_combo = NoWheelComboBox()
-        self.type_combo.addItems([
-            "SQL工具", "随机数生成器", "Python脚本执行器",
-            "等待定时器", "HTTP请求工具", "自定义工具"
-        ])
+        self.type_combo.addItems(
+            [
+                "SQL工具",
+                "随机数生成器",
+                "Python脚本执行器",
+                "等待定时器",
+                "HTTP请求工具",
+                "自定义工具",
+            ]
+        )
         self.type_combo.currentIndexChanged.connect(self.on_tool_type_changed)
         self.type_combo.setStyleSheet(get_combobox_style())
 
@@ -308,7 +307,8 @@ class GlobalToolDialog(QDialog):
         self.test_btn = QPushButton("测试工具")
         self.test_btn.clicked.connect(self.test_tool)
         # 设置测试按钮样式
-        self.test_btn.setStyleSheet("""
+        self.test_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #28a745;
                 color: white;
@@ -330,7 +330,8 @@ class GlobalToolDialog(QDialog):
                 border-color: #6c757d;
                 color: #ced4da;
             }
-        """)
+        """
+        )
 
         # 测试结果
         self.test_result_text = QTextEdit()
@@ -376,7 +377,9 @@ class GlobalToolDialog(QDialog):
         layout = QFormLayout(group)
 
         self.sql_database_type = NoWheelComboBox()
-        self.sql_database_type.addItems(["MySQL", "PostgreSQL", "SQLite", "Oracle", "SQL Server"])
+        self.sql_database_type.addItems(
+            ["MySQL", "PostgreSQL", "SQLite", "Oracle", "SQL Server"]
+        )
         self.sql_database_type.setStyleSheet(get_combobox_style())
 
         self.sql_host = QLineEdit()
@@ -402,7 +405,9 @@ class GlobalToolDialog(QDialog):
 
         self.sql_result_type = NoWheelComboBox()
         self.sql_result_type.addItems(["single", "multiple", "count"])
-        self.sql_result_type.setToolTip("single: 返回单条记录\nmultiple: 返回多条记录\ncount: 返回计数")
+        self.sql_result_type.setToolTip(
+            "single: 返回单条记录\nmultiple: 返回多条记录\ncount: 返回计数"
+        )
         self.sql_result_type.setStyleSheet(get_combobox_style())
 
         layout.addRow("数据库类型:", self.sql_database_type)
@@ -478,7 +483,9 @@ class GlobalToolDialog(QDialog):
 
         self.python_allowed_modules = QTextEdit()
         self.python_allowed_modules.setMaximumHeight(60)
-        self.python_allowed_modules.setPlaceholderText("允许导入的模块，每行一个\n例如: random, datetime, json")
+        self.python_allowed_modules.setPlaceholderText(
+            "允许导入的模块，每行一个\n例如: random, datetime, json"
+        )
 
         self.python_default_script = QTextEdit()
         self.python_default_script.setPlaceholderText("默认脚本代码")
@@ -533,7 +540,9 @@ class GlobalToolDialog(QDialog):
         layout = QVBoxLayout(group)
 
         self.custom_config_text = QTextEdit()
-        self.custom_config_text.setPlaceholderText('请输入JSON格式的配置，例如: {"key": "value"}')
+        self.custom_config_text.setPlaceholderText(
+            '请输入JSON格式的配置，例如: {"key": "value"}'
+        )
 
         layout.addWidget(QLabel("自定义配置 (JSON格式):"))
         layout.addWidget(self.custom_config_text)
@@ -546,31 +555,31 @@ class GlobalToolDialog(QDialog):
             return
 
         # 基本信息
-        self.name_edit.setText(self.tool_data.get('name', ''))
+        self.name_edit.setText(self.tool_data.get("name", ""))
 
         # 设置工具类型
         type_map = {
-            'sql': 'SQL工具',
-            'random': '随机数生成器',
-            'python': 'Python脚本执行器',
-            'timer': '等待定时器',
-            'http': 'HTTP请求工具',
-            'custom': '自定义工具'
+            "sql": "SQL工具",
+            "random": "随机数生成器",
+            "python": "Python脚本执行器",
+            "timer": "等待定时器",
+            "http": "HTTP请求工具",
+            "custom": "自定义工具",
         }
-        tool_type = self.tool_data.get('tool_type', 'custom')
-        type_text = type_map.get(tool_type, '自定义工具')
+        tool_type = self.tool_data.get("tool_type", "custom")
+        type_text = type_map.get(tool_type, "自定义工具")
         index = self.type_combo.findText(type_text)
         if index >= 0:
             self.type_combo.setCurrentIndex(index)
 
-        self.desc_edit.setText(self.tool_data.get('description', ''))
-        self.enabled_check.setChecked(self.tool_data.get('enabled', True))
+        self.desc_edit.setText(self.tool_data.get("description", ""))
+        self.enabled_check.setChecked(self.tool_data.get("enabled", True))
 
         # 先更新配置表单，确保相关控件已创建
         self.update_config_form()
-        
+
         # 加载配置
-        config = self.tool_data.get('config', {})
+        config = self.tool_data.get("config", {})
         self.load_config_data(config)
 
     def load_config_data(self, config):
@@ -578,64 +587,66 @@ class GlobalToolDialog(QDialog):
         tool_type = self.type_combo.currentText()
 
         if tool_type == "SQL工具":
-            self.sql_database_type.setCurrentText(config.get('database_type', 'MySQL'))
-            self.sql_host.setText(config.get('host', ''))
-            self.sql_port.setText(str(config.get('port', '')))
-            self.sql_username.setText(config.get('username', ''))
-            self.sql_password.setText(config.get('password', ''))
-            self.sql_database.setText(config.get('database', ''))
-            self.sql_charset.setCurrentText(config.get('charset', 'utf8mb4'))
-            self.sql_result_type.setCurrentText(config.get('result_type', 'single'))
+            self.sql_database_type.setCurrentText(config.get("database_type", "MySQL"))
+            self.sql_host.setText(config.get("host", ""))
+            self.sql_port.setText(str(config.get("port", "")))
+            self.sql_username.setText(config.get("username", ""))
+            self.sql_password.setText(config.get("password", ""))
+            self.sql_database.setText(config.get("database", ""))
+            self.sql_charset.setCurrentText(config.get("charset", "utf8mb4"))
+            self.sql_result_type.setCurrentText(config.get("result_type", "single"))
 
         elif tool_type == "随机数生成器":
-            self.random_type.setCurrentText(config.get('type', 'integer'))
-            self.random_min.setValue(config.get('min_value', 1))
-            self.random_max.setValue(config.get('max_value', 100))
-            self.random_length.setValue(config.get('length', 10))
-            self.random_charset.setCurrentText(config.get('charset', 'alphanumeric'))
-            self.random_custom_chars.setText(config.get('custom_chars', ''))
+            self.random_type.setCurrentText(config.get("type", "integer"))
+            self.random_min.setValue(config.get("min_value", 1))
+            self.random_max.setValue(config.get("max_value", 100))
+            self.random_length.setValue(config.get("length", 10))
+            self.random_charset.setCurrentText(config.get("charset", "alphanumeric"))
+            self.random_custom_chars.setText(config.get("custom_chars", ""))
 
         elif tool_type == "Python脚本执行器":
-            self.python_timeout.setValue(config.get('timeout', 30))
-            modules = config.get('allowed_modules', [])
-            self.python_allowed_modules.setText('\n'.join(modules))
-            self.python_default_script.setText(config.get('default_script', ''))
+            self.python_timeout.setValue(config.get("timeout", 30))
+            modules = config.get("allowed_modules", [])
+            self.python_allowed_modules.setText("\n".join(modules))
+            self.python_default_script.setText(config.get("default_script", ""))
 
         elif tool_type == "等待定时器":
-            self.timer_max_wait.setValue(config.get('max_wait_time', 300))
+            self.timer_max_wait.setValue(config.get("max_wait_time", 300))
 
         elif tool_type == "HTTP请求工具":
-            self.http_timeout.setValue(config.get('timeout', 30))
-            self.http_max_redirects.setValue(config.get('max_redirects', 5))
-            self.http_verify_ssl.setChecked(config.get('verify_ssl', True))
+            self.http_timeout.setValue(config.get("timeout", 30))
+            self.http_max_redirects.setValue(config.get("max_redirects", 5))
+            self.http_verify_ssl.setChecked(config.get("verify_ssl", True))
 
         else:  # 自定义工具
-            self.custom_config_text.setText(json.dumps(config, indent=2, ensure_ascii=False))
+            self.custom_config_text.setText(
+                json.dumps(config, indent=2, ensure_ascii=False)
+            )
 
     def get_data(self):
         """获取表单数据"""
         # 基本信息
         data = {
-            'name': self.name_edit.text().strip(),
-            'description': self.desc_edit.toPlainText().strip(),
-            'enabled': self.enabled_check.isChecked()
+            "name": self.name_edit.text().strip(),
+            "description": self.desc_edit.toPlainText().strip(),
+            "enabled": self.enabled_check.isChecked(),
         }
 
         # 工具类型映射
         type_map = {
-            'SQL查询工具': 'sql',
-            '随机数生成器': 'random',
-            'Python脚本执行器': 'python',
-            '等待定时器': 'timer',
-            'HTTP请求工具': 'http',
-            '自定义工具': 'custom'
+            "SQL查询工具": "sql",
+            "随机数生成器": "random",
+            "Python脚本执行器": "python",
+            "等待定时器": "timer",
+            "HTTP请求工具": "http",
+            "自定义工具": "custom",
         }
         tool_type_text = self.type_combo.currentText()
-        data['tool_type'] = type_map.get(tool_type_text, 'custom')
+        data["tool_type"] = type_map.get(tool_type_text, "custom")
 
         # 配置数据
         config = self.get_config_data()
-        data['config'] = config
+        data["config"] = config
 
         return data
 
@@ -645,53 +656,53 @@ class GlobalToolDialog(QDialog):
 
         if tool_type == "SQL查询工具":
             return {
-                'database_type': self.sql_database_type.currentText(),
-                'host': self.sql_host.text().strip(),
-                'port': int(self.sql_port.text()) if self.sql_port.text().strip() else 3306,
-                'username': self.sql_username.text().strip(),
-                'password': self.sql_password.text(),
-                'database': self.sql_database.text().strip(),
-                'charset': self.sql_charset.currentText(),
-                'result_type': self.sql_result_type.currentText()
+                "database_type": self.sql_database_type.currentText(),
+                "host": self.sql_host.text().strip(),
+                "port": (
+                    int(self.sql_port.text()) if self.sql_port.text().strip() else 3306
+                ),
+                "username": self.sql_username.text().strip(),
+                "password": self.sql_password.text(),
+                "database": self.sql_database.text().strip(),
+                "charset": self.sql_charset.currentText(),
+                "result_type": self.sql_result_type.currentText(),
             }
 
         elif tool_type == "随机数生成器":
             config = {
-                'type': self.random_type.currentText(),
-                'min_value': self.random_min.value(),
-                'max_value': self.random_max.value()
+                "type": self.random_type.currentText(),
+                "min_value": self.random_min.value(),
+                "max_value": self.random_max.value(),
             }
-            if self.random_type.currentText() == 'string':
-                config['length'] = self.random_length.value()
-                config['charset'] = self.random_charset.currentText()
-                if self.random_charset.currentText() == 'custom':
-                    config['custom_chars'] = self.random_custom_chars.text().strip()
+            if self.random_type.currentText() == "string":
+                config["length"] = self.random_length.value()
+                config["charset"] = self.random_charset.currentText()
+                if self.random_charset.currentText() == "custom":
+                    config["custom_chars"] = self.random_custom_chars.text().strip()
             return config
 
         elif tool_type == "Python脚本执行器":
             modules_text = self.python_allowed_modules.toPlainText().strip()
-            modules = [m.strip() for m in modules_text.split('\n') if m.strip()]
+            modules = [m.strip() for m in modules_text.split("\n") if m.strip()]
 
             return {
-                'timeout': self.python_timeout.value(),
-                'allowed_modules': modules,
-                'default_script': self.python_default_script.toPlainText().strip()
+                "timeout": self.python_timeout.value(),
+                "allowed_modules": modules,
+                "default_script": self.python_default_script.toPlainText().strip(),
             }
 
         elif tool_type == "等待定时器":
-            return {
-                'max_wait_time': self.timer_max_wait.value()
-            }
+            return {"max_wait_time": self.timer_max_wait.value()}
 
         elif tool_type == "HTTP请求工具":
             return {
-                'timeout': self.http_timeout.value(),
-                'max_redirects': self.http_max_redirects.value(),
-                'verify_ssl': self.http_verify_ssl.isChecked()
+                "timeout": self.http_timeout.value(),
+                "max_redirects": self.http_max_redirects.value(),
+                "verify_ssl": self.http_verify_ssl.isChecked(),
             }
 
         else:  # 自定义工具
-            if hasattr(self, 'custom_config_text'):
+            if hasattr(self, "custom_config_text"):
                 config_text = self.custom_config_text.toPlainText().strip()
                 if config_text:
                     try:
@@ -705,7 +716,7 @@ class GlobalToolDialog(QDialog):
         tool_data = self.get_data()
 
         # 验证基本数据
-        if not tool_data['name']:
+        if not tool_data["name"]:
             Toast.warn(self, "工具名称不能为空")
             return
 
@@ -723,14 +734,14 @@ class GlobalToolDialog(QDialog):
         """测试完成"""
         self.test_btn.setEnabled(True)
 
-        if result['success']:
+        if result["success"]:
             self.test_result_text.append("✅ 测试成功!")
-            self.test_result_text.append(result.get('message', '工具测试通过'))
-            if 'data' in result:
+            self.test_result_text.append(result.get("message", "工具测试通过"))
+            if "data" in result:
                 self.test_result_text.append(f"测试数据: {result['data']}")
         else:
             self.test_result_text.append("❌ 测试失败!")
-            self.test_result_text.append(result.get('error', '未知错误'))
+            self.test_result_text.append(result.get("error", "未知错误"))
 
         # 滚动到底部
         cursor = self.test_result_text.textCursor()
@@ -740,22 +751,24 @@ class GlobalToolDialog(QDialog):
 
 class GlobalToolsManager(QWidget):
     """全局工具管理页面"""
+
     data_changed = pyqtSignal()  # 数据变化信号
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
         self.tool_service = None  # 延迟初始化，避免启动时数据库连接检查
-        
+
         # 分页相关变量初始化
         self.current_page = 1
         self.current_page_size = 20
         self.total_pages = 0
         self.total_records = 0
-        
+
         self.init_ui()
         # 延迟加载数据，避免启动时弹窗
         from PyQt5.QtCore import QTimer
+
         QTimer.singleShot(100, self.delayed_load_data)
 
     def init_ui(self):
@@ -767,7 +780,8 @@ class GlobalToolsManager(QWidget):
         # 使用QPushButton创建文字按钮
         self.add_button = QPushButton("新增")
         self.add_button.setFixedSize(90, 35)
-        self.add_button.setStyleSheet("""
+        self.add_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: #28a745;
                 color: white;
@@ -782,7 +796,8 @@ class GlobalToolsManager(QWidget):
             QPushButton:pressed {
                 background-color: #1e7e34;
             }
-        """)
+        """
+        )
         self.add_button.clicked.connect(self.add_tool)
 
         # 直接添加按钮到主布局
@@ -790,38 +805,50 @@ class GlobalToolsManager(QWidget):
 
         # 工具列表 - 使用与定时调度tab中调度任务列表相同的QTreeWidget组件和样式
         self.tree_widget = QTreeWidget()
-        self.tree_widget.setColumnCount(8)  # 明确设置列数：序号、工具名称、工具类型、状态、描述、创建时间、更新时间、操作
-        self.tree_widget.setHeaderLabels([
-            "序号", "工具名称", "工具类型", "状态", "描述", "创建时间", "更新时间", "操作"
-        ])
-        
+        self.tree_widget.setColumnCount(
+            8
+        )  # 明确设置列数：序号、工具名称、工具类型、状态、描述、创建时间、更新时间、操作
+        self.tree_widget.setHeaderLabels(
+            [
+                "序号",
+                "工具名称",
+                "工具类型",
+                "状态",
+                "描述",
+                "创建时间",
+                "更新时间",
+                "操作",
+            ]
+        )
+
         # 设置树形控件属性 - 完全匹配定时调度tab中tree_widget配置
         header = self.tree_widget.header()
         header.setSectionsMovable(False)  # 禁止表头拖拽
         header.setDefaultAlignment(Qt.AlignCenter)  # 表头文本居中
-        
+
         # 设置树形控件属性
         self.tree_widget.setSelectionBehavior(QTreeWidget.SelectRows)
         self.tree_widget.setContextMenuPolicy(Qt.NoContextMenu)  # 禁用右键菜单
         self.tree_widget.setRootIsDecorated(False)  # 不显示展开/折叠图标列
         self.tree_widget.setAlternatingRowColors(True)
-        
+
         # 设置所有列文本居中
         for i in range(self.tree_widget.columnCount()):
             self.tree_widget.headerItem().setTextAlignment(i, Qt.AlignCenter)
-        
+
         # 设置固定列宽 - 参考定时调度tab的列宽设计
-        self.tree_widget.setColumnWidth(0, 100)     # 序号
-        self.tree_widget.setColumnWidth(1, 450)    # 工具名称
-        self.tree_widget.setColumnWidth(2, 200)    # 工具类型
-        self.tree_widget.setColumnWidth(3, 150)      # 状态
-        self.tree_widget.setColumnWidth(4, 350)    # 描述
-        self.tree_widget.setColumnWidth(5, 300)    # 创建时间
-        self.tree_widget.setColumnWidth(6, 300)    # 更新时间
-        self.tree_widget.setColumnWidth(7, 300)    # 操作
-        
+        self.tree_widget.setColumnWidth(0, 100)  # 序号
+        self.tree_widget.setColumnWidth(1, 450)  # 工具名称
+        self.tree_widget.setColumnWidth(2, 200)  # 工具类型
+        self.tree_widget.setColumnWidth(3, 150)  # 状态
+        self.tree_widget.setColumnWidth(4, 350)  # 描述
+        self.tree_widget.setColumnWidth(5, 300)  # 创建时间
+        self.tree_widget.setColumnWidth(6, 300)  # 更新时间
+        self.tree_widget.setColumnWidth(7, 300)  # 操作
+
         # 参考定时调度UI的表格样式美化
-        self.tree_widget.setStyleSheet("""
+        self.tree_widget.setStyleSheet(
+            """
             QTreeWidget {
                 background-color: #f8f9fa;
                 alternate-background-color: #ffffff;
@@ -889,12 +916,13 @@ class GlobalToolsManager(QWidget):
             QHeaderView::section:hover {
                 background-color: #e9ecef;
             }
-        """)
+        """
+        )
 
         # 关键设置：设置树形控件大小策略，允许充分拉伸
         self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tree_widget.setMinimumHeight(400)  # 设置最小高度
-        
+
         main_layout.addWidget(self.tree_widget, 1)
 
         # 分页控件
@@ -902,18 +930,19 @@ class GlobalToolsManager(QWidget):
         pagination_layout = QHBoxLayout(self.pagination_widget)
         pagination_layout.setContentsMargins(10, 5, 10, 5)
         pagination_layout.setSpacing(10)
-        
+
         # 分页信息标签
         self.pagination_label = QLabel("共 0 条记录")
         self.pagination_label.setStyleSheet("color: #6c757d; font-size: 12px;")
         pagination_layout.addWidget(self.pagination_label)
-        
+
         pagination_layout.addStretch()
-        
+
         # 首页按钮
         self.first_page_btn = QPushButton("« 首页")
         self.first_page_btn.setFixedSize(70, 32)
-        self.first_page_btn.setStyleSheet("""
+        self.first_page_btn.setStyleSheet(
+            """
             QPushButton {
                 border: none;
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -940,20 +969,22 @@ class GlobalToolsManager(QWidget):
                 background: #f8f9fa;
                 color: #adb5bd;
             }
-        """)
+        """
+        )
         pagination_layout.addWidget(self.first_page_btn)
-        
+
         # 上一页按钮
         self.prev_page_btn = QPushButton("‹ 上一页")
         self.prev_page_btn.setFixedSize(70, 32)
         self.prev_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
         pagination_layout.addWidget(self.prev_page_btn)
-        
+
         # 页码输入框
         self.page_input = QLineEdit()
         self.page_input.setFixedSize(50, 32)
         self.page_input.setAlignment(Qt.AlignCenter)
-        self.page_input.setStyleSheet("""
+        self.page_input.setStyleSheet(
+            """
             QLineEdit {
                 border: 1px solid #dee2e6;
                 border-radius: 6px;
@@ -971,26 +1002,29 @@ class GlobalToolsManager(QWidget):
             QLineEdit:hover:enabled {
                 border-color: #adb5bd;
             }
-        """)
+        """
+        )
         pagination_layout.addWidget(self.page_input)
-        
+
         # 总页数标签
         self.total_pages_label = QLabel("/ 0")
-        self.total_pages_label.setStyleSheet("color: #6c757d; font-size: 12px; font-weight: 500; margin: 0 4px;")
+        self.total_pages_label.setStyleSheet(
+            "color: #6c757d; font-size: 12px; font-weight: 500; margin: 0 4px;"
+        )
         pagination_layout.addWidget(self.total_pages_label)
-        
+
         # 下一页按钮
         self.next_page_btn = QPushButton("下一页 ›")
         self.next_page_btn.setFixedSize(70, 32)
         self.next_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
         pagination_layout.addWidget(self.next_page_btn)
-        
+
         # 末页按钮
         self.last_page_btn = QPushButton("末页 »")
         self.last_page_btn.setFixedSize(70, 32)
         self.last_page_btn.setStyleSheet(self.first_page_btn.styleSheet())
         pagination_layout.addWidget(self.last_page_btn)
-        
+
         # 每页显示数量选择
         self.page_size_combo = QComboBox()
         self.page_size_combo.setFixedSize(85, 32)
@@ -998,10 +1032,8 @@ class GlobalToolsManager(QWidget):
         self.page_size_combo.setCurrentText("20")
         self.page_size_combo.setStyleSheet(get_combobox_style())
         pagination_layout.addWidget(self.page_size_combo)
-        
+
         main_layout.addWidget(self.pagination_widget)
-
-
 
         # 连接分页控件信号
         self.first_page_btn.clicked.connect(self.go_to_first_page)
@@ -1015,6 +1047,7 @@ class GlobalToolsManager(QWidget):
         """延迟加载数据，避免启动时弹窗"""
         try:
             from src.core.services.global_tool_service import GlobalToolService
+
             self.tool_service = GlobalToolService()
             self.load_tools_with_pagination()
         except Exception as e:
@@ -1025,29 +1058,37 @@ class GlobalToolsManager(QWidget):
         """获取图标"""
         try:
             # 打包后路径处理：尝试从 PyInstaller 临时解压目录加载
-            if getattr(sys, 'frozen', False):
+            if getattr(sys, "frozen", False):
                 # 打包后的可执行文件路径
                 base_path = sys._MEIPASS
                 # 尝试从打包后的 resources/icons 目录加载
-                icon_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                icon_path = os.path.join(
+                    base_path, "src", "resources", "icons", icon_name
+                )
                 if os.path.exists(icon_path):
                     return QIcon(icon_path)
-                
+
                 # 尝试直接加载图标文件
                 icon_path = os.path.join(base_path, icon_name)
                 if os.path.exists(icon_path):
                     return QIcon(icon_path)
-                
+
                 # 尝试从当前目录加载
-                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "resources", "icons", icon_name)
+                icon_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "..",
+                    "resources",
+                    "icons",
+                    icon_name,
+                )
                 if os.path.exists(icon_path):
                     return QIcon(icon_path)
-            
+
             # 开发环境：尝试从 ui/interface_auto/icons 目录加载
             icon_path = os.path.join("src", "ui", "interface_auto", "icons", icon_name)
             if os.path.exists(icon_path):
                 return QIcon(icon_path)
-            
+
             # 尝试从 resources/icons 目录加载
             icon_path = os.path.join("src", "resources", "icons", icon_name)
             if os.path.exists(icon_path):
@@ -1067,7 +1108,7 @@ class GlobalToolsManager(QWidget):
             dialog = GlobalToolDialog(self, tool_data)
             if dialog.exec_() == QDialog.Accepted:
                 data = dialog.get_data()
-                if not data['name']:
+                if not data["name"]:
                     Toast.warn(self, "工具名称不能为空")
                     return
 
@@ -1100,7 +1141,7 @@ class GlobalToolsManager(QWidget):
         dialog = GlobalToolDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            if not data['name']:
+            if not data["name"]:
                 Toast.warn(self, "工具名称不能为空")
                 return
 
@@ -1122,12 +1163,12 @@ class GlobalToolsManager(QWidget):
         dialog = GlobalToolDialog(self, tool_data)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
-            if not data['name']:
+            if not data["name"]:
                 Toast.warn(self, "工具名称不能为空")
                 return
 
             try:
-                self.tool_service.update_tool(tool_data['id'], data)
+                self.tool_service.update_tool(tool_data["id"], data)
                 self.load_tools_with_pagination()
                 self.data_changed.emit()
                 Toast.success(self, "工具更新成功")
@@ -1142,19 +1183,22 @@ class GlobalToolsManager(QWidget):
             return
 
         # 创建确认对话框，手动设置按钮文本
-        msg_box = QMessageBox(QMessageBox.Question, "确认删除",
-                             f"确定要删除工具 '{tool_data['name']}' 吗？")
-        
+        msg_box = QMessageBox(
+            QMessageBox.Question,
+            "确认删除",
+            f"确定要删除工具 '{tool_data['name']}' 吗？",
+        )
+
         # 添加确认和取消按钮
         confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
         cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
         msg_box.setDefaultButton(cancel_btn)
-        
+
         msg_box.exec_()
-        
+
         if msg_box.clickedButton() == confirm_btn:
             try:
-                self.tool_service.delete_tool(tool_data['id'])
+                self.tool_service.delete_tool(tool_data["id"])
                 self.load_tools_with_pagination()
                 self.data_changed.emit()
                 Toast.success(self, "工具删除成功")
@@ -1181,14 +1225,14 @@ class GlobalToolsManager(QWidget):
             Toast.warn(self, "请先选择一个工具")
             return
 
-        new_status = not tool_data['enabled']
+        new_status = not tool_data["enabled"]
         status_text = "启用" if new_status else "禁用"
 
         try:
-                self.tool_service.update_tool_status(tool_data['id'], new_status)
-                self.load_tools_with_pagination()
-                self.data_changed.emit()
-                Toast.success(self, f"工具已{status_text}")
+            self.tool_service.update_tool_status(tool_data["id"], new_status)
+            self.load_tools_with_pagination()
+            self.data_changed.emit()
+            Toast.success(self, f"工具已{status_text}")
         except Exception as e:
             Toast.error(self, f"{status_text}工具失败: {str(e)}")
 
@@ -1201,15 +1245,18 @@ class GlobalToolsManager(QWidget):
                 return
 
             # 创建确认对话框
-            msg_box = QMessageBox(QMessageBox.Question, "确认删除",
-                                 f"确定要删除工具 '{tool_data['name']}' 吗？")
-            
+            msg_box = QMessageBox(
+                QMessageBox.Question,
+                "确认删除",
+                f"确定要删除工具 '{tool_data['name']}' 吗？",
+            )
+
             confirm_btn = msg_box.addButton("确认", QMessageBox.YesRole)
             cancel_btn = msg_box.addButton("取消", QMessageBox.NoRole)
             msg_box.setDefaultButton(cancel_btn)
-            
+
             msg_box.exec_()
-            
+
             if msg_box.clickedButton() == confirm_btn:
                 self.tool_service.delete_tool(tool_id)
                 self.load_tools_with_pagination()
@@ -1226,7 +1273,7 @@ class GlobalToolsManager(QWidget):
                 Toast.warn(self, "工具不存在")
                 return
 
-            new_status = not tool_data['enabled']
+            new_status = not tool_data["enabled"]
             status_text = "启用" if new_status else "禁用"
 
             self.tool_service.update_tool_status(tool_id, new_status)
@@ -1246,27 +1293,28 @@ class GlobalToolsManager(QWidget):
                 return
 
             # 生成不重复的工具名称
-            new_name = self.generate_unique_copy_name(tool_data['name'])
-            
+            new_name = self.generate_unique_copy_name(tool_data["name"])
+
             # 深拷贝工具数据
             import copy
+
             new_tool_data = copy.deepcopy(tool_data)
-            
+
             # 更新复制后的工具数据
-            new_tool_data['name'] = new_name
-            new_tool_data['id'] = None  # 清除ID以创建新记录
-            new_tool_data['created_at'] = None  # 清除创建时间
-            new_tool_data['updated_at'] = None  # 清除更新时间
-            
+            new_tool_data["name"] = new_name
+            new_tool_data["id"] = None  # 清除ID以创建新记录
+            new_tool_data["created_at"] = None  # 清除创建时间
+            new_tool_data["updated_at"] = None  # 清除更新时间
+
             # 创建新工具
             self.tool_service.create_tool(new_tool_data)
-            
+
             # 重新加载工具列表
             self.load_tools_with_pagination()
             self.data_changed.emit()
-            
+
             Toast.success(self, f"工具复制成功: {new_name}")
-            
+
         except Exception as e:
             Toast.error(self, f"复制工具失败: {str(e)}")
 
@@ -1274,27 +1322,27 @@ class GlobalToolsManager(QWidget):
         """生成唯一的副本名称"""
         # 获取所有工具
         tools = self.tool_service.get_all_tools()
-        
+
         # 查找所有以原始名称开头的副本
         copy_pattern = f"{original_name}_副本"
         existing_copies = []
-        
+
         for tool in tools:
-            name = tool['name']
+            name = tool["name"]
             if name.startswith(copy_pattern):
                 # 提取副本编号
-                suffix = name[len(copy_pattern):]
+                suffix = name[len(copy_pattern) :]
                 if suffix.isdigit():
                     existing_copies.append(int(suffix))
                 elif suffix == "":
                     existing_copies.append(1)  # 默认第一个副本
-        
+
         # 确定下一个副本编号
         if existing_copies:
             next_copy_num = max(existing_copies) + 1
         else:
             next_copy_num = 1
-        
+
         # 生成副本名称
         if next_copy_num == 1:
             return f"{original_name}_副本"
@@ -1307,82 +1355,89 @@ class GlobalToolsManager(QWidget):
         if self.tool_service is None:
             print("GlobalToolsManager: tool_service未初始化，跳过加载")
             return
-            
+
         try:
             # 调用分页服务方法
             tools, total_records = self.tool_service.get_tools_with_pagination(
                 self.current_page, self.current_page_size
             )
-            
+
             # 更新分页信息
             self.total_records = total_records
-            self.total_pages = max(1, (total_records + self.current_page_size - 1) // self.current_page_size)
-            
+            self.total_pages = max(
+                1,
+                (total_records + self.current_page_size - 1) // self.current_page_size,
+            )
+
             # 清空树形控件
             self.tree_widget.clear()
 
             # 计算当前页的起始序号
             start_index = (self.current_page - 1) * self.current_page_size
-            
+
             for index, tool in enumerate(tools):
                 # 创建树形项
                 tree_item = QTreeWidgetItem()
-                tree_item.setData(0, Qt.UserRole, tool['id'])
-                
+                tree_item.setData(0, Qt.UserRole, tool["id"])
+
                 # 序号栏 - 使用全局序号
                 tree_item.setText(0, str(start_index + index + 1))
                 tree_item.setTextAlignment(0, Qt.AlignCenter)
 
                 # 工具名称 - 确保居中显示
-                tree_item.setText(1, tool['name'])
+                tree_item.setText(1, tool["name"])
                 tree_item.setTextAlignment(1, Qt.AlignCenter)
 
                 # 工具类型
                 type_map = {
-                    'sql': 'SQL工具',
-                    'random': '随机数生成器',
-                    'python': 'Python脚本执行器',
-                    'timer': '等待定时器',
-                    'http': 'HTTP请求工具',
-                    'custom': '自定义工具'
+                    "sql": "SQL工具",
+                    "random": "随机数生成器",
+                    "python": "Python脚本执行器",
+                    "timer": "等待定时器",
+                    "http": "HTTP请求工具",
+                    "custom": "自定义工具",
                 }
-                type_text = type_map.get(tool['tool_type'], tool['tool_type'])
+                type_text = type_map.get(tool["tool_type"], tool["tool_type"])
                 tree_item.setText(2, type_text)
                 tree_item.setTextAlignment(2, Qt.AlignCenter)
 
                 # 状态 - 使用现代化样式
-                status_text = "启用" if tool['enabled'] else "禁用"
+                status_text = "启用" if tool["enabled"] else "禁用"
                 tree_item.setText(3, status_text)
                 tree_item.setTextAlignment(3, Qt.AlignCenter)
-                
+
                 # 设置状态文本的字体和样式
                 font = tree_item.font(3)
                 font.setBold(True)
                 tree_item.setFont(3, font)
-                
+
                 # 设置状态文本的颜色样式
-                if tool['enabled']:
+                if tool["enabled"]:
                     # 启用状态 - 绿色
-                    tree_item.setForeground(3, QColor('#28a745'))
+                    tree_item.setForeground(3, QColor("#28a745"))
                 else:
                     # 禁用状态 - 红色
-                    tree_item.setForeground(3, QColor('#dc3545'))
-                
+                    tree_item.setForeground(3, QColor("#dc3545"))
+
                 # 描述
-                desc = tool.get('description', '')
+                desc = tool.get("description", "")
                 tree_item.setText(4, desc)
                 tree_item.setToolTip(4, desc)
                 tree_item.setTextAlignment(4, Qt.AlignCenter)
 
                 # 创建时间
-                created_at = tool.get('created_at')
-                created_text = created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else ""
+                created_at = tool.get("created_at")
+                created_text = (
+                    created_at.strftime("%Y-%m-%d %H:%M:%S") if created_at else ""
+                )
                 tree_item.setText(5, created_text)
                 tree_item.setTextAlignment(5, Qt.AlignCenter)
 
                 # 更新时间
-                updated_at = tool.get('updated_at')
-                updated_text = updated_at.strftime('%Y-%m-%d %H:%M:%S') if updated_at else ""
+                updated_at = tool.get("updated_at")
+                updated_text = (
+                    updated_at.strftime("%Y-%m-%d %H:%M:%S") if updated_at else ""
+                )
                 tree_item.setText(6, updated_text)
                 tree_item.setTextAlignment(6, Qt.AlignCenter)
 
@@ -1393,13 +1448,14 @@ class GlobalToolsManager(QWidget):
                 action_layout.setContentsMargins(5, 2, 5, 2)
                 action_layout.setSpacing(3)
                 action_layout.setAlignment(Qt.AlignCenter)
-                
+
                 # 编辑按钮
                 edit_button = QPushButton()
                 edit_button.setFixedSize(25, 25)
                 edit_button.setIcon(self.get_icon("edit.png"))
                 edit_button.setToolTip("编辑")
-                edit_button.setStyleSheet("""
+                edit_button.setStyleSheet(
+                    """
                     QPushButton { 
                         border: none; 
                         background: transparent; 
@@ -1415,15 +1471,19 @@ class GlobalToolsManager(QWidget):
                         border-radius: 3px;
                         padding: 5px;
                     }
-                """)
-                edit_button.clicked.connect(lambda checked, tool_id=tool['id']: self.edit_tool_by_id(tool_id))
-                
+                """
+                )
+                edit_button.clicked.connect(
+                    lambda checked, tool_id=tool["id"]: self.edit_tool_by_id(tool_id)
+                )
+
                 # 删除按钮
                 delete_button = QPushButton()
                 delete_button.setFixedSize(25, 25)
                 delete_button.setIcon(self.get_icon("delete.png"))
                 delete_button.setToolTip("删除")
-                delete_button.setStyleSheet("""
+                delete_button.setStyleSheet(
+                    """
                     QPushButton { 
                         border: none; 
                         background: transparent; 
@@ -1439,15 +1499,19 @@ class GlobalToolsManager(QWidget):
                         border-radius: 3px;
                         padding: 5px;
                     }
-                """)
-                delete_button.clicked.connect(lambda checked, tool_id=tool['id']: self.delete_tool_by_id(tool_id))
-                
+                """
+                )
+                delete_button.clicked.connect(
+                    lambda checked, tool_id=tool["id"]: self.delete_tool_by_id(tool_id)
+                )
+
                 # 复制按钮
                 copy_button = QPushButton()
                 copy_button.setFixedSize(25, 25)
                 copy_button.setIcon(self.get_icon("copy.png"))
                 copy_button.setToolTip("复制")
-                copy_button.setStyleSheet("""
+                copy_button.setStyleSheet(
+                    """
                     QPushButton { 
                         border: none; 
                         background: transparent; 
@@ -1463,19 +1527,23 @@ class GlobalToolsManager(QWidget):
                         border-radius: 3px;
                         padding: 5px;
                     }
-                """)
-                copy_button.clicked.connect(lambda checked, tool_id=tool['id']: self.copy_tool_by_id(tool_id))
-                
+                """
+                )
+                copy_button.clicked.connect(
+                    lambda checked, tool_id=tool["id"]: self.copy_tool_by_id(tool_id)
+                )
+
                 # 启用/禁用按钮
                 toggle_button = QPushButton()
                 toggle_button.setFixedSize(25, 25)
-                if tool['enabled']:
+                if tool["enabled"]:
                     toggle_button.setIcon(self.get_icon("stop.png"))
                     toggle_button.setToolTip("禁用")
                 else:
                     toggle_button.setIcon(self.get_icon("start.png"))
                     toggle_button.setToolTip("启用")
-                toggle_button.setStyleSheet("""
+                toggle_button.setStyleSheet(
+                    """
                     QPushButton { 
                         border: none; 
                         background: transparent; 
@@ -1491,21 +1559,24 @@ class GlobalToolsManager(QWidget):
                         border-radius: 3px;
                         padding: 5px;
                     }
-                """)
-                toggle_button.clicked.connect(lambda checked, tool_id=tool['id']: self.toggle_tool_by_id(tool_id))
-                
+                """
+                )
+                toggle_button.clicked.connect(
+                    lambda checked, tool_id=tool["id"]: self.toggle_tool_by_id(tool_id)
+                )
+
                 action_layout.addWidget(toggle_button)
                 action_layout.addWidget(edit_button)
                 action_layout.addWidget(copy_button)
                 action_layout.addWidget(delete_button)
-                
+
                 # 为操作列设置空文本
                 tree_item.setText(7, "")
                 tree_item.setTextAlignment(7, Qt.AlignCenter)
-                
+
                 # 先添加到树形控件
                 self.tree_widget.addTopLevelItem(tree_item)
-                
+
                 # 然后将按钮容器添加到树形项
                 self.tree_widget.setItemWidget(tree_item, 7, action_widget)
 
@@ -1521,10 +1592,10 @@ class GlobalToolsManager(QWidget):
         # 更新分页标签
         self.pagination_label.setText(f"共 {self.total_records} 条记录")
         self.total_pages_label.setText(f"/ {self.total_pages}")
-        
+
         # 更新页码输入框
         self.page_input.setText(str(self.current_page))
-        
+
         # 更新按钮状态
         self.first_page_btn.setEnabled(self.current_page > 1)
         self.prev_page_btn.setEnabled(self.current_page > 1)

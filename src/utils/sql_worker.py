@@ -7,6 +7,7 @@ from src.utils.template_processor import TemplateProcessor
 # 修改 sql_worker.py 中的 SQLWorker 类
 class SQLWorker(QThread):
     """SQL 执行工作线程"""
+
     finished = pyqtSignal(str, str, object)  # 查询配置, 执行信息, 结果数据
     error = pyqtSignal(str, str)  # 查询配置, 错误信息
 
@@ -22,7 +23,9 @@ class SQLWorker(QThread):
             # 在执行前替换SQL中的变量
             processed_sql = self.replace_sql_variables(self.sql)
 
-            print(f"正在连接数据库配置: {self.connection_params['host']}:{self.connection_params['port']}")
+            print(
+                f"正在连接数据库配置: {self.connection_params['host']}:{self.connection_params['port']}"
+            )
             conn = pymysql.connect(**self.connection_params)
             cursor = conn.cursor()
 
@@ -37,14 +40,16 @@ class SQLWorker(QThread):
                 row_dict = {}
                 for i, col in enumerate(columns):
                     # 处理特殊类型，如datetime
-                    if hasattr(row[i], 'isoformat'):
+                    if hasattr(row[i], "isoformat"):
                         row_dict[col] = row[i].isoformat()
                     else:
                         row_dict[col] = row[i]
                 result_data.append(row_dict)
 
             print(f"查询成功，返回 {len(results)} 行数据")
-            self.finished.emit(self.query_name, f"查询成功，返回 {len(results)} 行数据", result_data)
+            self.finished.emit(
+                self.query_name, f"查询成功，返回 {len(results)} 行数据", result_data
+            )
 
             cursor.close()
             conn.close()
@@ -74,5 +79,5 @@ class SQLWorker(QThread):
                 return match.group(0)
 
         # 替换 {variable} 格式的变量
-        processed_sql = re.sub(r'\{(\w+)\}', replace_match, sql)
+        processed_sql = re.sub(r"\{(\w+)\}", replace_match, sql)
         return processed_sql

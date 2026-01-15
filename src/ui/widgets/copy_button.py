@@ -19,7 +19,8 @@ class CopyButton(QPushButton):
         self.setIconSize(QSize(16, 16))
 
         # 设置样式 - 去掉边框
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -31,7 +32,8 @@ class CopyButton(QPushButton):
             QPushButton:pressed {
                 background-color: #e0e0e0;
             }
-        """)
+        """
+        )
 
         # 使用 resource_path 处理图标路径
         copy_icon_path = resource_path(self.copy_icon_path)

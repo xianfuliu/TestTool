@@ -17,7 +17,8 @@ class BackfillButton(QPushButton):
         self.setIconSize(QSize(16, 16))  # 减小图标大小
 
         # 设置样式 - 去掉边框
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -29,7 +30,8 @@ class BackfillButton(QPushButton):
             QPushButton:pressed {
                 background-color: #e0e0e0;
             }
-        """)
+        """
+        )
 
         # 使用 resource_path 处理图标路径
         backfill_icon_path = resource_path(self.backfill_icon_path)

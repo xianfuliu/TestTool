@@ -13,12 +13,15 @@ class ProjectService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, business_group_id as group_id, name, description, created_at, updated_at
                         FROM projects 
                         WHERE business_group_id = %s
                         ORDER BY created_at DESC
-                    """, (group_id,))
+                    """,
+                        (group_id,),
+                    )
                     return cursor.fetchall()
         except Exception as e:
             print(f"获取项目列表失败: {e}")
@@ -29,11 +32,14 @@ class ProjectService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, business_group_id as group_id, name, description, created_at, updated_at
                         FROM projects 
                         WHERE id = %s
-                    """, (project_id,))
+                    """,
+                        (project_id,),
+                    )
                     return cursor.fetchone()
         except Exception as e:
             print(f"获取项目失败: {e}")
@@ -44,10 +50,13 @@ class ProjectService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO projects (business_group_id, name, description)
                         VALUES (%s, %s, %s)
-                    """, (data['group_id'], data['name'], data['description']))
+                    """,
+                        (data["group_id"], data["name"], data["description"]),
+                    )
                     conn.commit()
                     return cursor.lastrowid
         except Exception as e:
@@ -59,11 +68,14 @@ class ProjectService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE projects 
                         SET name = %s, description = %s 
                         WHERE id = %s
-                    """, (data['name'], data['description'], project_id))
+                    """,
+                        (data["name"], data["description"], project_id),
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
@@ -88,34 +100,39 @@ class ProjectService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 接口数量
-                    cursor.execute("SELECT COUNT(*) as count FROM api_templates WHERE project_id = %s", (project_id,))
-                    api_count = cursor.fetchone()['count']
+                    cursor.execute(
+                        "SELECT COUNT(*) as count FROM api_templates WHERE project_id = %s",
+                        (project_id,),
+                    )
+                    api_count = cursor.fetchone()["count"]
 
                     # 用例数量
-                    cursor.execute("SELECT COUNT(*) as count FROM test_cases WHERE project_id = %s", (project_id,))
-                    case_count = cursor.fetchone()['count']
+                    cursor.execute(
+                        "SELECT COUNT(*) as count FROM test_cases WHERE project_id = %s",
+                        (project_id,),
+                    )
+                    case_count = cursor.fetchone()["count"]
 
-                    return {
-                        'api_count': api_count,
-                        'case_count': case_count
-                    }
+                    return {"api_count": api_count, "case_count": case_count}
         except Exception as e:
             print(f"获取项目统计失败: {e}")
-            return {'api_count': 0, 'case_count': 0}
+            return {"api_count": 0, "case_count": 0}
 
     def get_all_projects(self) -> List[Dict[str, Any]]:
         """获取所有项目（包含业务分组信息）"""
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT p.id, p.business_group_id as group_id, p.name, p.description, 
                                p.created_at, p.updated_at,
                                bg.name as group_name
                         FROM projects p
                         LEFT JOIN business_groups bg ON p.business_group_id = bg.id
                         ORDER BY p.created_at DESC
-                    """)
+                    """
+                    )
                     return cursor.fetchall()
         except Exception as e:
             print(f"获取所有项目失败: {e}")

@@ -15,6 +15,6 @@ class WidthAwareWidget(QWidget):
         """重写绘制事件 - 在第一次绘制时调整宽度"""
         super().paintEvent(event)
         # 只在第一次绘制时调整宽度
-        if not hasattr(self, '_width_adjusted'):
+        if not hasattr(self, "_width_adjusted"):
             self.parent_tab.adjust_all_elements_width()
             self._width_adjusted = True

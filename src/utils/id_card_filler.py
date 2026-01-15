@@ -12,7 +12,9 @@ class IDCardFiller:
         self.template_path = resource_path(template_path)
         if not os.path.exists(self.template_path):
             # 如果找不到文件，尝试直接使用 resources 目录下的文件
-            static_path = os.path.normpath(os.path.join("src/resources/images", os.path.basename(template_path)))
+            static_path = os.path.normpath(
+                os.path.join("src/resources/images", os.path.basename(template_path))
+            )
             if os.path.exists(static_path):
                 self.template_path = static_path
                 print(f"使用静态目录下的模板: {self.template_path}")
@@ -29,7 +31,7 @@ class IDCardFiller:
             "C:/Windows/Fonts/simhei.ttf",  # Windows 黑体
             "C:/Windows/Fonts/simsun.ttc",  # Windows 宋体
             "/System/Library/Fonts/PingFang.ttc",  # macOS 苹方
-            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"  # Linux
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",  # Linux
         ]
 
         for path in font_paths:
@@ -39,7 +41,9 @@ class IDCardFiller:
         # 如果找不到系统字体，使用PIL默认字体（可能不支持中文）
         return None
 
-    def add_face_image(self, image, face_image_path, face_position, face_size=(210, 290)):
+    def add_face_image(
+        self, image, face_image_path, face_position, face_size=(210, 290)
+    ):
         """
         将人脸图片添加到身份证上
         """
@@ -50,7 +54,10 @@ class IDCardFiller:
             if not os.path.exists(actual_face_path):
                 # 如果找不到文件，尝试直接使用 resources 目录下的文件
                 static_face_path = os.path.normpath(
-                    os.path.join("src/resources/images", os.path.basename(face_image_path)))
+                    os.path.join(
+                        "src/resources/images", os.path.basename(face_image_path)
+                    )
+                )
                 if os.path.exists(static_face_path):
                     actual_face_path = static_face_path
                     print(f"使用静态目录下的人脸图片: {actual_face_path}")
@@ -64,7 +71,7 @@ class IDCardFiller:
             face_img = face_img.resize(face_size, Image.Resampling.LANCZOS)
 
             # 创建一个与身份证图片相同大小的透明图层
-            overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+            overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
             # 将人脸图片放到透明图层的正确位置
             overlay.paste(face_img, face_position)
 
@@ -85,7 +92,7 @@ class IDCardFiller:
             if not os.path.exists(self.template_path):
                 print(f"错误: 模板文件不存在: {self.template_path}")
                 return None
-            print(f'模板路径{self.template_path}')
+            print(f"模板路径{self.template_path}")
             # 打开模板图片
             image = Image.open(self.template_path).convert("RGBA")
             draw = ImageDraw.Draw(image)
@@ -125,7 +132,6 @@ class IDCardFiller:
                 "birth_day": (584, 475),  # 出生日期位置
                 "address": (326, 542),  # 住址位置
                 "id_number": (480, 722),  # 身份证号码位置
-
                 # 反面信息（国徽面）
                 "issue_authority": (535, 1380),  # 签发机关位置
                 "valid_period": (535, 1450),  # 有效期限位置
@@ -134,18 +140,39 @@ class IDCardFiller:
             # 绘制文本
             try:
                 # 姓名
-                draw.text(positions["name"], id_data["name"], fill="black", font=main_font)
+                draw.text(
+                    positions["name"], id_data["name"], fill="black", font=main_font
+                )
 
                 # 性别
-                draw.text(positions["gender"], id_data["gender"], fill="black", font=main_font)
+                draw.text(
+                    positions["gender"], id_data["gender"], fill="black", font=main_font
+                )
 
                 # 民族
-                draw.text(positions["ethnic"], id_data["ethnic"], fill="black", font=main_font)
+                draw.text(
+                    positions["ethnic"], id_data["ethnic"], fill="black", font=main_font
+                )
 
                 # 出生日期
-                draw.text(positions["birth_year"], id_data["birth_year"], fill="black", font=date_font)
-                draw.text(positions["birth_month"], id_data["birth_month"], fill="black", font=date_font)
-                draw.text(positions["birth_day"], id_data["birth_day"], fill="black", font=date_font)
+                draw.text(
+                    positions["birth_year"],
+                    id_data["birth_year"],
+                    fill="black",
+                    font=date_font,
+                )
+                draw.text(
+                    positions["birth_month"],
+                    id_data["birth_month"],
+                    fill="black",
+                    font=date_font,
+                )
+                draw.text(
+                    positions["birth_day"],
+                    id_data["birth_day"],
+                    fill="black",
+                    font=date_font,
+                )
 
                 # 住址
                 address = id_data["address"]
@@ -153,32 +180,49 @@ class IDCardFiller:
                     part1 = address[:20]
                     part2 = address[20:40]
                     draw.text(positions["address"], part1, fill="black", font=main_font)
-                    second_line_pos = (positions["address"][0], positions["address"][1] + 35)
+                    second_line_pos = (
+                        positions["address"][0],
+                        positions["address"][1] + 35,
+                    )
                     draw.text(second_line_pos, part2, fill="black", font=main_font)
                 else:
-                    draw.text(positions["address"], address, fill="black", font=main_font)
+                    draw.text(
+                        positions["address"], address, fill="black", font=main_font
+                    )
 
                 # 身份证号码
                 id_num = id_data["id_number"]
                 draw.text(positions["id_number"], id_num, fill="black", font=id_font)
 
                 # 签发机关
-                draw.text(positions["issue_authority"], id_data["issue_authority"], fill="black", font=issue_font)
+                draw.text(
+                    positions["issue_authority"],
+                    id_data["issue_authority"],
+                    fill="black",
+                    font=issue_font,
+                )
 
                 # 有效期限
-                draw.text(positions["valid_period"], id_data["valid_period"], fill="black", font=issue_font)
+                draw.text(
+                    positions["valid_period"],
+                    id_data["valid_period"],
+                    fill="black",
+                    font=issue_font,
+                )
 
             except Exception as draw_error:
                 print(f"绘制文本时出错: {draw_error}")
                 return None
 
             # 添加人脸图片
-            print(f'人脸路径：{face_image_path}')
+            print(f"人脸路径：{face_image_path}")
             if face_image_path and os.path.exists(face_image_path):
                 try:
                     face_position = (814, 284)
                     face_size = (210, 290)
-                    image = self.add_face_image(image, face_image_path, face_position, face_size)
+                    image = self.add_face_image(
+                        image, face_image_path, face_position, face_size
+                    )
                 except Exception as face_error:
                     print(f"添加人脸图片时出错: {face_error}")
                 print("身份证图片生成成功")
@@ -190,6 +234,7 @@ class IDCardFiller:
         except Exception as e:
             print(f"生成身份证时出错: {e}")
             import traceback
+
             traceback.print_exc()  # 打印完整堆栈跟踪
             return None
 

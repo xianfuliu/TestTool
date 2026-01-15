@@ -1,5 +1,16 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-                             QLabel, QLineEdit, QPushButton, QGroupBox, QScrollArea, QPlainTextEdit, QSizePolicy)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QGroupBox,
+    QScrollArea,
+    QPlainTextEdit,
+    QSizePolicy,
+)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
@@ -114,14 +125,14 @@ class DataQueryTab(QWidget):
             field_container.setContentsMargins(0, 0, 0, 0)
 
             # 创建标签
-            label = QLabel(field_config['label'] + "：")
+            label = QLabel(field_config["label"] + "：")
             label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             label.setMinimumWidth(30)  # 设置标签最小宽度
             label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # 左对齐
 
             # 创建输入框
             input_widget = QLineEdit()
-            input_widget.setPlaceholderText(field_config.get('placeholder', ''))
+            input_widget.setPlaceholderText(field_config.get("placeholder", ""))
             input_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             input_widget.setFixedWidth(250)  # 固定宽度
 
@@ -145,26 +156,11 @@ class DataQueryTab(QWidget):
     def create_default_input_fields_config(self):
         """创建默认的输入字段配置"""
         self.input_fields_config = {
-            "mobile": {
-                "label": "手机号",
-                "placeholder": "请输入手机号"
-            },
-            "id_card": {
-                "label": "身份证号",
-                "placeholder": "请输入身份证号"
-            },
-            "guarantor_loan_no": {
-                "label": "授信单号",
-                "placeholder": "请输入授信单号"
-            },
-            "loan_no": {
-                "label": "借款单号",
-                "placeholder": "请输入借款单号"
-            },
-            "repay_no": {
-                "label": "还款单号",
-                "placeholder": "请输入还款单号"
-            }
+            "mobile": {"label": "手机号", "placeholder": "请输入手机号"},
+            "id_card": {"label": "身份证号", "placeholder": "请输入身份证号"},
+            "guarantor_loan_no": {"label": "授信单号", "placeholder": "请输入授信单号"},
+            "loan_no": {"label": "借款单号", "placeholder": "请输入借款单号"},
+            "repay_no": {"label": "还款单号", "placeholder": "请输入还款单号"},
         }
 
     def create_button_panel(self):
@@ -219,15 +215,17 @@ class DataQueryTab(QWidget):
 
         try:
             if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
+                with open(config_file, "r", encoding="utf-8") as f:
                     config_data = json.load(f)
-                    self.db_configs = config_data.get('database_connections', {})
-                    self.sql_configs = config_data.get('sql_queries', {})
-                    self.input_fields_config = config_data.get('input_fields', {})
+                    self.db_configs = config_data.get("database_connections", {})
+                    self.sql_configs = config_data.get("sql_queries", {})
+                    self.input_fields_config = config_data.get("input_fields", {})
 
                     print(f"已加载数据库配置配置: {list(self.db_configs.keys())}")
                     print(f"已加载SQL操作配置: {list(self.sql_configs.keys())}")
-                    print(f"已加载输入字段配置: {list(self.input_fields_config.keys())}")
+                    print(
+                        f"已加载输入字段配置: {list(self.input_fields_config.keys())}"
+                    )
             else:
                 print(f"配置文件不存在: {config_file}")
                 # 如果配置文件不存在，创建默认配置
@@ -247,7 +245,12 @@ class DataQueryTab(QWidget):
         old_input_panel = None
         for i in range(self.layout().count()):
             item = self.layout().itemAt(i)
-            if item and item.widget() and isinstance(item.widget(), QGroupBox) and item.widget().title() == "":
+            if (
+                item
+                and item.widget()
+                and isinstance(item.widget(), QGroupBox)
+                and item.widget().title() == ""
+            ):
                 old_input_panel = item.widget()
                 break
 
@@ -275,7 +278,7 @@ class DataQueryTab(QWidget):
                 "port": "3306",
                 "username": "root",
                 "password": "",
-                "database": "test_db"
+                "database": "test_db",
             }
         }
 
@@ -290,32 +293,17 @@ class DataQueryTab(QWidget):
                     "user_name": "用户名",
                     "mobile": "手机号",
                     "id_card": "身份证号",
-                    "create_time": "创建时间"
-                }
+                    "create_time": "创建时间",
+                },
             }
         }
 
         self.input_fields_config = {
-            "mobile": {
-                "label": "手机号",
-                "placeholder": "请输入手机号"
-            },
-            "id_card": {
-                "label": "身份证号",
-                "placeholder": "请输入身份证号"
-            },
-            "guarantor_loan_no": {
-                "label": "授信单号",
-                "placeholder": "请输入授信单号"
-            },
-            "loan_no": {
-                "label": "借款单号",
-                "placeholder": "请输入借款单号"
-            },
-            "repay_no": {
-                "label": "还款单号",
-                "placeholder": "请输入还款单号"
-            }
+            "mobile": {"label": "手机号", "placeholder": "请输入手机号"},
+            "id_card": {"label": "身份证号", "placeholder": "请输入身份证号"},
+            "guarantor_loan_no": {"label": "授信单号", "placeholder": "请输入授信单号"},
+            "loan_no": {"label": "借款单号", "placeholder": "请输入借款单号"},
+            "repay_no": {"label": "还款单号", "placeholder": "请输入还款单号"},
         }
 
         # 保存默认配置
@@ -323,12 +311,12 @@ class DataQueryTab(QWidget):
         try:
             os.makedirs(os.path.dirname(config_file), exist_ok=True)
             config_data = {
-                'database_connections': self.db_configs,
-                'sql_queries': self.sql_configs,
-                'input_fields': self.input_fields_config
+                "database_connections": self.db_configs,
+                "sql_queries": self.sql_configs,
+                "input_fields": self.input_fields_config,
             }
 
-            with open(config_file, 'w', encoding='utf-8') as f:
+            with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"保存默认配置失败: {e}")
@@ -351,8 +339,8 @@ class DataQueryTab(QWidget):
             self.buttons_layout.addWidget(no_config_label)
         else:
             for config_name, config in self.sql_configs.items():
-                btn = QPushButton(config['display_name'])
-                btn.setProperty('config_name', config_name)
+                btn = QPushButton(config["display_name"])
+                btn.setProperty("config_name", config_name)
                 btn.clicked.connect(self.on_query_button_clicked)
                 self.buttons_layout.addWidget(btn)
                 self.query_buttons[config_name] = btn
@@ -364,46 +352,50 @@ class DataQueryTab(QWidget):
         """查询按钮点击事件"""
         try:
             button = self.sender()
-            config_name = button.property('config_name')
+            config_name = button.property("config_name")
             config = self.sql_configs[config_name]
 
             print(f"执行查询: {config_name}")
 
             # 检查查询条件
-            required_params = config.get('required_params', [])
+            required_params = config.get("required_params", [])
             missing_params = []
             for param in required_params:
                 if param in self.input_widgets:
                     value = self.input_widgets[param].text().strip()
                     if not value:
                         # 获取字段按钮名称
-                        field_label = self.input_fields_config.get(param, {}).get('label', param)
+                        field_label = self.input_fields_config.get(param, {}).get(
+                            "label", param
+                        )
                         missing_params.append(field_label)
 
             if missing_params:
-                Toast.warning(self, "警告", f"请填写以下查询条件: {', '.join(missing_params)}")
+                Toast.warning(
+                    self, "警告", f"请填写以下查询条件: {', '.join(missing_params)}"
+                )
                 return
 
             # 获取数据库配置配置
-            db_connection_name = config.get('db_connection')
+            db_connection_name = config.get("db_connection")
             if db_connection_name not in self.db_configs:
                 Toast.warning(self, "警告", f"数据库配置 '{db_connection_name}' 未配置")
                 return
 
             db_config = self.db_configs[db_connection_name]
             connection_params = {
-                'host': db_config.get('host'),
-                'port': int(db_config.get('port', 3306)),
-                'user': db_config.get('username'),
-                'password': db_config.get('password'),
-                'database': db_config.get('database'),
-                'charset': 'utf8mb4',
-                'connect_timeout': 10,  # 添加连接超时
-                'read_timeout': 30,  # 添加读取超时
+                "host": db_config.get("host"),
+                "port": int(db_config.get("port", 3306)),
+                "user": db_config.get("username"),
+                "password": db_config.get("password"),
+                "database": db_config.get("database"),
+                "charset": "utf8mb4",
+                "connect_timeout": 10,  # 添加连接超时
+                "read_timeout": 30,  # 添加读取超时
             }
 
             # 构建SQL
-            sql_template = config['sql']
+            sql_template = config["sql"]
 
             # 安全地构建SQL参数
             sql_params = {}
@@ -413,12 +405,12 @@ class DataQueryTab(QWidget):
             # 安全替换参数
             sql = sql_template
             for param, value in sql_params.items():
-                placeholder = '{' + param + '}'
+                placeholder = "{" + param + "}"
                 if placeholder in sql:
                     # 对值进行基本的SQL注入防护
                     if value:
                         # 移除可能的SQL注入字符
-                        value = re.sub(r'[\'\";]', '', value)
+                        value = re.sub(r"[\'\";]", "", value)
                     # 修复：在参数值周围添加单引号
                     sql = sql.replace(placeholder, f"'{value}'")
 
@@ -426,7 +418,7 @@ class DataQueryTab(QWidget):
 
             # 创建或获取输出框
             if config_name not in self.output_textedits:
-                self.create_output_area(config_name, config['display_name'])
+                self.create_output_area(config_name, config["display_name"])
 
             # 更新输出框状态
             output_textedit = self.output_textedits[config_name]
@@ -482,7 +474,7 @@ class DataQueryTab(QWidget):
                 output_textedit = self.output_textedits[query_name]
 
                 # 获取输出字段配置
-                output_fields = self.sql_configs[query_name].get('output_fields', {})
+                output_fields = self.sql_configs[query_name].get("output_fields", {})
 
                 # 格式化输出
                 if result_data:
@@ -502,10 +494,14 @@ class DataQueryTab(QWidget):
 
                     # 转换为格式化的JSON字符串
                     try:
-                        json_output = json.dumps(formatted_data, ensure_ascii=False, indent=2, default=str)
+                        json_output = json.dumps(
+                            formatted_data, ensure_ascii=False, indent=2, default=str
+                        )
                         output_textedit.setPlainText(json_output)
                     except Exception as e:
-                        output_textedit.setPlainText(f"JSON格式化错误: {str(e)}\n原始数据: {formatted_data}")
+                        output_textedit.setPlainText(
+                            f"JSON格式化错误: {str(e)}\n原始数据: {formatted_data}"
+                        )
                 else:
                     output_textedit.setPlainText("[]\n\n# 未查询到数据")
 
@@ -529,7 +525,7 @@ class DataQueryTab(QWidget):
                 # 只显示关键错误信息，避免过长的堆栈跟踪
                 if "pymysql" in error_message or "MySQL" in error_message:
                     # 提取主要的错误信息
-                    lines = error_message.split('\n')
+                    lines = error_message.split("\n")
                     main_error = lines[0] if lines else error_message
                     output_textedit.setPlainText(f"数据库配置错误: {main_error}")
                 else:

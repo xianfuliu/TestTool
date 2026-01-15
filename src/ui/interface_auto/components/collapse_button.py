@@ -12,20 +12,21 @@ from src.utils.resource_utils import resource_path
 
 class CollapseButton(QPushButton):
     """展开/收缩按钮组件"""
-    
+
     # 状态变化信号
     state_changed = pyqtSignal(bool)  # True: 展开状态, False: 收起状态
-    
+
     def __init__(self, parent=None, is_expanded=True):
         super().__init__(parent)
         self._is_expanded = is_expanded
         self.init_ui()
-        
+
     def init_ui(self):
         """初始化界面"""
         self.setFixedSize(24, 24)
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QPushButton {
                 background-color: #f0f0f0;
                 border: 1px solid #ccc;
@@ -39,11 +40,12 @@ class CollapseButton(QPushButton):
             QPushButton:pressed {
                 background-color: #d0d0d0;
             }
-        """)
-        
+        """
+        )
+
         self.update_icon()
         self.clicked.connect(self.toggle_state)
-        
+
     def update_icon(self):
         """更新图标显示"""
         if self._is_expanded:
@@ -64,22 +66,22 @@ class CollapseButton(QPushButton):
             else:
                 self.setText("◀")
             self.setToolTip("展开左侧菜单栏")
-        
+
         self.setIconSize(self.size())
-    
+
     def toggle_state(self):
         """切换展开/收起状态"""
         self._is_expanded = not self._is_expanded
         self.update_icon()
         self.state_changed.emit(self._is_expanded)
-        
+
     def set_expanded(self, expanded):
         """设置展开状态"""
         if self._is_expanded != expanded:
             self._is_expanded = expanded
             self.update_icon()
             self.state_changed.emit(self._is_expanded)
-            
+
     def is_expanded(self):
         """获取当前状态"""
         return self._is_expanded

@@ -1,12 +1,29 @@
 import os
 import json
 import re
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QLineEdit, QPushButton, QGroupBox,
-                             QComboBox, QCheckBox, QTextEdit, QMessageBox,
-                             QScrollArea, QSizePolicy, QDialog,
-                             QListWidget, QListWidgetItem, QFormLayout, QTabWidget, QTableWidget,
-                             QTableWidgetItem, QSpacerItem)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QGroupBox,
+    QComboBox,
+    QCheckBox,
+    QTextEdit,
+    QMessageBox,
+    QScrollArea,
+    QSizePolicy,
+    QDialog,
+    QListWidget,
+    QListWidgetItem,
+    QFormLayout,
+    QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QSpacerItem,
+)
 from PyQt5.QtCore import Qt, pyqtSignal
 from src.ui.dialogs.api_tool_interface_config_dialog import InterfaceConfigDialog
 from src.ui.dialogs.api_tool_sql_config_dialog import SQLConfigDialog
@@ -18,6 +35,7 @@ from src.utils.resource_utils import resource_path
 
 class ConfigManagementDialog(QDialog):
     """配置管理弹窗"""
+
     # 定义保存成功的信号
     config_saved = pyqtSignal(str)  # 参数为消息内容
 
@@ -107,11 +125,15 @@ class ConfigManagementDialog(QDialog):
         self.product_config_path_edit = QLineEdit()
         self.product_config_path_edit.setReadOnly(True)
         self.product_config_path_edit.setFixedWidth(400)
-        self.product_config_path_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+        self.product_config_path_edit.setStyleSheet(
+            "background-color: #f0f0f0; color: #666;"
+        )
 
         # 锁定状态显示（只读）
         self.product_locked_label = QLabel("未锁定")
-        self.product_locked_label.setStyleSheet("color: green; font-weight: bold; padding: 3px;")
+        self.product_locked_label.setStyleSheet(
+            "color: green; font-weight: bold; padding: 3px;"
+        )
         self.product_locked_label.setFixedWidth(80)
         self.product_locked_label.setAlignment(Qt.AlignCenter)
 
@@ -159,7 +181,9 @@ class ConfigManagementDialog(QDialog):
         product_select_layout.setSpacing(8)
         product_select_layout.addWidget(QLabel("产品:"))
         self.detail_product_combo = NoWheelComboBox()
-        self.detail_product_combo.currentTextChanged.connect(self.on_detail_product_changed)
+        self.detail_product_combo.currentTextChanged.connect(
+            self.on_detail_product_changed
+        )
         self.detail_product_combo.setFixedWidth(250)
         self.detail_product_combo.setStyleSheet(get_combobox_style())
         product_select_layout.addWidget(self.detail_product_combo)
@@ -167,7 +191,8 @@ class ConfigManagementDialog(QDialog):
         # 锁定状态提示
         self.detail_locked_label = QLabel("")
         self.detail_locked_label.setStyleSheet(
-            "color: red; font-weight: bold; padding: 5px; border: 1px solid red; border-radius: 3px;")
+            "color: red; font-weight: bold; padding: 5px; border: 1px solid red; border-radius: 3px;"
+        )
         self.detail_locked_label.setVisible(False)
         self.detail_locked_label.setFixedWidth(180)
         self.detail_locked_label.setAlignment(Qt.AlignCenter)
@@ -282,7 +307,9 @@ class ConfigManagementDialog(QDialog):
         layout_btn_layout.addWidget(self.remove_layout_item_btn)
         layout_btn_layout.addStretch()
 
-        self.layout_config_layout.addWidget(QLabel("提示：可以通过拖拽项来调整优先级顺序"))
+        self.layout_config_layout.addWidget(
+            QLabel("提示：可以通过拖拽项来调整优先级顺序")
+        )
         self.layout_config_layout.addWidget(self.layout_list)
         self.layout_config_layout.addLayout(layout_btn_layout)
 
@@ -312,7 +339,9 @@ class ConfigManagementDialog(QDialog):
         interface_btn_layout.addWidget(self.view_interface_btn)  # 添加查看按钮
         interface_btn_layout.addStretch()
 
-        self.interface_layout.addWidget(QLabel("提示：接口通过布局配置中的接口类型项自动生成和管理"))
+        self.interface_layout.addWidget(
+            QLabel("提示：接口通过布局配置中的接口类型项自动生成和管理")
+        )
         self.interface_layout.addWidget(self.interface_list)
         self.interface_layout.addLayout(interface_btn_layout)
 
@@ -342,7 +371,9 @@ class ConfigManagementDialog(QDialog):
         sql_btn_layout.addWidget(self.view_sql_btn)
         sql_btn_layout.addStretch()
 
-        self.sql_layout.addWidget(QLabel("提示：SQL通过布局配置中的SQL类型项自动生成和管理"))
+        self.sql_layout.addWidget(
+            QLabel("提示：SQL通过布局配置中的SQL类型项自动生成和管理")
+        )
         self.sql_layout.addWidget(self.sql_list)
         self.sql_layout.addLayout(sql_btn_layout)
 
@@ -359,13 +390,13 @@ class ConfigManagementDialog(QDialog):
         try:
             config_file = resource_path("config/products_config.json")
             if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
+                with open(config_file, "r", encoding="utf-8") as f:
                     self.products_config = json.load(f)
             else:
                 self.products_config = {
                     "products": {},
                     "default_product": "",
-                    "locked_products": []
+                    "locked_products": [],
                 }
 
             self.refresh_product_list()
@@ -390,7 +421,7 @@ class ConfigManagementDialog(QDialog):
             self.products_config = {
                 "products": {},
                 "default_product": "",
-                "locked_products": []
+                "locked_products": [],
             }
 
     def refresh_product_list(self):
@@ -399,7 +430,9 @@ class ConfigManagementDialog(QDialog):
         if "products" in self.products_config and self.products_config["products"]:
             for product_name in self.products_config["products"].keys():
                 # 检查产品是否被锁定
-                is_locked = product_name in self.products_config.get("locked_products", [])
+                is_locked = product_name in self.products_config.get(
+                    "locked_products", []
+                )
                 display_name = product_name
 
                 if product_name == self.products_config.get("default_product"):
@@ -415,7 +448,9 @@ class ConfigManagementDialog(QDialog):
         if "products" in self.products_config:
             for product_name in self.products_config["products"].keys():
                 # 检查产品是否被锁定
-                is_locked = product_name in self.products_config.get("locked_products", [])
+                is_locked = product_name in self.products_config.get(
+                    "locked_products", []
+                )
                 display_name = product_name
                 self.detail_product_combo.addItem(display_name, product_name)
 
@@ -429,7 +464,11 @@ class ConfigManagementDialog(QDialog):
             return
 
         # 从显示名称中提取真实产品名称（移除默认标志）
-        real_product_name = product_name.replace(" (默认)", "") if " (默认)" in product_name else product_name
+        real_product_name = (
+            product_name.replace(" (默认)", "")
+            if " (默认)" in product_name
+            else product_name
+        )
 
         config_path = self.products_config["products"].get(real_product_name, "")
 
@@ -442,10 +481,10 @@ class ConfigManagementDialog(QDialog):
     def get_real_product_name(self, display_name):
         """从显示名称中提取真实产品名称"""
         # 移除锁标志
-        name = display_name.replace('🔒', '').strip()
+        name = display_name.replace("🔒", "").strip()
         # 移除默认标志
-        if ' (默认)' in name:
-            name = name.replace(' (默认)', '')
+        if " (默认)" in name:
+            name = name.replace(" (默认)", "")
         return name
 
     def load_product_locked_status(self, product_name):
@@ -465,7 +504,7 @@ class ConfigManagementDialog(QDialog):
             return
 
         product_name = self.get_real_product_name(current_text)
-        locked = (state == Qt.Checked)
+        locked = state == Qt.Checked
 
         # 更新锁定状态
         self.update_product_locked_status(product_name, locked)
@@ -476,7 +515,10 @@ class ConfigManagementDialog(QDialog):
 
         # 如果当前在详情Tab中选中的是这个产品，更新详情Tab的状态
         current_detail_product = self.detail_product_combo.currentText()
-        if current_detail_product and self.get_real_product_name(current_detail_product) == product_name:
+        if (
+            current_detail_product
+            and self.get_real_product_name(current_detail_product) == product_name
+        ):
             self.update_detail_tab_enabled(not locked)
 
     def update_product_locked_status(self, product_name, locked):
@@ -511,7 +553,7 @@ class ConfigManagementDialog(QDialog):
 
             # 加载现有配置
             if os.path.exists(product_config_file):
-                with open(product_config_file, 'r', encoding='utf-8') as f:
+                with open(product_config_file, "r", encoding="utf-8") as f:
                     product_config = json.load(f)
             else:
                 product_config = {}
@@ -520,7 +562,7 @@ class ConfigManagementDialog(QDialog):
             product_config["locked"] = locked
 
             # 保存配置
-            with open(product_config_file, 'w', encoding='utf-8') as f:
+            with open(product_config_file, "w", encoding="utf-8") as f:
                 json.dump(product_config, f, ensure_ascii=False, indent=2)
 
             return True
@@ -589,7 +631,7 @@ class ConfigManagementDialog(QDialog):
         if widget in exclude_widgets:
             return
 
-        if hasattr(widget, 'setEnabled'):
+        if hasattr(widget, "setEnabled"):
             widget.setEnabled(enabled)
 
         # 递归处理子控件
@@ -633,7 +675,7 @@ class ConfigManagementDialog(QDialog):
 
             product_config_file = resource_path(f"{config_path}")
             if os.path.exists(product_config_file):
-                with open(product_config_file, 'r', encoding='utf-8') as f:
+                with open(product_config_file, "r", encoding="utf-8") as f:
                     product_config = json.load(f)
 
                 # 更新加解密配置
@@ -695,7 +737,9 @@ class ConfigManagementDialog(QDialog):
 
                 # 更新接口配置
                 self.interface_list.clear()
-                for interface_name, interface_config in product_config.get("interfaces", {}).items():
+                for interface_name, interface_config in product_config.get(
+                    "interfaces", {}
+                ).items():
                     item = QListWidgetItem(interface_name)
                     item.setData(Qt.UserRole, interface_config)  # 保存完整接口数据
                     self.interface_list.addItem(item)
@@ -761,10 +805,13 @@ class ConfigManagementDialog(QDialog):
                 return
 
             # 检查是否已存在默认产品
-            if is_default_checkbox.isChecked() and self.products_config.get("default_product"):
+            if is_default_checkbox.isChecked() and self.products_config.get(
+                "default_product"
+            ):
                 Toast.warning(
-                    dialog, "无法设置默认产品",
-                    f"已存在默认产品 '{self.products_config['default_product']}'，无法设置新的默认产品。\n请先取消现有产品的默认设置，再设置新的默认产品。"
+                    dialog,
+                    "无法设置默认产品",
+                    f"已存在默认产品 '{self.products_config['default_product']}'，无法设置新的默认产品。\n请先取消现有产品的默认设置，再设置新的默认产品。",
                 )
                 return
 
@@ -838,7 +885,11 @@ class ConfigManagementDialog(QDialog):
                 return
 
             # 获取真实产品名称
-            old_name = current_text.replace(" (默认)", "") if " (默认)" in current_text else current_text
+            old_name = (
+                current_text.replace(" (默认)", "")
+                if " (默认)" in current_text
+                else current_text
+            )
 
             # 获取当前锁定状态
             current_locked = old_name in self.products_config.get("locked_products", [])
@@ -863,7 +914,9 @@ class ConfigManagementDialog(QDialog):
             name_edit.setFixedWidth(200)
 
             is_default_checkbox = QCheckBox("设为默认产品")
-            is_default_checkbox.setChecked(old_name == self.products_config.get("default_product"))
+            is_default_checkbox.setChecked(
+                old_name == self.products_config.get("default_product")
+            )
 
             locked_checkbox = QCheckBox("锁定配置")
             locked_checkbox.setChecked(current_locked)
@@ -898,29 +951,38 @@ class ConfigManagementDialog(QDialog):
                         return
 
                 # 检查是否尝试设置新的默认产品但已存在默认产品
-                if (is_default_checkbox.isChecked() and
-                        self.products_config.get("default_product") and
-                        self.products_config["default_product"] != old_name):
+                if (
+                    is_default_checkbox.isChecked()
+                    and self.products_config.get("default_product")
+                    and self.products_config["default_product"] != old_name
+                ):
                     Toast.warning(
-                        dialog, "无法设置默认产品",
-                        f"已存在默认产品 '{self.products_config['default_product']}'，无法设置新的默认产品。\n请先取消现有产品的默认设置，再设置新的默认产品。"
+                        dialog,
+                        "无法设置默认产品",
+                        f"已存在默认产品 '{self.products_config['default_product']}'，无法设置新的默认产品。\n请先取消现有产品的默认设置，再设置新的默认产品。",
                     )
                     return
 
                 # 更新锁定状态
                 if current_locked != locked_checkbox.isChecked():
-                    self.update_product_locked_status(old_name, locked_checkbox.isChecked())
+                    self.update_product_locked_status(
+                        old_name, locked_checkbox.isChecked()
+                    )
 
                 # 如果产品名称发生变化
                 if old_name != new_name:
                     # 更新产品名称
-                    self.products_config["products"][new_name] = self.products_config["products"][old_name]
+                    self.products_config["products"][new_name] = self.products_config[
+                        "products"
+                    ][old_name]
 
                     # 重命名配置文件
                     try:
                         old_config_path = self.products_config["products"][old_name]
                         old_config_file = resource_path(f"{old_config_path}")
-                        new_config_file = resource_path(f"config/products/{new_name}.json")
+                        new_config_file = resource_path(
+                            f"config/products/{new_name}.json"
+                        )
 
                         if os.path.exists(old_config_file):
                             # 确保新目录存在
@@ -928,7 +990,9 @@ class ConfigManagementDialog(QDialog):
                             os.rename(old_config_file, new_config_file)
 
                         # 更新配置文件路径
-                        self.products_config["products"][new_name] = f"config/products/{new_name}.json"
+                        self.products_config["products"][
+                            new_name
+                        ] = f"config/products/{new_name}.json"
 
                         # 更新锁定列表中的名称
                         if old_name in self.products_config.get("locked_products", []):
@@ -947,8 +1011,12 @@ class ConfigManagementDialog(QDialog):
 
                 # 更新默认产品
                 if is_default_checkbox.isChecked():
-                    self.products_config["default_product"] = new_name if old_name != new_name else old_name
-                elif self.products_config.get("default_product") == (new_name if old_name != new_name else old_name):
+                    self.products_config["default_product"] = (
+                        new_name if old_name != new_name else old_name
+                    )
+                elif self.products_config.get("default_product") == (
+                    new_name if old_name != new_name else old_name
+                ):
                     # 如果取消默认，清空默认产品
                     self.products_config["default_product"] = ""
 
@@ -991,14 +1059,16 @@ class ConfigManagementDialog(QDialog):
             # 创建自定义确认对话框，显示中文按钮
             msg_box = QMessageBox(self)
             msg_box.setWindowTitle("确认删除")
-            msg_box.setText(f"确定要删除产品 '{product_name}' 吗？\n此操作将删除产品配置文件，且不可恢复！")
+            msg_box.setText(
+                f"确定要删除产品 '{product_name}' 吗？\n此操作将删除产品配置文件，且不可恢复！"
+            )
             msg_box.setIcon(QMessageBox.Question)
-            
+
             # 设置中文按钮文本
             yes_btn = msg_box.addButton("确定", QMessageBox.YesRole)
             no_btn = msg_box.addButton("取消", QMessageBox.NoRole)
             msg_box.setDefaultButton(no_btn)
-            
+
             msg_box.exec_()
 
             if msg_box.clickedButton() == yes_btn:
@@ -1022,7 +1092,7 @@ class ConfigManagementDialog(QDialog):
                 # 保存更新后的配置到文件
                 try:
                     products_config_file = resource_path("config/products_config.json")
-                    with open(products_config_file, 'w', encoding='utf-8') as f:
+                    with open(products_config_file, "w", encoding="utf-8") as f:
                         json.dump(self.products_config, f, ensure_ascii=False, indent=2)
                 except Exception as e:
                     Toast.critical(self, "错误", f"保存产品配置失败: {str(e)}")
@@ -1059,28 +1129,28 @@ class ConfigManagementDialog(QDialog):
                     "key": "name",
                     "label": "姓名",
                     "priority": 1,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
                     "key": "id_card",
                     "label": "身份证号",
                     "priority": 2,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
                     "key": "phone",
                     "label": "手机号",
                     "priority": 3,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
                     "key": "bank_card_no",
                     "label": "银行卡号",
                     "priority": 4,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
@@ -1088,7 +1158,7 @@ class ConfigManagementDialog(QDialog):
                     "label": "有效期开始",
                     "priority": 5,
                     "default": "",
-                    "show_in_ui": False
+                    "show_in_ui": False,
                 },
                 {
                     "type": "field",
@@ -1096,24 +1166,18 @@ class ConfigManagementDialog(QDialog):
                     "label": "有效期结束",
                     "priority": 6,
                     "default": "",
-                    "show_in_ui": False
+                    "show_in_ui": False,
                 },
-                {
-                    "type": "interface",
-                    "name": "默认接口",
-                    "priority": 7
-                }
+                {"type": "interface", "name": "默认接口", "priority": 7},
             ],
             "interfaces": {
                 "默认接口": {
                     "url": "http://api.example.com/default",
                     "method": "POST",
-                    "headers": {
-                        "Content-Type": "application/json"
-                    },
-                    "body_template": {}
+                    "headers": {"Content-Type": "application/json"},
+                    "body_template": {},
                 }
-            }
+            },
         }
 
         try:
@@ -1122,7 +1186,7 @@ class ConfigManagementDialog(QDialog):
             # 确保目录存在
             os.makedirs(os.path.dirname(product_config_file), exist_ok=True)
 
-            with open(product_config_file, 'w', encoding='utf-8') as f:
+            with open(product_config_file, "w", encoding="utf-8") as f:
                 json.dump(default_config, f, ensure_ascii=False, indent=2)
 
             return True
@@ -1163,7 +1227,9 @@ class ConfigManagementDialog(QDialog):
         task_group_edit.setText("DEFAULT")
         task_group_edit.setEnabled(False)  # 任务组不可编辑
         task_group_edit.setFixedWidth(250)
-        task_group_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")  # 灰色背景表示禁用
+        task_group_edit.setStyleSheet(
+            "background-color: #f0f0f0; color: #666;"
+        )  # 灰色背景表示禁用
         form_layout.addRow("任务组:", task_group_edit)
 
         layout.addLayout(form_layout)
@@ -1203,11 +1269,7 @@ class ConfigManagementDialog(QDialog):
                     return
 
             # 创建任务数据
-            task_data = {
-                "id": task_id,
-                "name": task_name,
-                "jobGroup": task_group
-            }
+            task_data = {"id": task_id, "name": task_name, "jobGroup": task_group}
 
             # 添加到列表
             item_text = f"{task_name} (ID: {task_id}, Group: {task_group})"
@@ -1272,7 +1334,9 @@ class ConfigManagementDialog(QDialog):
         task_group_edit.setText(task_data.get("jobGroup", "DEFAULT"))
         task_group_edit.setEnabled(False)  # 任务组不可编辑
         task_group_edit.setFixedWidth(250)
-        task_group_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")  # 灰色背景表示禁用
+        task_group_edit.setStyleSheet(
+            "background-color: #f0f0f0; color: #666;"
+        )  # 灰色背景表示禁用
         form_layout.addRow("任务组:", task_group_edit)
 
         layout.addLayout(form_layout)
@@ -1318,11 +1382,9 @@ class ConfigManagementDialog(QDialog):
             current_item.setText(item_text)
 
             # 更新任务数据
-            current_item.setData(Qt.UserRole, {
-                "id": task_id,
-                "name": task_name,
-                "jobGroup": task_group
-            })
+            current_item.setData(
+                Qt.UserRole, {"id": task_id, "name": task_name, "jobGroup": task_group}
+            )
 
             dialog.accept()
 
@@ -1355,9 +1417,10 @@ class ConfigManagementDialog(QDialog):
 
         # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
         reply = QMessageBox.question(
-            self, "确认删除",
+            self,
+            "确认删除",
             f"确定要删除定时任务 '{task_name}' (ID: {task_id}) 吗？",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
 
         if reply == QMessageBox.Yes:
@@ -1513,10 +1576,14 @@ class ConfigManagementDialog(QDialog):
         self.add_condition_field_combo = NoWheelComboBox()
         self.add_condition_field_combo.setFixedWidth(250)
         self.add_condition_field_combo.setStyleSheet(get_combobox_style())
-        self.add_condition_field_combo.currentIndexChanged.connect(self.on_condition_field_changed)
+        self.add_condition_field_combo.currentIndexChanged.connect(
+            self.on_condition_field_changed
+        )
         self.add_condition_field_label.setVisible(False)
         self.add_condition_field_combo.setVisible(False)
-        form_layout.addRow(self.add_condition_field_label, self.add_condition_field_combo)
+        form_layout.addRow(
+            self.add_condition_field_label, self.add_condition_field_combo
+        )
 
         # 数据类型 - 字段和下拉框显示
         self.add_data_type_label = QLabel("数据类型:")
@@ -1538,7 +1605,9 @@ class ConfigManagementDialog(QDialog):
         self.add_show_in_ui_label = QLabel("展示到前端:")
         self.add_show_in_ui_checkbox = QCheckBox()
         self.add_show_in_ui_checkbox.setChecked(True)  # 默认勾选
-        self.add_show_in_ui_checkbox.setToolTip("勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数")
+        self.add_show_in_ui_checkbox.setToolTip(
+            "勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数"
+        )
         form_layout.addRow(self.add_show_in_ui_label, self.add_show_in_ui_checkbox)
 
         # 新增：公式类型选择 - 仅公式类型显示
@@ -1554,7 +1623,9 @@ class ConfigManagementDialog(QDialog):
         # 新增：公式输入框 - 仅公式类型显示
         self.add_formula_label = QLabel("公式:")
         self.add_formula_edit = QTextEdit()
-        self.add_formula_edit.setPlaceholderText("请输入公式表达式，例如: {field1} + {field2} * 0.06")
+        self.add_formula_edit.setPlaceholderText(
+            "请输入公式表达式，例如: {field1} + {field2} * 0.06"
+        )
         self.add_formula_edit.setFixedHeight(80)
         self.add_formula_edit.setVisible(False)
         form_layout.addRow(self.add_formula_label, self.add_formula_edit)
@@ -1613,7 +1684,9 @@ class ConfigManagementDialog(QDialog):
 
         self.add_condition_mapping_table = QTableWidget()
         self.add_condition_mapping_table.setColumnCount(2)
-        self.add_condition_mapping_table.setHorizontalHeaderLabels(["条件值", "变量字段"])
+        self.add_condition_mapping_table.setHorizontalHeaderLabels(
+            ["条件值", "变量字段"]
+        )
         self.add_condition_mapping_table.horizontalHeader().setStretchLastSection(True)
         self.add_condition_mapping_table.setMaximumHeight(180)
         self.add_condition_mapping_table.setColumnWidth(0, 150)
@@ -1639,11 +1712,23 @@ class ConfigManagementDialog(QDialog):
             label = self.add_label_edit.text().strip()
             interface_name = self.add_interface_name_edit.text().strip()
             sql_name = self.add_sql_name_edit.text().strip()
-            data_type = self.add_data_type_combo.currentText() if item_type in ["field", "combo"] else "string"
+            data_type = (
+                self.add_data_type_combo.currentText()
+                if item_type in ["field", "combo"]
+                else "string"
+            )
             default_value = self.add_default_edit.text().strip()
             show_in_ui = self.add_show_in_ui_checkbox.isChecked()
-            formula_type = self.add_formula_type_combo.currentData() if item_type == "formula" else ""
-            formula = self.add_formula_edit.toPlainText().strip() if item_type == "formula" else ""
+            formula_type = (
+                self.add_formula_type_combo.currentData()
+                if item_type == "formula"
+                else ""
+            )
+            formula = (
+                self.add_formula_edit.toPlainText().strip()
+                if item_type == "formula"
+                else ""
+            )
 
             # 验证必填字段
             if item_type in ["field", "combo", "condition", "formula"]:  # 添加公式类型
@@ -1682,12 +1767,14 @@ class ConfigManagementDialog(QDialog):
                 # 根据公式类型进行不同的验证
                 if formula_type == "numeric":
                     # 数值公式验证：检查是否包含数字运算符号
-                    if not any(op in formula for op in ['+', '-', '*', '/']):
-                        Toast.warning(dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）")
+                    if not any(op in formula for op in ["+", "-", "*", "/"]):
+                        Toast.warning(
+                            dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）"
+                        )
                         return
                 elif formula_type == "date":
                     # 日期公式验证：检查是否包含日期运算
-                    if not any(op in formula for op in ['-']):
+                    if not any(op in formula for op in ["-"]):
                         Toast.warning(dialog, "警告", "日期公式应包含减法运算符（-）")
                         return
 
@@ -1703,19 +1790,18 @@ class ConfigManagementDialog(QDialog):
                     return
 
             # 构建布局项数据
-            item_data = {
-                "type": item_type,
-                "priority": self.layout_list.count() + 1
-            }
+            item_data = {"type": item_type, "priority": self.layout_list.count() + 1}
 
             if item_type == "field":
-                item_data.update({
-                    "key": key,
-                    "label": label,
-                    "data_type": data_type,
-                    "default": default_value,
-                    "show_in_ui": show_in_ui
-                })
+                item_data.update(
+                    {
+                        "key": key,
+                        "label": label,
+                        "data_type": data_type,
+                        "default": default_value,
+                        "show_in_ui": show_in_ui,
+                    }
+                )
                 display_text = f"字段: {label} ({key})"
                 if not show_in_ui:
                     display_text += " [隐藏]"
@@ -1727,40 +1813,37 @@ class ConfigManagementDialog(QDialog):
                     text_item = self.add_options_table.item(row, 0)
                     value_item = self.add_options_table.item(row, 1)
                     if text_item and value_item:
-                        options.append({
-                            "text": text_item.text(),
-                            "value": value_item.text()
-                        })
+                        options.append(
+                            {"text": text_item.text(), "value": value_item.text()}
+                        )
 
                 if not options:
                     Toast.warning(dialog, "警告", "请至少添加一个下拉框选项")
                     return
 
-                item_data.update({
-                    "key": key,
-                    "label": label,
-                    "data_type": data_type,
-                    "default": default_value,
-                    "options": options,
-                    "show_in_ui": show_in_ui
-                })
+                item_data.update(
+                    {
+                        "key": key,
+                        "label": label,
+                        "data_type": data_type,
+                        "default": default_value,
+                        "options": options,
+                        "show_in_ui": show_in_ui,
+                    }
+                )
                 display_text = f"下拉框: {label} ({key})"
                 if not show_in_ui:
                     display_text += " [隐藏]"
 
             elif item_type == "interface":
-                item_data.update({
-                    "name": interface_name
-                })
+                item_data.update({"name": interface_name})
                 display_text = f"接口: {interface_name}"
 
                 # 自动在接口配置中生成默认接口
                 self.add_default_interface(interface_name)
 
             elif item_type == "sql":  # 新增SQL类型处理
-                item_data.update({
-                    "name": sql_name
-                })
+                item_data.update({"name": sql_name})
                 display_text = f"SQL: {sql_name}"
 
                 # 自动在SQL配置中生成默认SQL配置
@@ -1787,25 +1870,29 @@ class ConfigManagementDialog(QDialog):
                 if not mappings:
                     Toast.warning(dialog, "警告", "请至少配置一个条件映射")
                     return
-                item_data.update({
-                    "key": key,
-                    "label": label,
-                    "condition_field": condition_field_key,
-                    "mappings": mappings,
-                    "show_in_ui": show_in_ui  # 新增展示到前端配置
-                })
+                item_data.update(
+                    {
+                        "key": key,
+                        "label": label,
+                        "condition_field": condition_field_key,
+                        "mappings": mappings,
+                        "show_in_ui": show_in_ui,  # 新增展示到前端配置
+                    }
+                )
                 display_text = f"条件: {label} ({key})"
                 if not show_in_ui:
                     display_text += " [隐藏]"  # 添加隐藏标记
 
             elif item_type == "formula":  # 新增公式类型处理
-                item_data.update({
-                    "key": key,
-                    "label": label,
-                    "formula_type": formula_type,  # 新增公式类型
-                    "formula": formula,
-                    "show_in_ui": show_in_ui  # 确保这一行存在
-                })
+                item_data.update(
+                    {
+                        "key": key,
+                        "label": label,
+                        "formula_type": formula_type,  # 新增公式类型
+                        "formula": formula,
+                        "show_in_ui": show_in_ui,  # 确保这一行存在
+                    }
+                )
                 display_text = f"公式: {label} ({key})"
                 if not show_in_ui:
                     display_text += " [隐藏]"
@@ -1883,10 +1970,12 @@ class ConfigManagementDialog(QDialog):
             "interface": "接口",
             "sql": "SQL",
             "condition": "条件",
-            "formula": "公式"
+            "formula": "公式",
         }
 
-        type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
+        type_value = QLabel(
+            type_mapping.get(item_data.get("type", ""), item_data.get("type", ""))
+        )
         type_value.setStyleSheet("font-weight: bold; color: blue;")
         type_layout.addWidget(type_value)
         type_layout.addStretch()
@@ -1932,7 +2021,9 @@ class ConfigManagementDialog(QDialog):
             show_in_ui_checkbox = QCheckBox()
             show_in_ui = item_data.get("show_in_ui", True)  # 默认True
             show_in_ui_checkbox.setChecked(show_in_ui)
-            show_in_ui_checkbox.setToolTip("勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数")
+            show_in_ui_checkbox.setToolTip(
+                "勾选时在前端显示该字段，不勾选时仅作为变量传递给请求参数"
+            )
             form_layout.addRow("展示到前端:", show_in_ui_checkbox)
 
         elif item_type == "interface":
@@ -1969,7 +2060,9 @@ class ConfigManagementDialog(QDialog):
             formula_label = QLabel("公式:")
             formula_edit = QTextEdit()
             formula_edit.setText(item_data.get("formula", ""))
-            formula_edit.setPlaceholderText("请输入公式表达式，例如: {field1} + {field2} * 0.06")
+            formula_edit.setPlaceholderText(
+                "请输入公式表达式，例如: {field1} + {field2} * 0.06"
+            )
             formula_edit.setFixedHeight(80)
             form_layout.addRow(formula_label, formula_edit)
 
@@ -1987,15 +2080,17 @@ class ConfigManagementDialog(QDialog):
                 item = self.layout_list.item(i)
                 item_data_field = item.data(Qt.UserRole)
                 if item_data_field and item_data_field.get("type") == "combo":
-                    combo_fields.append({
-                        "key": item_data_field.get("key"),
-                        "label": item_data_field.get("label")
-                    })
+                    combo_fields.append(
+                        {
+                            "key": item_data_field.get("key"),
+                            "label": item_data_field.get("label"),
+                        }
+                    )
 
             # 添加到下拉框
             for field in combo_fields:
                 display_text = f"{field['label']} ({field['key']})"
-                condition_field_combo.addItem(display_text, field['key'])
+                condition_field_combo.addItem(display_text, field["key"])
 
             # 设置当前选中的条件字段
             current_condition_field = item_data.get("condition_field")
@@ -2069,7 +2164,9 @@ class ConfigManagementDialog(QDialog):
                 sub_layout.addRow("值:", value_edit)
 
                 # 添加一些弹性空间，使布局更舒适
-                sub_layout.addItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
+                sub_layout.addItem(
+                    QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
+                )
 
                 sub_button_layout = QHBoxLayout()
                 sub_ok_btn = QPushButton("确定")
@@ -2141,7 +2238,9 @@ class ConfigManagementDialog(QDialog):
                 sub_layout.addRow("值:", value_edit)
 
                 # 添加弹性空间
-                sub_layout.addItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
+                sub_layout.addItem(
+                    QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
+                )
 
                 sub_button_layout = QHBoxLayout()
                 sub_ok_btn = QPushButton("确定")
@@ -2227,10 +2326,12 @@ class ConfigManagementDialog(QDialog):
                 item = self.layout_list.item(i)
                 item_data_field = item.data(Qt.UserRole)
                 if item_data_field and item_data_field.get("type") == "field":
-                    field_items.append({
-                        "key": item_data_field.get("key"),
-                        "label": item_data_field.get("label")
-                    })
+                    field_items.append(
+                        {
+                            "key": item_data_field.get("key"),
+                            "label": item_data_field.get("label"),
+                        }
+                    )
 
             # 获取当前条件字段的选项（如果条件字段已设置）
             current_condition_field_key = item_data.get("condition_field")
@@ -2239,8 +2340,11 @@ class ConfigManagementDialog(QDialog):
                 for i in range(self.layout_list.count()):
                     item = self.layout_list.item(i)
                     item_data_field = item.data(Qt.UserRole)
-                    if item_data_field and item_data_field.get(
-                            "key") == current_condition_field_key and item_data_field.get("type") == "combo":
+                    if (
+                        item_data_field
+                        and item_data_field.get("key") == current_condition_field_key
+                        and item_data_field.get("type") == "combo"
+                    ):
                         condition_options = item_data_field.get("options", [])
                         break
 
@@ -2261,9 +2365,12 @@ class ConfigManagementDialog(QDialog):
                 current_index = 0
                 for idx, field in enumerate(field_items):
                     display_text = f"{field['label']} ({field['key']})"
-                    combo.addItem(display_text, field['key'])
+                    combo.addItem(display_text, field["key"])
                     # 如果当前有映射，设置选中项
-                    if condition_value in mappings and mappings[condition_value] == field['key']:
+                    if (
+                        condition_value in mappings
+                        and mappings[condition_value] == field["key"]
+                    ):
                         current_index = idx + 1  # +1 因为第一个是空选项
                 combo.setCurrentIndex(current_index)
                 condition_mapping_table.setCellWidget(row, 1, combo)
@@ -2281,8 +2388,11 @@ class ConfigManagementDialog(QDialog):
                 for i in range(self.layout_list.count()):
                     item = self.layout_list.item(i)
                     item_data_field = item.data(Qt.UserRole)
-                    if item_data_field and item_data_field.get("key") == current_field_key and item_data_field.get(
-                            "type") == "combo":
+                    if (
+                        item_data_field
+                        and item_data_field.get("key") == current_field_key
+                        and item_data_field.get("type") == "combo"
+                    ):
                         combo_config = item_data_field
                         break
                 if not combo_config:
@@ -2301,15 +2411,20 @@ class ConfigManagementDialog(QDialog):
                     current_index = 0
                     for idx, field in enumerate(field_items):
                         display_text = f"{field['label']} ({field['key']})"
-                        combo.addItem(display_text, field['key'])
-                        if condition_value in mappings and mappings[condition_value] == field['key']:
+                        combo.addItem(display_text, field["key"])
+                        if (
+                            condition_value in mappings
+                            and mappings[condition_value] == field["key"]
+                        ):
                             current_index = idx + 1
                     combo.setCurrentIndex(current_index)
                     condition_mapping_table.setCellWidget(row, 1, combo)
 
             # 将信号连接移到条件类型判断内部
             if condition_field_combo:
-                condition_field_combo.currentIndexChanged.connect(on_condition_field_changed)
+                condition_field_combo.currentIndexChanged.connect(
+                    on_condition_field_changed
+                )
 
             layout.addWidget(condition_mapping_group)
 
@@ -2352,11 +2467,17 @@ class ConfigManagementDialog(QDialog):
                         elif data_type == "float":
                             float(default_value)
                     except ValueError:
-                        Toast.warning(dialog, "警告", f"默认值 '{default_value}' 与数据类型 '{data_type}' 不匹配")
+                        Toast.warning(
+                            dialog,
+                            "警告",
+                            f"默认值 '{default_value}' 与数据类型 '{data_type}' 不匹配",
+                        )
                         return
                 elif data_type == "bool" and default_value:
                     if default_value.lower() not in ["true", "false", "1", "0"]:
-                        Toast.warning(dialog, "警告", "布尔类型的默认值应为 true/false 或 1/0")
+                        Toast.warning(
+                            dialog, "警告", "布尔类型的默认值应为 true/false 或 1/0"
+                        )
                         return
 
                 # 下拉框特殊校验
@@ -2374,7 +2495,11 @@ class ConfigManagementDialog(QDialog):
                                 found = True
                                 break
                         if not found:
-                            Toast.warning(dialog, "警告", f"默认值 '{default_value}' 不在下拉框选项中")
+                            Toast.warning(
+                                dialog,
+                                "警告",
+                                f"默认值 '{default_value}' 不在下拉框选项中",
+                            )
                             return
 
             elif item_type == "interface":
@@ -2426,24 +2551,28 @@ class ConfigManagementDialog(QDialog):
                 formula_type = formula_type_combo.currentData()
                 if formula_type == "numeric":
                     # 数值公式验证：检查是否包含数字运算符号
-                    if not any(op in formula for op in ['+', '-', '*', '/']):
-                        Toast.warning(dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）")
+                    if not any(op in formula for op in ["+", "-", "*", "/"]):
+                        Toast.warning(
+                            dialog, "警告", "数值公式应包含数学运算符（+、-、*、/）"
+                        )
                         return
                 elif formula_type == "date":
                     # 日期公式验证：检查是否包含日期运算
-                    if not any(op in formula for op in ['-']):
+                    if not any(op in formula for op in ["-"]):
                         Toast.warning(dialog, "警告", "日期公式应包含减法运算符（-）")
                         return
 
             # 更新布局项数据
             if item_type in ["field", "combo"]:
-                item_data.update({
-                    "key": key_edit.text().strip(),
-                    "label": label_edit.text().strip(),
-                    "data_type": data_type_combo.currentText(),
-                    "default": default_edit.text().strip(),
-                    "show_in_ui": show_in_ui_checkbox.isChecked()
-                })
+                item_data.update(
+                    {
+                        "key": key_edit.text().strip(),
+                        "label": label_edit.text().strip(),
+                        "data_type": data_type_combo.currentText(),
+                        "default": default_edit.text().strip(),
+                        "show_in_ui": show_in_ui_checkbox.isChecked(),
+                    }
+                )
 
                 if item_type == "combo":
                     # 获取枚举选项
@@ -2452,10 +2581,9 @@ class ConfigManagementDialog(QDialog):
                         text_item = options_table.item(row, 0)
                         value_item = options_table.item(row, 1)
                         if text_item and value_item:
-                            options.append({
-                                "text": text_item.text(),
-                                "value": value_item.text()
-                            })
+                            options.append(
+                                {"text": text_item.text(), "value": value_item.text()}
+                            )
                     item_data["options"] = options
 
                 display_text = f"{'字段' if item_type == 'field' else '下拉框'}: {label_edit.text().strip()} ({key_edit.text().strip()})"
@@ -2474,9 +2602,7 @@ class ConfigManagementDialog(QDialog):
                             self.interface_list.item(i).setText(new_interface_name)
                             break
 
-                item_data.update({
-                    "name": new_interface_name
-                })
+                item_data.update({"name": new_interface_name})
                 display_text = f"接口: {new_interface_name}"
 
             elif item_type == "sql":
@@ -2491,14 +2617,16 @@ class ConfigManagementDialog(QDialog):
                             self.sql_list.item(i).setText(new_sql_name)
                             break
 
-                item_data.update({
-                    "name": new_sql_name
-                })
+                item_data.update({"name": new_sql_name})
                 display_text = f"SQL: {new_sql_name}"
 
             elif item_type == "condition":
                 # 获取条件字段
-                new_condition_field_key = condition_field_combo.currentData() if condition_field_combo else None
+                new_condition_field_key = (
+                    condition_field_combo.currentData()
+                    if condition_field_combo
+                    else None
+                )
                 if not new_condition_field_key:
                     Toast.warning(dialog, "警告", "请选择条件字段")
                     return
@@ -2522,26 +2650,34 @@ class ConfigManagementDialog(QDialog):
                     Toast.warning(dialog, "警告", "请至少配置一个条件映射")
                     return
 
-                item_data.update({
-                    "key": key_edit.text().strip(),
-                    "label": label_edit.text().strip(),
-                    "condition_field": new_condition_field_key,
-                    "mappings": mappings,
-                    "show_in_ui": show_in_ui_checkbox.isChecked()  # 使用复选框的值
-                })
-                display_text = f"条件: {label_edit.text().strip()} ({key_edit.text().strip()})"
+                item_data.update(
+                    {
+                        "key": key_edit.text().strip(),
+                        "label": label_edit.text().strip(),
+                        "condition_field": new_condition_field_key,
+                        "mappings": mappings,
+                        "show_in_ui": show_in_ui_checkbox.isChecked(),  # 使用复选框的值
+                    }
+                )
+                display_text = (
+                    f"条件: {label_edit.text().strip()} ({key_edit.text().strip()})"
+                )
                 if not show_in_ui_checkbox.isChecked():
                     display_text += " [隐藏]"  # 添加隐藏标记
 
             elif item_type == "formula":  # 新增公式类型更新
-                item_data.update({
-                    "key": key_edit.text().strip(),
-                    "label": label_edit.text().strip(),
-                    "formula_type": formula_type_combo.currentData(),
-                    "formula": formula_edit.toPlainText().strip(),
-                    "show_in_ui": show_in_ui_checkbox.isChecked()  # 确保这一行存在
-                })
-                display_text = f"公式: {label_edit.text().strip()} ({key_edit.text().strip()})"
+                item_data.update(
+                    {
+                        "key": key_edit.text().strip(),
+                        "label": label_edit.text().strip(),
+                        "formula_type": formula_type_combo.currentData(),
+                        "formula": formula_edit.toPlainText().strip(),
+                        "show_in_ui": show_in_ui_checkbox.isChecked(),  # 确保这一行存在
+                    }
+                )
+                display_text = (
+                    f"公式: {label_edit.text().strip()} ({key_edit.text().strip()})"
+                )
                 if not show_in_ui_checkbox.isChecked():
                     display_text += " [隐藏]"
 
@@ -2581,10 +2717,11 @@ class ConfigManagementDialog(QDialog):
         # 二次确认弹窗
         # 对于确认对话框，暂时保留QMessageBox.question，因为Toast没有确认对话框功能
         reply = QMessageBox.question(
-            self, "确认删除",
+            self,
+            "确认删除",
             f"确定要删除布局项 '{display_text}' 吗？\n此操作将同时删除相关的接口配置！",
             QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No  # 默认选择"No"更安全
+            QMessageBox.No,  # 默认选择"No"更安全
         )
 
         if reply != QMessageBox.Yes:
@@ -2657,9 +2794,11 @@ class ConfigManagementDialog(QDialog):
             "interface": "接口",
             "sql": "SQL",
             "condition": "条件",
-            "formula": "公式"  # 新增公式类型
+            "formula": "公式",  # 新增公式类型
         }
-        type_value = QLabel(type_mapping.get(item_data.get("type", ""), item_data.get("type", "")))
+        type_value = QLabel(
+            type_mapping.get(item_data.get("type", ""), item_data.get("type", ""))
+        )
         type_value.setStyleSheet("font-weight: bold; color: blue;")
         type_layout.addWidget(type_value)
         type_layout.addStretch()
@@ -2739,7 +2878,9 @@ class ConfigManagementDialog(QDialog):
             condition_field_edit = QLineEdit()
             condition_field_edit.setText(item_data.get("condition_field", ""))
             condition_field_edit.setReadOnly(True)
-            condition_field_edit.setStyleSheet("background-color: #f0f0f0; color: #666;")
+            condition_field_edit.setStyleSheet(
+                "background-color: #f0f0f0; color: #666;"
+            )
             condition_field_edit.setFixedWidth(250)
             form_layout.addRow("条件字段:", condition_field_edit)
 
@@ -2812,7 +2953,9 @@ class ConfigManagementDialog(QDialog):
             condition_mapping_table.setMaximumHeight(180)
             condition_mapping_table.setColumnWidth(0, 150)
             condition_mapping_table.setColumnWidth(1, 150)
-            condition_mapping_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 禁止编辑
+            condition_mapping_table.setEditTriggers(
+                QTableWidget.NoEditTriggers
+            )  # 禁止编辑
 
             # 填充现有映射
             mappings = item_data.get("mappings", {})
@@ -2822,7 +2965,9 @@ class ConfigManagementDialog(QDialog):
                 item = self.layout_list.item(i)
                 item_data_field = item.data(Qt.UserRole)
                 if item_data_field and item_data_field.get("type") == "field":
-                    field_mapping[item_data_field.get("key")] = item_data_field.get("label")
+                    field_mapping[item_data_field.get("key")] = item_data_field.get(
+                        "label"
+                    )
 
             # 获取条件字段的选项（用于显示条件值的标签）
             condition_field_options = {}
@@ -2831,12 +2976,16 @@ class ConfigManagementDialog(QDialog):
                 for i in range(self.layout_list.count()):
                     item = self.layout_list.item(i)
                     item_data_field = item.data(Qt.UserRole)
-                    if (item_data_field and
-                            item_data_field.get("type") == "combo" and
-                            item_data_field.get("key") == condition_field_key):
+                    if (
+                        item_data_field
+                        and item_data_field.get("type") == "combo"
+                        and item_data_field.get("key") == condition_field_key
+                    ):
                         options = item_data_field.get("options", [])
                         for option in options:
-                            condition_field_options[option.get("value")] = option.get("text")
+                            condition_field_options[option.get("value")] = option.get(
+                                "text"
+                            )
                         break
 
             for condition_value, variable_field in mappings.items():
@@ -2844,12 +2993,18 @@ class ConfigManagementDialog(QDialog):
                 condition_mapping_table.insertRow(row)
 
                 # 第一列：条件值（显示文本）
-                condition_text = condition_field_options.get(condition_value, condition_value)
-                condition_mapping_table.setItem(row, 0, QTableWidgetItem(f"{condition_text} ({condition_value})"))
+                condition_text = condition_field_options.get(
+                    condition_value, condition_value
+                )
+                condition_mapping_table.setItem(
+                    row, 0, QTableWidgetItem(f"{condition_text} ({condition_value})")
+                )
 
                 # 第二列：变量字段显示（显示标签）
                 field_label = field_mapping.get(variable_field, variable_field)
-                condition_mapping_table.setItem(row, 1, QTableWidgetItem(f"{field_label} ({variable_field})"))
+                condition_mapping_table.setItem(
+                    row, 1, QTableWidgetItem(f"{field_label} ({variable_field})")
+                )
 
             condition_mapping_layout.addWidget(condition_mapping_table)
             layout.addWidget(condition_mapping_group)
@@ -2876,7 +3031,7 @@ class ConfigManagementDialog(QDialog):
             "interface": (400, 250),  # 接口类型
             "sql": (400, 250),  # SQL类型
             "condition": (500, 650),  # 条件类型（需要显示映射表格）
-            "formula": (400, 400)  # 公式类型
+            "formula": (400, 400),  # 公式类型
         }
 
         width, height = size_mapping.get(item_type, (450, 580))  # 默认大小
@@ -2885,7 +3040,7 @@ class ConfigManagementDialog(QDialog):
     def on_add_type_changed(self, item_type):
         """添加布局项类型改变事件 - 修复版"""
         # 安全检查：确保 add_type_combo 存在
-        if not hasattr(self, 'add_type_combo'):
+        if not hasattr(self, "add_type_combo"):
             return
 
             # 获取实际的类型值（如果是中文显示，需要映射到英文）
@@ -2895,16 +3050,20 @@ class ConfigManagementDialog(QDialog):
             "接口": "interface",
             "SQL": "sql",
             "条件": "condition",
-            "公式": "formula"
+            "公式": "formula",
         }
         actual_type = type_mapping.get(item_type, item_type)
 
         # 动态调整对话框大小
-        if hasattr(self, '_add_dialog') and self._add_dialog:
+        if hasattr(self, "_add_dialog") and self._add_dialog:
             self._set_dialog_size_by_type(self._add_dialog, actual_type)
 
         # 显示/隐藏相关字段 - 修复：确保所有变量都是布尔值
-        is_field_or_combo_or_condition = actual_type in ["field", "combo", "condition"]  # 添加条件类型
+        is_field_or_combo_or_condition = actual_type in [
+            "field",
+            "combo",
+            "condition",
+        ]  # 添加条件类型
         is_interface = actual_type == "interface"
         is_sql = actual_type == "sql"
         is_combo = actual_type == "combo"  # 修复：确保这是布尔值，不是元组
@@ -2912,10 +3071,18 @@ class ConfigManagementDialog(QDialog):
         is_formula = actual_type == "formula"  # 新增公式类型处理
 
         # 键/名称和标签 - 仅字段、下拉框、条件和公式显示
-        self.add_key_label.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
-        self.add_key_edit.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
-        self.add_label_label.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
-        self.add_label_edit.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
+        self.add_key_label.setVisible(
+            is_field_or_combo_or_condition or is_formula
+        )  # 修改
+        self.add_key_edit.setVisible(
+            is_field_or_combo_or_condition or is_formula
+        )  # 修改
+        self.add_label_label.setVisible(
+            is_field_or_combo_or_condition or is_formula
+        )  # 修改
+        self.add_label_edit.setVisible(
+            is_field_or_combo_or_condition or is_formula
+        )  # 修改
 
         # 接口名称 - 仅接口显示
         self.add_interface_name_label.setVisible(is_interface)
@@ -2939,11 +3106,17 @@ class ConfigManagementDialog(QDialog):
         self.add_default_edit.setVisible(is_field_or_combo_or_condition)
 
         # 是否展示到前端 - 仅字段、下拉框和公式显示
-        self.add_show_in_ui_label.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
-        self.add_show_in_ui_checkbox.setVisible(is_field_or_combo_or_condition or is_formula)  # 修改
+        self.add_show_in_ui_label.setVisible(
+            is_field_or_combo_or_condition or is_formula
+        )  # 修改
+        self.add_show_in_ui_checkbox.setVisible(
+            is_field_or_combo_or_condition or is_formula
+        )  # 修改
 
         # 下拉框枚举配置 - 仅下拉框显示
-        self.add_options_group.setVisible(is_combo)  # 修复：这里应该是 is_combo 而不是 is_combo
+        self.add_options_group.setVisible(
+            is_combo
+        )  # 修复：这里应该是 is_combo 而不是 is_combo
 
         # 新增：公式类型选择 - 仅公式类型显示
         self.add_formula_type_label.setVisible(is_formula)
@@ -2979,15 +3152,14 @@ class ConfigManagementDialog(QDialog):
             item = self.layout_list.item(i)
             item_data = item.data(Qt.UserRole)
             if item_data and item_data.get("type") == "combo":
-                combo_fields.append({
-                    "key": item_data.get("key"),
-                    "label": item_data.get("label")
-                })
+                combo_fields.append(
+                    {"key": item_data.get("key"), "label": item_data.get("label")}
+                )
 
         # 添加到下拉框
         for field in combo_fields:
             display_text = f"{field['label']} ({field['key']})"
-            self.add_condition_field_combo.addItem(display_text, field['key'])
+            self.add_condition_field_combo.addItem(display_text, field["key"])
 
         # 如果有条件字段，初始化映射表格
         if self.add_condition_field_combo.count() > 0:
@@ -3012,7 +3184,11 @@ class ConfigManagementDialog(QDialog):
         for i in range(self.layout_list.count()):
             item = self.layout_list.item(i)
             item_data = item.data(Qt.UserRole)
-            if item_data and item_data.get("key") == current_field_key and item_data.get("type") == "combo":
+            if (
+                item_data
+                and item_data.get("key") == current_field_key
+                and item_data.get("type") == "combo"
+            ):
                 combo_config = item_data
                 break
 
@@ -3028,10 +3204,9 @@ class ConfigManagementDialog(QDialog):
             item = self.layout_list.item(i)
             item_data = item.data(Qt.UserRole)
             if item_data and item_data.get("type") == "field":
-                field_items.append({
-                    "key": item_data.get("key"),
-                    "label": item_data.get("label")
-                })
+                field_items.append(
+                    {"key": item_data.get("key"), "label": item_data.get("label")}
+                )
 
         # 填充表格
         for option in options:
@@ -3041,10 +3216,16 @@ class ConfigManagementDialog(QDialog):
             # 第一列：条件值（不可编辑）
             condition_value = option.get("value", "")
             condition_text = option.get("text", "")
-            display_text = f"{condition_text} ({condition_value})" if condition_text != condition_value else condition_value
+            display_text = (
+                f"{condition_text} ({condition_value})"
+                if condition_text != condition_value
+                else condition_value
+            )
 
             value_item = QTableWidgetItem(display_text)
-            value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable)  # 设置为不可编辑
+            value_item.setFlags(
+                value_item.flags() & ~Qt.ItemIsEditable
+            )  # 设置为不可编辑
             value_item.setData(Qt.UserRole, condition_value)  # 保存原始值到 UserRole
             self.add_condition_mapping_table.setItem(row, 0, value_item)
 
@@ -3054,7 +3235,7 @@ class ConfigManagementDialog(QDialog):
             combo.addItem("", "")  # 空选项
             for field in field_items:
                 display_text = f"{field['label']} ({field['key']})"
-                combo.addItem(display_text, field['key'])
+                combo.addItem(display_text, field["key"])
             self.add_condition_mapping_table.setCellWidget(row, 1, combo)
 
     def add_option_item(self):
@@ -3197,12 +3378,10 @@ class ConfigManagementDialog(QDialog):
         default_interface_config = {
             "url": "",
             "method": "POST",
-            "headers": {
-                "Content-Type": "application/json"
-            },
+            "headers": {"Content-Type": "application/json"},
             "body_template": {},
             "response_mapping": {},
-            "field_types": {}
+            "field_types": {},
         }
 
         # 检查接口是否已存在
@@ -3278,10 +3457,10 @@ class ConfigManagementDialog(QDialog):
                 "port": 3306,
                 "user": "xvdba",
                 "password": "xvdba@2022",
-                "database": "cfloan_biz"
+                "database": "cfloan_biz",
             },
             "sql": "",
-            "output_fields": []
+            "output_fields": [],
         }
 
         # 检查SQL是否已存在
@@ -3329,7 +3508,9 @@ class ConfigManagementDialog(QDialog):
         dialog.setWindowTitle(f"查看SQL - {sql_name}")
 
         # 禁用所有可编辑控件
-        for widget in dialog.findChildren((QLineEdit, QTextEdit, QComboBox, QPushButton, QTableWidget)):
+        for widget in dialog.findChildren(
+            (QLineEdit, QTextEdit, QComboBox, QPushButton, QTableWidget)
+        ):
             if isinstance(widget, QLineEdit):
                 widget.setReadOnly(True)
                 widget.setStyleSheet("background-color: #f0f0f0; color: #666;")
@@ -3361,7 +3542,7 @@ class ConfigManagementDialog(QDialog):
             config_file = resource_path("config/products_config.json")
             os.makedirs(os.path.dirname(config_file), exist_ok=True)
 
-            with open(config_file, 'w', encoding='utf-8') as f:
+            with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(self.products_config, f, ensure_ascii=False, indent=2)
 
             # 保存当前选中的产品详情配置（仅当产品未锁定时）
@@ -3369,7 +3550,9 @@ class ConfigManagementDialog(QDialog):
             if current_product:
                 real_product_name = self.get_real_product_name(current_product)
                 # 只有产品未锁定时才允许保存
-                if real_product_name not in self.products_config.get("locked_products", []):
+                if real_product_name not in self.products_config.get(
+                    "locked_products", []
+                ):
                     self.save_product_detail_config(real_product_name)
 
             # 通知主界面重新加载配置
@@ -3400,7 +3583,7 @@ class ConfigManagementDialog(QDialog):
                 "schedule_tasks": [],
                 "layout": [],
                 "interfaces": {},
-                "sqls": {}  # 新增SQL配置
+                "sqls": {},  # 新增SQL配置
             }
 
             # 保存定时任务
@@ -3416,7 +3599,7 @@ class ConfigManagementDialog(QDialog):
                 layout_data = item.data(Qt.UserRole)
                 if layout_data:
                     # 更新优先级为当前顺序
-                    layout_data['priority'] = i + 1
+                    layout_data["priority"] = i + 1
                     product_config["layout"].append(layout_data)
 
             # 保存接口配置
@@ -3430,10 +3613,8 @@ class ConfigManagementDialog(QDialog):
                     product_config["interfaces"][interface_name] = {
                         "url": "",
                         "method": "POST",
-                        "headers": {
-                            "Content-Type": "application/json"
-                        },
-                        "body_template": {}
+                        "headers": {"Content-Type": "application/json"},
+                        "body_template": {},
                     }
 
             # 保存SQL配置
@@ -3445,7 +3626,7 @@ class ConfigManagementDialog(QDialog):
 
             os.makedirs(os.path.dirname(product_config_file), exist_ok=True)
 
-            with open(product_config_file, 'w', encoding='utf-8') as f:
+            with open(product_config_file, "w", encoding="utf-8") as f:
                 json.dump(product_config, f, ensure_ascii=False, indent=2)
 
             # 刷新主界面的定时任务下拉列表
@@ -3453,7 +3634,9 @@ class ConfigManagementDialog(QDialog):
                 self.api_tool_tab.load_products_config()
                 # 如果当前产品是主界面正在使用的产品，更新定时任务下拉框
                 if self.api_tool_tab.current_product == product_name:
-                    product_config = self.api_tool_tab.api_config["products"].get(product_name, {})
+                    product_config = self.api_tool_tab.api_config["products"].get(
+                        product_name, {}
+                    )
                     self.api_tool_tab.update_schedule_tasks_combo(product_config)
 
             return True
@@ -3464,6 +3647,6 @@ class ConfigManagementDialog(QDialog):
 
     def extract_formula_dependencies(self, formula):
         """提取公式中依赖的变量"""
-        pattern = r'\{(\w+)\}'
+        pattern = r"\{(\w+)\}"
         variables = re.findall(pattern, formula)
         return list(set(variables))  # 去重

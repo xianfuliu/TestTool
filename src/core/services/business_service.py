@@ -8,7 +8,7 @@ class BusinessService:
     def __init__(self):
         self.db = Database()
         self.database_available = self._check_database_connection()
-    
+
     def _check_database_connection(self) -> bool:
         """检查数据库连接是否可用"""
         try:
@@ -25,11 +25,13 @@ class BusinessService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, name, description, created_by, created_at, updated_at
                         FROM business_groups 
                         ORDER BY created_at DESC
-                    """)
+                    """
+                    )
                     return cursor.fetchall()
         except Exception as e:
             print(f"获取业务分组失败: {e}")
@@ -40,11 +42,14 @@ class BusinessService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, name, description, created_by, created_at, updated_at
                         FROM business_groups 
                         WHERE id = %s
-                    """, (group_id,))
+                    """,
+                        (group_id,),
+                    )
                     return cursor.fetchone()
         except Exception as e:
             print(f"获取业务分组失败: {e}")
@@ -55,10 +60,13 @@ class BusinessService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO business_groups (name, description, created_by)
                         VALUES (%s, %s, %s)
-                    """, (data['name'], data['description'], 'admin'))  # 实际应该从登录用户获取
+                    """,
+                        (data["name"], data["description"], "admin"),
+                    )  # 实际应该从登录用户获取
                     conn.commit()
                     return cursor.lastrowid
         except Exception as e:
@@ -70,11 +78,14 @@ class BusinessService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE business_groups 
                         SET name = %s, description = %s 
                         WHERE id = %s
-                    """, (data['name'], data['description'], group_id))
+                    """,
+                        (data["name"], data["description"], group_id),
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
@@ -87,9 +98,13 @@ class BusinessService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 先删除关联的项目
-                    cursor.execute("DELETE FROM projects WHERE business_group_id = %s", (group_id,))
+                    cursor.execute(
+                        "DELETE FROM projects WHERE business_group_id = %s", (group_id,)
+                    )
                     # 再删除业务分组
-                    cursor.execute("DELETE FROM business_groups WHERE id = %s", (group_id,))
+                    cursor.execute(
+                        "DELETE FROM business_groups WHERE id = %s", (group_id,)
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
@@ -102,30 +117,39 @@ class BusinessService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 项目数量
-                    cursor.execute("SELECT COUNT(*) as count FROM projects WHERE business_group_id = %s", (group_id,))
-                    project_count = cursor.fetchone()['count']
+                    cursor.execute(
+                        "SELECT COUNT(*) as count FROM projects WHERE business_group_id = %s",
+                        (group_id,),
+                    )
+                    project_count = cursor.fetchone()["count"]
 
                     # 接口数量（通过项目关联）
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT COUNT(*) as count 
                         FROM api_templates 
                         WHERE project_id IN (SELECT id FROM projects WHERE business_group_id = %s)
-                    """, (group_id,))
-                    api_count = cursor.fetchone()['count']
+                    """,
+                        (group_id,),
+                    )
+                    api_count = cursor.fetchone()["count"]
 
                     # 用例数量（通过项目关联）
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT COUNT(*) as count 
                         FROM test_cases 
                         WHERE project_id IN (SELECT id FROM projects WHERE business_group_id = %s)
-                    """, (group_id,))
-                    case_count = cursor.fetchone()['count']
+                    """,
+                        (group_id,),
+                    )
+                    case_count = cursor.fetchone()["count"]
 
                     return {
-                        'project_count': project_count,
-                        'api_count': api_count,
-                        'case_count': case_count
+                        "project_count": project_count,
+                        "api_count": api_count,
+                        "case_count": case_count,
                     }
         except Exception as e:
             print(f"获取分组统计失败: {e}")
-            return {'project_count': 0, 'api_count': 0, 'case_count': 0}
+            return {"project_count": 0, "api_count": 0, "case_count": 0}

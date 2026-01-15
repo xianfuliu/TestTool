@@ -11,13 +11,16 @@ class IdCardImageGenerator:
 
     def __init__(self, parent_app=None):
         self.parent_app = parent_app
-        self.face_images = ["src/resources/images/ocr_face_1.png", "src/resources/images/ocr_face_2.png"]
+        self.face_images = [
+            "src/resources/images/ocr_face_1.png",
+            "src/resources/images/ocr_face_2.png",
+        ]
 
         # 压缩设置
         self.compression_config = {
-            'max_size': (400, 300),  # 最大尺寸
-            'quality': 85,  # JPEG质量 (1-100)
-            'optimize': True  # 优化
+            "max_size": (400, 300),  # 最大尺寸
+            "quality": 85,  # JPEG质量 (1-100)
+            "optimize": True,  # 优化
         }
 
     def generate_id_card_images(self, id_data=None, face_image_path=None):
@@ -42,10 +45,14 @@ class IdCardImageGenerator:
 
         # 检查模板文件是否存在
         if not os.path.exists(self.parent_app.filler.template_path):
-            raise FileNotFoundError(f"身份证模板文件不存在: {self.parent_app.filler.template_path}")
+            raise FileNotFoundError(
+                f"身份证模板文件不存在: {self.parent_app.filler.template_path}"
+            )
 
         # 生成完整身份证图片
-        full_image = self.parent_app.filler.fill_id_card(id_data, face_image_path=face_image_path)
+        full_image = self.parent_app.filler.fill_id_card(
+            id_data, face_image_path=face_image_path
+        )
 
         if full_image is None:
             raise Exception("身份证图片生成失败")
@@ -58,8 +65,9 @@ class IdCardImageGenerator:
 
         return front_image, back_image
 
-    def generate_id_card_images_base64(self, id_data=None, face_image_path=None, format="JPEG",
-                                       compression_config=None):
+    def generate_id_card_images_base64(
+        self, id_data=None, face_image_path=None, format="JPEG", compression_config=None
+    ):
         """
         生成身份证图片并返回Base64编码
 
@@ -78,29 +86,35 @@ class IdCardImageGenerator:
         """
         try:
             # 生成图片
-            front_image, back_image = self.generate_id_card_images(id_data, face_image_path)
+            front_image, back_image = self.generate_id_card_images(
+                id_data, face_image_path
+            )
 
             # 应用压缩配置
             config = compression_config or self.compression_config
 
             # 转换为Base64（带压缩）
-            front_base64 = self._pil_image_to_base64_compressed(front_image, format, config)
-            back_base64 = self._pil_image_to_base64_compressed(back_image, format, config)
+            front_base64 = self._pil_image_to_base64_compressed(
+                front_image, format, config
+            )
+            back_base64 = self._pil_image_to_base64_compressed(
+                back_image, format, config
+            )
 
             # 人脸图片也压缩
             face_pil_image = Image.open(self._get_random_face_image())
-            face_base64 = self._pil_image_to_base64_compressed(face_pil_image, format, config)
+            face_base64 = self._pil_image_to_base64_compressed(
+                face_pil_image, format, config
+            )
 
-            return {
-                'front': front_base64,
-                'back': back_base64,
-                'face': face_base64
-            }
+            return {"front": front_base64, "back": back_base64, "face": face_base64}
 
         except Exception as e:
             raise Exception(f"生成Base64编码的身份证图片失败: {str(e)}")
 
-    def _pil_image_to_base64_compressed(self, pil_image, format="JPEG", compression_config=None):
+    def _pil_image_to_base64_compressed(
+        self, pil_image, format="JPEG", compression_config=None
+    ):
         """
         将PIL图像转换为Base64编码（带压缩）
 
@@ -119,33 +133,30 @@ class IdCardImageGenerator:
         config = compression_config or self.compression_config
 
         # 调整图片尺寸
-        if config.get('max_size'):
-            pil_image = self._resize_image(pil_image, config['max_size'])
+        if config.get("max_size"):
+            pil_image = self._resize_image(pil_image, config["max_size"])
 
         # 转换为RGB模式（如果是RGBA）
-        if pil_image.mode in ('RGBA', 'LA'):
-            background = Image.new('RGB', pil_image.size, (255, 255, 255))
+        if pil_image.mode in ("RGBA", "LA"):
+            background = Image.new("RGB", pil_image.size, (255, 255, 255))
             background.paste(pil_image, mask=pil_image.split()[-1])
             pil_image = background
 
         # 将图像保存到内存缓冲区（带压缩）
         buffer = io.BytesIO()
 
-        save_kwargs = {
-            'format': format,
-            'optimize': config.get('optimize', True)
-        }
+        save_kwargs = {"format": format, "optimize": config.get("optimize", True)}
 
-        if format.upper() == 'JPEG':
-            save_kwargs['quality'] = config.get('quality', 75)
-        elif format.upper() == 'PNG':
-            save_kwargs['compress_level'] = 6  # PNG压缩级别 (0-9, 9为最高压缩)
+        if format.upper() == "JPEG":
+            save_kwargs["quality"] = config.get("quality", 75)
+        elif format.upper() == "PNG":
+            save_kwargs["compress_level"] = 6  # PNG压缩级别 (0-9, 9为最高压缩)
 
         pil_image.save(buffer, **save_kwargs)
 
         # 获取字节数据并编码为Base64
         image_bytes = buffer.getvalue()
-        base64_string = base64.b64encode(image_bytes).decode('utf-8')
+        base64_string = base64.b64encode(image_bytes).decode("utf-8")
 
         return base64_string
 
@@ -211,7 +222,7 @@ class IdCardImageGenerator:
         buffer = io.BytesIO()
         pil_image.save(buffer, format=format)
         image_bytes = buffer.getvalue()
-        base64_string = base64.b64encode(image_bytes).decode('utf-8')
+        base64_string = base64.b64encode(image_bytes).decode("utf-8")
 
         return base64_string
 
@@ -222,8 +233,8 @@ class IdCardImageGenerator:
         if not base64_string:
             raise ValueError("Base64字符串不能为空")
 
-        if base64_string.startswith('data:image'):
-            base64_string = base64_string.split(',', 1)[1]
+        if base64_string.startswith("data:image"):
+            base64_string = base64_string.split(",", 1)[1]
 
         image_bytes = base64.b64decode(base64_string)
         image = Image.open(io.BytesIO(image_bytes))
@@ -240,8 +251,8 @@ class IdCardImageGenerator:
             optimize: 是否优化
         """
         if max_size:
-            self.compression_config['max_size'] = max_size
+            self.compression_config["max_size"] = max_size
         if quality is not None:
-            self.compression_config['quality'] = quality
+            self.compression_config["quality"] = quality
         if optimize is not None:
-            self.compression_config['optimize'] = optimize
+            self.compression_config["optimize"] = optimize

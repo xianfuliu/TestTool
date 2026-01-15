@@ -9,26 +9,26 @@ class Toast:
 
     # 预定义样式和图标 - 统一使用黑底白字
     STYLES = {
-        'warning': {
-            'background': 'rgba(0, 0, 0, 0.85)',
-            'border': '1px solid #555',
-            'icon': 'warning.png'
+        "warning": {
+            "background": "rgba(0, 0, 0, 0.85)",
+            "border": "1px solid #555",
+            "icon": "warning.png",
         },
-        'critical': {
-            'background': 'rgba(0, 0, 0, 0.85)',
-            'border': '1px solid #555',
-            'icon': 'error.png'
+        "critical": {
+            "background": "rgba(0, 0, 0, 0.85)",
+            "border": "1px solid #555",
+            "icon": "error.png",
         },
-        'success': {
-            'background': 'rgba(0, 0, 0, 0.85)',
-            'border': '1px solid #555',
-            'icon': 'success.png'
+        "success": {
+            "background": "rgba(0, 0, 0, 0.85)",
+            "border": "1px solid #555",
+            "icon": "success.png",
         },
-        'information': {
-            'background': 'rgba(0, 0, 0, 0.85)',
-            'border': '1px solid #555',
-            'icon': 'info.png'
-        }
+        "information": {
+            "background": "rgba(0, 0, 0, 0.85)",
+            "border": "1px solid #555",
+            "icon": "info.png",
+        },
     }
 
     @staticmethod
@@ -39,23 +39,25 @@ class Toast:
 
         # 方法1: 从当前文件向上查找，直到找到包含 'src' 目录的文件夹
         current_dir = os.path.dirname(current_file_path)
-        while current_dir and not os.path.exists(os.path.join(current_dir, 'src')):
+        while current_dir and not os.path.exists(os.path.join(current_dir, "src")):
             parent_dir = os.path.dirname(current_dir)
             if parent_dir == current_dir:  # 已经到达根目录
                 break
             current_dir = parent_dir
 
         # 构建图标路径
-        icon_path = os.path.join(current_dir, 'src', 'resources', 'icons', icon_name)
+        icon_path = os.path.join(current_dir, "src", "resources", "icons", icon_name)
 
         # 如果找不到，尝试其他可能的路径
         if not os.path.exists(icon_path):
             # 方法2: 假设当前工作目录是项目根目录
-            icon_path = os.path.join(os.getcwd(), 'src', 'resources', 'icons', icon_name)
+            icon_path = os.path.join(
+                os.getcwd(), "src", "resources", "icons", icon_name
+            )
 
         if not os.path.exists(icon_path):
             # 方法3: 直接使用相对路径
-            icon_path = os.path.join('src', 'resources', 'icons', icon_name)
+            icon_path = os.path.join("src", "resources", "icons", icon_name)
 
         if not os.path.exists(icon_path):
             # 方法4: 尝试绝对路径
@@ -67,7 +69,7 @@ class Toast:
         return icon_path
 
     @staticmethod
-    def show_message(parent, message, message_type='information', duration=2000):
+    def show_message(parent, message, message_type="information", duration=2000):
         """显示Toast提示 - 清晰的参数名
 
         Args:
@@ -81,7 +83,7 @@ class Toast:
             duration = 2000
 
         if message_type not in Toast.STYLES:
-            message_type = 'information'
+            message_type = "information"
 
         style = Toast.STYLES[message_type]
 
@@ -95,10 +97,10 @@ class Toast:
                     main_window_temp = widget
                     break
             parent = main_window_temp if main_window_temp else QApplication.desktop()
-        
+
         toast = QWidget(parent)
         toast.setObjectName("toast")
-        
+
         # 设置窗口标志 - 确保Toast位于最上层且不会被覆盖
         toast.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         toast.setAttribute(Qt.WA_ShowWithoutActivating)
@@ -106,14 +108,14 @@ class Toast:
         # 创建背景容器，用于实现圆角效果
         background_widget = QWidget(toast)
         background_widget.setObjectName("background_widget")
-        
+
         # 设置布局
         layout = QHBoxLayout(background_widget)
         layout.setContentsMargins(15, 10, 15, 10)
         layout.setSpacing(10)
 
         # 添加图标（如果存在）
-        icon_path = Toast.get_icon_path(style['icon'])
+        icon_path = Toast.get_icon_path(style["icon"])
         if icon_path and os.path.exists(icon_path):
             try:
                 icon_label = QLabel()
@@ -121,9 +123,13 @@ class Toast:
 
                 if not pixmap.isNull():
                     # 调整图标大小（20x20像素）
-                    scaled_pixmap = pixmap.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    scaled_pixmap = pixmap.scaled(
+                        20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    )
                     icon_label.setPixmap(scaled_pixmap)
-                    icon_label.setStyleSheet("background-color: transparent;")  # 确保图标背景透明
+                    icon_label.setStyleSheet(
+                        "background-color: transparent;"
+                    )  # 确保图标背景透明
                     layout.addWidget(icon_label)
                 else:
                     print(f"无法加载图标: {icon_path}")
@@ -143,11 +149,14 @@ class Toast:
 
         # 添加文本
         text_label = QLabel(message)
-        text_label.setStyleSheet("color: white; font-size: 18px; font-weight: bold; background: transparent;")
+        text_label.setStyleSheet(
+            "color: white; font-size: 18px; font-weight: bold; background: transparent;"
+        )
         layout.addWidget(text_label)
 
         # 设置背景容器的样式 - 实现黑色圆角背景
-        background_widget.setStyleSheet(f"""
+        background_widget.setStyleSheet(
+            f"""
             QWidget#background_widget {{
                 background-color: {style['background']};
                 border-radius: 10px;
@@ -160,12 +169,13 @@ class Toast:
                 background: transparent;
                 border: none;
             }}
-        """)
-        
+        """
+        )
+
         # 设置背景容器的大小和位置
         background_widget.adjustSize()
         toast.resize(background_widget.size())
-        
+
         # 设置Toast为透明，让背景容器显示圆角效果
         toast.setAttribute(Qt.WA_TranslucentBackground)
         toast.setStyleSheet("background: transparent;")
@@ -175,31 +185,39 @@ class Toast:
 
         # 获取应用程序的主窗口，而不是使用传递的parent
         main_window = None
-        
+
         # 方法1: 使用activeWindow获取当前活动窗口
         main_window = QApplication.activeWindow()
-        
+
         # 方法2: 如果activeWindow为None，遍历所有顶层窗口
         if main_window is None:
             for widget in QApplication.topLevelWidgets():
-                if widget.isWindow() and widget.windowType() == Qt.Window and widget.isVisible():
+                if (
+                    widget.isWindow()
+                    and widget.windowType() == Qt.Window
+                    and widget.isVisible()
+                ):
                     main_window = widget
                     break
-        
+
         # 计算Toast位置
-        if main_window is not None and hasattr(main_window, 'geometry'):
+        if main_window is not None and hasattr(main_window, "geometry"):
             # 使用主窗口的几何信息计算位置
             main_rect = main_window.geometry()
             toast_x = main_rect.x() + (main_rect.width() // 2) - (toast.width() // 2)
             toast_y = main_rect.y() + (main_rect.height() // 2) - (toast.height() // 2)
-            
+
         else:
             # 如果找不到主窗口，使用桌面中央位置
             desktop = QApplication.desktop()
             screen_rect = desktop.availableGeometry()
-            toast_x = screen_rect.x() + (screen_rect.width() // 2) - (toast.width() // 2)
-            toast_y = screen_rect.y() + (screen_rect.height() // 2) - (toast.height() // 2)
-        
+            toast_x = (
+                screen_rect.x() + (screen_rect.width() // 2) - (toast.width() // 2)
+            )
+            toast_y = (
+                screen_rect.y() + (screen_rect.height() // 2) - (toast.height() // 2)
+            )
+
         # 在主窗口中央显示Toast
         toast.move(toast_x, toast_y)
 
@@ -218,44 +236,49 @@ class Toast:
     def information(parent, title, message, buttons=None, defaultButton=None):
         """信息提示 - 兼容QMessageBox"""
         # 注意：第二个参数是title，但我们显示的是message
-        return Toast.show_message(parent, message, 'success')
+        return Toast.show_message(parent, message, "success")
 
     @staticmethod
     def warning(parent, title, message, buttons=None, defaultButton=None):
         """警告提示 - 兼容QMessageBox"""
-        return Toast.show_message(parent, message, 'warning')
+        return Toast.show_message(parent, message, "warning")
 
     @staticmethod
     def critical(parent, title, message, buttons=None, defaultButton=None):
         """错误提示 - 兼容QMessageBox"""
-        return Toast.show_message(parent, message, 'critical')
+        return Toast.show_message(parent, message, "critical")
 
     # 推荐使用的新方法（避免混淆）
     @staticmethod
     def info(parent, message, duration=2000):
         """信息提示 - 推荐使用"""
-        return Toast.show_message(parent, message, 'information', duration)
+        return Toast.show_message(parent, message, "information", duration)
 
     @staticmethod
     def warn(parent, message, duration=2000):
         """警告提示 - 推荐使用"""
-        return Toast.show_message(parent, message, 'warning', duration)
+        return Toast.show_message(parent, message, "warning", duration)
 
     @staticmethod
     def error(parent, message, duration=2000):
         """错误提示 - 推荐使用"""
-        return Toast.show_message(parent, message, 'critical', duration)
+        return Toast.show_message(parent, message, "critical", duration)
 
     @staticmethod
     def success(parent, message, duration=2000):
         """成功提示 - 推荐使用"""
-        return Toast.show_message(parent, message, 'success', duration)
+        return Toast.show_message(parent, message, "success", duration)
 
 
 if __name__ == "__main__":
     import sys
-    from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget
-
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QMainWindow,
+        QPushButton,
+        QVBoxLayout,
+        QWidget,
+    )
 
     class TestWindow(QMainWindow):
         def __init__(self):
@@ -273,15 +296,21 @@ if __name__ == "__main__":
 
             # 测试各种Toast类型
             btn_info = QPushButton("信息提示")
-            btn_info.clicked.connect(lambda: Toast.information(self, "信息", "这是一个信息提示"))
+            btn_info.clicked.connect(
+                lambda: Toast.information(self, "信息", "这是一个信息提示")
+            )
             layout.addWidget(btn_info)
 
             btn_warning = QPushButton("警告提示")
-            btn_warning.clicked.connect(lambda: Toast.warning(self, "警告", "这是一个警告提示"))
+            btn_warning.clicked.connect(
+                lambda: Toast.warning(self, "警告", "这是一个警告提示")
+            )
             layout.addWidget(btn_warning)
 
             btn_critical = QPushButton("错误提示")
-            btn_critical.clicked.connect(lambda: Toast.critical(self, "错误", "这是一个错误提示"))
+            btn_critical.clicked.connect(
+                lambda: Toast.critical(self, "错误", "这是一个错误提示")
+            )
             layout.addWidget(btn_critical)
 
             btn_success = QPushButton("成功提示")
@@ -289,7 +318,6 @@ if __name__ == "__main__":
             layout.addWidget(btn_success)
 
             central_widget.setLayout(layout)
-
 
     app = QApplication(sys.argv)
     window = TestWindow()

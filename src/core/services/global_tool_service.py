@@ -9,35 +9,40 @@ class GlobalToolService:
     def __init__(self):
         self.db = Database()
 
-    def get_tools_with_pagination(self, page: int = 1, page_size: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+    def get_tools_with_pagination(
+        self, page: int = 1, page_size: int = 10
+    ) -> Tuple[List[Dict[str, Any]], int]:
         """获取分页工具列表"""
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 计算偏移量
                     offset = (page - 1) * page_size
-                    
+
                     # 获取分页数据
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, name, tool_type, description, config, enabled, 
                                created_by, created_at, updated_at
                         FROM global_tools 
                         ORDER BY created_at DESC
                         LIMIT %s OFFSET %s
-                    """, (page_size, offset))
+                    """,
+                        (page_size, offset),
+                    )
                     tools = cursor.fetchall()
 
                     # 处理JSON字段
                     for tool in tools:
-                        if tool.get('config'):
+                        if tool.get("config"):
                             try:
-                                tool['config'] = json.loads(tool['config'])
+                                tool["config"] = json.loads(tool["config"])
                             except (json.JSONDecodeError, TypeError):
-                                tool['config'] = {}
+                                tool["config"] = {}
 
                     # 获取总数
                     cursor.execute("SELECT COUNT(*) as total FROM global_tools")
-                    total = cursor.fetchone()['total']
+                    total = cursor.fetchone()["total"]
 
                     return tools, total
         except Exception as e:
@@ -49,21 +54,23 @@ class GlobalToolService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, name, tool_type, description, config, enabled, 
                                created_by, created_at, updated_at
                         FROM global_tools 
                         ORDER BY created_at DESC
-                    """)
+                    """
+                    )
                     tools = cursor.fetchall()
 
                     # 处理JSON字段
                     for tool in tools:
-                        if tool.get('config'):
+                        if tool.get("config"):
                             try:
-                                tool['config'] = json.loads(tool['config'])
+                                tool["config"] = json.loads(tool["config"])
                             except (json.JSONDecodeError, TypeError):
-                                tool['config'] = {}
+                                tool["config"] = {}
 
                     return tools
         except Exception as e:
@@ -75,19 +82,22 @@ class GlobalToolService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, name, tool_type, description, config, enabled, 
                                created_by, created_at, updated_at
                         FROM global_tools 
                         WHERE id = %s
-                    """, (tool_id,))
+                    """,
+                        (tool_id,),
+                    )
                     tool = cursor.fetchone()
 
-                    if tool and tool.get('config'):
+                    if tool and tool.get("config"):
                         try:
-                            tool['config'] = json.loads(tool['config'])
+                            tool["config"] = json.loads(tool["config"])
                         except (json.JSONDecodeError, TypeError):
-                            tool['config'] = {}
+                            tool["config"] = {}
 
                     return tool
         except Exception as e:
@@ -99,22 +109,25 @@ class GlobalToolService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, name, tool_type, description, config, enabled, 
                                created_by, created_at, updated_at
                         FROM global_tools 
                         WHERE tool_type = %s AND enabled = TRUE
                         ORDER BY created_at DESC
-                    """, (tool_type,))
+                    """,
+                        (tool_type,),
+                    )
                     tools = cursor.fetchall()
 
                     # 处理JSON字段
                     for tool in tools:
-                        if tool.get('config'):
+                        if tool.get("config"):
                             try:
-                                tool['config'] = json.loads(tool['config'])
+                                tool["config"] = json.loads(tool["config"])
                             except (json.JSONDecodeError, TypeError):
-                                tool['config'] = {}
+                                tool["config"] = {}
 
                     return tools
         except Exception as e:
@@ -127,20 +140,23 @@ class GlobalToolService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 处理JSON字段
-                    config = data.get('config', {})
+                    config = data.get("config", {})
                     config_json = json.dumps(config, ensure_ascii=False)
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO global_tools (name, tool_type, description, config, enabled, created_by)
                         VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (
-                        data['name'],
-                        data['tool_type'],
-                        data.get('description', ''),
-                        config_json,
-                        data.get('enabled', True),
-                        'admin'  # 实际应该从登录用户获取
-                    ))
+                    """,
+                        (
+                            data["name"],
+                            data["tool_type"],
+                            data.get("description", ""),
+                            config_json,
+                            data.get("enabled", True),
+                            "admin",  # 实际应该从登录用户获取
+                        ),
+                    )
                     conn.commit()
                     return cursor.lastrowid
         except Exception as e:
@@ -153,21 +169,24 @@ class GlobalToolService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 处理JSON字段
-                    config = data.get('config', {})
+                    config = data.get("config", {})
                     config_json = json.dumps(config, ensure_ascii=False)
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE global_tools 
                         SET name = %s, tool_type = %s, description = %s, config = %s, enabled = %s
                         WHERE id = %s
-                    """, (
-                        data['name'],
-                        data['tool_type'],
-                        data.get('description', ''),
-                        config_json,
-                        data.get('enabled', True),
-                        tool_id
-                    ))
+                    """,
+                        (
+                            data["name"],
+                            data["tool_type"],
+                            data.get("description", ""),
+                            config_json,
+                            data.get("enabled", True),
+                            tool_id,
+                        ),
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
@@ -191,11 +210,14 @@ class GlobalToolService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE global_tools 
                         SET enabled = %s 
                         WHERE id = %s
-                    """, (enabled, tool_id))
+                    """,
+                        (enabled, tool_id),
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:

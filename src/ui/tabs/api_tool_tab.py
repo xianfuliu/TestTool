@@ -6,10 +6,22 @@ import math
 from datetime import datetime
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QLineEdit, QPushButton, QGroupBox,
-                             QCheckBox, QTextEdit, QMessageBox, QSplitter, QScrollArea, QSizePolicy,
-                             QShortcut)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QGroupBox,
+    QCheckBox,
+    QTextEdit,
+    QMessageBox,
+    QSplitter,
+    QScrollArea,
+    QSizePolicy,
+    QShortcut,
+)
 from PyQt5.QtGui import QFont, QKeySequence, QTextCursor, QTextCharFormat, QColor
 from src.ui.widgets.no_wheel_combo_box import NoWheelComboBox
 from src.ui.widgets.toast_tips import Toast
@@ -57,9 +69,9 @@ class ApiToolTab(QWidget):
         self.products_config_dir_path = "config/products/"
         # Base64 变量键常量
         self.BASE64_VARIABLE_KEYS = [
-            'id_card_front_base64',
-            'id_card_back_base64',
-            'face_base64'
+            "id_card_front_base64",
+            "id_card_back_base64",
+            "face_base64",
         ]
         # 变量池 - 存储所有变量（包括响应映射变量等）
         self.variable_pool = {}
@@ -79,9 +91,7 @@ class ApiToolTab(QWidget):
 
     def init_variable_pool(self):
         """初始化变量池"""
-        self.variable_pool = {
-            'request_id': self.generate_request_id()
-        }
+        self.variable_pool = {"request_id": self.generate_request_id()}
 
     def load_configs(self):
         """统一加载所有配置"""
@@ -96,7 +106,7 @@ class ApiToolTab(QWidget):
             self.create_default_products_config(self.default_products_config_path)
 
         try:
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 self.products_config = json.load(f)
 
             # 加载所有产品配置
@@ -115,7 +125,9 @@ class ApiToolTab(QWidget):
             # 如果有产品，自动更新流水
             if self.product_combo.count() > 0:
                 # 这里会触发 on_product_changed，其中会调用 update_request_id()
-                self.on_product_changed(self.product_combo.currentText(), initial_load=True)
+                self.on_product_changed(
+                    self.product_combo.currentText(), initial_load=True
+                )
             else:
                 self.product_combo.addItem("无可用产品")
 
@@ -139,7 +151,7 @@ class ApiToolTab(QWidget):
             try:
                 product_config_file = resource_path(f"{config_path}")
                 if os.path.exists(product_config_file):
-                    with open(product_config_file, 'r', encoding='utf-8') as f:
+                    with open(product_config_file, "r", encoding="utf-8") as f:
                         product_config = json.load(f)
                     self.api_config["products"][product_name] = product_config
                 else:
@@ -158,7 +170,7 @@ class ApiToolTab(QWidget):
         try:
             product_config_file = resource_path(f"{config_path}")
             if os.path.exists(product_config_file):
-                with open(product_config_file, 'r', encoding='utf-8') as f:
+                with open(product_config_file, "r", encoding="utf-8") as f:
                     product_config = json.load(f)
                 self.api_config["products"][product_name] = product_config
                 return True
@@ -182,9 +194,13 @@ class ApiToolTab(QWidget):
         os.makedirs(os.path.dirname(product_config_file), exist_ok=True)
 
         try:
-            with open(product_config_file, 'w', encoding='utf-8') as f:
-                json.dump(self.api_config["products"][product_name], f,
-                          ensure_ascii=False, indent=2)
+            with open(product_config_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    self.api_config["products"][product_name],
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
             return True
         except Exception as e:
             Toast.critical(self, "失败", f"保存产品配置失败: {str(e)}")
@@ -194,11 +210,9 @@ class ApiToolTab(QWidget):
         """创建默认的产品配置文件结构"""
         try:
             self.products_config = {
-                "products": {
-                    "中银消金": f"{default_products_config_path}"
-                },
+                "products": {"中银消金": f"{default_products_config_path}"},
                 "default_product": "中银消金",
-                "locked_products": []  # 添加锁定产品列表
+                "locked_products": [],  # 添加锁定产品列表
             }
 
             # 确保配置目录存在
@@ -217,7 +231,9 @@ class ApiToolTab(QWidget):
             # 设置当前产品并更新流水
             if self.product_combo.count() > 0:
                 self.product_combo.setCurrentIndex(0)
-                self.on_product_changed(self.product_combo.currentText(), initial_load=True)
+                self.on_product_changed(
+                    self.product_combo.currentText(), initial_load=True
+                )
 
             return True
         except Exception as e:
@@ -230,7 +246,7 @@ class ApiToolTab(QWidget):
         os.makedirs(os.path.dirname(config_file), exist_ok=True)
 
         try:
-            with open(config_file, 'w', encoding='utf-8') as f:
+            with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(self.products_config, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
@@ -250,28 +266,28 @@ class ApiToolTab(QWidget):
                     "key": "name",
                     "label": "姓名",
                     "priority": 1,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
                     "key": "id_card",
                     "label": "身份证号",
                     "priority": 2,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
                     "key": "phone",
                     "label": "手机号",
                     "priority": 3,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
                     "key": "bank_card_no",
                     "label": "银行卡号",
                     "priority": 4,
-                    "default": ""
+                    "default": "",
                 },
                 {
                     "type": "field",
@@ -279,7 +295,7 @@ class ApiToolTab(QWidget):
                     "label": "有效期开始",
                     "priority": 5,
                     "default": "",
-                    "show_in_ui": False
+                    "show_in_ui": False,
                 },
                 {
                     "type": "field",
@@ -287,31 +303,25 @@ class ApiToolTab(QWidget):
                     "label": "有效期结束",
                     "priority": 6,
                     "default": "",
-                    "show_in_ui": False
+                    "show_in_ui": False,
                 },
-                {
-                    "type": "interface",
-                    "name": "默认接口",
-                    "priority": 7
-                }
+                {"type": "interface", "name": "默认接口", "priority": 7},
             ],
             "interfaces": {
                 "默认接口": {
                     "url": "http://api.example.com/default",
                     "method": "POST",
-                    "headers": {
-                        "Content-Type": "application/json"
-                    },
+                    "headers": {"Content-Type": "application/json"},
                     "body_template": {
                         "requestId": "",
                         "userInfo": {
                             "name": "{name}",
                             "idCard": "{id_card}",
-                            "phone": "{phone}"
-                        }
-                    }
+                            "phone": "{phone}",
+                        },
+                    },
                 }
-            }
+            },
         }
 
         self.api_config["products"][product_name] = default_config
@@ -348,7 +358,8 @@ class ApiToolTab(QWidget):
         """创建全局配置面板"""
         panel = QGroupBox()
         # 设置面板样式：白色背景，圆角，减小边距
-        panel.setStyleSheet("""
+        panel.setStyleSheet(
+            """
             QGroupBox {
                 background-color: white;
                 border: 1px solid #e0e0e0;
@@ -361,7 +372,8 @@ class ApiToolTab(QWidget):
                 left: 10px;
                 padding: 0 5px 0 5px;
             }
-        """)
+        """
+        )
         main_vertical_layout = QVBoxLayout(panel)
         main_vertical_layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
 
@@ -447,7 +459,8 @@ class ApiToolTab(QWidget):
         """创建左侧面板 - 接口按钮和参数字段混合在一起，左对齐"""
         panel = QGroupBox()
         # 设置面板样式：灰色背景，圆角，减小边距
-        panel.setStyleSheet("""
+        panel.setStyleSheet(
+            """
             QGroupBox {
                 background-color: #f5f5f5;
                 border: 1px solid #e0e0e0;
@@ -460,7 +473,8 @@ class ApiToolTab(QWidget):
                 left: 10px;
                 padding: 0 5px 0 5px;
             }
-        """)
+        """
+        )
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 修改：面板布局左对齐
         layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
@@ -468,7 +482,8 @@ class ApiToolTab(QWidget):
         # 创建滚动区域，包含混合的接口和字段
         self.combined_scroll = QScrollArea()
         # 设置滚动区域样式：灰色背景，无边框，最小边距
-        self.combined_scroll.setStyleSheet("""
+        self.combined_scroll.setStyleSheet(
+            """
             QScrollArea {
                 background-color: #f5f5f5;
                 border: none;
@@ -476,16 +491,21 @@ class ApiToolTab(QWidget):
             QScrollArea > QWidget > QWidget {
                 background-color: #f5f5f5;
             }
-        """)
+        """
+        )
         self.combined_widget = QWidget()
         self.combined_layout = QVBoxLayout(self.combined_widget)  # 修改：使用垂直布局
-        self.combined_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 修改：滚动区域内容左对齐
+        self.combined_layout.setAlignment(
+            Qt.AlignLeft | Qt.AlignTop
+        )  # 修改：滚动区域内容左对齐
         # 设置最小边距
         self.combined_layout.setContentsMargins(0, 0, 0, 0)
         self.combined_layout.setSpacing(0)
         self.combined_scroll.setWidget(self.combined_widget)
         self.combined_scroll.setWidgetResizable(True)
-        self.combined_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # 需要时显示水平滚动条
+        self.combined_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded
+        )  # 需要时显示水平滚动条
         layout.addWidget(self.combined_scroll)
 
         panel.setLayout(layout)
@@ -494,7 +514,8 @@ class ApiToolTab(QWidget):
     def create_right_panel(self):
         panel = QGroupBox()
         # 设置面板样式：白色背景，圆角，减小边距
-        panel.setStyleSheet("""
+        panel.setStyleSheet(
+            """
             QGroupBox {
                 background-color: white;
                 border: 1px solid #e0e0e0;
@@ -507,7 +528,8 @@ class ApiToolTab(QWidget):
                 left: 10px;
                 padding: 0 5px 0 5px;
             }
-        """)
+        """
+        )
         layout = QVBoxLayout()
         layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
 
@@ -636,7 +658,9 @@ class ApiToolTab(QWidget):
                         # 同时清空显示控件
                         if condition_key in self.condition_displays:
                             self.condition_displays[condition_key].setText("")
-                            self.adjust_field_width(self.condition_displays[condition_key], "")
+                            self.adjust_field_width(
+                                self.condition_displays[condition_key], ""
+                            )
 
             # 清空所有公式字段的变量池
             for item in layout_config:
@@ -650,7 +674,9 @@ class ApiToolTab(QWidget):
                         # 同时清空显示控件
                         if formula_key in self.formula_displays:
                             self.formula_displays[formula_key].setText("")
-                            self.adjust_field_width(self.formula_displays[formula_key], "")
+                            self.adjust_field_width(
+                                self.formula_displays[formula_key], ""
+                            )
 
         except Exception as e:
             print(f"清空产品变量池时出错: {str(e)}")
@@ -672,7 +698,7 @@ class ApiToolTab(QWidget):
             for task in schedule_tasks:
                 self.schedule_combo.addItem(
                     f"{task['name']} (ID: {task['id']})",
-                    (task["id"], task.get("jobGroup", "DEFAULT"))
+                    (task["id"], task.get("jobGroup", "DEFAULT")),
                 )
             self.execute_schedule_btn.setEnabled(True)
         else:
@@ -719,7 +745,12 @@ class ApiToolTab(QWidget):
 
         for item in sorted_layout:
             # 检查是否需要在UI中显示（仅对字段和下拉框类型）
-            if item["type"] in ["field", "combo", "condition", "formula"]:  # 添加公式类型
+            if item["type"] in [
+                "field",
+                "combo",
+                "condition",
+                "formula",
+            ]:  # 添加公式类型
                 # 默认值为True，保持向后兼容
                 show_in_ui = item.get("show_in_ui", True)
                 if not show_in_ui:
@@ -733,7 +764,9 @@ class ApiToolTab(QWidget):
                             field_input.setText(default_value)
                         self.field_inputs[item["key"]] = field_input
 
-                    elif item["type"] == "combo" and item["key"] not in self.combo_boxes:
+                    elif (
+                        item["type"] == "combo" and item["key"] not in self.combo_boxes
+                    ):
                         # 创建隐藏的下拉框，但不添加到UI
                         combo_box = NoWheelComboBox()
                         # 添加选项
@@ -756,30 +789,44 @@ class ApiToolTab(QWidget):
                                 combo_box.setCurrentIndex(0)
                         self.combo_boxes[item["key"]] = combo_box
 
-                    elif item["type"] == "condition" and item["key"] not in self.condition_displays:
+                    elif (
+                        item["type"] == "condition"
+                        and item["key"] not in self.condition_displays
+                    ):
                         # 创建隐藏的条件显示控件，但不添加到UI
                         condition_display = QLineEdit()
                         condition_display.setReadOnly(True)
                         # 初始显示值
                         condition_key = item["key"]
-                        condition_value = self.get_condition_variable_value(condition_key)
+                        condition_value = self.get_condition_variable_value(
+                            condition_key
+                        )
                         if condition_value is not None:
                             condition_display.setText(str(condition_value))
                         self.condition_displays[condition_key] = condition_display
 
-                    elif item["type"] == "formula" and item["key"] not in self.formula_displays:
+                    elif (
+                        item["type"] == "formula"
+                        and item["key"] not in self.formula_displays
+                    ):
                         # 新增：创建隐藏的公式显示控件，但不添加到UI
                         formula_display = QLineEdit()
                         formula_display.setReadOnly(True)
-                        formula_display.setStyleSheet("background-color: #f0f0f0; color: #666;")
+                        formula_display.setStyleSheet(
+                            "background-color: #f0f0f0; color: #666;"
+                        )
                         self.formula_displays[item["key"]] = formula_display
 
                         # 保存公式配置
                         formula_key = item["key"]
                         self.formula_configs[formula_key] = {
                             "formula": item.get("formula", ""),
-                            "formula_type": item.get("formula_type", "numeric"),  # 新增公式类型
-                            "dependencies": self.extract_formula_dependencies(item.get("formula", ""))
+                            "formula_type": item.get(
+                                "formula_type", "numeric"
+                            ),  # 新增公式类型
+                            "dependencies": self.extract_formula_dependencies(
+                                item.get("formula", "")
+                            ),
                         }
                         # 初始计算公式值
                         self.calculate_formula(formula_key)
@@ -799,7 +846,9 @@ class ApiToolTab(QWidget):
                 # 创建字段控件 - 根据内容自适应宽度
                 field_label = QLabel(item["label"])
                 field_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                field_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # 标签固定宽度
+                field_label.setSizePolicy(
+                    QSizePolicy.Fixed, QSizePolicy.Fixed
+                )  # 标签固定宽度
 
                 field_input = QLineEdit()
                 # 智能设置默认值：优先使用变量池中的值，其次使用配置的默认值
@@ -814,7 +863,9 @@ class ApiToolTab(QWidget):
                     # 使用配置的默认值（支持变量替换）
                     default_value = item.get("default", "")
                     if default_value:
-                        processed_default = self.replace_variables_in_string(default_value)
+                        processed_default = self.replace_variables_in_string(
+                            default_value
+                        )
 
                         # 处理字段数据类型
                         data_type = item.get("data_type", "string")
@@ -838,13 +889,16 @@ class ApiToolTab(QWidget):
 
                 # 根据内容调整宽度
                 self.adjust_field_width(field_input, field_input.text())
-                field_input.textChanged.connect(lambda text, field=field_input: self.adjust_field_width(field, text))
+                field_input.textChanged.connect(
+                    lambda text, field=field_input: self.adjust_field_width(field, text)
+                )
 
                 self.field_inputs[item["key"]] = field_input
 
                 # 监听字段变化，实时更新变量池
-                field_input.textChanged.connect(lambda text, key=field_key:
-                                                self.on_field_changed(key, text))
+                field_input.textChanged.connect(
+                    lambda text, key=field_key: self.on_field_changed(key, text)
+                )
 
                 self.field_inputs[field_key] = field_input
 
@@ -856,7 +910,9 @@ class ApiToolTab(QWidget):
                 # 创建下拉框控件 - 根据内容自适应宽度
                 combo_label = QLabel(item["label"])
                 combo_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                combo_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # 标签固定宽度
+                combo_label.setSizePolicy(
+                    QSizePolicy.Fixed, QSizePolicy.Fixed
+                )  # 标签固定宽度
 
                 combo_box = NoWheelComboBox()
                 # 添加选项
@@ -889,7 +945,9 @@ class ApiToolTab(QWidget):
                     # 使用配置的默认值（支持变量替换）
                     default_value = item.get("default", "")
                     if default_value:
-                        processed_default = self.replace_variables_in_string(default_value)
+                        processed_default = self.replace_variables_in_string(
+                            default_value
+                        )
 
                         # 在选项中查找默认值对应的索引
                         found_index = -1
@@ -913,13 +971,18 @@ class ApiToolTab(QWidget):
 
                 # 根据内容调整宽度
                 self.adjust_combo_width(combo_box)
-                combo_box.currentTextChanged.connect(lambda text, combo=combo_box: self.adjust_combo_width(combo))
+                combo_box.currentTextChanged.connect(
+                    lambda text, combo=combo_box: self.adjust_combo_width(combo)
+                )
 
                 self.combo_boxes[item["key"]] = combo_box
 
                 # 监听下拉框变化，实时更新变量池
-                combo_box.currentIndexChanged.connect(lambda index, key=combo_key, combo=combo_box:
-                                                      self.on_combo_changed(key, combo))
+                combo_box.currentIndexChanged.connect(
+                    lambda index, key=combo_key, combo=combo_box: self.on_combo_changed(
+                        key, combo
+                    )
+                )
 
                 self.combo_boxes[combo_key] = combo_box
 
@@ -940,7 +1003,11 @@ class ApiToolTab(QWidget):
                     # 根据按钮文本调整宽度
                     self.adjust_button_width(interface_btn)
 
-                    interface_btn.clicked.connect(lambda checked, name=interface_name: self.on_interface_clicked(name))
+                    interface_btn.clicked.connect(
+                        lambda checked, name=interface_name: self.on_interface_clicked(
+                            name
+                        )
+                    )
 
                     # 添加到当前行
                     current_row_layout.addWidget(interface_btn)
@@ -958,7 +1025,9 @@ class ApiToolTab(QWidget):
                     # 根据按钮文本调整宽度
                     self.adjust_button_width(sql_btn)
 
-                    sql_btn.clicked.connect(lambda checked, name=sql_name: self.on_sql_clicked(name))
+                    sql_btn.clicked.connect(
+                        lambda checked, name=sql_name: self.on_sql_clicked(name)
+                    )
 
                     # 保存SQL按钮引用
                     self.sql_buttons[sql_name] = sql_btn
@@ -976,7 +1045,9 @@ class ApiToolTab(QWidget):
                 # 条件字段显示当前映射的值
                 condition_display = QLineEdit()
                 condition_display.setReadOnly(True)  # 只读显示
-                condition_display.setStyleSheet("background-color: #f0f0f0; color: #666;")
+                condition_display.setStyleSheet(
+                    "background-color: #f0f0f0; color: #666;"
+                )
 
                 # 设置固定的大小策略，不拉伸
                 condition_display.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -995,7 +1066,6 @@ class ApiToolTab(QWidget):
                 # 添加到当前行
                 current_row_layout.addWidget(condition_label)
                 current_row_layout.addWidget(condition_display)
-
 
             elif item["type"] == "formula":
                 # 创建公式控件 - 只读显示计算结果
@@ -1017,7 +1087,9 @@ class ApiToolTab(QWidget):
                 self.formula_configs[formula_key] = {
                     "formula": item.get("formula", ""),
                     "formula_type": item.get("formula_type", "numeric"),  # 新增公式类型
-                    "dependencies": self.extract_formula_dependencies(item.get("formula", ""))
+                    "dependencies": self.extract_formula_dependencies(
+                        item.get("formula", "")
+                    ),
                 }
 
                 # 初始计算公式值
@@ -1225,16 +1297,22 @@ class ApiToolTab(QWidget):
             processed_sql = self.replace_variables_in_string(sql_statement)
 
             # 验证SQL是否为SELECT语句
-            if not re.match(r'^\s*SELECT\s', processed_sql, re.IGNORECASE):
+            if not re.match(r"^\s*SELECT\s", processed_sql, re.IGNORECASE):
                 Toast.warning(self, "警告", "仅支持SELECT查询语句")
                 return
 
             # 在工作线程中执行SQL
             self.sql_worker = SQLWorker(sql_name, db_config, processed_sql)
-            self.sql_worker.finished.connect(lambda query_name, message, result_data:
-                                             self.on_sql_finished(sql_name, sql_config, result_data))
-            self.sql_worker.error.connect(lambda query_name, error_message:
-                                          self.on_sql_error(sql_name, error_message))
+            self.sql_worker.finished.connect(
+                lambda query_name, message, result_data: self.on_sql_finished(
+                    sql_name, sql_config, result_data
+                )
+            )
+            self.sql_worker.error.connect(
+                lambda query_name, error_message: self.on_sql_error(
+                    sql_name, error_message
+                )
+            )
             self.sql_worker.start()
 
             # 显示加载状态
@@ -1289,7 +1367,9 @@ class ApiToolTab(QWidget):
                 new_value = first_record[field_name]
                 self.variable_pool[variable_name] = new_value
 
-                print(f"更新变量池: '{variable_name}' 从 '{old_value}' 到 '{new_value}'")
+                print(
+                    f"更新变量池: '{variable_name}' 从 '{old_value}' 到 '{new_value}'"
+                )
 
         # 自动填充到使用这些变量的字段输入框（始终覆盖）
         self.auto_fill_sql_variables_to_fields(sql_name, first_record)
@@ -1318,19 +1398,29 @@ class ApiToolTab(QWidget):
 
                     # 更新变量池（确保条件变量在变量池中是最新的）
                     old_value = self.variable_pool.get(condition_key, "未设置")
-                    self.variable_pool[condition_key] = condition_value if condition_value is not None else ""
+                    self.variable_pool[condition_key] = (
+                        condition_value if condition_value is not None else ""
+                    )
 
                     # 更新显示控件
                     if condition_key in self.condition_displays:
-                        display_value = str(condition_value) if condition_value is not None else ""
+                        display_value = (
+                            str(condition_value) if condition_value is not None else ""
+                        )
                         current_display = self.condition_displays[condition_key].text()
 
                         # 只有当值发生变化时才更新显示
                         if display_value != current_display:
-                            self.condition_displays[condition_key].setText(display_value)
+                            self.condition_displays[condition_key].setText(
+                                display_value
+                            )
                             # 调整宽度
-                            self.adjust_field_width(self.condition_displays[condition_key], display_value)
-                            print(f"刷新条件字段显示: {condition_key} = {display_value} (原值: {current_display})")
+                            self.adjust_field_width(
+                                self.condition_displays[condition_key], display_value
+                            )
+                            print(
+                                f"刷新条件字段显示: {condition_key} = {display_value} (原值: {current_display})"
+                            )
 
                             # 新增：刷新依赖此条件字段的公式
                             self.refresh_formulas_dependent_on_condition(condition_key)
@@ -1356,7 +1446,9 @@ class ApiToolTab(QWidget):
                     # 检查公式是否依赖这个条件字段
                     dependencies = formula_config.get("dependencies", [])
                     if condition_key in dependencies:
-                        print(f"条件字段 {condition_key} 变化，重新计算公式 {formula_key}")
+                        print(
+                            f"条件字段 {condition_key} 变化，重新计算公式 {formula_key}"
+                        )
                         self.calculate_formula(formula_key)
 
         except Exception as e:
@@ -1403,12 +1495,16 @@ class ApiToolTab(QWidget):
                     # 检查默认值中是否包含SQL变量
                     if default_value and f"{{{sql_name}" in default_value:
                         # 构建替换后的值
-                        filled_value = self.replace_sql_variables_in_default(default_value, sql_name, sql_result)
+                        filled_value = self.replace_sql_variables_in_default(
+                            default_value, sql_name, sql_result
+                        )
 
                         if filled_value != default_value:  # 如果有替换发生
                             if field_key in self.field_inputs:
                                 self.field_inputs[field_key].setText(filled_value)
-                                print(f"通过变量替换更新字段 '{field_key}' 值为: {filled_value}")
+                                print(
+                                    f"通过变量替换更新字段 '{field_key}' 值为: {filled_value}"
+                                )
                             elif field_key in self.combo_boxes:
                                 combo_box = self.combo_boxes[field_key]
                                 # 在下拉框中查找匹配的选项
@@ -1419,7 +1515,9 @@ class ApiToolTab(QWidget):
                                         break
                                 if found_index >= 0:
                                     combo_box.setCurrentIndex(found_index)
-                                    print(f"通过变量替换更新下拉框 '{field_key}' 为: {filled_value}")
+                                    print(
+                                        f"通过变量替换更新下拉框 '{field_key}' 为: {filled_value}"
+                                    )
 
         except Exception as e:
             print(f"填充使用SQL变量的字段时出错: {str(e)}")
@@ -1429,7 +1527,7 @@ class ApiToolTab(QWidget):
         processed_value = default_value
 
         # 匹配 {sql_name_field} 格式的变量
-        sql_var_pattern = r'\{(' + re.escape(sql_name) + r'_\w+)\}'
+        sql_var_pattern = r"\{(" + re.escape(sql_name) + r"_\w+)\}"
         matches = re.findall(sql_var_pattern, processed_value)
 
         for sql_var in matches:
@@ -1439,7 +1537,9 @@ class ApiToolTab(QWidget):
             # 从SQL结果中获取值
             if field_name in sql_result:
                 field_value = sql_result[field_name]
-                processed_value = processed_value.replace(f"{{{sql_var}}}", str(field_value))
+                processed_value = processed_value.replace(
+                    f"{{{sql_var}}}", str(field_value)
+                )
 
         return processed_value
 
@@ -1472,7 +1572,9 @@ class ApiToolTab(QWidget):
                     for i in range(combo_box.count()):
                         if combo_box.itemText(i) == str(field_value):
                             combo_box.setCurrentIndex(i)
-                            print(f"更新下拉框 '{field_key}' 为: {field_value} (通过显示文本匹配)")
+                            print(
+                                f"更新下拉框 '{field_key}' 为: {field_value} (通过显示文本匹配)"
+                            )
                             break
 
         except Exception as e:
@@ -1485,7 +1587,9 @@ class ApiToolTab(QWidget):
 
         # 检查是否存在条件模板
         if "conditional_body" in interface_config:
-            body_template = self.process_conditional_body(interface_config["conditional_body"])
+            body_template = self.process_conditional_body(
+                interface_config["conditional_body"]
+            )
         else:
             body_template = interface_config["body_template"]
 
@@ -1523,29 +1627,43 @@ class ApiToolTab(QWidget):
                     # 键使用紫色 #92278f，加粗，字体16px
                     formatted_key = f'<span style="color: #92278f; font-weight: bold; font-size: 16px;">"{key}"</span>'
                     formatted_value = format_value(value, level + 1)
-                    items.append(f'{formatted_key}: {formatted_value}')
+                    items.append(f"{formatted_key}: {formatted_value}")
 
-                indent_str = ' ' * (indent * level)
-                inner_indent = ' ' * (indent * (level + 1))
-                return '{\n' + inner_indent + (',\n' + inner_indent).join(items) + '\n' + indent_str + '}'
+                indent_str = " " * (indent * level)
+                inner_indent = " " * (indent * (level + 1))
+                return (
+                    "{\n"
+                    + inner_indent
+                    + (",\n" + inner_indent).join(items)
+                    + "\n"
+                    + indent_str
+                    + "}"
+                )
 
             elif isinstance(obj, list):
                 if not obj:
-                    return '[]'
+                    return "[]"
 
                 items = []
                 for item in obj:
                     formatted_item = format_value(item, level + 1)
                     items.append(formatted_item)
 
-                indent_str = ' ' * (indent * level)
-                inner_indent = ' ' * (indent * (level + 1))
+                indent_str = " " * (indent * level)
+                inner_indent = " " * (indent * (level + 1))
 
                 # 如果列表元素都是简单类型，在一行显示
                 if all(not isinstance(item, (dict, list)) for item in obj):
-                    return '[' + ', '.join(items) + ']'
+                    return "[" + ", ".join(items) + "]"
                 else:
-                    return '[\n' + inner_indent + (',\n' + inner_indent).join(items) + '\n' + indent_str + ']'
+                    return (
+                        "[\n"
+                        + inner_indent
+                        + (",\n" + inner_indent).join(items)
+                        + "\n"
+                        + indent_str
+                        + "]"
+                    )
 
             else:
                 # 值使用绿色 #3ab54a，加粗，字体16px
@@ -1557,7 +1675,7 @@ class ApiToolTab(QWidget):
                     return f'<span style="color: #3ab54a; font-weight: bold; font-size: 16px;">{obj}</span>'
                 else:
                     # 字符串需要转义特殊字符
-                    escaped_str = str(obj).replace('\\', '\\\\').replace('"', '\\"')
+                    escaped_str = str(obj).replace("\\", "\\\\").replace('"', '\\"')
                     return f'<span style="color: #3ab54a; font-weight: bold; font-size: 16px;">"{escaped_str}"</span>'
 
         try:
@@ -1638,13 +1756,13 @@ class ApiToolTab(QWidget):
         # 获取用户输入的 URL
         user_url = self.url_input.text().strip()
         if not user_url:
-            Toast.info(self, '请输入URL')
+            Toast.info(self, "请输入URL")
             return
 
         # 获取请求体
         request_body_text = self.request_body_edit.toPlainText().strip()
         if not request_body_text:
-            Toast.info(self, '请求体不能为空')
+            Toast.info(self, "请求体不能为空")
             return
 
         # 清空响应体内容
@@ -1668,7 +1786,9 @@ class ApiToolTab(QWidget):
         """发送产品接口请求（使用产品配置）"""
         try:
             product_config = self.api_config["products"][self.current_product]
-            interface_config = product_config["interfaces"][self.current_interface].copy()
+            interface_config = product_config["interfaces"][
+                self.current_interface
+            ].copy()
 
             # 使用用户修改的 URL
             interface_config["url"] = user_url
@@ -1686,10 +1806,8 @@ class ApiToolTab(QWidget):
         interface_config = {
             "url": user_url,
             "method": "POST",
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "enable_encryption": False  # 手动请求默认不启用加解密
+            "headers": {"Content-Type": "application/json"},
+            "enable_encryption": False,  # 手动请求默认不启用加解密
         }
 
         # 发送请求（不启用加解密）
@@ -1719,7 +1837,10 @@ class ApiToolTab(QWidget):
             # 直接从产品配置中获取加解密配置，不再依赖UI控件
             encrypt_url = None
             decrypt_url = None
-            if self.current_product and self.current_product in self.api_config["products"]:
+            if (
+                self.current_product
+                and self.current_product in self.api_config["products"]
+            ):
                 product_config = self.api_config["products"][self.current_product]
                 # 检查产品是否启用了加解密
                 if product_config.get("enable_encryption", False):
@@ -1727,7 +1848,9 @@ class ApiToolTab(QWidget):
                     decrypt_url = product_config.get("decrypt_url")
 
         # 在工作线程中执行请求
-        self.worker = ApiWorker(url, method, headers, request_body, encrypt_url, decrypt_url)
+        self.worker = ApiWorker(
+            url, method, headers, request_body, encrypt_url, decrypt_url
+        )
         self.worker.finished.connect(self.on_request_finished)
         self.worker.error.connect(self.on_request_error)
         self.worker.start()
@@ -1743,9 +1866,9 @@ class ApiToolTab(QWidget):
         processed = text
 
         # 特殊处理：如果是JSONPath并且包含数组索引，先处理数组索引
-        if '[' in processed and ']' in processed:
+        if "[" in processed and "]" in processed:
             # 匹配数组索引中的变量，如 data[{rpyTerm}]
-            array_index_pattern = r'\[(\{(\w+)\})\]'
+            array_index_pattern = r"\[(\{(\w+)\})\]"
 
             def replace_array_index(match):
                 var_name = match.group(2)  # 提取变量名
@@ -1755,12 +1878,16 @@ class ApiToolTab(QWidget):
                         # 用户输入1代表索引0，所以需要减1
                         index = int(var_value) - 1
                         if index < 0:
-                            print(f"警告: 变量 '{var_name}' 的值 {var_value} 小于1，使用索引0")
+                            print(
+                                f"警告: 变量 '{var_name}' 的值 {var_value} 小于1，使用索引0"
+                            )
                             index = 0
                         return f"[{index}]"
                     except (ValueError, TypeError):
                         # 如果不是数字，保持原样
-                        print(f"警告: 变量 '{var_name}' 的值 '{var_value}' 不是有效数字")
+                        print(
+                            f"警告: 变量 '{var_name}' 的值 '{var_value}' 不是有效数字"
+                        )
                         return match.group(0)
                 else:
                     # 变量不存在，尝试获取默认值
@@ -1770,12 +1897,16 @@ class ApiToolTab(QWidget):
                             # 用户输入1代表索引0，所以需要减1
                             index = int(default_value) - 1
                             if index < 0:
-                                print(f"警告: 变量 '{var_name}' 的默认值 {default_value} 小于1，使用索引0")
+                                print(
+                                    f"警告: 变量 '{var_name}' 的默认值 {default_value} 小于1，使用索引0"
+                                )
                                 index = 0
                             return f"[{index}]"
                         except (ValueError, TypeError):
                             # 如果不是数字，保持原样
-                            print(f"警告: 变量 '{var_name}' 的默认值 '{default_value}' 不是有效数字")
+                            print(
+                                f"警告: 变量 '{var_name}' 的默认值 '{default_value}' 不是有效数字"
+                            )
                             return match.group(0)
                     else:
                         # 默认值也没有，使用索引0
@@ -1786,8 +1917,10 @@ class ApiToolTab(QWidget):
             processed = re.sub(array_index_pattern, replace_array_index, processed)
 
         # 1. 处理复杂模板（日期时间、随机数等）
-        if any(pattern in processed for pattern in
-               ["{dateTime", "{date", "{time", "{random:"]):
+        if any(
+            pattern in processed
+            for pattern in ["{dateTime", "{date", "{time", "{random:"]
+        ):
             processed = TemplateProcessor.process_template(processed)
 
         # 然后处理其他类型的变量（与之前相同）
@@ -1825,25 +1958,29 @@ class ApiToolTab(QWidget):
 
         # 6. 处理SQL输出变量（从变量池获取，使用字段名作为变量名）
         # 匹配所有变量占位符
-        all_var_pattern = r'\{(\w+)\}'
+        all_var_pattern = r"\{(\w+)\}"
         all_matches = re.findall(all_var_pattern, processed)
 
         for var_name in all_matches:
             # 如果变量在变量池中且不在其他已处理的类别中，则替换
-            if (var_name in self.variable_pool and
-                    var_name not in self.BASE64_VARIABLE_KEYS and
-                    var_name != "request_id" and
-                    var_name not in self.field_inputs and
-                    var_name not in self.combo_boxes):
+            if (
+                var_name in self.variable_pool
+                and var_name not in self.BASE64_VARIABLE_KEYS
+                and var_name != "request_id"
+                and var_name not in self.field_inputs
+                and var_name not in self.combo_boxes
+            ):
                 var_value = self.variable_pool[var_name]
                 str_value = str(var_value) if var_value is not None else ""
                 processed = processed.replace(f"{{{var_name}}}", str_value)
                 print(f"替换SQL变量 {var_name}: {str_value}")
-            elif (var_name not in self.variable_pool and
-                  var_name not in self.BASE64_VARIABLE_KEYS and
-                  var_name != "request_id" and
-                  var_name not in self.field_inputs and
-                  var_name not in self.combo_boxes):
+            elif (
+                var_name not in self.variable_pool
+                and var_name not in self.BASE64_VARIABLE_KEYS
+                and var_name != "request_id"
+                and var_name not in self.field_inputs
+                and var_name not in self.combo_boxes
+            ):
                 # 变量不在变量池中，尝试获取默认值
                 default_value = self.get_variable_default_value(var_name)
                 if default_value is not None:
@@ -1852,7 +1989,7 @@ class ApiToolTab(QWidget):
                 else:
                     # 默认值也没有，使用索引0或空字符串
                     # 如果是数组索引相关的变量，使用"0"
-                    if var_name.endswith(('_index', '_idx', 'index', 'idx')):
+                    if var_name.endswith(("_index", "_idx", "index", "idx")):
                         processed = processed.replace(f"{{{var_name}}}", "0")
                         print(f"替换缺失变量 {var_name} 为索引: 0")
                     else:
@@ -1860,16 +1997,18 @@ class ApiToolTab(QWidget):
                         print(f"替换缺失变量 {var_name} 为空字符串")
 
         # 7. 处理条件变量（在普通变量之后处理）
-        condition_var_pattern = r'\{(\w+)\}'
+        condition_var_pattern = r"\{(\w+)\}"
         condition_matches = re.findall(condition_var_pattern, processed)
 
         for var_name in condition_matches:
             # 如果变量已经被其他类型处理过，跳过
-            if (var_name in self.BASE64_VARIABLE_KEYS or
-                    var_name == "request_id" or
-                    var_name in self.field_inputs or
-                    var_name in self.combo_boxes or
-                    var_name in self.variable_pool):
+            if (
+                var_name in self.BASE64_VARIABLE_KEYS
+                or var_name == "request_id"
+                or var_name in self.field_inputs
+                or var_name in self.combo_boxes
+                or var_name in self.variable_pool
+            ):
                 continue
 
             # 检查是否是条件变量
@@ -2005,7 +2144,7 @@ class ApiToolTab(QWidget):
             return text
 
         # 检查是否还有变量占位符
-        var_pattern = r'\{(\w+)\}'
+        var_pattern = r"\{(\w+)\}"
         matches = re.findall(var_pattern, text)
 
         if not matches:
@@ -2031,7 +2170,9 @@ class ApiToolTab(QWidget):
 
         # 如果还有变化，继续递归
         if processed != text:
-            return self.recursive_replace_variables(processed, current_depth + 1, max_depth)
+            return self.recursive_replace_variables(
+                processed, current_depth + 1, max_depth
+            )
         else:
             return processed
 
@@ -2039,7 +2180,9 @@ class ApiToolTab(QWidget):
         """请求完成"""
         try:
             status_code = response_data.get("status_code", 0)
-            response_body = response_data.get("decrypted_body") or response_data.get("body", "")
+            response_body = response_data.get("decrypted_body") or response_data.get(
+                "body", ""
+            )
 
             parsed_response = None  # 初始化为 None
 
@@ -2052,17 +2195,23 @@ class ApiToolTab(QWidget):
                     parsed_response = response_body
 
                 # 使用彩色格式化的JSON
-                formatted_response = self.format_json_with_colors(parsed_response, indent=2)
+                formatted_response = self.format_json_with_colors(
+                    parsed_response, indent=2
+                )
                 result_text = formatted_response
 
             except:
                 # 如果不是 JSON，直接显示原文
                 if isinstance(response_body, (dict, list)):
                     parsed_response = response_body
-                    formatted_response = self.format_json_with_colors(response_body, indent=2)
+                    formatted_response = self.format_json_with_colors(
+                        response_body, indent=2
+                    )
                     result_text = formatted_response
                 else:
-                    parsed_response = {"raw_response": response_body}  # 将原始响应包装为字典
+                    parsed_response = {
+                        "raw_response": response_body
+                    }  # 将原始响应包装为字典
                     # 非JSON内容也使用16px字体
                     result_text = f'<pre style="font-family: Consolas, Monaco, monospace; font-size: 16px; white-space: pre-wrap; line-height: 1.4;">{str(response_body)}</pre>'
 
@@ -2092,19 +2241,25 @@ class ApiToolTab(QWidget):
                 return
 
             print(f"开始处理响应映射，共有 {len(response_mapping)} 个映射项")
-            print(f"响应数据: {json.dumps(response_data, ensure_ascii=False, indent=2)}")
+            print(
+                f"响应数据: {json.dumps(response_data, ensure_ascii=False, indent=2)}"
+            )
 
             # 遍历映射关系，更新对应的字段输入框和变量池
             for field_key, response_path in response_mapping.items():
                 print(f"处理字段: {field_key}, 原始路径: {response_path}")
 
                 # 第一步：先替换JSONPath中的变量
-                processed_response_path = self.replace_variables_in_string(response_path)
+                processed_response_path = self.replace_variables_in_string(
+                    response_path
+                )
 
                 print(f"处理后路径: {processed_response_path}")
 
                 # 第二步：使用处理后的JSONPath提取值
-                value = self.extract_value_by_jsonpath(response_data, processed_response_path)
+                value = self.extract_value_by_jsonpath(
+                    response_data, processed_response_path
+                )
 
                 if value is not None:
                     # 更新变量池
@@ -2116,7 +2271,8 @@ class ApiToolTab(QWidget):
                         self.field_inputs[field_key].setText(str(value))
 
                     print(
-                        f"从响应中提取字段 '{field_key}': '{old_value}' -> '{value}' (路径: {processed_response_path})")
+                        f"从响应中提取字段 '{field_key}': '{old_value}' -> '{value}' (路径: {processed_response_path})"
+                    )
 
             # 新增：接口查询后立即刷新所有条件字段和依赖的公式字段
             self.refresh_all_condition_displays()
@@ -2155,7 +2311,7 @@ class ApiToolTab(QWidget):
             print(f"开始提取: {jsonpath_expr}")
 
             # 支持多种分隔符：| 或 -> 或 .
-            separators = ['|', '->', '.']
+            separators = ["|", "->", "."]
             used_separator = None
 
             for sep in separators:
@@ -2165,15 +2321,19 @@ class ApiToolTab(QWidget):
 
             # 如果使用分隔符，按多级路径处理
             if used_separator:
-                parts = [part.strip() for part in jsonpath_expr.split(used_separator) if part.strip()]
+                parts = [
+                    part.strip()
+                    for part in jsonpath_expr.split(used_separator)
+                    if part.strip()
+                ]
                 current_data = data
 
                 for i, part in enumerate(parts):
                     print(f"处理第 {i + 1} 级: {part}")
 
                     # 处理每个路径部分
-                    if not part.startswith('$'):
-                        part = '$.' + part
+                    if not part.startswith("$"):
+                        part = "$." + part
 
                     try:
                         expr = jsonpath_ng.parse(part)
@@ -2187,7 +2347,9 @@ class ApiToolTab(QWidget):
                         print(f"提取到值: {current_data}")
 
                         # 如果当前数据是字符串，尝试解析为JSON
-                        if isinstance(current_data, str) and current_data.strip().startswith(('{', '[')):
+                        if isinstance(
+                            current_data, str
+                        ) and current_data.strip().startswith(("{", "[")):
                             try:
                                 current_data = json.loads(current_data)
                                 print(f"解析字符串为JSON: {current_data}")
@@ -2203,8 +2365,8 @@ class ApiToolTab(QWidget):
                 return current_data
 
             # 单级路径处理
-            if not jsonpath_expr.startswith('$'):
-                jsonpath_expr = '$.' + jsonpath_expr
+            if not jsonpath_expr.startswith("$"):
+                jsonpath_expr = "$." + jsonpath_expr
 
             expr = jsonpath_ng.parse(jsonpath_expr)
             matches = [match.value for match in expr.find(data)]
@@ -2238,13 +2400,18 @@ class ApiToolTab(QWidget):
             print(f"尝试处理嵌套JSON: {jsonpath_expr}")
 
             # 解析JSONPath表达式，找到output字段
-            if 'output' in jsonpath_expr and 'repayApplyNo' in jsonpath_expr:
+            if "output" in jsonpath_expr and "repayApplyNo" in jsonpath_expr:
                 # 提取output字段的路径部分
-                output_path = jsonpath_expr.split('|')[0].strip() if '|' in jsonpath_expr else \
-                    jsonpath_expr.split('.output')[0] + '.output'
+                output_path = (
+                    jsonpath_expr.split("|")[0].strip()
+                    if "|" in jsonpath_expr
+                    else jsonpath_expr.split(".output")[0] + ".output"
+                )
 
                 # 提取output字段的值
-                output_expr = jsonpath_ng.parse(output_path if output_path.startswith('$') else '$.' + output_path)
+                output_expr = jsonpath_ng.parse(
+                    output_path if output_path.startswith("$") else "$." + output_path
+                )
                 output_matches = [match.value for match in output_expr.find(data)]
 
                 if output_matches:
@@ -2258,12 +2425,21 @@ class ApiToolTab(QWidget):
                             print(f"解析output为JSON: {parsed_output}")
 
                             # 从解析后的JSON中提取目标字段
-                            target_field = jsonpath_expr.split('.')[-1] if '.' in jsonpath_expr else \
-                                jsonpath_expr.split('|')[-1].strip() if '|' in jsonpath_expr else jsonpath_expr
+                            target_field = (
+                                jsonpath_expr.split(".")[-1]
+                                if "." in jsonpath_expr
+                                else (
+                                    jsonpath_expr.split("|")[-1].strip()
+                                    if "|" in jsonpath_expr
+                                    else jsonpath_expr
+                                )
+                            )
 
                             if target_field in parsed_output:
                                 result = parsed_output[target_field]
-                                print(f"从嵌套JSON中提取成功: {target_field} = {result}")
+                                print(
+                                    f"从嵌套JSON中提取成功: {target_field} = {result}"
+                                )
                                 return result
                         except json.JSONDecodeError as e:
                             print(f"解析output JSON失败: {e}")
@@ -2286,7 +2462,7 @@ class ApiToolTab(QWidget):
             路径对应的值，如果路径不存在返回None
         """
         try:
-            keys = path.split('.')
+            keys = path.split(".")
             current = data
 
             for key in keys:
@@ -2379,7 +2555,7 @@ class ApiToolTab(QWidget):
             self.load_products_config()
 
             # 如果有当前产品，更新界面状态
-            if hasattr(self, 'current_product') and self.current_product:
+            if hasattr(self, "current_product") and self.current_product:
                 # 更新产品下拉框
                 index = self.product_combo.findText(self.current_product)
                 if index >= 0:
@@ -2452,7 +2628,9 @@ class ApiToolTab(QWidget):
                 current_value = field_input.text()
                 if str(new_value) != current_value:
                     field_input.setText(str(new_value))
-                    print(f"强制刷新字段 '{field_key}': '{current_value}' -> '{new_value}'")
+                    print(
+                        f"强制刷新字段 '{field_key}': '{current_value}' -> '{new_value}'"
+                    )
 
         # 刷新下拉框
         for combo_key, combo_box in self.combo_boxes.items():
@@ -2468,7 +2646,9 @@ class ApiToolTab(QWidget):
                             break
                     if found_index >= 0:
                         combo_box.setCurrentIndex(found_index)
-                        print(f"强制刷新下拉框 '{combo_key}': '{current_data}' -> '{new_value}'")
+                        print(
+                            f"强制刷新下拉框 '{combo_key}': '{current_data}' -> '{new_value}'"
+                        )
 
     def on_field_changed(self, field_key, new_value):
         """字段值变化时的处理"""
@@ -2516,7 +2696,10 @@ class ApiToolTab(QWidget):
 
             # 查找所有使用这个字段作为条件字段的条件配置
             for item in layout_config:
-                if item.get("type") == "condition" and item.get("condition_field") == field_key:
+                if (
+                    item.get("type") == "condition"
+                    and item.get("condition_field") == field_key
+                ):
                     condition_key = item.get("key")
                     # 获取条件字段的当前值
                     condition_field_value = None
@@ -2536,7 +2719,8 @@ class ApiToolTab(QWidget):
                     if not variable_field_key:
                         # 如果没有映射，只清空条件变量本身
                         print(
-                            f"条件字段 '{field_key}' 的值 '{condition_field_value}' 没有配置映射，清空条件变量 '{condition_key}'")
+                            f"条件字段 '{field_key}' 的值 '{condition_field_value}' 没有配置映射，清空条件变量 '{condition_key}'"
+                        )
                         self.clear_condition_variable(condition_key)
                         continue
 
@@ -2556,11 +2740,17 @@ class ApiToolTab(QWidget):
 
                     # 更新UI显示
                     if condition_key in self.condition_displays:
-                        display_value = str(variable_value) if variable_value is not None else ""
+                        display_value = (
+                            str(variable_value) if variable_value is not None else ""
+                        )
                         self.condition_displays[condition_key].setText(display_value)
                         # 新增：调整条件字段显示框的宽度
-                        self.adjust_field_width(self.condition_displays[condition_key], display_value)
-                        print(f"更新条件显示 {condition_key}: {old_value} -> {variable_value}")
+                        self.adjust_field_width(
+                            self.condition_displays[condition_key], display_value
+                        )
+                        print(
+                            f"更新条件显示 {condition_key}: {old_value} -> {variable_value}"
+                        )
 
                     # 强制刷新请求体
                     self.force_refresh_request_body()
@@ -2589,7 +2779,9 @@ class ApiToolTab(QWidget):
                     # 检查公式是否依赖这个条件字段
                     dependencies = formula_config.get("dependencies", [])
                     if condition_key in dependencies:
-                        print(f"条件字段 {condition_key} 变化，重新计算公式 {formula_key}")
+                        print(
+                            f"条件字段 {condition_key} 变化，重新计算公式 {formula_key}"
+                        )
                         self.calculate_formula(formula_key)
 
         except Exception as e:
@@ -2618,7 +2810,7 @@ class ApiToolTab(QWidget):
         # 生成新的请求流水并更新变量池
         new_request_id = self.generate_request_id()
         self.request_id_input.setText(new_request_id)
-        self.variable_pool['request_id'] = new_request_id
+        self.variable_pool["request_id"] = new_request_id
 
         # 生成测试数据
         if self.current_product and self.current_product in self.api_config["products"]:
@@ -2626,13 +2818,15 @@ class ApiToolTab(QWidget):
 
             # 集中生成身份证图片的Base64编码
             try:
-                base64_images = self.id_card_image_generator.generate_id_card_images_base64(
-                    id_data=test_data
+                base64_images = (
+                    self.id_card_image_generator.generate_id_card_images_base64(
+                        id_data=test_data
+                    )
                 )
                 # 将Base64编码添加到变量池
-                self.variable_pool['id_card_front_base64'] = base64_images['front']
-                self.variable_pool['id_card_back_base64'] = base64_images['back']
-                self.variable_pool['face_base64'] = base64_images['face']
+                self.variable_pool["id_card_front_base64"] = base64_images["front"]
+                self.variable_pool["id_card_back_base64"] = base64_images["back"]
+                self.variable_pool["face_base64"] = base64_images["face"]
             except Exception as e:
                 print(f"生成身份证图片Base64失败: {str(e)}")
                 # 如果生成失败，设置空值到变量池
@@ -2661,7 +2855,9 @@ class ApiToolTab(QWidget):
                 request_body = self.generate_request_body(interface_config)
 
                 # 使用彩色格式化JSON
-                formatted_request_body = self.format_json_with_colors(request_body, indent=2)
+                formatted_request_body = self.format_json_with_colors(
+                    request_body, indent=2
+                )
                 self.request_body_edit.setHtml(formatted_request_body)
 
                 print(f"强制刷新请求体完成，使用最新的变量值")
@@ -2670,19 +2866,26 @@ class ApiToolTab(QWidget):
                 print(f"强制刷新请求体时出错: {str(e)}")
         else:
             # 如果没有当前接口，但URL和请求体有内容，也尝试刷新
-            if self.url_input.text().strip() and self.request_body_edit.toPlainText().strip():
+            if (
+                self.url_input.text().strip()
+                and self.request_body_edit.toPlainText().strip()
+            ):
                 try:
                     # 尝试解析现有的请求体并重新生成
                     request_body_text = self.request_body_edit.toPlainText().strip()
                     if request_body_text:
                         # 先对现有请求体进行变量替换
-                        processed_body = self.replace_variables_in_string(request_body_text)
+                        processed_body = self.replace_variables_in_string(
+                            request_body_text
+                        )
                         # 如果处理后的内容不同，则更新
                         if processed_body != request_body_text:
                             # 尝试解析为JSON并格式化
                             try:
                                 parsed_body = json.loads(processed_body)
-                                formatted_body = self.format_json_with_colors(parsed_body, indent=2)
+                                formatted_body = self.format_json_with_colors(
+                                    parsed_body, indent=2
+                                )
                                 self.request_body_edit.setHtml(formatted_body)
                             except:
                                 # 如果不是有效的JSON，直接显示文本
@@ -2718,7 +2921,10 @@ class ApiToolTab(QWidget):
                     combo_box.addItem(option["text"], option["value"])
                 self.combo_boxes[item["key"]] = combo_box
 
-            elif item["type"] == "condition" and item["key"] not in self.condition_displays:
+            elif (
+                item["type"] == "condition"
+                and item["key"] not in self.condition_displays
+            ):
                 # 如果条件字段不在condition_displays中（可能是隐藏字段），创建它
                 condition_display = QLineEdit()
                 condition_display.setReadOnly(True)
@@ -2737,7 +2943,9 @@ class ApiToolTab(QWidget):
                 self.formula_configs[formula_key] = {
                     "formula": item.get("formula", ""),
                     "formula_type": item.get("formula_type", "numeric"),
-                    "dependencies": self.extract_formula_dependencies(item.get("formula", ""))
+                    "dependencies": self.extract_formula_dependencies(
+                        item.get("formula", "")
+                    ),
                 }
 
         # 然后，重置所有字段的值（先处理非公式字段）
@@ -2756,13 +2964,17 @@ class ApiToolTab(QWidget):
 
                     if default_value:
                         # 有默认值：使用默认值（支持变量替换）
-                        processed_default = self.replace_variables_in_string(default_value)
+                        processed_default = self.replace_variables_in_string(
+                            default_value
+                        )
                         field_input.setText(processed_default)
                         print(f"字段 '{field_key}' 设置为默认值: {processed_default}")
                     else:
                         # 无默认值：使用测试数据或清空
                         if field_key in self.get_test_data_mapping(test_data):
-                            test_value = self.get_test_data_mapping(test_data)[field_key]
+                            test_value = self.get_test_data_mapping(test_data)[
+                                field_key
+                            ]
                             field_input.setText(str(test_value))
                             print(f"字段 '{field_key}' 设置为测试数据: {test_value}")
                         else:
@@ -2777,7 +2989,9 @@ class ApiToolTab(QWidget):
 
                     if default_value:
                         # 有默认值：使用默认值
-                        processed_default = self.replace_variables_in_string(default_value)
+                        processed_default = self.replace_variables_in_string(
+                            default_value
+                        )
                         # 在下拉框中查找匹配的选项
                         found_index = -1
                         for i in range(combo_box.count()):
@@ -2786,25 +3000,33 @@ class ApiToolTab(QWidget):
                                 break
                         if found_index >= 0:
                             combo_box.setCurrentIndex(found_index)
-                            print(f"下拉框 '{field_key}' 设置为默认值: {processed_default}")
+                            print(
+                                f"下拉框 '{field_key}' 设置为默认值: {processed_default}"
+                            )
                         else:
                             # 如果没有找到，尝试使用显示文本匹配
                             for i in range(combo_box.count()):
                                 if combo_box.itemText(i) == processed_default:
                                     combo_box.setCurrentIndex(i)
-                                    print(f"下拉框 '{field_key}' 设置为默认值(文本匹配): {processed_default}")
+                                    print(
+                                        f"下拉框 '{field_key}' 设置为默认值(文本匹配): {processed_default}"
+                                    )
                                     break
                             else:
                                 # 如果还是没有找到，使用第一个选项
                                 if combo_box.count() > 0:
                                     combo_box.setCurrentIndex(0)
                                     first_value = combo_box.itemData(0)
-                                    print(f"下拉框 '{field_key}' 未找到默认值，使用第一个选项: {first_value}")
+                                    print(
+                                        f"下拉框 '{field_key}' 未找到默认值，使用第一个选项: {first_value}"
+                                    )
                     else:
                         # 无默认值：使用测试数据或第一个选项
                         test_value = None
                         if field_key in self.get_test_data_mapping(test_data):
-                            test_value = self.get_test_data_mapping(test_data)[field_key]
+                            test_value = self.get_test_data_mapping(test_data)[
+                                field_key
+                            ]
 
                         if test_value:
                             # 在下拉框中查找匹配的选项
@@ -2815,30 +3037,40 @@ class ApiToolTab(QWidget):
                                     break
                             if found_index >= 0:
                                 combo_box.setCurrentIndex(found_index)
-                                print(f"下拉框 '{field_key}' 设置为测试数据: {test_value}")
+                                print(
+                                    f"下拉框 '{field_key}' 设置为测试数据: {test_value}"
+                                )
                             else:
                                 # 如果没有找到，尝试使用显示文本匹配
                                 for i in range(combo_box.count()):
                                     if combo_box.itemText(i) == str(test_value):
                                         combo_box.setCurrentIndex(i)
-                                        print(f"下拉框 '{field_key}' 设置为测试数据(文本匹配): {test_value}")
+                                        print(
+                                            f"下拉框 '{field_key}' 设置为测试数据(文本匹配): {test_value}"
+                                        )
                                         break
                                 else:
                                     # 如果还是没有找到，使用第一个选项
                                     if combo_box.count() > 0:
                                         combo_box.setCurrentIndex(0)
                                         first_value = combo_box.itemData(0)
-                                        print(f"下拉框 '{field_key}' 未找到测试数据，使用第一个选项: {first_value}")
+                                        print(
+                                            f"下拉框 '{field_key}' 未找到测试数据，使用第一个选项: {first_value}"
+                                        )
                         else:
                             # 无测试数据，使用第一个选项
                             if combo_box.count() > 0:
                                 combo_box.setCurrentIndex(0)
                                 first_value = combo_box.itemData(0)
-                                print(f"下拉框 '{field_key}' 使用第一个选项: {first_value}")
+                                print(
+                                    f"下拉框 '{field_key}' 使用第一个选项: {first_value}"
+                                )
 
                     # 更新变量池
                     current_data = combo_box.currentData()
-                    self.variable_pool[field_key] = current_data if current_data is not None else ""
+                    self.variable_pool[field_key] = (
+                        current_data if current_data is not None else ""
+                    )
 
                 elif item["type"] == "condition":
                     # 条件类型不需要重置，因为它的值依赖于其他字段
@@ -2849,7 +3081,9 @@ class ApiToolTab(QWidget):
                         self.variable_pool[condition_key] = condition_value
                         # 更新显示控件
                         if condition_key in self.condition_displays:
-                            self.condition_displays[condition_key].setText(str(condition_value))
+                            self.condition_displays[condition_key].setText(
+                                str(condition_value)
+                            )
                         print(f"重置条件字段 '{condition_key}' 值为: {condition_value}")
 
         # 在所有非公式字段都初始化完成后，再处理公式字段
@@ -2879,7 +3113,9 @@ class ApiToolTab(QWidget):
             layout_config = product_config.get("layout", [])
 
             # 查找所有条件配置
-            condition_configs = [item for item in layout_config if item.get("type") == "condition"]
+            condition_configs = [
+                item for item in layout_config if item.get("type") == "condition"
+            ]
 
             for condition_config in condition_configs:
                 condition_key = condition_config.get("key")
@@ -2898,7 +3134,8 @@ class ApiToolTab(QWidget):
                         if not variable_field_key:
                             # 没有映射，只清空条件变量本身
                             print(
-                                f"初始化时发现条件字段 '{condition_field_key}' 的值 '{condition_field_value}' 没有配置映射，清空条件变量 '{condition_key}'")
+                                f"初始化时发现条件字段 '{condition_field_key}' 的值 '{condition_field_value}' 没有配置映射，清空条件变量 '{condition_key}'"
+                            )
                             self.clear_condition_variable(condition_key)
 
         except Exception as e:
@@ -2912,12 +3149,12 @@ class ApiToolTab(QWidget):
             "phone": test_data["phone"],
             "bank_card_no": test_data["bank_card_number"],
             "id_card_start_time": test_data["id_card_start_time"],
-            "id_card_end_time": test_data["id_card_end_time"]
+            "id_card_end_time": test_data["id_card_end_time"],
         }
 
     def extract_formula_dependencies(self, formula):
         """提取公式中依赖的变量"""
-        pattern = r'\{(\w+)\}'
+        pattern = r"\{(\w+)\}"
         variables = re.findall(pattern, formula)
         return list(set(variables))  # 去重
 
@@ -2964,7 +3201,9 @@ class ApiToolTab(QWidget):
 
         # 如果有缺失的依赖变量，设置公式值为空
         if missing_dependencies:
-            print(f"公式 '{formula_key}' 依赖的变量为空或不存在: {missing_dependencies}")
+            print(
+                f"公式 '{formula_key}' 依赖的变量为空或不存在: {missing_dependencies}"
+            )
             self.set_formula_value(formula_key, "")
             return
 
@@ -2999,20 +3238,20 @@ class ApiToolTab(QWidget):
             expression = expression.replace(" ", "")
 
             # 安全地计算数学表达式
-            allowed_chars = set('0123456789+-*/().% ')
+            allowed_chars = set("0123456789+-*/().% ")
             if not all(c in allowed_chars for c in expression):
                 raise ValueError("数值表达式包含非法字符")
 
             # 验证表达式包含必要的数学运算符
-            if not any(op in expression for op in ['+', '-', '*', '/']):
+            if not any(op in expression for op in ["+", "-", "*", "/"]):
                 raise ValueError("数值公式应包含数学运算符（+、-、*、/）")
 
             # 替换百分比符号
-            expression = expression.replace('%', '/100')
+            expression = expression.replace("%", "/100")
 
             # 使用 eval 计算（在生产环境中应考虑更安全的替代方案）
             result = eval(expression)
-            
+
             # 向上保留两位小数：当第三位小数≥5时向上进位，否则舍去
             # 例如：0.015 -> 0.02，0.014 -> 0.01
             if isinstance(result, (int, float)):
@@ -3020,14 +3259,14 @@ class ApiToolTab(QWidget):
                 multiplied = result * 1000
                 # 获取第三位小数
                 third_decimal = multiplied % 10
-                
+
                 if third_decimal >= 5:
                     # 第三位小数≥5，向上进位
                     result = math.ceil(result * 100) / 100
                 else:
                     # 第三位小数<5，舍去
                     result = math.floor(result * 100) / 100
-            
+
             return result
 
         except Exception as e:
@@ -3042,13 +3281,13 @@ class ApiToolTab(QWidget):
             expression = expression.replace(" ", "")
 
             # 验证日期表达式格式
-            if not any(op in expression for op in ['-']):
+            if not any(op in expression for op in ["-"]):
                 raise ValueError("日期公式应包含减法运算符（-）")
 
             # 提取日期和操作符
-            date_pattern = r'(\d{4}[-/]?\d{2}[-/]?\d{2})(?:\s+\d{2}:\d{2}:\d{2})?'
+            date_pattern = r"(\d{4}[-/]?\d{2}[-/]?\d{2})(?:\s+\d{2}:\d{2}:\d{2})?"
             dates = re.findall(date_pattern, expression)
-            operators = re.findall(r'[+-]', expression)
+            operators = re.findall(r"[+-]", expression)
 
             print(f"找到日期: {dates}, 操作符: {operators}")
 
@@ -3058,18 +3297,18 @@ class ApiToolTab(QWidget):
             date1_str, date2_str = dates
             operator = operators[0]
 
-            if operator != '-':
+            if operator != "-":
                 raise ValueError("日期公式目前只支持减法运算")
 
             # 统一日期格式
             def parse_date(date_str):
                 # 移除分隔符
-                clean_str = re.sub(r'[-/]', '', date_str)
+                clean_str = re.sub(r"[-/]", "", date_str)
                 if len(clean_str) == 8:
-                    return datetime.strptime(clean_str, '%Y%m%d')
+                    return datetime.strptime(clean_str, "%Y%m%d")
                 else:
                     # 尝试解析带时间的日期
-                    return datetime.strptime(date_str, '%Y%m%d %H:%M:%S')
+                    return datetime.strptime(date_str, "%Y%m%d %H:%M:%S")
 
             date1 = parse_date(date1_str)
             date2 = parse_date(date2_str)
@@ -3118,7 +3357,8 @@ class ApiToolTab(QWidget):
 
         self.request_search_close_btn = QPushButton("×")  # 使用乘号，更美观
         self.request_search_close_btn.setFixedSize(20, 20)
-        self.request_search_close_btn.setStyleSheet("""
+        self.request_search_close_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #fef2f2;
                 border: 1px solid #fecaca;
@@ -3138,7 +3378,8 @@ class ApiToolTab(QWidget):
                 border: 1px solid #ef4444;
                 color: #991b1b;
             }
-        """)
+        """
+        )
 
         self.request_search_layout.addWidget(self.request_search_input)
         self.request_search_layout.addWidget(self.request_search_close_btn)
@@ -3156,7 +3397,8 @@ class ApiToolTab(QWidget):
 
         self.response_search_close_btn = QPushButton("×")
         self.response_search_close_btn.setFixedSize(20, 20)
-        self.response_search_close_btn.setStyleSheet("""
+        self.response_search_close_btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #fef2f2;
                 border: 1px solid #fecaca;
@@ -3176,7 +3418,8 @@ class ApiToolTab(QWidget):
                 border: 1px solid #ef4444;
                 color: #991b1b;
             }
-        """)
+        """
+        )
 
         self.response_search_layout.addWidget(self.response_search_input)
         self.response_search_layout.addWidget(self.response_search_close_btn)
@@ -3193,7 +3436,7 @@ class ApiToolTab(QWidget):
         container_width = self.request_body_container.width()
         dynamic_width = min(max(200, int(container_width * 0.3)), 300)
 
-        if hasattr(self, 'request_search_widget') and self.request_search_widget:
+        if hasattr(self, "request_search_widget") and self.request_search_widget:
             # 设置搜索输入框宽度
             self.request_search_input.setFixedWidth(dynamic_width)
 
@@ -3209,7 +3452,7 @@ class ApiToolTab(QWidget):
             self.request_search_input.update()
 
         # 同样处理响应体搜索框
-        if hasattr(self, 'response_search_widget') and self.response_search_widget:
+        if hasattr(self, "response_search_widget") and self.response_search_widget:
             container_width = self.response_body_container.width()
             dynamic_width = min(max(200, int(container_width * 0.3)), 300)
 
@@ -3234,10 +3477,14 @@ class ApiToolTab(QWidget):
 
         # 连接搜索框的回车事件
         self.request_search_input.returnPressed.connect(
-            lambda: self.handle_search_enter(self.request_body_edit, self.request_search_input)
+            lambda: self.handle_search_enter(
+                self.request_body_edit, self.request_search_input
+            )
         )
         self.response_search_input.returnPressed.connect(
-            lambda: self.handle_search_enter(self.response_body_edit, self.response_search_input)
+            lambda: self.handle_search_enter(
+                self.response_body_edit, self.response_search_input
+            )
         )
 
         # 连接关闭按钮事件
@@ -3285,15 +3532,25 @@ class ApiToolTab(QWidget):
         self.hide_all_search_boxes()
 
         if focused_widget == self.request_body_edit:
-            self.show_search_box(self.request_search_widget, self.request_search_input, self.request_search_close_btn)
+            self.show_search_box(
+                self.request_search_widget,
+                self.request_search_input,
+                self.request_search_close_btn,
+            )
         elif focused_widget == self.response_body_edit:
-            self.show_search_box(self.response_search_widget, self.response_search_input,
-                                 self.response_search_close_btn)
+            self.show_search_box(
+                self.response_search_widget,
+                self.response_search_input,
+                self.response_search_close_btn,
+            )
         else:
             # 默认使用响应体
             self.response_body_edit.setFocus()
-            self.show_search_box(self.response_search_widget, self.response_search_input,
-                                 self.response_search_close_btn)
+            self.show_search_box(
+                self.response_search_widget,
+                self.response_search_input,
+                self.response_search_close_btn,
+            )
 
     def show_search_box(self, search_widget, search_input, close_btn):
         """显示搜索框"""
@@ -3401,7 +3658,9 @@ class ApiToolTab(QWidget):
 
         # 更新搜索框提示，显示当前匹配位置
         if self.total_matches > 0:
-            search_input.setToolTip(f"找到 {self.total_matches} 个匹配项，当前第 {self.current_match_index + 1} 个")
+            search_input.setToolTip(
+                f"找到 {self.total_matches} 个匹配项，当前第 {self.current_match_index + 1} 个"
+            )
         else:
             search_input.setToolTip("未找到匹配项")
 

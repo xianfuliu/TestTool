@@ -1,8 +1,24 @@
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
-                             QWidget, QLabel, QLineEdit, QTextEdit,
-                             QSpinBox, QCheckBox, QPushButton, QGroupBox,
-                             QFormLayout, QListWidget, QListWidgetItem,
-                             QMessageBox, QScrollArea, QGridLayout, QInputDialog)
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QTabWidget,
+    QWidget,
+    QLabel,
+    QLineEdit,
+    QTextEdit,
+    QSpinBox,
+    QCheckBox,
+    QPushButton,
+    QGroupBox,
+    QFormLayout,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QScrollArea,
+    QGridLayout,
+    QInputDialog,
+)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 import json
@@ -58,7 +74,6 @@ class ToolCardsConfigDialog(QDialog):
         button_layout.addWidget(self.cancel_btn)
 
         layout.addLayout(button_layout)
-
 
         # 业务线和子业务管理区域已移除，现在只管理卡片
 
@@ -125,16 +140,16 @@ class ToolCardsConfigDialog(QDialog):
         """刷新卡片列表（基于数据库）"""
         # 清空现有卡片列表
         self.cards_list.clear()
-        
+
         # 从数据库加载卡片数据
         conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor(pymysql.cursors.DictCursor)
-                
+
                 # 获取当前项目ID（从父窗口传递）
-                current_project_id = getattr(self.parent(), 'current_project_id', None)
-                
+                current_project_id = getattr(self.parent(), "current_project_id", None)
+
                 if current_project_id:
                     # 查询当前项目下的所有卡片
                     query = """
@@ -146,46 +161,56 @@ class ToolCardsConfigDialog(QDialog):
                     """
                     cursor.execute(query, (current_project_id,))
                     cards = cursor.fetchall()
-                    
+
                     # 将数据库记录转换为卡片数据格式
                     for card in cards:
                         card_data = {
-                            'id': card['id'],
-                            'title': card['title'],
-                            'description': card['description'],
-                            'type': card['card_type'],
-                            'timeout': card['timeout'],
-                            'locked': bool(card['locked']),
-                            'configuration': json.loads(card['configuration']) if card['configuration'] else {}
+                            "id": card["id"],
+                            "title": card["title"],
+                            "description": card["description"],
+                            "type": card["card_type"],
+                            "timeout": card["timeout"],
+                            "locked": bool(card["locked"]),
+                            "configuration": (
+                                json.loads(card["configuration"])
+                                if card["configuration"]
+                                else {}
+                            ),
                         }
-                        
+
                         # 根据卡片类型添加特定配置
-                        if card_data['type'].startswith('sql'):
-                            config = card_data['configuration']
-                            card_data.update({
-                                'database': config.get('database', ''),
-                                'sql': config.get('sql', '')
-                            })
-                        elif card_data['type'] == 'http':
-                            config = card_data['configuration']
-                            card_data.update({
-                                'url': config.get('url', ''),
-                                'method': config.get('method', ''),
-                                'headers': config.get('headers', ''),
-                                'body': config.get('body', '')
-                            })
-                        elif card_data['type'] == 'python':
-                            config = card_data['configuration']
-                            card_data.update({
-                                'class_name': config.get('class_name', ''),
-                                'method_name': config.get('method_name', ''),
-                                'parameters': config.get('parameters', '')
-                            })
-                        
-                        item = QListWidgetItem(card_data['title'])
+                        if card_data["type"].startswith("sql"):
+                            config = card_data["configuration"]
+                            card_data.update(
+                                {
+                                    "database": config.get("database", ""),
+                                    "sql": config.get("sql", ""),
+                                }
+                            )
+                        elif card_data["type"] == "http":
+                            config = card_data["configuration"]
+                            card_data.update(
+                                {
+                                    "url": config.get("url", ""),
+                                    "method": config.get("method", ""),
+                                    "headers": config.get("headers", ""),
+                                    "body": config.get("body", ""),
+                                }
+                            )
+                        elif card_data["type"] == "python":
+                            config = card_data["configuration"]
+                            card_data.update(
+                                {
+                                    "class_name": config.get("class_name", ""),
+                                    "method_name": config.get("method_name", ""),
+                                    "parameters": config.get("parameters", ""),
+                                }
+                            )
+
+                        item = QListWidgetItem(card_data["title"])
                         item.setData(Qt.UserRole, card_data)
                         self.cards_list.addItem(item)
-                        
+
                 cursor.close()
             except pymysql.Error as e:
                 print(f"数据库查询失败: {e}")
@@ -217,11 +242,20 @@ class ToolCardsConfigDialog(QDialog):
         basic_info_group = QGroupBox("基本信息")
         basic_layout = QFormLayout(basic_info_group)
 
-        basic_layout.addRow("卡片名称:", QLabel(self.current_card_data.get('title', '')))
+        basic_layout.addRow(
+            "卡片名称:", QLabel(self.current_card_data.get("title", ""))
+        )
         basic_layout.addRow("卡片类型:", QLabel(self.get_type_display()))
-        basic_layout.addRow("描述:", QLabel(self.current_card_data.get('description', '')))
-        basic_layout.addRow("超时时间:", QLabel(f"{self.current_card_data.get('timeout', 5000)}ms"))
-        basic_layout.addRow("锁定状态:", QLabel("是" if self.current_card_data.get('locked', False) else "否"))
+        basic_layout.addRow(
+            "描述:", QLabel(self.current_card_data.get("description", ""))
+        )
+        basic_layout.addRow(
+            "超时时间:", QLabel(f"{self.current_card_data.get('timeout', 5000)}ms")
+        )
+        basic_layout.addRow(
+            "锁定状态:",
+            QLabel("是" if self.current_card_data.get("locked", False) else "否"),
+        )
 
         scroll_layout.addWidget(basic_info_group)
 
@@ -229,16 +263,28 @@ class ToolCardsConfigDialog(QDialog):
         config_group = QGroupBox("配置信息")
         config_layout = QFormLayout(config_group)
 
-        card_type = self.current_card_data.get('type', 'sql')
-        if card_type == 'sql':
-            config_layout.addRow("数据库连接:", QLabel(self.current_card_data.get('database', '')))
-            config_layout.addRow("SQL语句:", QLabel(self.current_card_data.get('sql', '')))
-        elif card_type == 'http':
-            config_layout.addRow("请求URL:", QLabel(self.current_card_data.get('url', '')))
-            config_layout.addRow("请求方法:", QLabel(self.current_card_data.get('method', 'GET')))
-        elif card_type == 'python':
-            config_layout.addRow("Python类:", QLabel(self.current_card_data.get('class_name', '')))
-            config_layout.addRow("方法名:", QLabel(self.current_card_data.get('method_name', '')))
+        card_type = self.current_card_data.get("type", "sql")
+        if card_type == "sql":
+            config_layout.addRow(
+                "数据库连接:", QLabel(self.current_card_data.get("database", ""))
+            )
+            config_layout.addRow(
+                "SQL语句:", QLabel(self.current_card_data.get("sql", ""))
+            )
+        elif card_type == "http":
+            config_layout.addRow(
+                "请求URL:", QLabel(self.current_card_data.get("url", ""))
+            )
+            config_layout.addRow(
+                "请求方法:", QLabel(self.current_card_data.get("method", "GET"))
+            )
+        elif card_type == "python":
+            config_layout.addRow(
+                "Python类:", QLabel(self.current_card_data.get("class_name", ""))
+            )
+            config_layout.addRow(
+                "方法名:", QLabel(self.current_card_data.get("method_name", ""))
+            )
 
         scroll_layout.addWidget(config_group)
         scroll_layout.addStretch()
@@ -261,7 +307,9 @@ class ToolCardsConfigDialog(QDialog):
         basic_layout.addRow("卡片名称:", self.card_title_edit)
 
         self.card_type_combo = NoWheelComboBox()
-        self.card_type_combo.addItems(["SQL查询", "SQL更新", "SQL删除", "HTTP接口", "Python类"])
+        self.card_type_combo.addItems(
+            ["SQL查询", "SQL更新", "SQL删除", "HTTP接口", "Python类"]
+        )
         self.card_type_combo.currentTextChanged.connect(self.on_card_type_changed)
         self.card_type_combo.setStyleSheet(get_combobox_style())
         basic_layout.addRow("卡片类型:", self.card_type_combo)
@@ -361,7 +409,9 @@ class ToolCardsConfigDialog(QDialog):
 
         self.parameters_edit = QTextEdit()
         self.parameters_edit.setMaximumHeight(80)
-        self.parameters_edit.setPlaceholderText('{"param1": "value1", "param2": "value2"}')
+        self.parameters_edit.setPlaceholderText(
+            '{"param1": "value1", "param2": "value2"}'
+        )
         self.config_layout.addRow("参数:", self.parameters_edit)
 
     def on_card_type_changed(self, type_text):
@@ -369,24 +419,16 @@ class ToolCardsConfigDialog(QDialog):
         if self.view_mode:
             return
 
-        type_map = {
-            "SQL工具": "sql",
-            "HTTP接口": "http",
-            "Python类": "python"
-        }
+        type_map = {"SQL工具": "sql", "HTTP接口": "http", "Python类": "python"}
 
         card_type = type_map.get(type_text, "sql")
 
-        if card_type == 'sql':
+        if card_type == "sql":
             self.create_sql_config()
-        elif card_type == 'http':
+        elif card_type == "http":
             self.create_http_config()
-        elif card_type == 'python':
+        elif card_type == "python":
             self.create_python_config()
-
-
-
-
 
     def on_card_selected(self, current, previous):
         """卡片选择事件"""
@@ -406,76 +448,65 @@ class ToolCardsConfigDialog(QDialog):
             return
 
         # 填充表单数据
-        self.card_title_edit.setText(card_data.get('title', ''))
+        self.card_title_edit.setText(card_data.get("title", ""))
 
         # 设置卡片类型
-        card_type = card_data.get('type', 'sql')
-        type_map = {
-            'sql': 'SQL工具',
-            'http': 'HTTP接口',
-            'python': 'Python类'
-        }
-        type_text = type_map.get(card_type, 'SQL工具')
+        card_type = card_data.get("type", "sql")
+        type_map = {"sql": "SQL工具", "http": "HTTP接口", "python": "Python类"}
+        type_text = type_map.get(card_type, "SQL工具")
         self.card_type_combo.setCurrentText(type_text)
 
-        self.card_desc_edit.setPlainText(card_data.get('description', ''))
-        self.timeout_spin.setValue(card_data.get('timeout', 5000))
-        self.locked_check.setChecked(card_data.get('locked', False))
+        self.card_desc_edit.setPlainText(card_data.get("description", ""))
+        self.timeout_spin.setValue(card_data.get("timeout", 5000))
+        self.locked_check.setChecked(card_data.get("locked", False))
 
         # 填充类型特定的配置
-        if card_type == 'sql':
-            self.database_combo.setCurrentText(card_data.get('database', ''))
-            self.sql_editor.setPlainText(card_data.get('sql', ''))
-        elif card_type == 'http':
-            self.url_edit.setText(card_data.get('url', ''))
-            self.method_combo.setCurrentText(card_data.get('method', 'GET'))
-            self.headers_edit.setPlainText(card_data.get('headers', ''))
-            self.body_edit.setPlainText(card_data.get('body', ''))
-        elif card_type == 'python':
-            self.class_name_edit.setText(card_data.get('class_name', ''))
-            self.method_name_edit.setText(card_data.get('method_name', ''))
-            self.parameters_edit.setPlainText(card_data.get('parameters', ''))
+        if card_type == "sql":
+            self.database_combo.setCurrentText(card_data.get("database", ""))
+            self.sql_editor.setPlainText(card_data.get("sql", ""))
+        elif card_type == "http":
+            self.url_edit.setText(card_data.get("url", ""))
+            self.method_combo.setCurrentText(card_data.get("method", "GET"))
+            self.headers_edit.setPlainText(card_data.get("headers", ""))
+            self.body_edit.setPlainText(card_data.get("body", ""))
+        elif card_type == "python":
+            self.class_name_edit.setText(card_data.get("class_name", ""))
+            self.method_name_edit.setText(card_data.get("method_name", ""))
+            self.parameters_edit.setPlainText(card_data.get("parameters", ""))
 
     def get_type_display(self):
         """获取卡片类型显示文本"""
         if not self.current_card_data:
             return ""
 
-        card_type = self.current_card_data.get('type', 'sql')
-        type_map = {
-            'sql': 'SQL工具',
-            'http': 'HTTP接口',
-            'python': 'Python类'
-        }
+        card_type = self.current_card_data.get("type", "sql")
+        type_map = {"sql": "SQL工具", "http": "HTTP接口", "python": "Python类"}
         return type_map.get(card_type, card_type)
 
     def generate_card_id(self):
         """生成唯一的卡片ID"""
         import uuid
+
         return str(uuid.uuid4())
-
-
-
-
 
     def add_card(self):
         """新增卡片"""
         # 确保当前有选中的项目
-        current_project_id = getattr(self.parent(), 'current_project_id', None)
+        current_project_id = getattr(self.parent(), "current_project_id", None)
         if not current_project_id:
             Toast.warn(self, "请先选择项目")
             return
 
         # 创建新卡片数据
         new_card = {
-            'id': self.generate_card_id(),
-            'title': '新卡片',
-            'type': 'sql',
-            'description': '',
-            'timeout': 5000,
-            'locked': False,
-            'database': 'default_db',
-            'sql': ''
+            "id": self.generate_card_id(),
+            "title": "新卡片",
+            "type": "sql",
+            "description": "",
+            "timeout": 5000,
+            "locked": False,
+            "database": "default_db",
+            "sql": "",
         }
 
         self.current_card_data = new_card
@@ -503,7 +534,7 @@ class ToolCardsConfigDialog(QDialog):
             return
 
         # 确保当前有选中的项目
-        current_project_id = getattr(self.parent(), 'current_project_id', None)
+        current_project_id = getattr(self.parent(), "current_project_id", None)
         if not current_project_id:
             Toast.warn(self, "请先选择项目")
             return
@@ -512,10 +543,10 @@ class ToolCardsConfigDialog(QDialog):
 
         # 创建副本
         new_card = original_card.copy()
-        new_card['id'] = self.generate_card_id()
+        new_card["id"] = self.generate_card_id()
 
         # 生成副本名称
-        base_name = original_card.get('title', '卡片')
+        base_name = original_card.get("title", "卡片")
         copy_count = 1
         new_title = f"{base_name}_cp{copy_count}"
 
@@ -524,85 +555,85 @@ class ToolCardsConfigDialog(QDialog):
         if conn:
             try:
                 cursor = conn.cursor()
-                
+
                 # 检查相同项目下是否有相同名称的卡片
                 query = "SELECT COUNT(*) FROM tool_cards WHERE project_id = %s AND title LIKE %s"
                 cursor.execute(query, (current_project_id, f"{base_name}_cp%"))
                 count = cursor.fetchone()[0]
-                
+
                 if count > 0:
                     new_title = f"{base_name}_cp{count + 1}"
-                
+
                 cursor.close()
             except mysql.connector.Error as e:
                 print(f"数据库查询失败: {e}")
             finally:
                 conn.close()
 
-        new_card['title'] = new_title
-        new_card['locked'] = False  # 副本默认不锁定
+        new_card["title"] = new_title
+        new_card["locked"] = False  # 副本默认不锁定
 
         # 保存到数据库
         conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor()
-                
+
                 # 准备配置数据
                 configuration = {}
-                if new_card['type'].startswith('sql'):
+                if new_card["type"].startswith("sql"):
                     configuration = {
-                        'database': new_card.get('database', ''),
-                        'sql': new_card.get('sql', '')
+                        "database": new_card.get("database", ""),
+                        "sql": new_card.get("sql", ""),
                     }
-                elif new_card['type'] == 'http':
+                elif new_card["type"] == "http":
                     configuration = {
-                        'url': new_card.get('url', ''),
-                        'method': new_card.get('method', ''),
-                        'headers': new_card.get('headers', ''),
-                        'body': new_card.get('body', '')
+                        "url": new_card.get("url", ""),
+                        "method": new_card.get("method", ""),
+                        "headers": new_card.get("headers", ""),
+                        "body": new_card.get("body", ""),
                     }
-                elif new_card['type'] == 'python':
+                elif new_card["type"] == "python":
                     configuration = {
-                        'class_name': new_card.get('class_name', ''),
-                        'method_name': new_card.get('method_name', ''),
-                        'parameters': new_card.get('parameters', '')
+                        "class_name": new_card.get("class_name", ""),
+                        "method_name": new_card.get("method_name", ""),
+                        "parameters": new_card.get("parameters", ""),
                     }
-                
+
                 query = """
                     INSERT INTO tool_cards 
                     (id, project_id, title, description, card_type, configuration, timeout, locked, sort_order, created_by)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 values = (
-                    new_card['id'],
+                    new_card["id"],
                     current_project_id,
-                    new_card['title'],
-                    new_card.get('description', ''),
-                    new_card['type'],
+                    new_card["title"],
+                    new_card.get("description", ""),
+                    new_card["type"],
                     json.dumps(configuration),
-                    new_card.get('timeout', 5000),
-                    int(new_card.get('locked', False)),
-                    new_card.get('sort_order', 0),
-                    'admin'
+                    new_card.get("timeout", 5000),
+                    int(new_card.get("locked", False)),
+                    new_card.get("sort_order", 0),
+                    "admin",
                 )
                 cursor.execute(query, values)
-                
+
                 conn.commit()
                 cursor.close()
-                
+
                 # 刷新卡片列表
                 self.refresh_cards_list()
-                
+
                 # 选中新复制的卡片
                 for i in range(self.cards_list.count()):
                     item = self.cards_list.item(i)
-                    if item.data(Qt.UserRole).get('id') == new_card['id']:
+                    if item.data(Qt.UserRole).get("id") == new_card["id"]:
                         self.cards_list.setCurrentItem(item)
                         break
-                
+
                 Toast.information(self, "卡片复制成功")
-                
+
             except pymysql.Error as e:
                 print(f"数据库插入失败: {e}")
                 Toast.warn(self, "卡片复制失败")
@@ -617,11 +648,14 @@ class ToolCardsConfigDialog(QDialog):
             return
 
         card_data = current_item.data(Qt.UserRole)
-        card_title = card_data.get('title', '未命名')
+        card_title = card_data.get("title", "未命名")
 
-        reply = QMessageBox.question(self, "确认删除",
-                                     f"确定要删除卡片 '{card_title}' 吗？",
-                                     QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除卡片 '{card_title}' 吗？",
+            QMessageBox.Yes | QMessageBox.No,
+        )
 
         if reply == QMessageBox.Yes:
             # 从数据库删除卡片
@@ -629,22 +663,22 @@ class ToolCardsConfigDialog(QDialog):
             if conn:
                 try:
                     cursor = conn.cursor()
-                    
+
                     query = "DELETE FROM tool_cards WHERE id = %s"
-                    cursor.execute(query, (card_data['id'],))
-                    
+                    cursor.execute(query, (card_data["id"],))
+
                     conn.commit()
                     cursor.close()
-                    
+
                     # 刷新卡片列表
                     self.refresh_cards_list()
-                    
+
                     # 清空当前卡片数据
                     self.current_card_data = None
                     self.create_card_details_form()
-                    
+
                     Toast.information(self, "卡片删除成功")
-                    
+
                 except pymysql.Error as e:
                     print(f"数据库删除失败: {e}")
                     Toast.warn(self, "卡片删除失败")
@@ -663,60 +697,56 @@ class ToolCardsConfigDialog(QDialog):
             return
 
         # 更新卡片数据
-        self.current_card_data['title'] = title
-        self.current_card_data['description'] = self.card_desc_edit.toPlainText()
-        self.current_card_data['timeout'] = self.timeout_spin.value()
-        self.current_card_data['locked'] = self.locked_check.isChecked()
+        self.current_card_data["title"] = title
+        self.current_card_data["description"] = self.card_desc_edit.toPlainText()
+        self.current_card_data["timeout"] = self.timeout_spin.value()
+        self.current_card_data["locked"] = self.locked_check.isChecked()
 
         # 获取卡片类型
         type_text = self.card_type_combo.currentText()
-        type_map = {
-            'SQL工具': 'sql',
-            'HTTP接口': 'http',
-            'Python类': 'python'
-        }
-        self.current_card_data['type'] = type_map.get(type_text, 'sql')
+        type_map = {"SQL工具": "sql", "HTTP接口": "http", "Python类": "python"}
+        self.current_card_data["type"] = type_map.get(type_text, "sql")
 
         # 保存类型特定的配置
-        card_type = self.current_card_data['type']
-        if card_type == 'sql':
-            self.current_card_data['database'] = self.database_combo.currentText()
-            self.current_card_data['sql'] = self.sql_editor.toPlainText()
-        elif card_type == 'http':
-            self.current_card_data['url'] = self.url_edit.text()
-            self.current_card_data['method'] = self.method_combo.currentText()
-            self.current_card_data['headers'] = self.headers_edit.toPlainText()
-            self.current_card_data['body'] = self.body_edit.toPlainText()
-        elif card_type == 'python':
-            self.current_card_data['class_name'] = self.class_name_edit.text()
-            self.current_card_data['method_name'] = self.method_name_edit.text()
-            self.current_card_data['parameters'] = self.parameters_edit.toPlainText()
+        card_type = self.current_card_data["type"]
+        if card_type == "sql":
+            self.current_card_data["database"] = self.database_combo.currentText()
+            self.current_card_data["sql"] = self.sql_editor.toPlainText()
+        elif card_type == "http":
+            self.current_card_data["url"] = self.url_edit.text()
+            self.current_card_data["method"] = self.method_combo.currentText()
+            self.current_card_data["headers"] = self.headers_edit.toPlainText()
+            self.current_card_data["body"] = self.body_edit.toPlainText()
+        elif card_type == "python":
+            self.current_card_data["class_name"] = self.class_name_edit.text()
+            self.current_card_data["method_name"] = self.method_name_edit.text()
+            self.current_card_data["parameters"] = self.parameters_edit.toPlainText()
 
         # 获取当前项目ID
-        current_project_id = getattr(self.parent(), 'current_project_id', None)
+        current_project_id = getattr(self.parent(), "current_project_id", None)
         if not current_project_id:
             Toast.warn(self, "无法获取项目信息")
             return
 
         # 准备配置数据
         configuration = {}
-        if self.current_card_data['type'].startswith('sql'):
+        if self.current_card_data["type"].startswith("sql"):
             configuration = {
-                'database': self.current_card_data.get('database', ''),
-                'sql': self.current_card_data.get('sql', '')
+                "database": self.current_card_data.get("database", ""),
+                "sql": self.current_card_data.get("sql", ""),
             }
-        elif self.current_card_data['type'] == 'http':
+        elif self.current_card_data["type"] == "http":
             configuration = {
-                'url': self.current_card_data.get('url', ''),
-                'method': self.current_card_data.get('method', ''),
-                'headers': self.current_card_data.get('headers', ''),
-                'body': self.current_card_data.get('body', '')
+                "url": self.current_card_data.get("url", ""),
+                "method": self.current_card_data.get("method", ""),
+                "headers": self.current_card_data.get("headers", ""),
+                "body": self.current_card_data.get("body", ""),
             }
-        elif self.current_card_data['type'] == 'python':
+        elif self.current_card_data["type"] == "python":
             configuration = {
-                'class_name': self.current_card_data.get('class_name', ''),
-                'method_name': self.current_card_data.get('method_name', ''),
-                'parameters': self.current_card_data.get('parameters', '')
+                "class_name": self.current_card_data.get("class_name", ""),
+                "method_name": self.current_card_data.get("method_name", ""),
+                "parameters": self.current_card_data.get("parameters", ""),
             }
 
         # 保存到数据库
@@ -724,27 +754,30 @@ class ToolCardsConfigDialog(QDialog):
         if conn:
             try:
                 cursor = conn.cursor()
-                
-                if 'id' not in self.current_card_data or not self.current_card_data['id']:
+
+                if (
+                    "id" not in self.current_card_data
+                    or not self.current_card_data["id"]
+                ):
                     # 新增卡片
-                    self.current_card_data['id'] = self.generate_card_id()
-                    
+                    self.current_card_data["id"] = self.generate_card_id()
+
                     query = """
                         INSERT INTO tool_cards 
                         (id, project_id, title, description, card_type, configuration, timeout, locked, sort_order, created_by)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     values = (
-                        self.current_card_data['id'],
+                        self.current_card_data["id"],
                         current_project_id,
-                        self.current_card_data['title'],
-                        self.current_card_data.get('description', ''),
-                        self.current_card_data['type'],
+                        self.current_card_data["title"],
+                        self.current_card_data.get("description", ""),
+                        self.current_card_data["type"],
                         json.dumps(configuration),
-                        self.current_card_data.get('timeout', 5000),
-                        int(self.current_card_data.get('locked', False)),
-                        self.current_card_data.get('sort_order', 0),
-                        'admin'
+                        self.current_card_data.get("timeout", 5000),
+                        int(self.current_card_data.get("locked", False)),
+                        self.current_card_data.get("sort_order", 0),
+                        "admin",
                     )
                     cursor.execute(query, values)
                 else:
@@ -756,24 +789,24 @@ class ToolCardsConfigDialog(QDialog):
                         WHERE id = %s
                     """
                     values = (
-                        self.current_card_data['title'],
-                        self.current_card_data.get('description', ''),
-                        self.current_card_data['type'],
+                        self.current_card_data["title"],
+                        self.current_card_data.get("description", ""),
+                        self.current_card_data["type"],
                         json.dumps(configuration),
-                        self.current_card_data.get('timeout', 5000),
-                        int(self.current_card_data.get('locked', False)),
-                        self.current_card_data.get('sort_order', 0),
-                        self.current_card_data['id']
+                        self.current_card_data.get("timeout", 5000),
+                        int(self.current_card_data.get("locked", False)),
+                        self.current_card_data.get("sort_order", 0),
+                        self.current_card_data["id"],
                     )
                     cursor.execute(query, values)
-                
+
                 conn.commit()
                 cursor.close()
-                
+
                 # 刷新卡片列表
                 self.refresh_cards_list()
                 Toast.information(self, "卡片保存成功")
-                
+
             except pymysql.Error as e:
                 print(f"数据库操作失败: {e}")
                 Toast.warn(self, "卡片保存失败")
@@ -794,6 +827,7 @@ class ToolCardsConfigDialog(QDialog):
     def generate_card_id(self):
         """生成卡片ID"""
         import time
+
         return f"card_{int(time.time() * 1000)}"
 
     def get_config_data(self):

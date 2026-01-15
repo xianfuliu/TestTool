@@ -13,15 +13,18 @@ class CaseFolderService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, project_id, parent_id, name, description, sort_order, 
                                created_at, updated_at
                         FROM case_folders 
                         WHERE project_id = %s
                         ORDER BY parent_id IS NULL DESC, sort_order, created_at
-                    """, (project_id,))
+                    """,
+                        (project_id,),
+                    )
                     folders = cursor.fetchall()
-                    
+
                     # 构建层级结构
                     return self._build_folder_tree(folders)
         except Exception as e:
@@ -32,21 +35,21 @@ class CaseFolderService:
         """构建文件夹树形结构"""
         folder_map = {}
         root_folders = []
-        
+
         # 创建文件夹映射
         for folder in folders:
-            folder_id = folder['id']
+            folder_id = folder["id"]
             folder_map[folder_id] = folder
-            folder['children'] = []
-        
+            folder["children"] = []
+
         # 构建父子关系
         for folder in folders:
-            parent_id = folder['parent_id']
+            parent_id = folder["parent_id"]
             if parent_id and parent_id in folder_map:
-                folder_map[parent_id]['children'].append(folder)
+                folder_map[parent_id]["children"].append(folder)
             else:
                 root_folders.append(folder)
-        
+
         return root_folders
 
     def create_folder(self, data: Dict[str, Any]) -> int:
@@ -54,16 +57,19 @@ class CaseFolderService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO case_folders (project_id, parent_id, name, description, sort_order)
                         VALUES (%s, %s, %s, %s, %s)
-                    """, (
-                        data['project_id'],
-                        data.get('parent_id'),
-                        data['name'],
-                        data.get('description', ''),
-                        data.get('sort_order', 0)
-                    ))
+                    """,
+                        (
+                            data["project_id"],
+                            data.get("parent_id"),
+                            data["name"],
+                            data.get("description", ""),
+                            data.get("sort_order", 0),
+                        ),
+                    )
                     conn.commit()
                     return cursor.lastrowid
         except Exception as e:
@@ -75,15 +81,14 @@ class CaseFolderService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE case_folders 
                         SET name = %s, description = %s 
                         WHERE id = %s
-                    """, (
-                        data['name'],
-                        data.get('description', ''),
-                        folder_id
-                    ))
+                    """,
+                        (data["name"], data.get("description", ""), folder_id),
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
@@ -96,24 +101,30 @@ class CaseFolderService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 先删除文件夹下的测试用例
-                    cursor.execute("DELETE FROM test_cases WHERE folder_id = %s", (folder_id,))
+                    cursor.execute(
+                        "DELETE FROM test_cases WHERE folder_id = %s", (folder_id,)
+                    )
                     # 再删除文件夹本身
-                    cursor.execute("DELETE FROM case_folders WHERE id = %s", (folder_id,))
+                    cursor.execute(
+                        "DELETE FROM case_folders WHERE id = %s", (folder_id,)
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
             print(f"删除文件夹失败: {e}")
             raise e
 
-    def check_folder_name_exists(self, project_id: int, parent_id: int, name: str, exclude_folder_id: int = None) -> bool:
+    def check_folder_name_exists(
+        self, project_id: int, parent_id: int, name: str, exclude_folder_id: int = None
+    ) -> bool:
         """检查同一级目录下文件夹名称是否已存在
-        
+
         Args:
             project_id: 项目ID
             parent_id: 父文件夹ID（None表示根目录）
             name: 文件夹名称
             exclude_folder_id: 排除的文件夹ID（用于编辑时排除自身）
-            
+
         Returns:
             如果名称已存在返回True，否则返回False
         """
@@ -135,16 +146,16 @@ class CaseFolderService:
                             WHERE project_id = %s AND parent_id = %s AND name = %s
                         """
                         params = [project_id, parent_id, name]
-                    
+
                     # 添加排除条件（用于编辑时）
                     if exclude_folder_id is not None:
                         query += " AND id != %s"
                         params.append(exclude_folder_id)
-                    
+
                     cursor.execute(query, params)
                     result = cursor.fetchone()
-                    
-                    return result['count'] > 0
+
+                    return result["count"] > 0
         except Exception as e:
             print(f"检查文件夹名称是否存在失败: {e}")
             return False

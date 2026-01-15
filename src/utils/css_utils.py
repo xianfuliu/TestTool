@@ -13,11 +13,11 @@ def get_combobox_style():
     """
     # 获取combobox.png图标的正确路径
     icon_path = resource_path("src/resources/icons/combobox.png")
-    
+
     # 将路径转换为文件URL格式，确保在CSS中正确使用
     # 注意：在Windows系统中，路径分隔符需要转换为正斜杠
-    icon_url = icon_path.replace('\\', '/')
-    
+    icon_url = icon_path.replace("\\", "/")
+
     # 构建CSS样式
     css_style = f"""
         QComboBox {{
@@ -74,7 +74,7 @@ def get_combobox_style():
             color: white;
         }}
     """
-    
+
     return css_style
 
 
@@ -84,8 +84,8 @@ def get_toolbar_combobox_style():
     """
     # 获取combobox.png图标的正确路径
     icon_path = resource_path("src/resources/icons/combobox.png")
-    icon_url = icon_path.replace('\\', '/')
-    
+    icon_url = icon_path.replace("\\", "/")
+
     css_style = f"""
         QToolBar QComboBox {{
             border: 1px solid #ced4da;
@@ -134,5 +134,5 @@ def get_toolbar_combobox_style():
             color: white;
         }}
     """
-    
+
     return css_style

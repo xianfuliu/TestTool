@@ -6,11 +6,24 @@
 import json
 import os
 import sys
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
-                             QLineEdit, QTextEdit, QTableWidget,
-                             QTableWidgetItem, QPushButton,
-                             QLabel, QCheckBox, QScrollArea,QMessageBox,
-                             QShortcut, QMenu, QToolButton, QFrame)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QTextEdit,
+    QTableWidget,
+    QTableWidgetItem,
+    QPushButton,
+    QLabel,
+    QCheckBox,
+    QScrollArea,
+    QMessageBox,
+    QShortcut,
+    QMenu,
+    QToolButton,
+    QFrame,
+)
 from PyQt5.QtCore import pyqtSignal, Qt, QSize
 from PyQt5.QtGui import QFont, QKeySequence, QIcon
 from .no_wheel_widgets import NoWheelComboBox, NoWheelTabWidget
@@ -20,153 +33,168 @@ from src.utils.css_utils import get_combobox_style
 
 class TabbedTemplateEditor(QWidget):
     """多标签页接口模板编辑器主窗口"""
-    
+
     saved = pyqtSignal(dict)  # 保存信号，传递模板数据
     tab_closed = pyqtSignal()  # 标签页关闭信号
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.tabs = {}  # 存储标签页数据：{tab_id: {'editor': editor, 'data': data, 'modified': bool}}
+        self.tabs = (
+            {}
+        )  # 存储标签页数据：{tab_id: {'editor': editor, 'data': data, 'modified': bool}}
         self.current_tab_id = None
         self.init_ui()
-    
+
     def init_ui(self):
         """初始化界面"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)  # 设置边距为0，消除外层容器边距
         layout.setSpacing(0)  # 设置间距为0，消除组件间距
-        
+
         # 创建标签页控件
         self.tab_widget = NoWheelTabWidget()
         self.tab_widget.setTabsClosable(True)
-        self.tab_widget.tabCloseRequested.connect(lambda index: self.close_tab(index, from_close_button=True))
+        self.tab_widget.tabCloseRequested.connect(
+            lambda index: self.close_tab(index, from_close_button=True)
+        )
         self.tab_widget.currentChanged.connect(self.tab_changed)
-        
+
         # 设置tab右键菜单
         self.tab_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tab_widget.customContextMenuRequested.connect(self.show_tab_context_menu)
-        
+
         layout.addWidget(self.tab_widget)
-        
+
         # 设置快捷键
         self.setup_shortcuts()
-        
+
     def open_template(self, template_data=None, project_id=None, folder_id=None):
         """打开或创建模板编辑标签页"""
         # 生成标签页ID
         tab_id = self.generate_tab_id(template_data)
-        
+
         # 如果标签页已存在，切换到该标签页
         if tab_id in self.tabs:
-            index = self.tab_widget.indexOf(self.tabs[tab_id]['widget'])
+            index = self.tab_widget.indexOf(self.tabs[tab_id]["widget"])
             self.tab_widget.setCurrentIndex(index)
             return tab_id
-        
+
         # 额外检查：如果模板有ID，检查是否已存在相同模板ID的标签页
         # 这可以防止因数据不一致导致的重复打开问题
-        if template_data and 'id' in template_data and template_data['id']:
+        if template_data and "id" in template_data and template_data["id"]:
             template_id_str = f"template_{template_data['id']}"
             if template_id_str in self.tabs:
                 # 如果存在相同模板ID的标签页，切换到该标签页
-                index = self.tab_widget.indexOf(self.tabs[template_id_str]['widget'])
+                index = self.tab_widget.indexOf(self.tabs[template_id_str]["widget"])
                 self.tab_widget.setCurrentIndex(index)
                 return template_id_str
-            
+
             # 进一步检查：通过遍历tabs字典，检查widget中的template_data是否匹配
             # 这是为了处理某些边界情况，如数据更新但tab_id未变的情况
-            template_id = template_data['id']
+            template_id = template_data["id"]
             for existing_tab_id, tab_data in self.tabs.items():
-                widget = tab_data['widget']
-                if hasattr(widget, 'template_data') and widget.template_data and 'id' in widget.template_data and widget.template_data['id'] == template_id:
+                widget = tab_data["widget"]
+                if (
+                    hasattr(widget, "template_data")
+                    and widget.template_data
+                    and "id" in widget.template_data
+                    and widget.template_data["id"] == template_id
+                ):
                     index = self.tab_widget.indexOf(widget)
                     self.tab_widget.setCurrentIndex(index)
                     return existing_tab_id
-        
+
         # 创建新的标签页
         editor_widget = TemplateTabWidget(template_data, project_id, folder_id)
-        
+
         # 连接信号
-        editor_widget.modified_signal.connect(lambda modified: self.set_tab_modified(tab_id, modified))
+        editor_widget.modified_signal.connect(
+            lambda modified: self.set_tab_modified(tab_id, modified)
+        )
         editor_widget.saved.connect(lambda data: self.template_saved(tab_id, data))
-        editor_widget.debugged.connect(lambda data: self.template_debugged(tab_id, data))
-        
+        editor_widget.debugged.connect(
+            lambda data: self.template_debugged(tab_id, data)
+        )
+
         # 添加到标签页
-        tab_name = template_data.get('name', '新增接口') if template_data else '新增接口'
+        tab_name = (
+            template_data.get("name", "新增接口") if template_data else "新增接口"
+        )
         index = self.tab_widget.addTab(editor_widget, tab_name)
-        
+
         # 存储标签页数据
         self.tabs[tab_id] = {
-            'widget': editor_widget,
-            'data': template_data or {},
-            'modified': False,
-            'tab_name': tab_name
+            "widget": editor_widget,
+            "data": template_data or {},
+            "modified": False,
+            "tab_name": tab_name,
         }
-        
+
         # 设置当前标签页
         self.tab_widget.setCurrentIndex(index)
         self.current_tab_id = tab_id
-        
+
         return tab_id
-    
+
     def generate_tab_id(self, template_data):
         """生成标签页唯一ID"""
-        if template_data and 'id' in template_data:
+        if template_data and "id" in template_data:
             return f"template_{template_data['id']}"
         else:
             return f"new_template_{len(self.tabs)}"
-    
+
     def close_tab(self, index, from_close_button=True):
         """关闭标签页
-        
+
         Args:
             index: 标签页索引
             from_close_button: 是否来自关闭按钮的调用，True表示用户点击关闭按钮，False表示程序内部调用
         """
         widget = self.tab_widget.widget(index)
-        
+
         # 查找对应的标签页ID
         tab_id = None
         for tid, tab_data in self.tabs.items():
-            if tab_data['widget'] == widget:
+            if tab_data["widget"] == widget:
                 tab_id = tid
                 break
-        
+
         if tab_id is None:
             self.tab_widget.removeTab(index)
             # 检查是否还有标签页，如果没有则发出关闭信号
             if self.tab_widget.count() == 0:
                 self.tab_closed.emit()
             return
-        
+
         # 检查是否有未保存的修改
-        if self.tabs[tab_id]['modified']:
+        if self.tabs[tab_id]["modified"]:
             # 无论是用户点击关闭按钮还是程序内部调用，都显示保存确认弹窗
             # 这样可以避免意外丢失未保存的工作，也能防止潜在的Qt框架异常
-            tab_name = self.tabs[tab_id]['tab_name']
-            
+            tab_name = self.tabs[tab_id]["tab_name"]
+
             # 创建自定义消息框，使用中文按钮名称
             msg_box = QMessageBox(self)
-            msg_box.setWindowTitle('保存确认')
+            msg_box.setWindowTitle("保存确认")
             msg_box.setText(f'标签页 "{tab_name}" 有未保存的修改，请选择操作：')
-            
+
             # 添加自定义按钮
-            save_btn = msg_box.addButton('保存', QMessageBox.AcceptRole)
-            ignore_btn = msg_box.addButton('忽略', QMessageBox.DestructiveRole)
-            cancel_btn = msg_box.addButton('取消', QMessageBox.RejectRole)
-            
+            save_btn = msg_box.addButton("保存", QMessageBox.AcceptRole)
+            ignore_btn = msg_box.addButton("忽略", QMessageBox.DestructiveRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
+
             # 设置默认按钮
             msg_box.setDefaultButton(save_btn)
-            
+
             msg_box.exec_()
-            
+
             clicked_button = msg_box.clickedButton()
-            
+
             if clicked_button == save_btn:
                 # 保存模板
-                self.tabs[tab_id]['widget'].save_template()
+                self.tabs[tab_id]["widget"].save_template()
                 # 保存完成后，标记标签页为已保存状态
                 self.set_tab_modified(tab_id, False)
-                
+
                 # 保存后关闭标签页
                 self.tab_widget.removeTab(index)
                 del self.tabs[tab_id]
@@ -210,217 +238,223 @@ class TabbedTemplateEditor(QWidget):
         index = self.tab_widget.tabBar().tabAt(pos)
         if index == -1:
             return
-            
+
         # 创建右键菜单
         menu = QMenu(self)
-        
+
         # 添加菜单项
         close_current_action = menu.addAction("关闭当前")
         close_others_action = menu.addAction("关闭其他")
         close_all_action = menu.addAction("关闭全部")
-        
+
         # 连接菜单项信号
         close_current_action.triggered.connect(lambda: self.close_current_tab(index))
         close_others_action.triggered.connect(lambda: self.close_other_tabs(index))
         close_all_action.triggered.connect(self.close_all_tabs)
-        
+
         # 显示菜单
         menu.exec_(self.tab_widget.mapToGlobal(pos))
-    
+
     def close_current_tab(self, index):
         """关闭当前标签页"""
         self.close_tab(index, from_close_button=False)
-    
+
     def close_other_tabs(self, current_index):
         """关闭其他标签页"""
         # 获取所有标签页索引
         tab_count = self.tab_widget.count()
         if tab_count <= 1:
             return
-            
+
         # 从后往前关闭标签页（避免索引变化问题）
         for i in range(tab_count - 1, -1, -1):
             if i != current_index:
                 self.close_tab(i, from_close_button=False)
-    
+
     def close_all_tabs(self):
         """关闭全部标签页"""
         # 直接关闭所有标签页，不依赖循环索引
         while self.tab_widget.count() > 0:
             self.close_tab(0, from_close_button=False)
-        
+
         # 确保在所有标签页关闭后发出tab_closed信号
         # 这里不需要再次检查，因为close_tab方法内部已经检查并发射了信号
         # 但为了确保信号被正确发射，我们直接发射一次
         self.tab_closed.emit()
-    
+
     def close_tab_by_template_id(self, template_id):
         """根据模板ID关闭对应的标签页"""
         tab_id = f"template_{template_id}"
-        
+
         # 查找对应的标签页索引
         for index in range(self.tab_widget.count()):
             widget = self.tab_widget.widget(index)
-            
+
             # 查找对应的标签页ID
             for tid, tab_data in self.tabs.items():
-                if tab_data['widget'] == widget and tid == tab_id:
+                if tab_data["widget"] == widget and tid == tab_id:
                     # 关闭标签页
                     self.close_tab(index, from_close_button=False)
                     return True
-        
+
         return False  # 没有找到对应的标签页
-    
+
     def tab_changed(self, index):
         """标签页切换事件"""
         if index == -1:
             self.current_tab_id = None
             return
-        
+
         widget = self.tab_widget.widget(index)
-        
+
         # 查找对应的标签页ID
         for tab_id, tab_data in self.tabs.items():
-            if tab_data['widget'] == widget:
+            if tab_data["widget"] == widget:
                 self.current_tab_id = tab_id
                 break
-    
+
     def set_tab_modified(self, tab_id, modified):
         """设置标签页修改状态"""
         if tab_id in self.tabs:
-            self.tabs[tab_id]['modified'] = modified
-            
+            self.tabs[tab_id]["modified"] = modified
+
             # 更新标签页标题（添加*号表示修改）
-            tab_name = self.tabs[tab_id]['tab_name']
+            tab_name = self.tabs[tab_id]["tab_name"]
             if modified:
                 tab_name = f"*{tab_name}"
-            
+
             # 查找标签页索引
             for i in range(self.tab_widget.count()):
-                if self.tab_widget.widget(i) == self.tabs[tab_id]['widget']:
+                if self.tab_widget.widget(i) == self.tabs[tab_id]["widget"]:
                     self.tab_widget.setTabText(i, tab_name)
                     break
-    
+
     def template_saved(self, tab_id, data):
         """模板保存事件"""
         if tab_id in self.tabs:
-            self.tabs[tab_id]['data'] = data
-            self.tabs[tab_id]['tab_name'] = data.get('name', '未命名')
-            
+            self.tabs[tab_id]["data"] = data
+            self.tabs[tab_id]["tab_name"] = data.get("name", "未命名")
+
             # 触发外部保存信号，传递模板数据到实际的保存逻辑
             # 注意：这里不立即设置修改状态，等待实际的保存结果
             self.saved.emit(data)
-    
+
     def template_debugged(self, tab_id, data):
         """模板调试事件"""
         # 直接更新当前标签页的响应信息展示区域
         if tab_id in self.tabs:
-            tab_widget = self.tabs[tab_id]['widget']
-            response_data = data.get('response', {})
-            
+            tab_widget = self.tabs[tab_id]["widget"]
+            response_data = data.get("response", {})
+
             # 获取响应体内容
-            response_body = response_data.get('body', {})
+            response_body = response_data.get("body", {})
             if not response_body:
-                response_body = response_data.get('text', '')
-            
+                response_body = response_data.get("text", "")
+
             # 格式化JSON响应体
             try:
                 if isinstance(response_body, str):
                     # 如果是字符串，尝试解析为JSON
                     parsed_body = json.loads(response_body)
-                    formatted_body = json.dumps(parsed_body, indent=2, ensure_ascii=False)
+                    formatted_body = json.dumps(
+                        parsed_body, indent=2, ensure_ascii=False
+                    )
                 else:
                     # 如果是字典，直接格式化
-                    formatted_body = json.dumps(response_body, indent=2, ensure_ascii=False)
+                    formatted_body = json.dumps(
+                        response_body, indent=2, ensure_ascii=False
+                    )
             except (json.JSONDecodeError, TypeError):
                 # 如果不是JSON格式，直接显示原始内容
                 formatted_body = str(response_body)
-            
+
             # 更新响应信息展示区域
             tab_widget.response_body_edit.setPlainText(formatted_body)
-            
+
             # 如果调试失败，显示错误信息
-            if not response_data.get('success', True):
-                error_message = response_data.get('error', '调试失败')
+            if not response_data.get("success", True):
+                error_message = response_data.get("error", "调试失败")
                 tab_widget.response_body_edit.setPlainText(f"调试失败: {error_message}")
-    
+
     def get_current_template_data(self):
         """获取当前标签页的模板数据"""
         if self.current_tab_id and self.current_tab_id in self.tabs:
-            return self.tabs[self.current_tab_id]['data']
+            return self.tabs[self.current_tab_id]["data"]
         return None
-    
+
     def has_modified_tabs(self):
         """检查是否有未保存的标签页"""
-        return any(tab['modified'] for tab in self.tabs.values())
+        return any(tab["modified"] for tab in self.tabs.values())
 
 
 class TemplateTabWidget(QWidget):
     """单个模板标签页的编辑组件"""
-    
+
     modified_signal = pyqtSignal(bool)  # 修改状态信号
-    saved = pyqtSignal(dict)     # 保存信号
+    saved = pyqtSignal(dict)  # 保存信号
     debugged = pyqtSignal(dict)  # 调试信号
-    
-    def __init__(self, template_data=None, project_id=None, folder_id=None, parent=None):
+
+    def __init__(
+        self, template_data=None, project_id=None, folder_id=None, parent=None
+    ):
         super().__init__(parent)
         self.template_data = template_data or {}
         self.project_id = project_id
         self.folder_id = folder_id
         self.is_edit = bool(template_data)
         self.modified = False
-        
+
         # 如果是新增模板，设置默认的Content-Type请求头
         if not self.is_edit:
-            if 'headers' not in self.template_data:
-                self.template_data['headers'] = {}
-            self.template_data['headers']['Content-Type'] = 'application/json'
-        
+            if "headers" not in self.template_data:
+                self.template_data["headers"] = {}
+            self.template_data["headers"]["Content-Type"] = "application/json"
+
         self.init_ui()
         self.setup_shortcuts()
-        
+
         if self.is_edit:
             self.load_template_data()
-        
+
         # 自动切换到请求体tab
         self.switch_to_body_tab()
-    
+
     def setup_shortcuts(self):
         """设置快捷键"""
         # Ctrl+S 保存模板
         self.save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
         self.save_shortcut.activated.connect(self.save_template)
         self.save_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
-    
+
     # close_current_tab方法已被移除，Ctrl+W快捷键功能已取消
-    
+
     def init_ui(self):
         """初始化界面 - 弹性空间分配"""
         # 主布局
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(8)  # 减小间距，使布局更紧凑
-        
+
         # 接口信息区域（紧凑布局）- 固定高度区域
         self.setup_interface_info(main_layout)
-        
+
         # 基本信息区域 - 固定高度区域
         self.setup_basic_info(main_layout)
-        
+
         # 功能子标签页和响应区域容器 - 弹性高度区域
         content_container = QWidget()
         content_layout = QVBoxLayout(content_container)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(8)
-        
+
         # 功能子标签页 - 弹性高度
         self.setup_function_tabs(content_layout)
-        
+
         # 响应信息区域 - 弹性高度
         self.setup_bottom_buttons(content_layout)
-        
+
         main_layout.addWidget(content_container, 1)  # 设置拉伸因子为1，占据剩余空间
-    
+
     def setup_interface_info(self, layout):
         """设置接口信息区域（接口名称和描述在两行）"""
         # 接口名称在第一行
@@ -438,7 +472,7 @@ class TemplateTabWidget(QWidget):
         name_layout.addWidget(self.name_edit)
         name_layout.addStretch()
         layout.addLayout(name_layout)
-        
+
         # 接口描述在第二行
         desc_layout = QHBoxLayout()
         desc_layout.addWidget(QLabel("接口描述:"))
@@ -454,14 +488,14 @@ class TemplateTabWidget(QWidget):
         desc_layout.addWidget(self.description_edit)
         desc_layout.addStretch()
         layout.addLayout(desc_layout)
-        
+
         layout.addSpacing(15)  # 增加区域之间的间距
-    
+
     def setup_basic_info(self, layout):
         """设置基本信息区域（请求方法、URL）"""
         # 基本信息区域 - 请求方法和URL路径
         basic_layout = QHBoxLayout()
-        
+
         # 请求方法 - 仅保留GET/POST/PUT/DELETE
         basic_layout.addWidget(QLabel("请求方法:"))
         self.method_combo = NoWheelComboBox()
@@ -470,7 +504,7 @@ class TemplateTabWidget(QWidget):
         self.method_combo.setMaximumWidth(100)
         self.method_combo.setStyleSheet(get_combobox_style())
         basic_layout.addWidget(self.method_combo)
-        
+
         # URL路径 - 进一步增加输入框宽度
         basic_layout.addWidget(QLabel("URL:"))
         self.url_edit = QLineEdit()
@@ -478,33 +512,35 @@ class TemplateTabWidget(QWidget):
         self.url_edit.textChanged.connect(self.on_content_changed)
         self.url_edit.setMinimumWidth(400)  # 设置更大的最小宽度
         basic_layout.addWidget(self.url_edit)
-        
+
         # 添加弹性空间
         basic_layout.addStretch()
-        
+
         layout.addLayout(basic_layout)
         layout.addSpacing(5)
-    
+
     def setup_bottom_buttons(self, layout):
         """设置底部按钮区域（响应信息展示区域 + 保存、调试按钮在右侧）"""
-        
+
         # 响应信息展示区域 - 弹性高度布局
         response_widget = QWidget()
         response_layout = QVBoxLayout(response_widget)
         response_layout.setSpacing(5)  # 适当间距
         response_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
-        
+
         # 响应信息标签 - 紧凑布局
         response_label = QLabel("响应")
-        response_label.setStyleSheet("""
+        response_label.setStyleSheet(
+            """
             font-weight: bold; 
             font-size: 14px; 
             margin: 0px; 
             padding: 0px 0px 5px 0px;
             color: #333;
-        """)
+        """
+        )
         response_layout.addWidget(response_label)
-        
+
         # 响应体展示区域 - 弹性高度，支持自适应
         self.response_body_edit = QTextEdit()
         self.response_body_edit.setReadOnly(True)
@@ -512,51 +548,52 @@ class TemplateTabWidget(QWidget):
         self.response_body_edit.setMinimumHeight(150)  # 设置合理的最小高度
         self.response_body_edit.setMaximumHeight(600)  # 设置合理的最大高度
         self.response_body_edit.setPlaceholderText("调试响应将显示在这里...")
-        
+
         # 添加滚动条支持
         self.response_body_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        
+
         response_layout.addWidget(self.response_body_edit, 1)  # 设置拉伸因子为1
-        
+
         layout.addWidget(response_widget, 1)  # 设置拉伸因子为1，与功能标签页共享空间
-        
+
         # 底部按钮布局
         button_layout = QHBoxLayout()
-        
+
         # 添加弹性空间使按钮靠右
         button_layout.addStretch()
-        
+
         # 调试按钮
         self.debug_btn = QPushButton("调试")
         self.debug_btn.clicked.connect(self.debug_template)
         self.debug_btn.setMaximumWidth(80)
         self.debug_btn.setMinimumHeight(35)
         button_layout.addWidget(self.debug_btn)
-        
+
         # 保存按钮
         self.save_btn = QPushButton("保存")
         self.save_btn.clicked.connect(self.save_template)
         self.save_btn.setMaximumWidth(80)
         self.save_btn.setMinimumHeight(35)
         button_layout.addWidget(self.save_btn)
-        
+
         layout.addLayout(button_layout)
         layout.addSpacing(5)  # 减少底部间距
-    
+
     def setup_function_tabs(self, layout):
         """设置功能子标签页 - 弹性高度布局"""
         # 创建子标签页控件
         self.function_tabs = NoWheelTabWidget()
         self.function_tabs.setMinimumHeight(200)  # 调整最小高度为200px
         self.function_tabs.setMaximumHeight(450)  # 设置最大高度为450px
-        
+
         # 设置标签页字体大小
         font = self.function_tabs.font()
         font.setPointSize(11)  # 增大字体大小到11px
         self.function_tabs.setFont(font)
-        
+
         # 调整tab的宽度和高度，使其更加协调
-        self.function_tabs.setStyleSheet("""
+        self.function_tabs.setStyleSheet(
+            """
             QTabBar::tab {
                 min-width: 70px;
                 max-width: 90px;
@@ -569,109 +606,115 @@ class TemplateTabWidget(QWidget):
                 border-radius: 4px;
                 background-color: white;
             }
-        """)
-        
+        """
+        )
+
         # 请求头标签页
         headers_tab = QWidget()
         self.setup_headers_tab(headers_tab)
         self.function_tabs.addTab(headers_tab, "请求头")
-        
+
         # 参数标签页
         params_tab = QWidget()
         self.setup_params_tab(params_tab)
         self.function_tabs.addTab(params_tab, "参数")
-        
+
         # 请求体标签页
         body_tab = QWidget()
         self.setup_body_tab(body_tab)
         self.function_tabs.addTab(body_tab, "请求体")
-        
+
         # 配置标签页
         config_tab = QWidget()
         self.setup_config_tab(config_tab)
         self.function_tabs.addTab(config_tab, "配置")
-        
+
         layout.addWidget(self.function_tabs, 2)  # 增加拉伸因子为2，优先占据空间
-    
+
     def setup_headers_tab(self, parent):
         """设置请求头标签页 - 参考用例管理tab中HTTP请求工具条的实现"""
         # 设置父容器背景色为白色
         parent.setStyleSheet("background-color: white;")
-        
+
         layout = QVBoxLayout(parent)
         layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
-        
+
         # 创建滚动区域
         self.headers_scroll_area = QScrollArea()
         self.headers_scroll_area.setWidgetResizable(True)
         self.headers_scroll_area.setMinimumHeight(180)  # 调整最小高度为180px
         self.headers_scroll_area.setMaximumHeight(400)  # 设置最大高度为400px
         self.headers_scroll_area.setFrameShape(QFrame.NoFrame)  # 移除边框
-        self.headers_scroll_area.setStyleSheet("QScrollArea { border: none; background-color: white; }")
-        
+        self.headers_scroll_area.setStyleSheet(
+            "QScrollArea { border: none; background-color: white; }"
+        )
+
         # 滚动区域内容
         scroll_content = QWidget()
         scroll_content.setStyleSheet("background-color: white;")
         self.headers_scroll_layout = QVBoxLayout(scroll_content)
         self.headers_scroll_layout.setSpacing(8)
         self.headers_scroll_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
-        
+
         self.headers_scroll_area.setWidget(scroll_content)
         layout.addWidget(self.headers_scroll_area)
-        
+
         # 初始化请求头行列表
         self.header_rows = []
-        
+
         # 确保第一行从顶部开始显示，不居中
         self.headers_scroll_layout.addStretch()
-        
+
         # 添加默认行
         self.add_header_row()
-    
+
     def setup_params_tab(self, parent):
         """设置参数标签页 - 参考用例管理tab中HTTP请求工具条的实现"""
         # 设置父容器背景色为白色
         parent.setStyleSheet("background-color: white;")
-        
+
         layout = QVBoxLayout(parent)
         layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
-        
+
         # 创建滚动区域
         self.params_scroll_area = QScrollArea()
         self.params_scroll_area.setWidgetResizable(True)
         self.params_scroll_area.setMinimumHeight(180)  # 调整最小高度为180px
         self.params_scroll_area.setMaximumHeight(400)  # 设置最大高度为400px
         self.params_scroll_area.setFrameShape(QFrame.NoFrame)  # 移除边框
-        self.params_scroll_area.setStyleSheet("QScrollArea { border: none; background-color: white; }")
-        
+        self.params_scroll_area.setStyleSheet(
+            "QScrollArea { border: none; background-color: white; }"
+        )
+
         # 滚动区域内容
         scroll_content = QWidget()
         scroll_content.setStyleSheet("background-color: white;")
         self.params_scroll_layout = QVBoxLayout(scroll_content)
         self.params_scroll_layout.setSpacing(8)
         self.params_scroll_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
-        
+
         self.params_scroll_area.setWidget(scroll_content)
         layout.addWidget(self.params_scroll_area)
-        
+
         # 初始化参数行列表
         self.param_rows = []
-        
+
         # 确保第一行从顶部开始显示，不居中
         self.params_scroll_layout.addStretch()
-        
+
         # 添加默认行
         self.add_param_row()
-    
+
     def setup_body_tab(self, parent):
         """设置请求体标签页 - 内部滚动条"""
         # 设置父容器背景色为白色
         parent.setStyleSheet("background-color: white;")
-        
+
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
+        scroll_area.setStyleSheet(
+            """
             QScrollArea {
                 border: none;
                 background-color: white;
@@ -679,39 +722,44 @@ class TemplateTabWidget(QWidget):
             QScrollArea > QWidget > QWidget {
                 background-color: white;
             }
-        """)
-        
+        """
+        )
+
         # 主容器
         container = QWidget()
         container.setStyleSheet("background-color: white;")
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
-        
+
         # 操作按钮布局
         button_layout = QHBoxLayout()
-        
+
         # JSON美化图标按钮
         beautify_btn = QToolButton()
         beautify_btn.setToolTip("美化JSON")
         beautify_btn.clicked.connect(self.beautify_json)
-        
+
         # 设置图标 - 修正路径构建逻辑
         # 从当前文件路径计算项目根目录
         current_file_path = os.path.abspath(__file__)
         # 当前文件路径：d:\workspace\TestTool\src\ui\interface_auto\components\tabbed_template_editor.py
         # 项目根目录应该是：d:\workspace\TestTool
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))))
+        base_dir = os.path.dirname(
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))
+            )
+        )
         icon_path = os.path.join(base_dir, "src", "resources", "icons", "beauty.png")
         if os.path.exists(icon_path):
             beautify_btn.setIcon(QIcon(icon_path))
         else:
             # 如果图标文件不存在，使用文本作为备选
             beautify_btn.setText("美化")
-        
+
         # 设置图标大小
         beautify_btn.setIconSize(QSize(16, 16))
-        
+
         # 使用工具按钮样式
         button_style = """
             QToolButton {
@@ -729,16 +777,19 @@ class TemplateTabWidget(QWidget):
             }
         """
         beautify_btn.setStyleSheet(button_style)
-        
+
         button_layout.addWidget(beautify_btn)
         button_layout.addStretch()  # 将按钮推到左边
         layout.addLayout(button_layout)
-        
+
         # 请求体编辑器
         self.body_edit = QTextEdit()
-        self.body_edit.setPlaceholderText('请输入JSON格式的请求体，例如: {"key": "value"}')
+        self.body_edit.setPlaceholderText(
+            '请输入JSON格式的请求体，例如: {"key": "value"}'
+        )
         self.body_edit.textChanged.connect(self.on_content_changed)
-        self.body_edit.setStyleSheet("""
+        self.body_edit.setStyleSheet(
+            """
             QTextEdit {
                 background-color: #fafafa;
                 border: 1px solid #d0d0d0;
@@ -752,24 +803,26 @@ class TemplateTabWidget(QWidget):
                 border-color: #b0b0b0;
                 background-color: #ffffff;
             }
-        """)
+        """
+        )
         self.body_edit.setMinimumHeight(150)  # 调整编辑器最小高度为150px
         self.body_edit.setMaximumHeight(350)  # 设置编辑器最大高度为350px
         layout.addWidget(self.body_edit)
-        
+
         # 设置滚动区域
         scroll_area.setWidget(container)
-        
+
         # 主布局
         main_layout = QVBoxLayout(parent)
         main_layout.addWidget(scroll_area)
-    
+
     def setup_config_tab(self, parent):
         """设置配置标签页 - 内部滚动条"""
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
+        scroll_area.setStyleSheet(
+            """
             QScrollArea {
                 border: none;
                 background-color: white;
@@ -777,14 +830,15 @@ class TemplateTabWidget(QWidget):
             QScrollArea > QWidget > QWidget {
                 background-color: white;
             }
-        """)
-        
+        """
+        )
+
         # 主容器
         container = QWidget()
         container.setStyleSheet("background-color: white;")
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # 超时设置
         timeout_layout = QHBoxLayout()
         timeout_layout.addWidget(QLabel("超时时间(秒):"))
@@ -794,7 +848,7 @@ class TemplateTabWidget(QWidget):
         self.timeout_edit.textChanged.connect(self.on_content_changed)
         timeout_layout.addWidget(self.timeout_edit)
         timeout_layout.addStretch()
-        
+
         # 重试设置
         retry_layout = QHBoxLayout()
         self.retry_check = QCheckBox("启用重试机制")
@@ -809,24 +863,24 @@ class TemplateTabWidget(QWidget):
         retry_layout.addWidget(QLabel("重试次数:"))
         retry_layout.addWidget(self.retry_count_edit)
         retry_layout.addStretch()
-        
+
         layout.addLayout(timeout_layout)
         layout.addLayout(retry_layout)
         layout.addStretch()
-        
+
         # 设置滚动区域
         scroll_area.setWidget(container)
-        
+
         # 主布局
         main_layout = QVBoxLayout(parent)
         main_layout.addWidget(scroll_area)
-    
+
     def on_content_changed(self):
         """内容改变事件"""
         if not self.modified:
             self.modified = True
             self.modified_signal.emit(True)
-    
+
     def get_icon(self, icon_name):
         """获取图标，支持PyInstaller打包路径处理"""
         try:
@@ -834,36 +888,39 @@ class TemplateTabWidget(QWidget):
             dev_path = os.path.join("src", "resources", "icons", icon_name)
             if os.path.exists(dev_path):
                 return QIcon(dev_path)
-            
+
             # 尝试从exe打包后路径加载
             exe_dir = os.path.dirname(os.path.abspath(sys.executable))
             exe_path = os.path.join(exe_dir, "src", "resources", "icons", icon_name)
             if os.path.exists(exe_path):
                 return QIcon(exe_path)
-            
+
             # 尝试相对路径
             relative_path = os.path.join("src", "resources", "icons", icon_name)
             if os.path.exists(relative_path):
                 return QIcon(relative_path)
-            
+
             # 尝试sys._MEIPASS临时解压路径（PyInstaller打包时）
-            if getattr(sys, 'frozen', False):
+            if getattr(sys, "frozen", False):
                 base_path = sys._MEIPASS
-                meipass_path = os.path.join(base_path, "src", "resources", "icons", icon_name)
+                meipass_path = os.path.join(
+                    base_path, "src", "resources", "icons", icon_name
+                )
                 if os.path.exists(meipass_path):
                     return QIcon(meipass_path)
-            
+
             # 如果所有路径都找不到，返回空图标
             return QIcon()
         except Exception:
             # 发生异常时返回空图标
             return QIcon()
-    
+
     def add_header_row(self, insert_after_row=None):
         """添加一行请求头配置 - 参考用例管理tab中HTTP请求工具条的实现"""
         row_widget = QWidget()
         row_widget.setObjectName("header-row")
-        row_widget.setStyleSheet("""
+        row_widget.setStyleSheet(
+            """
             QWidget#header-row {
                 border: none;
                 padding: 8px;
@@ -873,29 +930,31 @@ class TemplateTabWidget(QWidget):
             QWidget#header-row:hover {
                 background-color: #f0f0f0;
             }
-        """)
-        
+        """
+        )
+
         row_layout = QHBoxLayout(row_widget)
         row_layout.setSpacing(10)
-        
+
         # Header名称输入框
         header_name_edit = QLineEdit()
         header_name_edit.setPlaceholderText("Header名称")
         header_name_edit.setMinimumWidth(120)
         header_name_edit.textChanged.connect(self.on_content_changed)
-        
+
         # Header值输入框
         header_value_edit = QLineEdit()
         header_value_edit.setPlaceholderText("Header值")
         header_value_edit.setMinimumWidth(250)
         header_value_edit.textChanged.connect(self.on_content_changed)
-        
+
         # 添加按钮 - 使用图标
         add_button = QPushButton()
         add_button.setFixedSize(22, 22)
         add_button.setIcon(self.get_icon("add.png"))
         add_button.setIconSize(QSize(14, 14))
-        add_button.setStyleSheet("""
+        add_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -904,14 +963,16 @@ class TemplateTabWidget(QWidget):
                 background-color: #e8f5e8;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 删除按钮 - 使用图标
         delete_button = QPushButton()
         delete_button.setFixedSize(22, 22)
         delete_button.setIcon(self.get_icon("sub.png"))
         delete_button.setIconSize(QSize(14, 14))
-        delete_button.setStyleSheet("""
+        delete_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -920,27 +981,30 @@ class TemplateTabWidget(QWidget):
                 background-color: #ffebee;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 存储行信息
         row_data = {
-            'widget': row_widget,
-            'header_name_edit': header_name_edit,
-            'header_value_edit': header_value_edit,
-            'add_button': add_button,
-            'delete_button': delete_button
+            "widget": row_widget,
+            "header_name_edit": header_name_edit,
+            "header_value_edit": header_value_edit,
+            "add_button": add_button,
+            "delete_button": delete_button,
         }
-        
+
         # 连接按钮事件
-        add_button.clicked.connect(lambda checked, row=row_data: self.add_header_row(row))
+        add_button.clicked.connect(
+            lambda checked, row=row_data: self.add_header_row(row)
+        )
         delete_button.clicked.connect(lambda: self.remove_header_row(row_data))
-        
+
         # 添加到布局
         row_layout.addWidget(header_name_edit)
         row_layout.addWidget(header_value_edit)
         row_layout.addWidget(add_button)
         row_layout.addWidget(delete_button)
-        
+
         # 确定插入位置
         if insert_after_row is None:
             # 默认插入到开头（从上往下添加）
@@ -951,27 +1015,28 @@ class TemplateTabWidget(QWidget):
             insert_index = self.header_rows.index(insert_after_row) + 1
             self.headers_scroll_layout.insertWidget(insert_index, row_widget)
             self.header_rows.insert(insert_index, row_data)
-        
+
         self.on_content_changed()
-    
+
     def remove_header_row(self, row_data):
         """删除一行请求头配置"""
         if len(self.header_rows) <= 1:
             # 至少保留一行
             return
-            
+
         # 从布局中移除
-        self.headers_scroll_layout.removeWidget(row_data['widget'])
-        row_data['widget'].deleteLater()
+        self.headers_scroll_layout.removeWidget(row_data["widget"])
+        row_data["widget"].deleteLater()
         self.header_rows.remove(row_data)
-        
+
         self.on_content_changed()
-    
+
     def add_param_row(self, insert_after_row=None):
         """添加一行参数配置 - 参考用例管理tab中HTTP请求工具条的实现"""
         row_widget = QWidget()
         row_widget.setObjectName("param-row")
-        row_widget.setStyleSheet("""
+        row_widget.setStyleSheet(
+            """
             QWidget#param-row {
                 border: none;
                 padding: 8px;
@@ -981,29 +1046,31 @@ class TemplateTabWidget(QWidget):
             QWidget#param-row:hover {
                 background-color: #f0f0f0;
             }
-        """)
-        
+        """
+        )
+
         row_layout = QHBoxLayout(row_widget)
         row_layout.setSpacing(10)
-        
+
         # 参数名输入框
         param_name_edit = QLineEdit()
         param_name_edit.setPlaceholderText("参数名")
         param_name_edit.setMinimumWidth(120)
         param_name_edit.textChanged.connect(self.on_content_changed)
-        
+
         # 参数值输入框
         param_value_edit = QLineEdit()
         param_value_edit.setPlaceholderText("参数值")
         param_value_edit.setMinimumWidth(250)
         param_value_edit.textChanged.connect(self.on_content_changed)
-        
+
         # 添加按钮 - 使用图标
         add_button = QPushButton()
         add_button.setFixedSize(22, 22)
         add_button.setIcon(self.get_icon("add.png"))
         add_button.setIconSize(QSize(14, 14))
-        add_button.setStyleSheet("""
+        add_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -1012,14 +1079,16 @@ class TemplateTabWidget(QWidget):
                 background-color: #e8f5e8;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 删除按钮 - 使用图标
         delete_button = QPushButton()
         delete_button.setFixedSize(22, 22)
         delete_button.setIcon(self.get_icon("sub.png"))
         delete_button.setIconSize(QSize(14, 14))
-        delete_button.setStyleSheet("""
+        delete_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -1028,27 +1097,30 @@ class TemplateTabWidget(QWidget):
                 background-color: #ffebee;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 存储行信息
         row_data = {
-            'widget': row_widget,
-            'param_name_edit': param_name_edit,
-            'param_value_edit': param_value_edit,
-            'add_button': add_button,
-            'delete_button': delete_button
+            "widget": row_widget,
+            "param_name_edit": param_name_edit,
+            "param_value_edit": param_value_edit,
+            "add_button": add_button,
+            "delete_button": delete_button,
         }
-        
+
         # 连接按钮事件
-        add_button.clicked.connect(lambda checked, row=row_data: self.add_param_row(row))
+        add_button.clicked.connect(
+            lambda checked, row=row_data: self.add_param_row(row)
+        )
         delete_button.clicked.connect(lambda: self.remove_param_row(row_data))
-        
+
         # 添加到布局
         row_layout.addWidget(param_name_edit)
         row_layout.addWidget(param_value_edit)
         row_layout.addWidget(add_button)
         row_layout.addWidget(delete_button)
-        
+
         # 确定插入位置
         if insert_after_row is None:
             # 默认插入到开头（从上往下添加）
@@ -1059,28 +1131,29 @@ class TemplateTabWidget(QWidget):
             insert_index = self.param_rows.index(insert_after_row) + 1
             self.params_scroll_layout.insertWidget(insert_index, row_widget)
             self.param_rows.insert(insert_index, row_data)
-        
+
         self.on_content_changed()
-    
+
     def remove_param_row(self, row_data):
         """删除一行参数配置"""
         if len(self.param_rows) <= 1:
             # 至少保留一行
             return
-            
+
         # 从布局中移除
-        self.params_scroll_layout.removeWidget(row_data['widget'])
-        row_data['widget'].deleteLater()
+        self.params_scroll_layout.removeWidget(row_data["widget"])
+        row_data["widget"].deleteLater()
         self.param_rows.remove(row_data)
-        
+
         self.on_content_changed()
-    
+
     def add_header_row_at_end(self):
         """在末尾添加一行请求头配置"""
         # 复用add_header_row的逻辑，但插入到末尾而不是开头
         row_widget = QWidget()
         row_widget.setObjectName("header-row")
-        row_widget.setStyleSheet("""
+        row_widget.setStyleSheet(
+            """
             QWidget#header-row {
                 border: none;
                 padding: 8px;
@@ -1090,29 +1163,31 @@ class TemplateTabWidget(QWidget):
             QWidget#header-row:hover {
                 background-color: #f0f0f0;
             }
-        """)
-        
+        """
+        )
+
         row_layout = QHBoxLayout(row_widget)
         row_layout.setSpacing(10)
-        
+
         # Header名称输入框
         header_name_edit = QLineEdit()
         header_name_edit.setPlaceholderText("Header名称")
         header_name_edit.setMinimumWidth(120)
         header_name_edit.textChanged.connect(self.on_content_changed)
-        
+
         # Header值输入框
         header_value_edit = QLineEdit()
         header_value_edit.setPlaceholderText("Header值")
         header_value_edit.setMinimumWidth(250)
         header_value_edit.textChanged.connect(self.on_content_changed)
-        
+
         # 添加按钮 - 使用图标
         add_button = QPushButton()
         add_button.setFixedSize(22, 22)
         add_button.setIcon(self.get_icon("add.png"))
         add_button.setIconSize(QSize(14, 14))
-        add_button.setStyleSheet("""
+        add_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -1121,14 +1196,16 @@ class TemplateTabWidget(QWidget):
                 background-color: #e8f5e8;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 删除按钮 - 使用图标
         delete_button = QPushButton()
         delete_button.setFixedSize(22, 22)
         delete_button.setIcon(self.get_icon("sub.png"))
         delete_button.setIconSize(QSize(14, 14))
-        delete_button.setStyleSheet("""
+        delete_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -1137,39 +1214,43 @@ class TemplateTabWidget(QWidget):
                 background-color: #ffebee;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 存储行信息
         row_data = {
-            'widget': row_widget,
-            'header_name_edit': header_name_edit,
-            'header_value_edit': header_value_edit,
-            'add_button': add_button,
-            'delete_button': delete_button
+            "widget": row_widget,
+            "header_name_edit": header_name_edit,
+            "header_value_edit": header_value_edit,
+            "add_button": add_button,
+            "delete_button": delete_button,
         }
-        
+
         # 连接按钮事件
-        add_button.clicked.connect(lambda checked, row=row_data: self.add_header_row(row))
+        add_button.clicked.connect(
+            lambda checked, row=row_data: self.add_header_row(row)
+        )
         delete_button.clicked.connect(lambda: self.remove_header_row(row_data))
-        
+
         # 添加到布局
         row_layout.addWidget(header_name_edit)
         row_layout.addWidget(header_value_edit)
         row_layout.addWidget(add_button)
         row_layout.addWidget(delete_button)
-        
+
         # 插入到末尾
         self.headers_scroll_layout.insertWidget(len(self.header_rows), row_widget)
         self.header_rows.append(row_data)
-        
+
         self.on_content_changed()
-    
+
     def add_param_row_at_end(self):
         """在末尾添加一行参数配置"""
         # 复用add_param_row的逻辑，但插入到末尾而不是开头
         row_widget = QWidget()
         row_widget.setObjectName("param-row")
-        row_widget.setStyleSheet("""
+        row_widget.setStyleSheet(
+            """
             QWidget#param-row {
                 border: none;
                 padding: 8px;
@@ -1179,29 +1260,31 @@ class TemplateTabWidget(QWidget):
             QWidget#param-row:hover {
                 background-color: #f0f0f0;
             }
-        """)
-        
+        """
+        )
+
         row_layout = QHBoxLayout(row_widget)
         row_layout.setSpacing(10)
-        
+
         # 参数名输入框
         param_name_edit = QLineEdit()
         param_name_edit.setPlaceholderText("参数名")
         param_name_edit.setMinimumWidth(120)
         param_name_edit.textChanged.connect(self.on_content_changed)
-        
+
         # 参数值输入框
         param_value_edit = QLineEdit()
         param_value_edit.setPlaceholderText("参数值")
         param_value_edit.setMinimumWidth(250)
         param_value_edit.textChanged.connect(self.on_content_changed)
-        
+
         # 添加按钮 - 使用图标
         add_button = QPushButton()
         add_button.setFixedSize(22, 22)
         add_button.setIcon(self.get_icon("add.png"))
         add_button.setIconSize(QSize(14, 14))
-        add_button.setStyleSheet("""
+        add_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -1210,14 +1293,16 @@ class TemplateTabWidget(QWidget):
                 background-color: #e8f5e8;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 删除按钮 - 使用图标
         delete_button = QPushButton()
         delete_button.setFixedSize(22, 22)
         delete_button.setIcon(self.get_icon("sub.png"))
         delete_button.setIconSize(QSize(14, 14))
-        delete_button.setStyleSheet("""
+        delete_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -1226,54 +1311,57 @@ class TemplateTabWidget(QWidget):
                 background-color: #ffebee;
                 border-radius: 3px;
             }
-        """)
-        
+        """
+        )
+
         # 存储行信息
         row_data = {
-            'widget': row_widget,
-            'param_name_edit': param_name_edit,
-            'param_value_edit': param_value_edit,
-            'add_button': add_button,
-            'delete_button': delete_button
+            "widget": row_widget,
+            "param_name_edit": param_name_edit,
+            "param_value_edit": param_value_edit,
+            "add_button": add_button,
+            "delete_button": delete_button,
         }
-        
+
         # 连接按钮事件
-        add_button.clicked.connect(lambda checked, row=row_data: self.add_param_row(row))
+        add_button.clicked.connect(
+            lambda checked, row=row_data: self.add_param_row(row)
+        )
         delete_button.clicked.connect(lambda: self.remove_param_row(row_data))
-        
+
         # 添加到布局
         row_layout.addWidget(param_name_edit)
         row_layout.addWidget(param_value_edit)
         row_layout.addWidget(add_button)
         row_layout.addWidget(delete_button)
-        
+
         # 插入到末尾
         self.params_scroll_layout.insertWidget(len(self.param_rows), row_widget)
         self.param_rows.append(row_data)
-        
+
         self.on_content_changed()
-    
+
     def load_template_data(self):
         """加载模板数据到表单"""
         if not self.template_data:
             return
-        
+
         # 基本信息
-        self.name_edit.setText(self.template_data.get('name', ''))
-        self.description_edit.setText(self.template_data.get('description', ''))
-        
+        self.name_edit.setText(self.template_data.get("name", ""))
+        self.description_edit.setText(self.template_data.get("description", ""))
+
         # 请求配置
-        self.method_combo.setCurrentText(self.template_data.get('method', 'GET'))
-        self.url_edit.setText(self.template_data.get('url_path', ''))
-        
+        self.method_combo.setCurrentText(self.template_data.get("method", "GET"))
+        self.url_edit.setText(self.template_data.get("url_path", ""))
+
         # Headers
-        headers = self.template_data.get('headers', {})
+        headers = self.template_data.get("headers", {})
         # 清除现有行
         for row_data in self.header_rows:
-            self.headers_scroll_layout.removeWidget(row_data['widget'])
-            row_data['widget'].deleteLater()
+            self.headers_scroll_layout.removeWidget(row_data["widget"])
+            row_data["widget"].deleteLater()
         self.header_rows.clear()
-        
+
         # 添加数据行 - 按顺序添加，保持原有顺序
         for key, value in headers.items():
             # 添加新行，但不插入到开头，而是添加到末尾
@@ -1281,21 +1369,21 @@ class TemplateTabWidget(QWidget):
             # 设置最后一行的数据（新添加的行）
             if self.header_rows:
                 last_row = self.header_rows[-1]
-                last_row['header_name_edit'].setText(key)
-                last_row['header_value_edit'].setText(str(value))
-        
+                last_row["header_name_edit"].setText(key)
+                last_row["header_value_edit"].setText(str(value))
+
         # 如果没有数据，至少保留一行
         if not self.header_rows:
             self.add_header_row()
-        
+
         # 参数
-        params = self.template_data.get('params', {})
+        params = self.template_data.get("params", {})
         # 清除现有行
         for row_data in self.param_rows:
-            self.params_scroll_layout.removeWidget(row_data['widget'])
-            row_data['widget'].deleteLater()
+            self.params_scroll_layout.removeWidget(row_data["widget"])
+            row_data["widget"].deleteLater()
         self.param_rows.clear()
-        
+
         # 添加数据行 - 按顺序添加，保持原有顺序
         for key, value in params.items():
             # 添加新行，但不插入到开头，而是添加到末尾
@@ -1303,201 +1391,205 @@ class TemplateTabWidget(QWidget):
             # 设置最后一行的数据（新添加的行）
             if self.param_rows:
                 last_row = self.param_rows[-1]
-                last_row['param_name_edit'].setText(key)
-                last_row['param_value_edit'].setText(str(value))
-        
+                last_row["param_name_edit"].setText(key)
+                last_row["param_value_edit"].setText(str(value))
+
         # 如果没有数据，至少保留一行
         if not self.param_rows:
             self.add_param_row()
-        
+
         # 请求体
-        body = self.template_data.get('body', {})
+        body = self.template_data.get("body", {})
         if body:
             self.body_edit.setText(json.dumps(body, indent=2, ensure_ascii=False))
-        
+
         # 高级配置
-        self.timeout_edit.setText(str(self.template_data.get('timeout', 30)))
-        self.retry_check.setChecked(self.template_data.get('retry_enabled', False))
-        self.retry_count_edit.setText(str(self.template_data.get('retry_count', 3)))
-        self.retry_count_edit.setEnabled(self.template_data.get('retry_enabled', False))
-        
+        self.timeout_edit.setText(str(self.template_data.get("timeout", 30)))
+        self.retry_check.setChecked(self.template_data.get("retry_enabled", False))
+        self.retry_count_edit.setText(str(self.template_data.get("retry_count", 3)))
+        self.retry_count_edit.setEnabled(self.template_data.get("retry_enabled", False))
+
         self.modified = False
-    
+
     def get_data(self):
         """获取表单数据"""
         # 基本信息
         data = {
-            'name': self.name_edit.text().strip(),
-            'description': self.description_edit.toPlainText().strip(),
-            'method': self.method_combo.currentText(),
-            'url_path': self.url_edit.text().strip(),
-            'project_id': self.project_id or self.template_data.get('project_id'),
-            'folder_id': self.folder_id or self.template_data.get('folder_id'),
-            'sort_order': self.template_data.get('sort_order', 0),  # 关键修复：包含排序顺序
-            'timeout': int(self.timeout_edit.text()) if self.timeout_edit.text().isdigit() else 30,
-            'retry_enabled': self.retry_check.isChecked(),
-            'retry_count': int(self.retry_count_edit.text()) if self.retry_count_edit.text().isdigit() else 3
+            "name": self.name_edit.text().strip(),
+            "description": self.description_edit.toPlainText().strip(),
+            "method": self.method_combo.currentText(),
+            "url_path": self.url_edit.text().strip(),
+            "project_id": self.project_id or self.template_data.get("project_id"),
+            "folder_id": self.folder_id or self.template_data.get("folder_id"),
+            "sort_order": self.template_data.get(
+                "sort_order", 0
+            ),  # 关键修复：包含排序顺序
+            "timeout": (
+                int(self.timeout_edit.text())
+                if self.timeout_edit.text().isdigit()
+                else 30
+            ),
+            "retry_enabled": self.retry_check.isChecked(),
+            "retry_count": (
+                int(self.retry_count_edit.text())
+                if self.retry_count_edit.text().isdigit()
+                else 3
+            ),
         }
-        
+
         # Headers
         headers = {}
         for row_data in self.header_rows:
-            key = row_data['header_name_edit'].text().strip()
-            value = row_data['header_value_edit'].text().strip()
+            key = row_data["header_name_edit"].text().strip()
+            value = row_data["header_value_edit"].text().strip()
             if key:
                 headers[key] = value
-        data['headers'] = headers
-        
+        data["headers"] = headers
+
         # 参数
         params = {}
         for row_data in self.param_rows:
-            key = row_data['param_name_edit'].text().strip()
-            value = row_data['param_value_edit'].text().strip()
+            key = row_data["param_name_edit"].text().strip()
+            value = row_data["param_value_edit"].text().strip()
             if key:
                 params[key] = value
-        data['params'] = params
-        
+        data["params"] = params
+
         # 请求体
         body_text = self.body_edit.toPlainText().strip()
         if body_text:
             try:
-                data['body'] = json.loads(body_text)
+                data["body"] = json.loads(body_text)
             except json.JSONDecodeError:
-                data['body'] = body_text
+                data["body"] = body_text
         else:
-            data['body'] = {}
-        
+            data["body"] = {}
+
         return data
-    
+
     def save_template(self):
         """保存模板"""
         # 验证必填字段
         if not self.name_edit.text().strip():
             Toast.warn(self, "请输入接口名称")
             return
-        
+
         if not self.url_edit.text().strip():
             Toast.warn(self, "请输入URL路径")
             return
-        
+
         data = self.get_data()
-        
+
         # 如果是编辑模式，添加ID
-        if self.is_edit and 'id' in self.template_data:
-            data['id'] = self.template_data['id']
-        
+        if self.is_edit and "id" in self.template_data:
+            data["id"] = self.template_data["id"]
+
         # 发出保存信号，但不立即标记为已保存状态
         # 等待实际的保存结果来决定是否更新状态
         self.saved.emit(data)
-    
+
     def debug_template(self):
         """调试模板"""
         # 验证必填字段
         if not self.name_edit.text().strip():
             Toast.warn(self, "请输入接口名称")
             return
-        
+
         if not self.url_edit.text().strip():
             Toast.warn(self, "请输入URL路径")
             return
-        
+
         # 获取表单数据
         data = self.get_data()
-        
+
         # 如果是编辑模式，添加ID
-        if self.is_edit and 'id' in self.template_data:
-            data['id'] = self.template_data['id']
-        
+        if self.is_edit and "id" in self.template_data:
+            data["id"] = self.template_data["id"]
+
         # 禁用调试按钮，防止重复点击
         self.debug_btn.setEnabled(False)
         self.debug_btn.setText("调试中...")
-        
+
         # 导入调试请求引擎
         from .debug_request_engine import DebugRequestEngine, create_debug_request_data
-        
+
         # 创建调试请求引擎
         self.debug_engine = DebugRequestEngine()
-        
+
         # 创建调试请求数据
         debug_request_data = create_debug_request_data(data)
-        
+
         # 执行调试请求
         self.debug_engine.execute_debug_request(
             debug_request_data,
             finished_callback=self.on_debug_finished,
-            error_callback=self.on_debug_error
+            error_callback=self.on_debug_error,
         )
-    
+
     def on_debug_finished(self, response_data):
         """调试完成回调"""
         # 重新启用调试按钮
         self.debug_btn.setEnabled(True)
         self.debug_btn.setText("调试")
-        
+
         # 获取表单数据
         request_data = self.get_data()
-        
+
         # 构建调试结果数据
-        debug_result = {
-            'request': request_data,
-            'response': response_data
-        }
-        
+        debug_result = {"request": request_data, "response": response_data}
+
         # 发出调试完成信号
         self.debugged.emit(debug_result)
-    
+
     def on_debug_error(self, error_message):
         """调试错误回调"""
         # 重新启用调试按钮
         self.debug_btn.setEnabled(True)
         self.debug_btn.setText("调试")
-        
+
         # 获取表单数据
         request_data = self.get_data()
-        
+
         # 构建错误响应数据
         error_response = {
-            'success': False,
-            'error': error_message,
-            'status_code': 0,
-            'response_time': 0
+            "success": False,
+            "error": error_message,
+            "status_code": 0,
+            "response_time": 0,
         }
-        
+
         # 构建调试结果数据
-        debug_result = {
-            'request': request_data,
-            'response': error_response
-        }
-        
+        debug_result = {"request": request_data, "response": error_response}
+
         # 发出调试完成信号
         self.debugged.emit(debug_result)
-    
+
     def beautify_json(self):
         """JSON美化功能"""
         current_text = self.body_edit.toPlainText().strip()
-        
+
         if not current_text:
             Toast.info(self, "请输入JSON内容")
             return
-        
+
         try:
             # 解析JSON
             json_data = json.loads(current_text)
-            
+
             # 格式化JSON
             formatted_json = json.dumps(json_data, indent=2, ensure_ascii=False)
-            
+
             # 更新编辑器内容
             self.body_edit.setPlainText(formatted_json)
-            
+
             # 标记为已修改
             if not self.modified:
                 self.modified = True
                 self.modified_signal.emit(True)
-                
+
         except json.JSONDecodeError as e:
             Toast.error(self, f"JSON格式不正确：{str(e)}")
-    
+
     def switch_to_body_tab(self):
         """自动切换到请求体tab"""
         # 查找请求体tab的索引

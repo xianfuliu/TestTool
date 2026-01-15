@@ -8,10 +8,12 @@ from typing import Dict, Any
 class ScriptEngine:
     """脚本执行引擎"""
 
-    def execute_script(self, script: str, variables: Dict[str, Any], timeout: int = 30) -> Any:
+    def execute_script(
+        self, script: str, variables: Dict[str, Any], timeout: int = 30
+    ) -> Any:
         """执行Python脚本"""
         # 创建临时文件
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             # 写入变量
             for key, value in variables.items():
                 f.write(f"{key} = {repr(value)}\n")
@@ -27,12 +29,12 @@ class ScriptEngine:
                 [sys.executable, temp_file],
                 capture_output=True,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
             )
 
             if result.returncode == 0:
                 # 解析输出
-                output_lines = result.stdout.strip().split('\n')
+                output_lines = result.stdout.strip().split("\n")
                 if output_lines:
                     # 最后一行作为返回值
                     return output_lines[-1]

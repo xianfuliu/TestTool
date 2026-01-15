@@ -18,6 +18,7 @@ def excepthook(exc_type, exc_value, exc_traceback):
     try:
         from PyQt5.QtWidgets import QApplication
         from src.ui.widgets.toast_tips import Toast
+
         app = QApplication.instance()
         if app:
             error_msg = f"发生未处理的异常:\n\n{exc_type.__name__}: {exc_value}"

@@ -16,7 +16,8 @@ class DownloadButton(QPushButton):
         self.setIconSize(self.size())
 
         # 设置样式 - 透明背景
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -28,7 +29,8 @@ class DownloadButton(QPushButton):
             QPushButton:pressed {
                 background-color: #e0e0e0;
             }
-        """)
+        """
+        )
 
         # 使用 resource_path 处理图标路径
         download_icon_path = resource_path(self.download_icon_path)

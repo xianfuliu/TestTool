@@ -5,6 +5,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 class ApiWorker(QThread):
     """API 请求工作线程"""
+
     finished = pyqtSignal(dict)  # 响应数据
     error = pyqtSignal(str)  # 错误信息
 
@@ -31,7 +32,7 @@ class ApiWorker(QThread):
                         self.encrypt_url,
                         data=json.dumps(request_body),
                         headers=self.headers,
-                        timeout=30
+                        timeout=30,
                     )
                     if encrypt_response.status_code == 200:
                         # 尝试解析加密响应
@@ -41,10 +42,14 @@ class ApiWorker(QThread):
                             encrypted_data = encrypt_response.text
 
                         if not encrypted_data:
-                            self.error.emit(f"加密接口返回数据格式错误: {encrypt_response.text}")
+                            self.error.emit(
+                                f"加密接口返回数据格式错误: {encrypt_response.text}"
+                            )
                             return
                     else:
-                        self.error.emit(f"加密接口调用失败: {encrypt_response.status_code} - {encrypt_response.text}")
+                        self.error.emit(
+                            f"加密接口调用失败: {encrypt_response.status_code} - {encrypt_response.text}"
+                        )
                         return
                 except Exception as e:
                     self.error.emit(f"加密接口调用异常: {str(e)}")
@@ -57,10 +62,13 @@ class ApiWorker(QThread):
                         # 使用加密后的数据
                         response = requests.post(
                             self.url,
-                            data=encrypted_data if isinstance(encrypted_data,
-                                                              (dict, list)) else encrypted_data,
+                            data=(
+                                encrypted_data
+                                if isinstance(encrypted_data, (dict, list))
+                                else encrypted_data
+                            ),
                             headers=self.headers,
-                            timeout=30
+                            timeout=30,
                         )
                     else:
                         # 使用原始数据
@@ -68,20 +76,20 @@ class ApiWorker(QThread):
                             self.url,
                             json=request_body,
                             headers=self.headers,
-                            timeout=30
+                            timeout=30,
                         )
                 else:
                     # GET 请求
                     if encrypted_data:
-                        params = {"encrypted_data": encrypted_data} if isinstance(encrypted_data,
-                                                                                  (dict, list)) else encrypted_data
+                        params = (
+                            {"encrypted_data": encrypted_data}
+                            if isinstance(encrypted_data, (dict, list))
+                            else encrypted_data
+                        )
                     else:
                         params = request_body
                     response = requests.get(
-                        self.url,
-                        params=params,
-                        headers=self.headers,
-                        timeout=30
+                        self.url, params=params, headers=self.headers, timeout=30
                     )
 
                 response_data = response.text
@@ -91,23 +99,32 @@ class ApiWorker(QThread):
                 return
 
             # 如果需要解密，调用解密接口
-            if self.decrypt_url and self.decrypt_url.strip() and response.status_code == 200:
+            if (
+                self.decrypt_url
+                and self.decrypt_url.strip()
+                and response.status_code == 200
+            ):
                 try:
                     decrypt_response = requests.post(
                         self.decrypt_url,
                         data=response_data,
                         headers=self.headers,
-                        timeout=30
+                        timeout=30,
                     )
                     if decrypt_response.status_code == 200:
                         try:
                             decrypt_result = decrypt_response.json()
-                            final_response = decrypt_result.get("decrypted_data") or decrypt_result.get(
-                                "data") or decrypt_result
+                            final_response = (
+                                decrypt_result.get("decrypted_data")
+                                or decrypt_result.get("data")
+                                or decrypt_result
+                            )
                         except:
                             final_response = decrypt_response.text
                     else:
-                        self.error.emit(f"解密接口调用失败: {decrypt_response.status_code} - {decrypt_response.text}")
+                        self.error.emit(
+                            f"解密接口调用失败: {decrypt_response.status_code} - {decrypt_response.text}"
+                        )
                         return
                 except Exception as e:
                     self.error.emit(f"解密接口调用异常: {str(e)}")
@@ -121,7 +138,7 @@ class ApiWorker(QThread):
                 "status_code": response.status_code,
                 "headers": dict(response.headers),
                 "body": response_data,  # 原始响应体
-                "decrypted_body": final_response  # 解密后的响应体（如果有）
+                "decrypted_body": final_response,  # 解密后的响应体（如果有）
             }
 
             self.finished.emit(result)

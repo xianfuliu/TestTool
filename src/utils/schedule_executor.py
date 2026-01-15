@@ -6,6 +6,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 class ScheduleExecutor(QThread):
     """定时任务执行器"""
+
     finished = pyqtSignal(str)  # 执行完成信号
     error = pyqtSignal(str)  # 错误信号
 
@@ -46,16 +47,13 @@ class ScheduleExecutor(QThread):
         """登录定时任务平台"""
         try:
             login_url = f"{self.base_url}/auth/login"
-            login_data = {
-                "username": "admin",
-                "password": "admin123"
-            }
+            login_data = {"username": "admin", "password": "admin123"}
 
             response = requests.post(
                 login_url,
                 json=login_data,
                 headers={"Content-Type": "application/json"},
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code == 200:
@@ -76,22 +74,16 @@ class ScheduleExecutor(QThread):
         """执行定时任务"""
         try:
             execute_url = f"{self.base_url}/schedule/job/run"
-            job_data = {
-                "jobId": self.job_id,
-                "jobGroup": self.job_group
-            }
+            job_data = {"jobId": self.job_id, "jobGroup": self.job_group}
 
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.token}",
-                "Cookie": self.cookies
+                "Cookie": self.cookies,
             }
 
             response = requests.put(
-                execute_url,
-                json=job_data,
-                headers=headers,
-                timeout=30
+                execute_url, json=job_data, headers=headers, timeout=30
             )
             return response.status_code == 200
 
@@ -107,14 +99,10 @@ class ScheduleExecutor(QThread):
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.token}",
-                "Cookie": self.cookies
+                "Cookie": self.cookies,
             }
 
-            response = requests.delete(
-                logout_url,
-                headers=headers,
-                timeout=30
-            )
+            response = requests.delete(logout_url, headers=headers, timeout=30)
             return response.status_code == 200
 
         except Exception as e:

@@ -1,6 +1,7 @@
 import sys
 import os
 
+
 def resource_path(relative_path):
     """获取资源的绝对路径。用于PyInstaller打包后找到资源文件"""
     try:
@@ -22,7 +23,9 @@ def resource_path(relative_path):
 
         # 尝试在resources目录下查找
         filename = os.path.basename(relative_path)
-        alt_path = os.path.normpath(os.path.join(os.path.abspath(""), "resources", filename))
+        alt_path = os.path.normpath(
+            os.path.join(os.path.abspath(""), "resources", filename)
+        )
         if os.path.exists(alt_path):
             return alt_path
 
@@ -33,7 +36,9 @@ def resource_path(relative_path):
 
         # 尝试在config目录下查找
         filename = os.path.basename(relative_path)
-        alt_path = os.path.normpath(os.path.join(os.path.abspath("."), "config", filename))
+        alt_path = os.path.normpath(
+            os.path.join(os.path.abspath("."), "config", filename)
+        )
         if os.path.exists(alt_path):
             return alt_path
 

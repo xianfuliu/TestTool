@@ -14,23 +14,26 @@ class TestCaseService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, project_id, folder_id, name, description, 
                                environment_id, global_vars, created_by, created_at, updated_at,
                                enable_encryption, encrypt_url, decrypt_url, sort_order
                         FROM test_cases 
                         WHERE project_id = %s
                         ORDER BY sort_order, created_at
-                    """, (project_id,))
+                    """,
+                        (project_id,),
+                    )
                     cases = cursor.fetchall()
 
                     # 处理JSON字段
                     for case in cases:
-                        if case.get('global_vars'):
+                        if case.get("global_vars"):
                             try:
-                                case['global_vars'] = json.loads(case['global_vars'])
+                                case["global_vars"] = json.loads(case["global_vars"])
                             except (json.JSONDecodeError, TypeError):
-                                case['global_vars'] = {}
+                                case["global_vars"] = {}
 
                     return cases
         except Exception as e:
@@ -42,20 +45,23 @@ class TestCaseService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, project_id, folder_id, name, description, 
                                environment_id, global_vars, created_by, created_at, updated_at,
                                enable_encryption, encrypt_url, decrypt_url
                         FROM test_cases 
                         WHERE id = %s
-                    """, (case_id,))
+                    """,
+                        (case_id,),
+                    )
                     case = cursor.fetchone()
 
-                    if case and case.get('global_vars'):
+                    if case and case.get("global_vars"):
                         try:
-                            case['global_vars'] = json.loads(case['global_vars'])
+                            case["global_vars"] = json.loads(case["global_vars"])
                         except (json.JSONDecodeError, TypeError):
-                            case['global_vars'] = {}
+                            case["global_vars"] = {}
 
                     return case
         except Exception as e:
@@ -71,7 +77,7 @@ class TestCaseService:
 
             # 获取步骤
             steps = self.get_case_steps(case_id)
-            case['steps'] = steps
+            case["steps"] = steps
 
             return case
         except Exception as e:
@@ -83,7 +89,8 @@ class TestCaseService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT cs.id, cs.case_id, cs.api_template_id, cs.step_order, cs.name, cs.enabled,
                                cs.pre_processing, cs.post_processing, cs.assertions, cs.variables,
                                cs.enable_encryption, cs.created_at, cs.updated_at,
@@ -92,24 +99,31 @@ class TestCaseService:
                         LEFT JOIN api_templates at ON cs.api_template_id = at.id
                         WHERE cs.case_id = %s
                         ORDER BY cs.step_order
-                    """, (case_id,))
+                    """,
+                        (case_id,),
+                    )
                     steps = cursor.fetchall()
 
                     # 处理JSON字段和字段映射
                     for step in steps:
-                        json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
+                        json_fields = [
+                            "pre_processing",
+                            "post_processing",
+                            "assertions",
+                            "variables",
+                        ]
                         for field in json_fields:
                             if step.get(field):
                                 try:
                                     step[field] = json.loads(step[field])
                                 except (json.JSONDecodeError, TypeError):
                                     step[field] = {}
-                        
+
                         # 映射字段：将method映射到api_method，url_path映射到api_url_path
-                        if 'method' in step:
-                            step['api_method'] = step['method']
-                        if 'url_path' in step:
-                            step['api_url_path'] = step['url_path']
+                        if "method" in step:
+                            step["api_method"] = step["method"]
+                        if "url_path" in step:
+                            step["api_url_path"] = step["url_path"]
 
                     return steps
         except Exception as e:
@@ -118,85 +132,108 @@ class TestCaseService:
 
     def create_case(self, data: Dict[str, Any]) -> int:
         """创建测试用例"""
-        print(f"[DEBUG] create_case开始执行: name={data.get('name')}, steps数量={len(data.get('steps', []))}")
-        
+        print(
+            f"[DEBUG] create_case开始执行: name={data.get('name')}, steps数量={len(data.get('steps', []))}"
+        )
+
         # 打印加解密配置信息
-        enable_encryption = data.get('enable_encryption', False)
-        encrypt_url = data.get('encrypt_url', '')
-        decrypt_url = data.get('decrypt_url', '')
-        print(f"[DEBUG] 加解密配置 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
-        
+        enable_encryption = data.get("enable_encryption", False)
+        encrypt_url = data.get("encrypt_url", "")
+        decrypt_url = data.get("decrypt_url", "")
+        print(
+            f"[DEBUG] 加解密配置 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}"
+        )
+
         try:
             # 检查环境ID是否存在
-            environment_id = data.get('environment_id')
+            environment_id = data.get("environment_id")
             if environment_id and not self._check_environment_exists(environment_id):
                 raise ValueError(f"环境ID {environment_id} 不存在")
 
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 处理JSON字段
-                    global_vars = data.get('global_vars', {})
+                    global_vars = data.get("global_vars", {})
                     global_vars_json = json.dumps(global_vars, ensure_ascii=False)
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO test_cases (project_id, folder_id, name, description, 
                                               environment_id, global_vars, created_by,
                                               enable_encryption, encrypt_url, decrypt_url)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        data['project_id'],
-                        data.get('folder_id'),  # 保持folder_id为None，表示根目录（NULL）
-                        data['name'],
-                        data.get('description', ''),
-                        environment_id,  # 可能是None
-                        global_vars_json,
-                        'admin',  # 实际应该从登录用户获取
-                        enable_encryption,
-                        encrypt_url,
-                        decrypt_url
-                    ))
+                    """,
+                        (
+                            data["project_id"],
+                            data.get(
+                                "folder_id"
+                            ),  # 保持folder_id为None，表示根目录（NULL）
+                            data["name"],
+                            data.get("description", ""),
+                            environment_id,  # 可能是None
+                            global_vars_json,
+                            "admin",  # 实际应该从登录用户获取
+                            enable_encryption,
+                            encrypt_url,
+                            decrypt_url,
+                        ),
+                    )
                     case_id = cursor.lastrowid
                     print(f"[DEBUG] 用例基本信息插入成功，ID: {case_id}")
-                    print(f"[DEBUG] 已插入加解密字段 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
-                    
+                    print(
+                        f"[DEBUG] 已插入加解密字段 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}"
+                    )
+
                     # 保存步骤数据
-                    steps = data.get('steps', [])
+                    steps = data.get("steps", [])
                     print(f"[DEBUG] 开始插入步骤数据，共{len(steps)}个步骤")
-                    
+
                     if steps:
                         # 使用批量插入，避免逐个插入导致的超时问题
                         for i, step_data in enumerate(steps):
-                            print(f"[DEBUG] 处理第{i+1}个步骤: step_order={step_data.get('step_order')}, id={step_data.get('id')}")
-                            step_data['case_id'] = case_id
-                            step_data['step_order'] = i + 1
-                            
+                            print(
+                                f"[DEBUG] 处理第{i+1}个步骤: step_order={step_data.get('step_order')}, id={step_data.get('id')}"
+                            )
+                            step_data["case_id"] = case_id
+                            step_data["step_order"] = i + 1
+
                             # 处理JSON字段
-                            json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
+                            json_fields = [
+                                "pre_processing",
+                                "post_processing",
+                                "assertions",
+                                "variables",
+                            ]
                             for field in json_fields:
                                 if field in step_data:
-                                    step_data[field] = json.dumps(step_data[field], ensure_ascii=False)
+                                    step_data[field] = json.dumps(
+                                        step_data[field], ensure_ascii=False
+                                    )
                                 else:
-                                    step_data[field] = '{}'
-                            
+                                    step_data[field] = "{}"
+
                             # 直接插入步骤，避免递归调用
-                            cursor.execute("""
+                            cursor.execute(
+                                """
                                 INSERT INTO test_case_steps (case_id, api_template_id, step_order, name, 
                                                            enabled, pre_processing, post_processing, assertions, variables,
                                                            enable_encryption)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            """, (
-                                step_data['case_id'],
-                                step_data.get('api_template_id'),
-                                step_data.get('step_order', 0),
-                                step_data.get('name', ''),
-                                step_data.get('enabled', True),
-                                step_data.get('pre_processing', '{}'),
-                                step_data.get('post_processing', '{}'),
-                                step_data.get('assertions', '{}'),
-                                step_data.get('variables', '{}'),
-                                step_data.get('enable_encryption', None)
-                            ))
-                    
+                            """,
+                                (
+                                    step_data["case_id"],
+                                    step_data.get("api_template_id"),
+                                    step_data.get("step_order", 0),
+                                    step_data.get("name", ""),
+                                    step_data.get("enabled", True),
+                                    step_data.get("pre_processing", "{}"),
+                                    step_data.get("post_processing", "{}"),
+                                    step_data.get("assertions", "{}"),
+                                    step_data.get("variables", "{}"),
+                                    step_data.get("enable_encryption", None),
+                                ),
+                            )
+
                     conn.commit()
                     print(f"[DEBUG] create_case执行完成，返回ID: {case_id}")
                     return case_id
@@ -209,7 +246,9 @@ class TestCaseService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT id FROM environments WHERE id = %s", (environment_id,))
+                    cursor.execute(
+                        "SELECT id FROM environments WHERE id = %s", (environment_id,)
+                    )
                     return cursor.fetchone() is not None
         except Exception as e:
             print(f"检查环境存在失败: {e}")
@@ -217,115 +256,147 @@ class TestCaseService:
 
     def update_case(self, case_id: int, data: Dict[str, Any]) -> bool:
         """更新测试用例"""
-        print(f"[DEBUG] update_case开始执行: case_id={case_id}, name={data.get('name')}")
-        
+        print(
+            f"[DEBUG] update_case开始执行: case_id={case_id}, name={data.get('name')}"
+        )
+
         # 检查步骤数据大小
-        steps_count = len(data.get('steps', []))
+        steps_count = len(data.get("steps", []))
         print(f"[DEBUG] 需要处理的步骤数量: {steps_count}")
-        
+
         # 打印加解密配置信息
-        enable_encryption = data.get('enable_encryption', False)
-        encrypt_url = data.get('encrypt_url', '')
-        decrypt_url = data.get('decrypt_url', '')
-        print(f"[DEBUG] 加解密配置 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
-        
+        enable_encryption = data.get("enable_encryption", False)
+        encrypt_url = data.get("encrypt_url", "")
+        decrypt_url = data.get("decrypt_url", "")
+        print(
+            f"[DEBUG] 加解密配置 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}"
+        )
+
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 更新用例基本信息
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE test_cases 
                         SET name = %s, description = %s, environment_id = %s, 
                             global_vars = %s, folder_id = %s, updated_at = CURRENT_TIMESTAMP,
                             enable_encryption = %s, encrypt_url = %s, decrypt_url = %s
                         WHERE id = %s
-                    """, (
-                        data.get('name', ''),
-                        data.get('description', ''),
-                        data.get('environment_id'),
-                        json.dumps(data.get('global_vars', {}), ensure_ascii=False),
-                        data.get('folder_id'),
-                        enable_encryption,
-                        encrypt_url,
-                        decrypt_url,
-                        case_id
-                    ))
-                    
+                    """,
+                        (
+                            data.get("name", ""),
+                            data.get("description", ""),
+                            data.get("environment_id"),
+                            json.dumps(data.get("global_vars", {}), ensure_ascii=False),
+                            data.get("folder_id"),
+                            enable_encryption,
+                            encrypt_url,
+                            decrypt_url,
+                            case_id,
+                        ),
+                    )
+
                     # 立即提交基本信息更新
                     conn.commit()
                     print("[DEBUG] 用例基本信息更新完成")
-                    print(f"[DEBUG] 已更新加解密字段 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}")
+                    print(
+                        f"[DEBUG] 已更新加解密字段 - enable_encryption: {enable_encryption}, encrypt_url: {encrypt_url}, decrypt_url: {decrypt_url}"
+                    )
 
                     # 处理步骤数据（分批处理，避免超时）
                     if steps_count > 0:
                         print(f"[DEBUG] 开始处理步骤数据，共{steps_count}个步骤")
-                        
+
                         # 使用新的连接来删除步骤
                         with self.db.get_connection() as delete_conn:
                             with delete_conn.cursor() as delete_cursor:
-                                delete_cursor.execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
+                                delete_cursor.execute(
+                                    "DELETE FROM test_case_steps WHERE case_id = %s",
+                                    (case_id,),
+                                )
                                 delete_conn.commit()
                                 print("[DEBUG] 现有步骤删除完成")
-                        
+
                         # 分批插入新步骤（每批5个步骤）
                         batch_size = 5
                         for batch_start in range(0, steps_count, batch_size):
                             batch_end = min(batch_start + batch_size, steps_count)
-                            batch_steps = data['steps'][batch_start:batch_end]
-                            
+                            batch_steps = data["steps"][batch_start:batch_end]
+
                             print(f"[DEBUG] 处理步骤批次 {batch_start+1}-{batch_end}")
-                            
+
                             # 为每个批次创建新的数据库连接，避免长时间占用
                             with self.db.get_connection() as batch_conn:
                                 with batch_conn.cursor() as batch_cursor:
                                     for i, step in enumerate(batch_steps):
                                         step_index = batch_start + i
                                         step_data = step.copy()
-                                        step_data['case_id'] = case_id
-                                        step_data['step_order'] = step_index + 1
-                                        
-                                        print(f"[DEBUG] 插入第{step_index+1}个步骤: step_order={step_data['step_order']}, id={step_data.get('id')}")
-                                        
+                                        step_data["case_id"] = case_id
+                                        step_data["step_order"] = step_index + 1
+
+                                        print(
+                                            f"[DEBUG] 插入第{step_index+1}个步骤: step_order={step_data['step_order']}, id={step_data.get('id')}"
+                                        )
+
                                         # 处理JSON字段
-                                        json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
+                                        json_fields = [
+                                            "pre_processing",
+                                            "post_processing",
+                                            "assertions",
+                                            "variables",
+                                        ]
                                         for field in json_fields:
                                             if field in step_data:
-                                                step_data[field] = json.dumps(step_data[field], ensure_ascii=False)
+                                                step_data[field] = json.dumps(
+                                                    step_data[field], ensure_ascii=False
+                                                )
                                             else:
-                                                step_data[field] = '{}'
-                                        
+                                                step_data[field] = "{}"
+
                                         # 直接插入步骤，避免递归调用
-                                        batch_cursor.execute("""
+                                        batch_cursor.execute(
+                                            """
                                             INSERT INTO test_case_steps (case_id, api_template_id, step_order, name, 
                                                                        enabled, pre_processing, post_processing, assertions, variables,
                                                                        enable_encryption)
                                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                        """, (
-                                            step_data['case_id'],
-                                            step_data.get('api_template_id'),
-                                            step_data.get('step_order', 0),
-                                            step_data.get('name', ''),
-                                            step_data.get('enabled', True),
-                                            step_data.get('pre_processing', '{}'),
-                                            step_data.get('post_processing', '{}'),
-                                            step_data.get('assertions', '{}'),
-                                            step_data.get('variables', '{}'),
-                                            step_data.get('enable_encryption', None)
-                                        ))
-                                    
+                                        """,
+                                            (
+                                                step_data["case_id"],
+                                                step_data.get("api_template_id"),
+                                                step_data.get("step_order", 0),
+                                                step_data.get("name", ""),
+                                                step_data.get("enabled", True),
+                                                step_data.get("pre_processing", "{}"),
+                                                step_data.get("post_processing", "{}"),
+                                                step_data.get("assertions", "{}"),
+                                                step_data.get("variables", "{}"),
+                                                step_data.get(
+                                                    "enable_encryption", None
+                                                ),
+                                            ),
+                                        )
+
                                     # 提交当前批次
                                     batch_conn.commit()
-                                    print(f"[DEBUG] 步骤批次 {batch_start+1}-{batch_end} 提交完成")
-                                    
+                                    print(
+                                        f"[DEBUG] 步骤批次 {batch_start+1}-{batch_end} 提交完成"
+                                    )
+
                                     # 短暂延迟，避免数据库压力
                                     import time
+
                                     time.sleep(0.1)
                     else:
                         # 当步骤数量为0时，也需要删除现有步骤
                         print("[DEBUG] 步骤数量为0，删除现有步骤")
                         with self.db.get_connection() as delete_conn:
                             with delete_conn.cursor() as delete_cursor:
-                                delete_cursor.execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
+                                delete_cursor.execute(
+                                    "DELETE FROM test_case_steps WHERE case_id = %s",
+                                    (case_id,),
+                                )
                                 delete_conn.commit()
                                 print("[DEBUG] 现有步骤删除完成")
 
@@ -347,7 +418,9 @@ class TestCaseService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 先删除步骤
-                    cursor.execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
+                    cursor.execute(
+                        "DELETE FROM test_case_steps WHERE case_id = %s", (case_id,)
+                    )
                     # 再删除用例
                     cursor.execute("DELETE FROM test_cases WHERE id = %s", (case_id,))
                     conn.commit()
@@ -358,62 +431,78 @@ class TestCaseService:
 
     def create_case_step(self, data: Dict[str, Any]) -> int:
         """创建测试用例步骤"""
-        print(f"[DEBUG] create_case_step开始执行: case_id={data.get('case_id')}, step_order={data.get('step_order')}, id={data.get('id')}")
-        
+        print(
+            f"[DEBUG] create_case_step开始执行: case_id={data.get('case_id')}, step_order={data.get('step_order')}, id={data.get('id')}"
+        )
+
         # 检查数据大小，防止过大导致超时
         data_size = len(str(data))
         print(f"[DEBUG] 步骤数据大小: {data_size} 字符")
         if data_size > 100000:  # 超过100KB的数据可能有问题
             print(f"[WARNING] 步骤数据过大: {data_size} 字符，可能影响性能")
-        
+
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 处理JSON字段
-                    json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
+                    json_fields = [
+                        "pre_processing",
+                        "post_processing",
+                        "assertions",
+                        "variables",
+                    ]
                     processed_data = data.copy()
-                    
+
                     # 检查JSON字段大小
                     for field in json_fields:
                         if field in processed_data:
-                            json_str = json.dumps(processed_data[field], ensure_ascii=False)
+                            json_str = json.dumps(
+                                processed_data[field], ensure_ascii=False
+                            )
                             if len(json_str) > 10000:  # 单个JSON字段超过10KB
-                                print(f"[WARNING] JSON字段 '{field}' 过大: {len(json_str)} 字符")
+                                print(
+                                    f"[WARNING] JSON字段 '{field}' 过大: {len(json_str)} 字符"
+                                )
                                 # 截断过大的JSON数据
                                 if len(json_str) > 50000:
                                     processed_data[field] = {}
-                                    json_str = '{}'
+                                    json_str = "{}"
                                     print(f"[WARNING] JSON字段 '{field}' 被截断")
                             processed_data[field] = json_str
                         else:
-                            processed_data[field] = '{}'
+                            processed_data[field] = "{}"
 
-                    print(f"[DEBUG] 准备插入步骤数据，case_id={processed_data['case_id']}")
-                    
-                    cursor.execute("""
+                    print(
+                        f"[DEBUG] 准备插入步骤数据，case_id={processed_data['case_id']}"
+                    )
+
+                    cursor.execute(
+                        """
                         INSERT INTO test_case_steps (case_id, api_template_id, step_order, name, 
                                                    enabled, pre_processing, post_processing, assertions, variables,
                                                    enable_encryption)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        processed_data['case_id'],
-                        processed_data.get('api_template_id'),
-                        processed_data.get('step_order', 0),
-                        processed_data.get('name', ''),
-                        processed_data.get('enabled', True),
-                        processed_data.get('pre_processing', '{}'),
-                        processed_data.get('post_processing', '{}'),
-                        processed_data.get('assertions', '{}'),
-                        processed_data.get('variables', '{}'),
-                        processed_data.get('enable_encryption', None)
-                    ))
-                    
+                    """,
+                        (
+                            processed_data["case_id"],
+                            processed_data.get("api_template_id"),
+                            processed_data.get("step_order", 0),
+                            processed_data.get("name", ""),
+                            processed_data.get("enabled", True),
+                            processed_data.get("pre_processing", "{}"),
+                            processed_data.get("post_processing", "{}"),
+                            processed_data.get("assertions", "{}"),
+                            processed_data.get("variables", "{}"),
+                            processed_data.get("enable_encryption", None),
+                        ),
+                    )
+
                     step_id = cursor.lastrowid
                     print(f"[DEBUG] 步骤插入成功，准备提交事务")
-                    
+
                     # 立即提交事务，避免长时间占用连接
                     conn.commit()
-                    
+
                     print(f"[DEBUG] create_case_step执行完成，步骤ID: {step_id}")
                     return step_id
         except Exception as e:
@@ -432,32 +521,42 @@ class TestCaseService:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     # 处理JSON字段
-                    json_fields = ['pre_processing', 'post_processing', 'assertions', 'variables']
+                    json_fields = [
+                        "pre_processing",
+                        "post_processing",
+                        "assertions",
+                        "variables",
+                    ]
                     processed_data = data.copy()
                     for field in json_fields:
                         if field in processed_data:
-                            processed_data[field] = json.dumps(processed_data[field], ensure_ascii=False)
+                            processed_data[field] = json.dumps(
+                                processed_data[field], ensure_ascii=False
+                            )
                         else:
-                            processed_data[field] = '{}'
+                            processed_data[field] = "{}"
 
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE test_case_steps 
                         SET api_template_id = %s, step_order = %s, name = %s, enabled = %s,
                             pre_processing = %s, post_processing = %s, assertions = %s, variables = %s,
                             enable_encryption = %s
                         WHERE id = %s
-                    """, (
-                        processed_data.get('api_template_id'),
-                        processed_data.get('step_order', 0),
-                        processed_data.get('name', ''),
-                        processed_data.get('enabled', True),
-                        processed_data.get('pre_processing', '{}'),
-                        processed_data.get('post_processing', '{}'),
-                        processed_data.get('assertions', '{}'),
-                        processed_data.get('variables', '{}'),
-                        processed_data.get('enable_encryption', None),
-                        step_id
-                    ))
+                    """,
+                        (
+                            processed_data.get("api_template_id"),
+                            processed_data.get("step_order", 0),
+                            processed_data.get("name", ""),
+                            processed_data.get("enabled", True),
+                            processed_data.get("pre_processing", "{}"),
+                            processed_data.get("post_processing", "{}"),
+                            processed_data.get("assertions", "{}"),
+                            processed_data.get("variables", "{}"),
+                            processed_data.get("enable_encryption", None),
+                            step_id,
+                        ),
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
@@ -469,24 +568,31 @@ class TestCaseService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("DELETE FROM test_case_steps WHERE id = %s", (step_id,))
+                    cursor.execute(
+                        "DELETE FROM test_case_steps WHERE id = %s", (step_id,)
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
             print(f"删除测试用例步骤失败: {e}")
             raise e
 
-    def update_case_steps_order(self, case_id: int, step_orders: List[Dict[str, Any]]) -> bool:
+    def update_case_steps_order(
+        self, case_id: int, step_orders: List[Dict[str, Any]]
+    ) -> bool:
         """更新测试用例步骤顺序"""
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     for step_order in step_orders:
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             UPDATE test_case_steps 
                             SET step_order = %s 
                             WHERE id = %s AND case_id = %s
-                        """, (step_order['order'], step_order['step_id'], case_id))
+                        """,
+                            (step_order["order"], step_order["step_id"], case_id),
+                        )
                     conn.commit()
                     return True
         except Exception as e:
@@ -498,36 +604,44 @@ class TestCaseService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT id, project_id, folder_id, name, description, 
                                environment_id, global_vars, created_by, created_at, updated_at
                         FROM test_cases 
                         ORDER BY created_at DESC
-                    """)
+                    """
+                    )
                     cases = cursor.fetchall()
 
                     # 处理JSON字段
                     for case in cases:
-                        if case.get('global_vars'):
+                        if case.get("global_vars"):
                             try:
-                                case['global_vars'] = json.loads(case['global_vars'])
+                                case["global_vars"] = json.loads(case["global_vars"])
                             except (json.JSONDecodeError, TypeError):
-                                case['global_vars'] = {}
+                                case["global_vars"] = {}
 
                     return cases
         except Exception as e:
             print(f"获取所有测试用例失败: {e}")
             return []
 
-    def check_case_name_exists(self, project_id: int, name: str, folder_id: int = None, exclude_case_id: int = None) -> bool:
+    def check_case_name_exists(
+        self,
+        project_id: int,
+        name: str,
+        folder_id: int = None,
+        exclude_case_id: int = None,
+    ) -> bool:
         """检查同一级目录下测试用例名称是否已存在
-        
+
         Args:
             project_id: 项目ID
             name: 测试用例名称
             folder_id: 文件夹ID（None表示根目录）
             exclude_case_id: 排除的测试用例ID（用于编辑时排除自身）
-            
+
         Returns:
             如果名称已存在返回True，否则返回False
         """
@@ -536,7 +650,7 @@ class TestCaseService:
         print(f"[DEBUG] 用例名称: {name}")
         print(f"[DEBUG] 文件夹ID: {folder_id}")
         print(f"[DEBUG] 排除用例ID: {exclude_case_id}")
-        
+
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -547,7 +661,9 @@ class TestCaseService:
                             WHERE project_id = %s AND name = %s AND folder_id IS NULL
                         """
                         params = [project_id, name]
-                        print(f"[DEBUG] 使用folder_id IS NULL查询: folder_id={folder_id}")
+                        print(
+                            f"[DEBUG] 使用folder_id IS NULL查询: folder_id={folder_id}"
+                        )
                     else:
                         query = """
                             SELECT id FROM test_cases 
@@ -555,63 +671,74 @@ class TestCaseService:
                         """
                         params = [project_id, name, folder_id]
                         print(f"[DEBUG] 使用folder_id = {folder_id}查询")
-                    
+
                     # 添加排除条件（用于编辑时）
                     if exclude_case_id is not None:
                         query += " AND id != %s"
                         params.append(exclude_case_id)
-                        print(f"[DEBUG] 添加排除条件: exclude_case_id={exclude_case_id}")
-                    
+                        print(
+                            f"[DEBUG] 添加排除条件: exclude_case_id={exclude_case_id}"
+                        )
+
                     print(f"[DEBUG] 执行SQL查询: {query}")
                     print(f"[DEBUG] SQL参数: {params}")
-                    
+
                     cursor.execute(query, params)
                     result = cursor.fetchone()
                     exists = result is not None
-                    
+
                     print(f"[DEBUG] 查询结果: {result}")
                     print(f"[DEBUG] 名称是否存在: {exists}")
-                    
+
                     return exists
         except Exception as e:
             print(f"[ERROR] 检查测试用例名称是否存在失败: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
-    def get_cases_by_folder(self, project_id: int, folder_id: int = None) -> List[Dict[str, Any]]:
+    def get_cases_by_folder(
+        self, project_id: int, folder_id: int = None
+    ) -> List[Dict[str, Any]]:
         """根据文件夹获取测试用例列表"""
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
                     if folder_id is None:
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             SELECT id, project_id, folder_id, name, description, 
                                    environment_id, global_vars, created_by, created_at, updated_at,
                                    sort_order
                             FROM test_cases 
                             WHERE project_id = %s AND folder_id IS NULL
                             ORDER BY sort_order, created_at
-                        """, (project_id,))
+                        """,
+                            (project_id,),
+                        )
                     else:
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             SELECT id, project_id, folder_id, name, description, 
                                    environment_id, global_vars, created_by, created_at, updated_at,
                                    sort_order
                             FROM test_cases 
                             WHERE project_id = %s AND folder_id = %s
                             ORDER BY sort_order, created_at
-                        """, (project_id, folder_id))
-                    
+                        """,
+                            (project_id, folder_id),
+                        )
+
                     cases = cursor.fetchall()
 
                     # 处理JSON字段
                     for case in cases:
-                        if case.get('global_vars'):
+                        if case.get("global_vars"):
                             try:
-                                case['global_vars'] = json.loads(case['global_vars'])
+                                case["global_vars"] = json.loads(case["global_vars"])
                             except (json.JSONDecodeError, TypeError):
-                                case['global_vars'] = {}
+                                case["global_vars"] = {}
 
                     return cases
         except Exception as e:
@@ -623,11 +750,14 @@ class TestCaseService:
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE test_cases 
                         SET folder_id = %s, sort_order = %s, updated_at = CURRENT_TIMESTAMP
                         WHERE id = %s
-                    """, (folder_id, order_value, case_id))
+                    """,
+                        (folder_id, order_value, case_id),
+                    )
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:

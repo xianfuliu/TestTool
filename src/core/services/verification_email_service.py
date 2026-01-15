@@ -1,6 +1,7 @@
 """
 验证码邮件发送服务
 """
+
 import smtplib
 import logging
 from email.mime.text import MIMEText
@@ -17,19 +18,19 @@ logger = logging.getLogger(__name__)
 
 class VerificationEmailService:
     """验证码邮件发送服务"""
-    
+
     def __init__(self, config: EmailConfig):
         """初始化邮件服务"""
         self.config = config
-    
+
     def send_verification_code(self, recipient: str, verification_code: str) -> bool:
         """
         发送验证码邮件
-        
+
         Args:
             recipient: 收件人邮箱
             verification_code: 验证码
-            
+
         Returns:
             bool: 发送是否成功
         """
@@ -38,39 +39,39 @@ class VerificationEmailService:
             if not self._validate_config():
                 logger.error("邮件配置不完整")
                 return False
-            
+
             # 验证收件人
             if not recipient:
                 logger.warning("没有收件人，跳过邮件发送")
                 return False
-            
+
             # 创建邮件内容
             subject = self._generate_subject()
             html_content = self._generate_html_content(verification_code)
             text_content = self._generate_text_content(verification_code)
-            
+
             # 发送邮件
             return self._send_email([recipient], subject, html_content, text_content)
-            
+
         except Exception as e:
             logger.error(f"发送验证码邮件失败: {str(e)}")
             return False
-    
+
     def _validate_config(self) -> bool:
         """验证邮件配置"""
-        required_fields = ['smtp_server', 'smtp_port', 'smtp_username', 'sender_email']
-        
+        required_fields = ["smtp_server", "smtp_port", "smtp_username", "sender_email"]
+
         for field in required_fields:
             if not getattr(self.config, field):
                 logger.error(f"邮件配置缺少必要字段: {field}")
                 return False
-        
+
         return True
-    
+
     def _generate_subject(self) -> str:
         """生成邮件主题"""
         return "【测试工具】邮箱验证码"
-    
+
     def _generate_html_content(self, verification_code: str) -> str:
         """生成HTML邮件内容"""
         html = f"""
@@ -154,9 +155,9 @@ class VerificationEmailService:
         </body>
         </html>
         """
-        
+
         return html
-    
+
     def _generate_text_content(self, verification_code: str) -> str:
         """生成纯文本邮件内容"""
         text = f"""
@@ -174,101 +175,103 @@ class VerificationEmailService:
 此邮件由测试工具自动发送，请勿回复。
 发送时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
-        
+
         return text
-    
-    def _send_email(self, recipients: List[str], subject: str, html_content: str, text_content: str) -> bool:
+
+    def _send_email(
+        self, recipients: List[str], subject: str, html_content: str, text_content: str
+    ) -> bool:
         """发送邮件"""
         import os
         import socket
-        
+
         # 保存原始getfqdn函数
         original_getfqdn = socket.getfqdn
-        
-        def patched_getfqdn(name=''):
+
+        def patched_getfqdn(name=""):
             """修补的getfqdn函数，返回固定的localhost"""
-            return 'localhost'
-        
+            return "localhost"
+
         try:
             # 应用猴子补丁
             socket.getfqdn = patched_getfqdn
-            
+
             # 创建邮件消息
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = str(Header(subject, 'utf-8'))
-            
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = str(Header(subject, "utf-8"))
+
             # 修复From头：使用简单的邮箱格式，避免编码问题
-            msg['From'] = self.config.sender_email
-            msg['To'] = ', '.join(recipients)
-            
+            msg["From"] = self.config.sender_email
+            msg["To"] = ", ".join(recipients)
+
             # 添加文本和HTML版本
-            msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
-            msg.attach(MIMEText(html_content, 'html', 'utf-8'))
-            
+            msg.attach(MIMEText(text_content, "plain", "utf-8"))
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+
             # 方法1: 尝试使用简单的SMTP连接
             try:
                 # 直接使用SMTP连接，并显式设置local_hostname参数
                 server = smtplib.SMTP(
-                    self.config.smtp_server, 
-                    self.config.smtp_port, 
-                    local_hostname='localhost',
-                    timeout=30
+                    self.config.smtp_server,
+                    self.config.smtp_port,
+                    local_hostname="localhost",
+                    timeout=30,
                 )
-                
+
                 # 如果配置了TLS，启动STARTTLS
                 if self.config.use_tls:
                     server.starttls()
-                
+
                 # 设置编码处理
                 server.set_debuglevel(0)
-                
+
                 # 登录
                 server.login(self.config.smtp_username, self.config.smtp_password)
-                
+
                 # 发送邮件
                 server.send_message(msg)
-                
+
                 # 关闭连接
                 server.quit()
-                
+
                 logger.info(f"验证码邮件发送成功: {recipients}")
                 return True
-                
+
             except Exception as e:
                 logger.warning(f"方法1失败: {str(e)}，尝试方法2")
-                
+
                 # 方法2: 使用socket连接绕过主机名解析
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(30)
                 sock.connect((self.config.smtp_server, self.config.smtp_port))
-                
+
                 # 创建SMTP对象，使用已有的socket连接
-                server = smtplib.SMTP(local_hostname='localhost')
+                server = smtplib.SMTP(local_hostname="localhost")
                 server.sock = sock
-                
+
                 # 如果配置了TLS，启动STARTTLS
                 if self.config.use_tls:
                     server.starttls()
-                
+
                 # 设置编码处理
                 server.set_debuglevel(0)
-                
+
                 # 登录
                 server.login(self.config.smtp_username, self.config.smtp_password)
-                
+
                 # 发送邮件
                 server.send_message(msg)
-                
+
                 # 关闭连接
                 server.quit()
-                
+
                 logger.info(f"验证码邮件发送成功(方法2): {recipients}")
                 return True
-            
+
         except Exception as e:
             logger.error(f"发送邮件失败: {str(e)}")
             return False
-            
+
         finally:
             # 恢复原始getfqdn函数
             socket.getfqdn = original_getfqdn

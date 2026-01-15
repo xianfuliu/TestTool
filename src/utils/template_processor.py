@@ -31,40 +31,42 @@ class TemplateProcessor:
 
         # 处理自定义格式的日期时间 {dateTime:format}
         if "{dateTime:" in result:
-            matches = re.findall(r'\{dateTime:([^}]+)\}', result)
+            matches = re.findall(r"\{dateTime:([^}]+)\}", result)
             for match in matches:
                 formatted_datetime = datetime.now().strftime(match)
                 result = result.replace(f"{{dateTime:{match}}}", formatted_datetime)
 
         # 处理自定义格式的日期 {date:format}
         if "{date:" in result:
-            matches = re.findall(r'\{date:([^}]+)\}', result)
+            matches = re.findall(r"\{date:([^}]+)\}", result)
             for match in matches:
                 formatted_date = datetime.now().strftime(match)
                 result = result.replace(f"{{date:{match}}}", formatted_date)
 
         # 处理随机数字 {random:digits:N}
         if "{random:digits:" in result:
-            matches = re.findall(r'\{random:digits:(\d+)\}', result)
+            matches = re.findall(r"\{random:digits:(\d+)\}", result)
             for match in matches:
                 length = int(match)
-                random_digits = ''.join(random.choices(string.digits, k=length))
+                random_digits = "".join(random.choices(string.digits, k=length))
                 result = result.replace(f"{{random:digits:{match}}}", random_digits)
 
         # 处理随机字母 {random:string:N}
         if "{random:string:" in result:
-            matches = re.findall(r'\{random:string:(\d+)\}', result)
+            matches = re.findall(r"\{random:string:(\d+)\}", result)
             for match in matches:
                 length = int(match)
-                random_string = ''.join(random.choices(string.ascii_letters, k=length))
+                random_string = "".join(random.choices(string.ascii_letters, k=length))
                 result = result.replace(f"{{random:string:{match}}}", random_string)
 
         # 处理随机字母数字 {random:alphanum:N}
         if "{random:alphanum:" in result:
-            matches = re.findall(r'\{random:alphanum:(\d+)\}', result)
+            matches = re.findall(r"\{random:alphanum:(\d+)\}", result)
             for match in matches:
                 length = int(match)
-                random_alphanum = ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+                random_alphanum = "".join(
+                    random.choices(string.ascii_letters + string.digits, k=length)
+                )
                 result = result.replace(f"{{random:alphanum:{match}}}", random_alphanum)
 
         return result

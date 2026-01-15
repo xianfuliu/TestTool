@@ -1,7 +1,19 @@
 import re
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-                             QPushButton, QGroupBox, QFormLayout, QTextEdit,
-                             QTableWidget, QTableWidgetItem, QScrollArea, QWidget)
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QGroupBox,
+    QFormLayout,
+    QTextEdit,
+    QTableWidget,
+    QTableWidgetItem,
+    QScrollArea,
+    QWidget,
+)
 from src.ui.widgets.toast_tips import Toast
 from src.utils.sql_worker import SQLWorker
 
@@ -80,7 +92,9 @@ class SQLConfigDialog(QDialog):
         sql_layout.setSpacing(8)
 
         self.sql_edit = QTextEdit()
-        self.sql_edit.setPlaceholderText("请输入SELECT查询语句，支持使用{变量名}格式引用变量")
+        self.sql_edit.setPlaceholderText(
+            "请输入SELECT查询语句，支持使用{变量名}格式引用变量"
+        )
         self.sql_edit.setFixedHeight(120)
         sql_layout.addWidget(QLabel("SQL语句:"))
         sql_layout.addWidget(self.sql_edit)
@@ -176,7 +190,9 @@ class SQLConfigDialog(QDialog):
             # 输出字段
             output_fields = self.sql_config.get("output_fields", [])
             for field in output_fields:
-                self.add_output_table_row(field.get("field", ""), field.get("description", ""))
+                self.add_output_table_row(
+                    field.get("field", ""), field.get("description", "")
+                )
 
     def add_output_table_row(self, field_name="", description=""):
         """添加输出字段表格行"""
@@ -307,12 +323,12 @@ class SQLConfigDialog(QDialog):
         test_sql = "SELECT 1 as test_result"
 
         connection_params = {
-            'host': host,
-            'port': port_int,
-            'user': user,
-            'password': password,
-            'database': database,
-            'charset': 'utf8mb4'
+            "host": host,
+            "port": port_int,
+            "user": user,
+            "password": password,
+            "database": database,
+            "charset": "utf8mb4",
         }
 
         # 使用SQLWorker测试连接
@@ -334,7 +350,9 @@ class SQLConfigDialog(QDialog):
         """测试连接失败"""
         self.test_conn_btn.setEnabled(True)
         self.test_conn_btn.setText("测试连接")
-        Toast.critical(self, "失败", f"数据库连接测试失败: {error_message.split(':')[0]}")
+        Toast.critical(
+            self, "失败", f"数据库连接测试失败: {error_message.split(':')[0]}"
+        )
 
     def validate_sql(self):
         """校验SQL语句"""
@@ -345,14 +363,22 @@ class SQLConfigDialog(QDialog):
             return
 
         # 检查是否是SELECT语句
-        if not re.match(r'^\s*SELECT\s', sql, re.IGNORECASE):
+        if not re.match(r"^\s*SELECT\s", sql, re.IGNORECASE):
             Toast.warning(self, "警告", "仅支持SELECT查询语句")
             return
 
         # 检查是否有危险的SQL操作
-        dangerous_keywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE']
+        dangerous_keywords = [
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "DROP",
+            "ALTER",
+            "CREATE",
+            "TRUNCATE",
+        ]
         for keyword in dangerous_keywords:
-            if re.search(r'\b' + keyword + r'\b', sql, re.IGNORECASE):
+            if re.search(r"\b" + keyword + r"\b", sql, re.IGNORECASE):
                 Toast.warning(self, "警告", f"检测到不允许的SQL操作: {keyword}")
                 return
 
@@ -383,7 +409,7 @@ class SQLConfigDialog(QDialog):
             Toast.warning(self, "警告", "请输入SQL语句")
             return
 
-        if not re.match(r'^\s*SELECT\s', sql, re.IGNORECASE):
+        if not re.match(r"^\s*SELECT\s", sql, re.IGNORECASE):
             Toast.warning(self, "警告", "仅支持SELECT查询语句")
             return
 
@@ -394,10 +420,12 @@ class SQLConfigDialog(QDialog):
             desc_item = self.output_table.item(row, 1)
 
             if field_item and field_item.text().strip():
-                output_fields.append({
-                    "field": field_item.text().strip(),
-                    "description": desc_item.text().strip() if desc_item else ""
-                })
+                output_fields.append(
+                    {
+                        "field": field_item.text().strip(),
+                        "description": desc_item.text().strip() if desc_item else "",
+                    }
+                )
 
         if not output_fields:
             Toast.warning(self, "警告", "请至少配置一个输出字段")
@@ -410,10 +438,10 @@ class SQLConfigDialog(QDialog):
                 "port": port_int,
                 "user": user,
                 "password": password,
-                "database": database
+                "database": database,
             },
             "sql": sql,
-            "output_fields": output_fields
+            "output_fields": output_fields,
         }
 
         self.accept()

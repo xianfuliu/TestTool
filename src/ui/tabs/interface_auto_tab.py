@@ -1,7 +1,16 @@
 import time
-from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
-                             QListWidget, QStackedWidget, QListWidgetItem, QLabel,
-                             QHBoxLayout, QVBoxLayout)
+from PyQt5.QtWidgets import (
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QSplitter,
+    QListWidget,
+    QStackedWidget,
+    QListWidgetItem,
+    QLabel,
+    QHBoxLayout,
+    QVBoxLayout,
+)
 from PyQt5.QtCore import Qt
 from src.ui.interface_auto.business_management import BusinessManagement
 from src.ui.interface_auto.api_template import ApiTemplateManager
@@ -25,16 +34,16 @@ class InterfaceAutoTab(QWidget):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        
+
         # 创建占位界面，不立即创建任何子页面
         placeholder_label = QLabel("接口自动化功能加载中...")
         placeholder_label.setAlignment(Qt.AlignCenter)
         placeholder_label.setStyleSheet("color: #666; font-size: 14px; margin: 20px;")
         main_layout.addWidget(placeholder_label)
-        
+
         self.main_layout = main_layout
         self.ui_initialized = True
-        
+
         # 初始化子页面为None，延迟创建
         self.business_management = None
         self.api_template = None
@@ -49,40 +58,60 @@ class InterfaceAutoTab(QWidget):
     def connect_signals(self):
         """连接各个页面的信号"""
         # 检查子页面是否已创建
-        if self.business_management is None or self.api_template is None or self.test_case is None:
+        if (
+            self.business_management is None
+            or self.api_template is None
+            or self.test_case is None
+        ):
             return
-            
+
         # 当业务管理页面数据变化时，刷新接口模板页面的项目列表
-        self.business_management.data_changed.connect(self.api_template.refresh_project_list)
-        
+        self.business_management.data_changed.connect(
+            self.api_template.refresh_project_list
+        )
+
         # 当业务管理页面数据变化时，刷新测试用例管理页面的项目列表
-        self.business_management.data_changed.connect(self.test_case.refresh_project_list)
-        
+        self.business_management.data_changed.connect(
+            self.test_case.refresh_project_list
+        )
+
         # 当业务切换时，刷新接口模板页面的项目列表（根据业务分组ID过滤）
         self.business_management.business_changed.connect(
-            lambda business_group_id: self.api_template.refresh_project_list(business_group_id, show_toast=False)
+            lambda business_group_id: self.api_template.refresh_project_list(
+                business_group_id, show_toast=False
+            )
         )
-        
+
         # 当业务切换时，刷新测试用例管理页面的项目列表（根据业务分组ID过滤）
         self.business_management.business_changed.connect(
-            lambda business_group_id: self.test_case.refresh_project_list(business_group_id, show_toast=False)
+            lambda business_group_id: self.test_case.refresh_project_list(
+                business_group_id, show_toast=False
+            )
         )
-        
+
         # 当业务切换时，刷新定时调度页面的项目列表（根据业务分组ID过滤）
-        self.business_management.business_changed.connect(self.scheduler.on_business_changed)
-        
+        self.business_management.business_changed.connect(
+            self.scheduler.on_business_changed
+        )
+
         # 当业务切换时，刷新测试报告页面的项目列表（根据业务分组ID过滤）
-        self.business_management.business_changed.connect(self.test_report.on_business_changed)
-        
+        self.business_management.business_changed.connect(
+            self.test_report.on_business_changed
+        )
+
         # 当业务切换时，刷新变量管理页面的项目列表（根据业务分组ID过滤）
-        self.business_management.business_changed.connect(self.variable_management.on_business_changed)
-        
+        self.business_management.business_changed.connect(
+            self.variable_management.on_business_changed
+        )
+
         # 当测试用例管理页面请求编辑接口模板时，跳转到接口模板标签页并打开对应模板
-        self.test_case.api_template_edit_requested.connect(self.on_api_template_edit_requested)
-        
+        self.test_case.api_template_edit_requested.connect(
+            self.on_api_template_edit_requested
+        )
+
         # 当定时调度页面请求查看报告详情时，跳转到测试报告标签页并打开对应报告
         self.scheduler.report_detail_requested.connect(self.on_report_detail_requested)
-        
+
         # 当定时调度页面请求跳转到测试报告tab并筛选时，处理跳转和筛选
         self.scheduler.report_tab_requested.connect(self.on_report_tab_requested)
 
@@ -92,10 +121,11 @@ class InterfaceAutoTab(QWidget):
         if not self.ui_initialized:
             print("UI未初始化，跳过delayed_init")
             return
-            
+
         # 检查数据库连接是否可用
         try:
             from config.database import Database
+
             db = Database()
             # 测试数据库连接
             with db.get_connection() as conn:
@@ -107,67 +137,71 @@ class InterfaceAutoTab(QWidget):
             print(f"数据库连接失败: {e}")
             self.database_available = False
             # 显示错误信息
-            error_label = QLabel(f"数据库连接失败: {str(e)}\\n请检查数据库配置或网络连接。")
+            error_label = QLabel(
+                f"数据库连接失败: {str(e)}\\n请检查数据库配置或网络连接。"
+            )
             error_label.setAlignment(Qt.AlignCenter)
             error_label.setStyleSheet("color: red; font-size: 14px; margin: 20px;")
-            
+
             # 清除占位界面
             for i in reversed(range(self.main_layout.count())):
                 self.main_layout.itemAt(i).widget().setParent(None)
-            
+
             self.main_layout.addWidget(error_label)
             return
-        
+
         # 数据库连接成功，创建实际界面
         print("开始创建实际界面")
         self.create_actual_ui()
-        
+
         # 连接信号
         print("开始连接信号")
         self.connect_signals()
-        
+
         # 在所有页面创建和信号连接完成后，延迟触发初始业务切换
         print("开始延迟触发初始业务切换")
         from PyQt5.QtCore import QTimer
+
         QTimer.singleShot(1000, self.delayed_trigger_initial_business_change)
         print("delayed_init方法执行完成")
-    
+
     def delayed_trigger_initial_business_change(self):
         """延迟触发初始业务切换，确保数据已加载完成"""
         print("开始执行delayed_trigger_initial_business_change")
-        
+
         # 检查business_management对象是否存在
-        if not hasattr(self, 'business_management') or not self.business_management:
+        if not hasattr(self, "business_management") or not self.business_management:
             print("business_management对象不存在，跳过业务切换")
             return
-            
+
         # 检查数据是否已加载完成
-        if not hasattr(self.business_management, 'initial_business_ready'):
+        if not hasattr(self.business_management, "initial_business_ready"):
             print("initial_business_ready属性不存在，跳过业务切换")
             return
-            
+
         # 检查是否有业务数据，如果没有业务数据，停止循环检查
-        if not hasattr(self.business_management, 'business_groups'):
+        if not hasattr(self.business_management, "business_groups"):
             print("business_groups属性不存在，跳过业务切换")
             return
-            
+
         # 如果没有业务数据，停止循环检查
         if not self.business_management.business_groups:
             print("没有业务数据，停止循环检查")
             return
-            
+
         # 如果数据尚未准备好，继续延迟检查
         if not self.business_management.initial_business_ready:
             print("数据尚未准备好，继续延迟检查")
             from PyQt5.QtCore import QTimer
+
             QTimer.singleShot(500, self.delayed_trigger_initial_business_change)
             return
-            
+
         print("数据已准备好，开始触发初始业务切换")
-        
+
         # 手动触发初始业务切换
         self.trigger_initial_business_change()
-        
+
         print("delayed_trigger_initial_business_change执行完成")
 
     def create_actual_ui(self):
@@ -175,20 +209,20 @@ class InterfaceAutoTab(QWidget):
         # 清除占位界面
         for i in reversed(range(self.main_layout.count())):
             self.main_layout.itemAt(i).widget().setParent(None)
-        
+
         # 创建主容器
         main_container = QWidget()
         main_layout = QVBoxLayout(main_container)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         main_container.setContentsMargins(0, 0, 0, 0)
-        
+
         # 顶部工具栏（移除展开/收缩按钮，因为每个子页面有自己的按钮）
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         toolbar_layout.addStretch()
-        
+
         # 创建分割器
         self.splitter = QSplitter(Qt.Horizontal)
 
@@ -203,7 +237,8 @@ class InterfaceAutoTab(QWidget):
         # 左侧导航栏
         self.left_nav = QListWidget()
         self.left_nav.setFixedWidth(200)
-        self.left_nav.setStyleSheet("""
+        self.left_nav.setStyleSheet(
+            """
             QListWidget {
                 background-color: #f5f5f5;
                 border: none;
@@ -226,12 +261,18 @@ class InterfaceAutoTab(QWidget):
                 outline: none;
                 border: none;
             }
-        """)
+        """
+        )
 
         # 添加导航项
         nav_items = [
-            "业务管理", "接口模板", "用例管理",
-            "定时调度", "测试报告", "全局工具", "变量管理"
+            "业务管理",
+            "接口模板",
+            "用例管理",
+            "定时调度",
+            "测试报告",
+            "全局工具",
+            "变量管理",
         ]
         for item in nav_items:
             self.left_nav.addItem(item)
@@ -239,10 +280,11 @@ class InterfaceAutoTab(QWidget):
         # 添加展开/收缩图标（在左侧导航栏的右侧边线上）
         self.collapse_button = CollapseButton()
         self.collapse_button.state_changed.connect(self.on_collapse_state_changed)
-        
+
         # 设置图标样式（无背景、无边框）
         self.collapse_button.setFixedSize(24, 24)
-        self.collapse_button.setStyleSheet("""
+        self.collapse_button.setStyleSheet(
+            """
             QPushButton {
                 background-color: transparent;
                 border: none;
@@ -252,12 +294,13 @@ class InterfaceAutoTab(QWidget):
                 background-color: #f0f0f0;
                 border-radius: 12px;
             }
-        """)
+        """
+        )
 
         # 将导航栏和按钮添加到容器
         left_container_layout.addWidget(self.left_nav)
         left_container_layout.addWidget(self.collapse_button)
-        
+
         # 设置按钮紧贴导航栏右侧，无间隙
         left_container_layout.setStretchFactor(self.left_nav, 0)
         left_container_layout.setStretchFactor(self.collapse_button, 0)
@@ -292,7 +335,7 @@ class InterfaceAutoTab(QWidget):
         # 添加到主布局
         main_layout.addLayout(toolbar_layout)
         main_layout.addWidget(self.splitter)
-        
+
         # 将主容器添加到界面
         self.main_layout.addWidget(main_container)
 
@@ -314,44 +357,44 @@ class InterfaceAutoTab(QWidget):
             self.left_nav.hide()
             self.left_container.setFixedWidth(24)  # 只保留按钮宽度
             self.splitter.setSizes([24, 1000])
-    
+
     def on_api_template_edit_requested(self, api_template_id):
         """处理接口模板编辑请求，跳转到接口模板标签页并打开对应模板
-        
+
         Args:
             api_template_id: 接口模板ID
         """
         try:
             # 跳转到接口模板标签页（索引为1）
             self.left_nav.setCurrentRow(1)
-            
+
             # 检查api_template对象是否有open_template_by_id方法
-            if hasattr(self.api_template, 'open_template_by_id'):
+            if hasattr(self.api_template, "open_template_by_id"):
                 # 调用open_template_by_id方法打开对应模板
                 self.api_template.open_template_by_id(api_template_id)
                 print(f"成功跳转到接口模板编辑页面，模板ID: {api_template_id}")
             else:
                 print("ApiTemplateManager类中没有open_template_by_id方法")
-                
+
         except Exception as e:
             print(f"跳转到接口模板编辑页面失败: {str(e)}")
-    
+
     def on_report_detail_requested(self, report_data):
         """处理报告详情请求，跳转到测试报告标签页并打开对应报告
-        
+
         Args:
             report_data: 报告数据字典，包含报告ID等信息
         """
         try:
             print(f"收到报告详情请求，报告数据: {report_data}")
-            
+
             # 跳转到测试报告标签页（索引为4）
             self.left_nav.setCurrentRow(4)
-            
+
             # 检查test_report对象是否有view_report_detail_by_id方法
-            if hasattr(self.test_report, 'view_report_detail_by_id'):
+            if hasattr(self.test_report, "view_report_detail_by_id"):
                 # 从报告数据中获取报告ID
-                report_id = report_data.get('id')
+                report_id = report_data.get("id")
                 if report_id:
                     # 调用view_report_detail_by_id方法打开对应报告
                     self.test_report.view_report_detail_by_id(report_id)
@@ -359,59 +402,69 @@ class InterfaceAutoTab(QWidget):
                     print("报告数据中没有找到ID字段")
             else:
                 print("TestReportManager类中没有view_report_detail_by_id方法")
-                
+
         except Exception as e:
             print(f"跳转到测试报告详情页面失败: {str(e)}")
             Toast.critical(self, "错误", f"打开报告详情失败: {str(e)}")
-    
+
     def on_report_tab_requested(self, jump_data):
         """处理测试报告tab跳转请求，自动筛选调度相关的报告
-        
+
         Args:
             jump_data: 跳转数据字典，包含调度信息和报告列表
         """
-        try:            
+        try:
             # 跳转到测试报告标签页（索引为4）
             self.left_nav.setCurrentRow(4)
-            
+
             # 检查test_report对象是否有filter_by_scheduler方法
-            if hasattr(self.test_report, 'filter_by_scheduler'):
+            if hasattr(self.test_report, "filter_by_scheduler"):
                 # 调用filter_by_scheduler方法进行自动筛选
                 self.test_report.filter_by_scheduler(jump_data)
             else:
                 # 备用方案：直接显示报告列表
                 self._handle_report_tab_fallback(jump_data)
-                
+
         except Exception as e:
             print(f"跳转到测试报告tab并筛选失败: {str(e)}")
             Toast.critical(self, "错误", f"跳转到测试报告tab失败: {str(e)}")
-    
+
     def _handle_report_tab_fallback(self, jump_data):
         """处理测试报告tab跳转的备用方案"""
         try:
             # 如果test_report对象有refresh_report_list方法，刷新列表
-            if hasattr(self.test_report, 'refresh_report_list'):
+            if hasattr(self.test_report, "refresh_report_list"):
                 self.test_report.refresh_report_list()
-                
+
             # 显示提示信息
-            scheduler_name = jump_data.get('scheduler', {}).get('name', '未知')
-            report_count = len(jump_data.get('reports', []))
-            
+            scheduler_name = jump_data.get("scheduler", {}).get("name", "未知")
+            report_count = len(jump_data.get("reports", []))
+
             from src.ui.widgets.toast_tips import Toast
-            Toast.info(self, f"已跳转到测试报告tab，调度 '{scheduler_name}' 共有 {report_count} 条执行记录")
-                
+
+            Toast.info(
+                self,
+                f"已跳转到测试报告tab，调度 '{scheduler_name}' 共有 {report_count} 条执行记录",
+            )
+
         except Exception as e:
             print(f"备用方案处理失败: {str(e)}")
-    
+
     def trigger_initial_business_change(self):
         """在所有页面创建和信号连接完成后，手动触发初始业务切换"""
         print("检查business_management对象和trigger_initial_business_change方法")
-        print(f"business_management对象是否存在: {self.business_management is not None}")
+        print(
+            f"business_management对象是否存在: {self.business_management is not None}"
+        )
         if self.business_management:
             print(f"business_management对象类型: {type(self.business_management)}")
-            print(f"是否有trigger_initial_business_change方法: {hasattr(self.business_management, 'trigger_initial_business_change')}")
-            
-        if self.business_management and hasattr(self.business_management, 'trigger_initial_business_change'):
+            print(
+                f"是否有trigger_initial_business_change方法: {hasattr(self.business_management, 'trigger_initial_business_change')}"
+            )
+
+        if self.business_management and hasattr(
+            self.business_management, "trigger_initial_business_change"
+        ):
             print("开始调用business_management.trigger_initial_business_change()")
             self.business_management.trigger_initial_business_change()
             print("business_management.trigger_initial_business_change()调用完成")
@@ -422,12 +475,14 @@ class InterfaceAutoTab(QWidget):
         """处理导航栏切换事件"""
         # 设置堆叠窗口的当前页面
         self.stacked_widget.setCurrentIndex(index)
-        
+
         # 如果切换到业务管理页面（索引为0），重新检查并更新操作按钮的显示状态
         if index == 0 and self.business_management:
             # 检查business_management是否有更新操作按钮状态的方法
-            if hasattr(self.business_management, 'update_operation_buttons_visibility'):
+            if hasattr(self.business_management, "update_operation_buttons_visibility"):
                 self.business_management.update_operation_buttons_visibility()
-            elif hasattr(self.business_management, 'hide_all_operation_buttons_except_current'):
+            elif hasattr(
+                self.business_management, "hide_all_operation_buttons_except_current"
+            ):
                 # 如果没有专门的更新方法，调用现有的按钮隐藏方法
                 self.business_management.hide_all_operation_buttons_except_current()
