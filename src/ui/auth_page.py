@@ -160,7 +160,7 @@ class AuthPage(QWidget):
                 background-color: white;
             }
             QLineEdit:focus {
-                border-color: #3498db;
+                border-color: #667eea;
             }
             QPushButton {
                 padding: 12px;
@@ -168,11 +168,13 @@ class AuthPage(QWidget):
                 border-radius: 6px;
                 font-size: 14px;
                 font-weight: bold;
-                background-color: #3498db;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #667eea, stop:1 #764ba2);
                 color: white;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #5a6fd8, stop:1 #6a4190);
             }
             QPushButton:disabled {
                 background-color: #bdc3c7;
@@ -187,7 +189,8 @@ class AuthPage(QWidget):
         brand_widget.setStyleSheet(
             """
             QWidget {
-                background-color: #34495e;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                          stop:0 #667eea, stop:1 #764ba2);
             }
         """
         )
@@ -278,13 +281,13 @@ class AuthPage(QWidget):
             QPushButton {
                 background: transparent;
                 border: none;
-                color: #3498db;
+                color: #667eea;
                 text-decoration: underline;
                 font-size: 12px;
                 padding: 5px;
             }
             QPushButton:hover {
-                color: #2980b9;
+                color: #764ba2;
             }
         """
         )
@@ -295,13 +298,13 @@ class AuthPage(QWidget):
             QPushButton {
                 background: transparent;
                 border: none;
-                color: #3498db;
+                color: #667eea;
                 text-decoration: underline;
                 font-size: 12px;
                 padding: 5px;
             }
             QPushButton:hover {
-                color: #2980b9;
+                color: #764ba2;
             }
         """
         )
@@ -364,7 +367,8 @@ class AuthPage(QWidget):
         self.login_btn.setStyleSheet(
             """
             QPushButton {
-                background-color: #27ae60;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #667eea, stop:1 #764ba2);
                 color: white;
                 border: none;
                 border-radius: 6px;
@@ -372,10 +376,12 @@ class AuthPage(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #5a6fd8, stop:1 #6a4190);
             }
             QPushButton:pressed {
-                background-color: #1e8449;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #4f62c6, stop:1 #5f3780);
             }
         """
         )
@@ -535,7 +541,8 @@ class AuthPage(QWidget):
         self.register_btn.setStyleSheet(
             """
             QPushButton {
-                background-color: #27ae60;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #667eea, stop:1 #764ba2);
                 color: white;
                 border: none;
                 border-radius: 6px;
@@ -543,10 +550,12 @@ class AuthPage(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #5a6fd8, stop:1 #6a4190);
             }
             QPushButton:pressed {
-                background-color: #1e8449;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                          stop:0 #4f62c6, stop:1 #5f3780);
             }
         """
         )

@@ -232,33 +232,45 @@ class MainWindow(QMainWindow):
                 color: #666666;
             }
             QTabWidget::pane {
-                border: 1px solid #C2C7CB;
-                background-color: white;
+                border: 1px solid #DCDFE6;
+                border-top: none;
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #f8fafc, stop: 1 #f1f5f9);
+                border-radius: 0 4px 4px 4px;
+                margin-top: -1px; /* 消除pane与tab之间的间隙 */
             }
             QTabWidget::tab-bar {
-                alignment: left;  /* 左对齐 */
+                alignment: left;
+            }
+            QTabBar {
+                border-bottom: 1px solid #E4E7ED;
             }
             QTabBar::tab {
-                background-color: #E1E1E1;
-                border: 1px solid #C4C4C3;
-                padding: 8px 16px;
-                height: 18px;
-                margin-right: 2px;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f8fafc, stop: 1 #f1f5f9);
+                border: 1px solid #DCDFE6;
+                border-bottom: none;
+                padding: 10px 20px;
+                height: 22px;
+                margin-right: 0px;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
                 min-width: 100px;
+                font-weight: 500;
+                font-size: 15px;
+                color: #606266;
             }
             QTabBar::tab:selected {
-                background-color: #4CAF50;
-                color: white;
-                border-color: #4CAF50;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ffffff, stop: 1 #f8fafc);
+                color: #409EFF;
+                border-color: #DCDFE6;
+                border-bottom-color: #ffffff;
             }
             QTabBar::tab:!selected {
-                background-color: #E1E1E1;
-                color: #333333;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f8fafc, stop: 1 #f1f5f9);
+                color: #606266;
             }
             QTabBar::tab:!selected:hover {
-                background-color: #D1D1D1;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #ECF5FF, stop: 1 #f8fafc);
+                color: #409EFF;
             }
             QRadioButton {
                 font-size: 14px;

@@ -240,18 +240,30 @@ class InterfaceAutoTab(QWidget):
         self.left_nav.setStyleSheet(
             """
             QListWidget {
-                background-color: #f5f5f5;
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #f8fafc, stop: 1 #f1f5f9);
                 border: none;
                 font-size: 14px;
+                font-weight: 500;
                 outline: none;
+                border-right: 1px solid #E4E7ED;
             }
             QListWidget::item {
-                padding: 10px;
-                border-bottom: 1px solid #e0e0e0;
+                padding: 16px 20px;
+                border-bottom: 1px solid #F0F2F5;
+                color: #606266;
+                background-color: transparent;
+                font-size: 15px;
+                letter-spacing: 1px;
             }
             QListWidget::item:selected {
-                background-color: #4CAF50;
-                color: white;
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #ECF5FF, stop: 1 #f8fafc);
+                color: #409EFF;
+                border-right: 2px solid #409EFF;
+                border-bottom: 1px solid #F0F2F5;
+            }
+            QListWidget::item:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #F5F7FA, stop: 1 #ECF5FF);
+                color: #409EFF;
             }
             QListWidget::item:focus {
                 outline: none;
@@ -275,7 +287,9 @@ class InterfaceAutoTab(QWidget):
             "变量管理",
         ]
         for item in nav_items:
-            self.left_nav.addItem(item)
+            list_item = QListWidgetItem(item)
+            list_item.setTextAlignment(Qt.AlignCenter)
+            self.left_nav.addItem(list_item)
 
         # 添加展开/收缩图标（在左侧导航栏的右侧边线上）
         self.collapse_button = CollapseButton()

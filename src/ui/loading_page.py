@@ -257,7 +257,7 @@ class LoadingPage(QWidget):
             }
             QProgressBar::chunk {
                 background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                                stop:0 #00E5FF, stop:0.5 #00B0FF, stop:1 #0091EA);
+                                                stop:0 #667eea, stop:1 #764ba2);
                 border-radius: 10px;
                 margin: 2px;
             }
@@ -447,12 +447,10 @@ class LoadingPage(QWidget):
         painter.setPen(Qt.NoPen)
         painter.drawRect(rect)
 
-        # 设置渐变背景
-        gradient = QLinearGradient(0, 0, 0, rect.height())
-        gradient.setColorAt(0, QColor(26, 35, 126))  # #1A237E
-        gradient.setColorAt(0.3, QColor(40, 53, 147))  # #283593
-        gradient.setColorAt(0.7, QColor(48, 63, 159))  # #303F9F
-        gradient.setColorAt(1, QColor(57, 73, 171))  # #3949AB
+        # 使用蓝紫色到深紫色的135度对角线渐变
+        gradient = QLinearGradient(0, 0, rect.width(), rect.height())
+        gradient.setColorAt(0, QColor(102, 126, 234))    # #667eea - 蓝紫色
+        gradient.setColorAt(1, QColor(118, 75, 162))     # #764ba2 - 深紫色
 
         painter.setBrush(QBrush(gradient))
         painter.setPen(Qt.NoPen)

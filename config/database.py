@@ -37,7 +37,7 @@ import re
 
 # 数据库配置
 DATABASE_CONFIG = {
-    "host": "192.168.0.73",
+    "host": "localhost",
     "port": 3306,
     "user": "root",
     "password": "root",
