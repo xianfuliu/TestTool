@@ -226,7 +226,7 @@ class BusinessManagement(QWidget):
 
         # 左侧：树形结构
         left_widget = QWidget()
-        left_widget.setMaximumWidth(350)
+        left_widget.setMaximumWidth(360)
         left_layout = QVBoxLayout(left_widget)
 
         # 当前业务标题和下拉框
@@ -275,7 +275,7 @@ class BusinessManagement(QWidget):
         self.tree_widget.itemExpanded.connect(self.on_tree_item_expanded)
         self.tree_widget.itemCollapsed.connect(self.on_tree_item_collapsed)
         # 设置列宽
-        self.tree_widget.setColumnWidth(0, 180)  # 名称列
+        self.tree_widget.setColumnWidth(0, 220)  # 名称列
         self.tree_widget.setColumnWidth(1, 80)  # 操作列
         # 隐藏表头
         self.tree_widget.setHeaderHidden(True)

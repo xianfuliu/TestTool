@@ -47,7 +47,7 @@ class UnifiedSchedulerService:
 
     def __init__(self):
         self.running = False
-        self.check_interval = 10  # 检查间隔缩短到0.5秒，提高任务响应及时性
+        self.check_interval = 10  # 检查间隔调整为10秒，平衡执行精度和性能
 
         # 服务状态
         self.start_time = None
@@ -64,11 +64,14 @@ class UnifiedSchedulerService:
 
         # 正在执行的调度
         self.active_schedulers: Dict[int, threading.Thread] = {}
+        
+        # 任务执行状态跟踪 - 新增：记录任务的最后执行时间，避免重复执行
+        self.last_execution_times: Dict[int, datetime] = {}  # 调度ID -> 最后执行时间
 
         # 资源监控配置 - 平台级应用优化
         self.max_memory_mb = 2048  # 最大内存使用限制增加到2GB
         self.max_cpu_percent = 90  # 最大CPU使用率限制增加到90%
-        self.memory_check_interval = 15  # 内存检查间隔缩短到15秒，提高监控频率
+        self.memory_check_interval = 60  # 内存检查间隔调整为60秒
         self.last_memory_check = datetime.now()
 
         # 任务执行时间限制
@@ -81,7 +84,7 @@ class UnifiedSchedulerService:
 
         # 任务执行监控
         self.task_start_times: Dict[int, datetime] = {}  # 任务ID -> 开始时间
-        self.task_timeout_check_interval = 30  # 任务超时检查间隔缩短到30秒
+        self.task_timeout_check_interval = 60  # 任务超时检查间隔调整为60秒
         self.last_timeout_check = datetime.now()
 
         # 初始化服务组件
@@ -610,16 +613,26 @@ class UnifiedSchedulerService:
                     f"调度 {scheduler_name} - Cron: {cron_expression}, 下次执行: {next_run}"
                 )
 
+                # 检查是否应该执行任务
+                should_execute = False
+                
                 # 如果下次执行时间早于当前时间，说明需要执行
-                # 扩大时间窗口容错（10秒），避免错过精确执行时间
-                time_window = timedelta(seconds=10)
-                if next_run and (
-                    next_run <= current_time
-                    or (
-                        next_run - current_time <= time_window
-                        and next_run >= current_time - time_window
-                    )
-                ):
+                # 使用精确的时间匹配，避免时间窗口容错导致重复执行
+                if next_run and next_run <= current_time:
+                    # 检查任务是否已经在最近执行过（避免重复执行）
+                    last_execution = self.last_execution_times.get(scheduler_id)
+                    if last_execution:
+                        # 如果任务在最近30秒内执行过，跳过本次执行（针对10秒检查间隔优化）
+                        time_since_last_execution = current_time - last_execution
+                        if time_since_last_execution.total_seconds() < 30:
+                            logger.info(
+                                f"调度 {scheduler_name} (ID: {scheduler_id}) 最近已执行过，跳过本次执行"
+                            )
+                            continue
+                    
+                    should_execute = True
+                
+                if should_execute:
                     logger.info(f"调度 {scheduler_name} (ID: {scheduler_id}) 需要执行")
 
                     # 检查线程池容量
@@ -636,6 +649,9 @@ class UnifiedSchedulerService:
                             )
                         continue
 
+                    # 关键修复：在创建线程前立即记录执行时间，防止重复执行
+                    self.last_execution_times[scheduler_id] = datetime.now()
+                    
                     # 记录任务开始时间
                     self.task_start_times[scheduler_id] = datetime.now()
 
@@ -652,7 +668,7 @@ class UnifiedSchedulerService:
                     self.active_schedulers[scheduler_id] = thread
                     execution_count += 1
 
-                    logger.info(f"调度 {scheduler_name} 执行线程已启动")
+                    logger.info(f"调度 {scheduler_name} 执行线程已启动，已记录执行时间")
 
             if execution_count > 0:
                 logger.info(f"本次检查启动了 {execution_count} 个调度执行线程")
@@ -691,11 +707,26 @@ class UnifiedSchedulerService:
                 if scheduler_id in self.active_schedulers:
                     thread = self.active_schedulers[scheduler_id]
                     if thread and thread.is_alive():
+                        logger.warning(
+                            f"调度 {scheduler_name} (ID: {scheduler_id}) 正在执行中，跳过回溯检查"
+                        )
                         continue
 
-                # 检查过去一段时间内的执行时间
+                # 关键修复：检查任务是否已经在最近执行过
+                last_execution = self.last_execution_times.get(scheduler_id)
+                if last_execution:
+                    time_since_last_execution = current_time - last_execution
+                    if time_since_last_execution.total_seconds() < 60:
+                        logger.info(
+                            f"调度 {scheduler_name} (ID: {scheduler_id}) 最近已执行过，跳过回溯检查"
+                        )
+                        continue
+
+                # 检查过去一段时间内的执行时间（优化：减少检查频率）
                 check_time = past_time
-                while check_time < current_time:
+                found_missed = False
+                
+                while check_time < current_time and not found_missed:
                     # 计算在check_time时的下次执行时间
                     next_run_at_check_time = self.cron_parser.get_next_run(
                         cron_expression, check_time
@@ -716,10 +747,11 @@ class UnifiedSchedulerService:
                                 scheduler, next_run_at_check_time
                             )
                             missed_count += 1
+                            found_missed = True  # 找到一个错过的任务后停止检查
                             break
 
-                    # 移动到下一个检查点（每秒检查一次）
-                    check_time += timedelta(seconds=1)
+                    # 优化：每5秒检查一次，减少计算量
+                    check_time += timedelta(seconds=5)
 
             if missed_count > 0:
                 logger.info(f"回溯检查发现 {missed_count} 个错过的调度任务")
@@ -738,6 +770,9 @@ class UnifiedSchedulerService:
             scheduler_id = scheduler_data["id"]
             scheduler_name = scheduler_data["name"]
 
+            # 关键修复：在创建线程前立即记录执行时间，防止重复执行
+            self.last_execution_times[scheduler_id] = datetime.now()
+            
             # 检查线程池容量
             if len(self.thread_pool) >= self.max_threads:
                 # 线程池满，将任务加入待处理队列
@@ -752,6 +787,9 @@ class UnifiedSchedulerService:
                     )
                 return
 
+            # 记录任务开始时间
+            self.task_start_times[scheduler_id] = datetime.now()
+
             # 创建执行线程
             thread = threading.Thread(
                 target=self._execute_missed_scheduler_thread,
@@ -765,7 +803,7 @@ class UnifiedSchedulerService:
             self.active_schedulers[scheduler_id] = thread
 
             logger.info(
-                f"执行错过的调度 {scheduler_name} (ID: {scheduler_id}), 原应执行时间: {missed_time}"
+                f"执行错过的调度 {scheduler_name} (ID: {scheduler_id}), 原应执行时间: {missed_time}, 已记录执行时间"
             )
 
         except Exception as e:

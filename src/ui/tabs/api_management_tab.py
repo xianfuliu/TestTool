@@ -17,9 +17,12 @@ from PyQt5.QtWidgets import (
     QFrame,
     QProgressBar,
     QSplitter,
+    QScrollArea,
 )
 from PyQt5.QtCore import QTimer, pyqtSignal, Qt
 from PyQt5.QtGui import QFont
+
+from src.ui.widgets.toast_tips import Toast
 
 logger = logging.getLogger(__name__)
 
@@ -427,7 +430,7 @@ class ApiManagementTab(QWidget):
 
     def create_link_panel(self):
         """创建链接面板"""
-        panel = QGroupBox("快速访问")
+        panel = QGroupBox("API文档区域")
         panel.setStyleSheet(
             """
             QGroupBox {
@@ -452,6 +455,10 @@ class ApiManagementTab(QWidget):
         # API文档链接
         api_doc_frame = self.create_link_frame("📚 API文档", "http://localhost:-")
         layout.addWidget(api_doc_frame)
+
+        # 已配置的URL路由展示
+        routes_frame = self.create_routes_frame()
+        layout.addWidget(routes_frame)
 
         layout.addStretch()
 
@@ -499,6 +506,166 @@ class ApiManagementTab(QWidget):
         elif title == "👥 用户管理":
             self.user_label = url_label
             self.user_template = url_template
+
+        return frame
+
+    def create_routes_frame(self):
+        """创建已配置URL路由展示框架"""
+        frame = QFrame()
+        frame.setFrameStyle(QFrame.StyledPanel)
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setSpacing(8)
+
+        # 标题
+        title_label = QLabel("📋 已配置的URL路由")
+        title_label.setFont(QFont("Arial", 10, QFont.Bold))
+        frame_layout.addWidget(title_label)
+
+        # 创建滚动区域用于显示路由列表
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMaximumHeight(200)
+        scroll_area.setStyleSheet(
+            """
+            QScrollArea {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: #f8f9fa;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: #f8f9fa;
+            }
+        """
+        )
+
+        # 路由列表容器
+        routes_widget = QWidget()
+        routes_layout = QVBoxLayout(routes_widget)
+        routes_layout.setSpacing(6)
+        routes_layout.setContentsMargins(8, 8, 8, 8)
+
+        # 获取并显示已配置的路由
+        self.display_configured_routes(routes_layout)
+
+        scroll_area.setWidget(routes_widget)
+        frame_layout.addWidget(scroll_area)
+
+        return frame
+
+    def display_configured_routes(self, layout):
+        """显示已配置的路由信息"""
+        # 定义当前支持的API路由
+        api_routes = [
+            {
+                "method": "GET",
+                "path": "/api/v1/health",
+                "description": "健康检查接口",
+                "tags": ["健康检查"]
+            },
+            {
+                "method": "GET", 
+                "path": "/api/v1/health/system",
+                "description": "系统信息接口",
+                "tags": ["健康检查", "系统信息"]
+            },
+            {
+                "method": "GET",
+                "path": "/api/v1/system/status", 
+                "description": "系统状态接口",
+                "tags": ["健康检查", "系统状态"]
+            },
+            {
+                "method": "POST",
+                "path": "/api/v1/data/data-sync",
+                "description": "数据同步接口", 
+                "tags": ["数据同步"]
+            }
+        ]
+
+        # 显示路由信息
+        for route in api_routes:
+            route_frame = self.create_route_item_frame(route)
+            layout.addWidget(route_frame)
+
+    def create_route_item_frame(self, route):
+        """创建单个路由项框架"""
+        frame = QFrame()
+        frame.setFrameStyle(QFrame.StyledPanel)
+        frame.setStyleSheet(
+            """
+            QFrame {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, 
+                                          stop: 0 #e3f2fd, stop: 1 #f3e5f5);
+                border: 1px solid #bbdefb;
+                border-radius: 6px;
+                padding: 8px;
+            }
+        """
+        )
+
+        route_layout = QVBoxLayout(frame)
+        route_layout.setSpacing(4)
+
+        # 方法标签
+        method_label = QLabel(f"{route['method']}")
+        method_label.setStyleSheet(
+            f"""
+            QLabel {{
+                color: {'#4CAF50' if route['method'] == 'GET' else '#2196F3'};
+                font-weight: bold;
+                font-size: 10px;
+                background-color: {'#e8f5e8' if route['method'] == 'GET' else '#e3f2fd'};
+                padding: 2px 6px;
+                border-radius: 3px;
+                max-width: 40px;
+            }}
+        """
+        )
+
+        # 路径和描述
+        path_label = QLabel(f"{route['path']}")
+        path_label.setStyleSheet(
+            """
+            QLabel {
+                color: #333;
+                font-family: 'Courier New', monospace;
+                font-size: 9px;
+                font-weight: bold;
+            }
+        """
+        )
+
+        desc_label = QLabel(route['description'])
+        desc_label.setStyleSheet(
+            """
+            QLabel {
+                color: #666;
+                font-size: 9px;
+            }
+        """
+        )
+
+        # 标签显示
+        tags_label = QLabel(f"标签: {', '.join(route['tags'])}")
+        tags_label.setStyleSheet(
+            """
+            QLabel {
+                color: #888;
+                font-size: 8px;
+                font-style: italic;
+            }
+        """
+        )
+
+        # 水平布局：方法 + 路径
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(method_label)
+        header_layout.addWidget(path_label)
+        header_layout.addStretch()
+
+        route_layout.addLayout(header_layout)
+        route_layout.addWidget(desc_label)
+        route_layout.addWidget(tags_label)
 
         return frame
 
@@ -578,21 +745,21 @@ class ApiManagementTab(QWidget):
 
         if self.api_service.start(port):
             self.log_text.append(f"[INFO] 🚀 FastAPI服务启动成功，端口: {port}")
-            QMessageBox.information(
+            Toast.information(
                 self, "成功", f"FastAPI服务启动成功！\n端口: {port}"
             )
         else:
             self.log_text.append("[ERROR] ❌ FastAPI服务启动失败")
-            QMessageBox.warning(self, "错误", "FastAPI服务启动失败")
+            Toast.warning(self, "错误", "FastAPI服务启动失败")
 
     def stop_service(self):
         """停止服务"""
         if self.api_service.stop():
             self.log_text.append("[INFO] ⏹️ FastAPI服务已停止")
-            QMessageBox.information(self, "成功", "FastAPI服务已停止")
+            Toast.information(self, "成功", "FastAPI服务已停止")
         else:
             self.log_text.append("[ERROR] ❌ FastAPI服务停止失败")
-            QMessageBox.warning(self, "错误", "FastAPI服务停止失败")
+            Toast.warning(self, "错误", "FastAPI服务停止失败")
 
     def restart_service(self):
         """重启服务"""
@@ -600,12 +767,12 @@ class ApiManagementTab(QWidget):
 
         if self.api_service.restart(port):
             self.log_text.append(f"[INFO] 🔄 FastAPI服务重启成功，端口: {port}")
-            QMessageBox.information(
+            Toast.information(
                 self, "成功", f"FastAPI服务重启成功！\n端口: {port}"
             )
         else:
             self.log_text.append("[ERROR] ❌ FastAPI服务重启失败")
-            QMessageBox.warning(self, "错误", "FastAPI服务重启失败")
+            Toast.warning(self, "错误", "FastAPI服务重启失败")
 
     def closeEvent(self, event):
         """关闭事件，确保服务停止"""

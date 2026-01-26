@@ -826,6 +826,11 @@ class TestCaseExecutor:
             )
             self._log_message(
                 "DEBUG",
+                f"请求头: {json.dumps(request_data['headers'], ensure_ascii=False)}",
+                step_index,
+            )
+            self._log_message(
+                "DEBUG",
                 f"请求体: {json.dumps(request_data['body'], ensure_ascii=False)}",
                 step_index,
             )
@@ -919,6 +924,13 @@ class TestCaseExecutor:
                     )
 
                 if response["success"]:
+                    # 记录响应头信息
+                    self._log_message(
+                        "DEBUG",
+                        f"响应头: {json.dumps(response.get('headers', {}), ensure_ascii=False)}",
+                        step_index,
+                    )
+                    
                     # 检查是否为加解密请求，优先打印解密后的响应体
                     if response.get("decrypted_body"):
                         try:
@@ -961,6 +973,13 @@ class TestCaseExecutor:
                     self._log_message(
                         "ERROR",
                         f"请求失败: {json.dumps({'error': response.get('error', '未知错误'), 'status_code': response.get('status_code', 0)}, ensure_ascii=False)}",
+                        step_index,
+                    )
+                    
+                    # 记录失败请求的响应头信息
+                    self._log_message(
+                        "DEBUG",
+                        f"失败响应头: {json.dumps(response.get('headers', {}), ensure_ascii=False)}",
                         step_index,
                     )
 
@@ -1466,7 +1485,7 @@ class TestCaseExecutor:
                     )
             else:
                 # 如果没有解密后的响应体，使用原始响应数据
-                response_data_for_extraction = response_data.get("response_data", {})
+                response_data_for_extraction = response_data.get("body", response_data.get("response_data", {}))
 
             # 处理每个提取器
             for extraction in extractions:
@@ -1570,7 +1589,7 @@ class TestCaseExecutor:
                     )
             else:
                 # 如果没有解密后的响应体，使用原始响应数据
-                response_data_for_extraction = response_data.get("response_data", {})
+                response_data_for_extraction = response_data.get("body", response_data.get("response_data", {}))
 
             # 处理每个提取器
             for var_name, extractor_config in extractors.items():
@@ -1683,7 +1702,7 @@ class TestCaseExecutor:
                     )
             else:
                 # 如果没有解密后的响应体，使用原始响应数据
-                response_data_for_extraction = response_data.get("response_data", {})
+                response_data_for_extraction = response_data.get("body", response_data.get("response_data", {}))
 
             # 处理每个变量提取
             for var_name, json_path in variables.items():

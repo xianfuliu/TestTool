@@ -1,89 +1,12 @@
-2026-01-22 15:53:26,833 - src.core.services.token_service - INFO - 每周清理任务工作线程启动
-2026-01-22 15:53:26,833 - src.core.services.token_service - INFO - 每周清理任务已启动
-2026-01-22 15:53:26,839 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2026-01-22 15:53:26,842 - src.core.services.email_config_service - INFO - 邮件配置服务数据库连接成功
-2026-01-22 15:53:26,848 - AuthPage - INFO - 验证码邮件服务初始化成功
-2026-01-22 15:53:26,874 - AuthPage - INFO - 成功加载 2 条业务线数据，默认选择第一个选项
-2026-01-22 15:53:27,839 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2026-01-22 15:53:27,897 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2026-01-22 15:53:30,305 - src.core.services.session_service - INFO - Session加载成功: 用户 admin
-2026-01-22 15:53:30,308 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
-2026-01-22 15:53:30,372 - UnifiedSchedulerService - INFO - 服务组件初始化成功
-2026-01-22 15:53:30,387 - UnifiedSchedulerService - INFO - 成功获取分布式锁
-2026-01-22 15:53:30,387 - UnifiedSchedulerService - INFO - 统一调度服务已启动，检查间隔: 10秒
-2026-01-22 15:53:30,388 - UnifiedSchedulerService - INFO - 服务启动时间: 2026-01-22 15:53:30.387714
-2026-01-22 15:53:30,388 - UnifiedSchedulerService - INFO - 当前实例持有调度锁
-2026-01-22 15:53:30,389 - UnifiedSchedulerService - INFO - 服务主循环开始运行
-2026-01-22 15:53:30,389 - UnifiedSchedulerService - INFO - 服务主循环线程已启动
-2026-01-22 15:53:30,389 - UnifiedSchedulerService - INFO - 当前时间: 2026-01-22 15:53:30.389238, 等待 30 秒到整分钟再开始运行...
-2026-01-22 15:53:40,465 - UnifiedSchedulerService - INFO - 等待倒计时: 20秒
-2026-01-22 15:53:50,530 - UnifiedSchedulerService - INFO - 等待倒计时: 10秒
-2026-01-22 15:53:55,583 - UnifiedSchedulerService - INFO - 等待倒计时: 5秒
-2026-01-22 15:53:56,590 - UnifiedSchedulerService - INFO - 等待倒计时: 4秒
-2026-01-22 15:53:57,606 - UnifiedSchedulerService - INFO - 等待倒计时: 3秒
-2026-01-22 15:53:58,611 - UnifiedSchedulerService - INFO - 等待倒计时: 2秒
-2026-01-22 15:53:59,625 - UnifiedSchedulerService - INFO - 等待倒计时: 1秒
-2026-01-22 15:54:00,002 - UnifiedSchedulerService - INFO - 整分钟启动时间: 2026-01-22 15:54:00.002623
-2026-01-22 15:54:00,002 - UnifiedSchedulerService - INFO - === 第 1 次检查 ===
-2026-01-22 15:54:00,137 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:54:00.137198, 启用的调度数量: 0
-2026-01-22 15:54:00,138 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:54:00,138 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 1, 错误次数: 0, 运行时长: 30秒
-2026-01-22 15:54:00,138 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:54:10,151 - UnifiedSchedulerService - INFO - === 第 2 次检查 ===
-2026-01-22 15:54:10,157 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:54:10.157773, 启用的调度数量: 0
-2026-01-22 15:54:10,159 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:54:10,159 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 2, 错误次数: 0, 运行时长: 40秒
-2026-01-22 15:54:10,159 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:54:20,267 - UnifiedSchedulerService - INFO - === 第 3 次检查 ===
-2026-01-22 15:54:20,384 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:54:20.384765, 启用的调度数量: 0
-2026-01-22 15:54:20,384 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:54:20,384 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 3, 错误次数: 0, 运行时长: 50秒
-2026-01-22 15:54:20,384 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:54:30,435 - UnifiedSchedulerService - INFO - === 第 4 次检查 ===
-2026-01-22 15:54:30,440 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:54:30.440057, 启用的调度数量: 0
-2026-01-22 15:54:30,440 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:54:30,441 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 4, 错误次数: 0, 运行时长: 60秒
-2026-01-22 15:54:30,441 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:54:40,555 - UnifiedSchedulerService - INFO - === 第 5 次检查 ===
-2026-01-22 15:54:41,583 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:54:41.583641, 启用的调度数量: 0
-2026-01-22 15:54:43,147 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:54:43,172 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 5, 错误次数: 0, 运行时长: 73秒
-2026-01-22 15:54:43,234 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:54:53,307 - UnifiedSchedulerService - INFO - === 第 6 次检查 ===
-2026-01-22 15:54:53,501 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:54:53.501254, 启用的调度数量: 0
-2026-01-22 15:54:53,520 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:54:53,523 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 6, 错误次数: 0, 运行时长: 83秒
-2026-01-22 15:54:53,525 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 6, 距离上次续期: 54秒, 需要: 120秒
-2026-01-22 15:54:53,567 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:55:03,631 - UnifiedSchedulerService - INFO - === 第 7 次检查 ===
-2026-01-22 15:55:03,751 - UnifiedSchedulerService - INFO - 资源监控 - 内存: 175.9MB, CPU: 0.0%, 活跃线程: 0
-2026-01-22 15:55:03,798 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:55:03.798967, 启用的调度数量: 0
-2026-01-22 15:55:03,800 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:55:03,800 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 7, 错误次数: 0, 运行时长: 93秒
-2026-01-22 15:55:03,803 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:55:13,819 - UnifiedSchedulerService - INFO - === 第 8 次检查 ===
-2026-01-22 15:55:13,824 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:55:13.824962, 启用的调度数量: 0
-2026-01-22 15:55:13,824 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:55:13,825 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 8, 错误次数: 0, 运行时长: 103秒
-2026-01-22 15:55:13,826 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:55:23,880 - UnifiedSchedulerService - INFO - === 第 9 次检查 ===
-2026-01-22 15:55:24,001 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:55:24.001711, 启用的调度数量: 0
-2026-01-22 15:55:24,003 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:55:24,003 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 9, 错误次数: 0, 运行时长: 114秒
-2026-01-22 15:55:24,003 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:55:34,054 - UnifiedSchedulerService - INFO - === 第 10 次检查 ===
-2026-01-22 15:55:34,058 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:55:34.058362, 启用的调度数量: 0
-2026-01-22 15:55:34,058 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:55:34,059 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 10, 错误次数: 0, 运行时长: 124秒
-2026-01-22 15:55:34,059 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:55:44,064 - UnifiedSchedulerService - INFO - === 第 11 次检查 ===
-2026-01-22 15:55:44,170 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:55:44.170290, 启用的调度数量: 0
-2026-01-22 15:55:44,171 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:55:44,171 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 11, 错误次数: 0, 运行时长: 134秒
-2026-01-22 15:55:44,171 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
-2026-01-22 15:55:54,205 - UnifiedSchedulerService - INFO - === 第 12 次检查 ===
-2026-01-22 15:55:54,224 - UnifiedSchedulerService - INFO - 检查时间: 2026-01-22 15:55:54.224654, 启用的调度数量: 0
-2026-01-22 15:55:54,225 - UnifiedSchedulerService - INFO - 本次检查没有需要执行的调度
-2026-01-22 15:55:54,225 - UnifiedSchedulerService - INFO - 服务持续运行中 - 检查次数: 12, 错误次数: 0, 运行时长: 144秒
-2026-01-22 15:55:54,226 - UnifiedSchedulerService - INFO - 续期检查 - 循环次数: 12, 距离上次续期: 114秒, 需要: 120秒
-2026-01-22 15:55:54,226 - UnifiedSchedulerService - INFO - 等待 10 秒后再次检查...
+2026-01-26 10:37:22,543 - src.core.services.token_service - INFO - 每周清理任务工作线程启动
+2026-01-26 10:37:22,543 - src.core.services.token_service - INFO - 每周清理任务已启动
+2026-01-26 10:37:22,549 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2026-01-26 10:37:22,562 - src.core.services.email_config_service - INFO - 邮件配置服务数据库连接成功
+2026-01-26 10:37:22,571 - AuthPage - INFO - 验证码邮件服务初始化成功
+2026-01-26 10:37:22,604 - AuthPage - INFO - 成功加载 2 条业务线数据，默认选择第一个选项
+2026-01-26 10:37:23,366 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2026-01-26 10:37:23,405 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2026-01-26 10:37:26,050 - src.core.services.session_service - INFO - Session加载成功: 用户 admin
+2026-01-26 10:37:26,052 - src.core.services.token_service - INFO - 会话验证成功: 用户ID 1
+2026-01-26 10:37:26,157 - UnifiedSchedulerService - INFO - 服务组件初始化成功
+2026-01-26 10:37:26,167 - UnifiedSchedulerService - WARNING - 检测到已有调度服务实例在运行，当前实例将作为只读客户端运行

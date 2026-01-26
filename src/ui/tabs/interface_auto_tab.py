@@ -52,7 +52,6 @@ class InterfaceAutoTab(QWidget):
         self.test_report = None
         self.global_tools = None
         self.variable_management = None
-        self.left_nav = None
         self.stacked_widget = None
 
     def connect_signals(self):
@@ -223,103 +222,7 @@ class InterfaceAutoTab(QWidget):
 
         toolbar_layout.addStretch()
 
-        # 创建分割器
-        self.splitter = QSplitter(Qt.Horizontal)
-
-        # 左侧导航栏容器（包含导航栏和展开/收缩图标）
-        self.left_container = QWidget()
-        self.left_container.setFixedWidth(224)  # 200px导航栏 + 24px按钮
-        left_container_layout = QHBoxLayout(self.left_container)
-        left_container_layout.setContentsMargins(0, 0, 0, 0)
-        left_container_layout.setSpacing(0)
-        left_container_layout.setAlignment(Qt.AlignLeft)
-
-        # 左侧导航栏
-        self.left_nav = QListWidget()
-        self.left_nav.setFixedWidth(200)
-        self.left_nav.setStyleSheet(
-            """
-            QListWidget {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #f8fafc, stop: 1 #f1f5f9);
-                border: none;
-                font-size: 14px;
-                font-weight: 500;
-                outline: none;
-                border-right: 1px solid #E4E7ED;
-            }
-            QListWidget::item {
-                padding: 16px 20px;
-                border-bottom: 1px solid #F0F2F5;
-                color: #606266;
-                background-color: transparent;
-                font-size: 15px;
-                letter-spacing: 1px;
-            }
-            QListWidget::item:selected {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #ECF5FF, stop: 1 #f8fafc);
-                color: #409EFF;
-                border-right: 2px solid #409EFF;
-                border-bottom: 1px solid #F0F2F5;
-            }
-            QListWidget::item:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #F5F7FA, stop: 1 #ECF5FF);
-                color: #409EFF;
-            }
-            QListWidget::item:focus {
-                outline: none;
-                border: none;
-            }
-            QListWidget::item:selected:focus {
-                outline: none;
-                border: none;
-            }
-        """
-        )
-
-        # 添加导航项
-        nav_items = [
-            "业务管理",
-            "接口模板",
-            "用例管理",
-            "定时调度",
-            "测试报告",
-            "全局工具",
-            "变量管理",
-        ]
-        for item in nav_items:
-            list_item = QListWidgetItem(item)
-            list_item.setTextAlignment(Qt.AlignCenter)
-            self.left_nav.addItem(list_item)
-
-        # 添加展开/收缩图标（在左侧导航栏的右侧边线上）
-        self.collapse_button = CollapseButton()
-        self.collapse_button.state_changed.connect(self.on_collapse_state_changed)
-
-        # 设置图标样式（无背景、无边框）
-        self.collapse_button.setFixedSize(24, 24)
-        self.collapse_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                margin: 0px;
-            }
-            QPushButton:hover {
-                background-color: #f0f0f0;
-                border-radius: 12px;
-            }
-        """
-        )
-
-        # 将导航栏和按钮添加到容器
-        left_container_layout.addWidget(self.left_nav)
-        left_container_layout.addWidget(self.collapse_button)
-
-        # 设置按钮紧贴导航栏右侧，无间隙
-        left_container_layout.setStretchFactor(self.left_nav, 0)
-        left_container_layout.setStretchFactor(self.collapse_button, 0)
-
-        # 右侧堆叠窗口
+        # 创建堆叠窗口
         self.stacked_widget = QStackedWidget()
         self.stacked_widget.setContentsMargins(0, 0, 0, 0)  # 移除边距
 
@@ -341,36 +244,23 @@ class InterfaceAutoTab(QWidget):
         self.stacked_widget.addWidget(self.global_tools)
         self.stacked_widget.addWidget(self.variable_management)
 
-        # 添加到分割器
-        self.splitter.addWidget(self.left_container)
-        self.splitter.addWidget(self.stacked_widget)
-        self.splitter.setSizes([224, 1000])  # 200px导航栏 + 24px按钮
-
         # 添加到主布局
         main_layout.addLayout(toolbar_layout)
-        main_layout.addWidget(self.splitter)
+        main_layout.addWidget(self.stacked_widget)
 
         # 将主容器添加到界面
         self.main_layout.addWidget(main_container)
 
-        # 连接信号
-        self.left_nav.currentRowChanged.connect(self.on_nav_changed)
-
-        # 默认选择第一个
-        self.left_nav.setCurrentRow(0)
+        # 默认显示第一个页面
+        self.stacked_widget.setCurrentIndex(0)
+        
+        # 初始化当前页面索引
+        self.current_page_index = 0
 
     def on_collapse_state_changed(self, is_expanded):
-        """处理展开/收缩状态变化"""
-        if is_expanded:
-            # 展开状态：显示左侧导航栏，容器宽度为224px
-            self.left_nav.show()
-            self.left_container.setFixedWidth(224)  # 200px导航栏 + 24px按钮
-            self.splitter.setSizes([224, 1000])
-        else:
-            # 收起状态：隐藏左侧导航栏内容，容器宽度收缩到24px
-            self.left_nav.hide()
-            self.left_container.setFixedWidth(24)  # 只保留按钮宽度
-            self.splitter.setSizes([24, 1000])
+        """处理展开/收缩状态变化（已弃用，保留方法签名）"""
+        # 由于移除了左侧导航栏，此方法不再需要
+        pass
 
     def on_api_template_edit_requested(self, api_template_id):
         """处理接口模板编辑请求，跳转到接口模板标签页并打开对应模板
@@ -380,7 +270,7 @@ class InterfaceAutoTab(QWidget):
         """
         try:
             # 跳转到接口模板标签页（索引为1）
-            self.left_nav.setCurrentRow(1)
+            self.stacked_widget.setCurrentIndex(1)
 
             # 检查api_template对象是否有open_template_by_id方法
             if hasattr(self.api_template, "open_template_by_id"):
@@ -403,7 +293,7 @@ class InterfaceAutoTab(QWidget):
             print(f"收到报告详情请求，报告数据: {report_data}")
 
             # 跳转到测试报告标签页（索引为4）
-            self.left_nav.setCurrentRow(4)
+            self.stacked_widget.setCurrentIndex(4)
 
             # 检查test_report对象是否有view_report_detail_by_id方法
             if hasattr(self.test_report, "view_report_detail_by_id"):
@@ -429,7 +319,7 @@ class InterfaceAutoTab(QWidget):
         """
         try:
             # 跳转到测试报告标签页（索引为4）
-            self.left_nav.setCurrentRow(4)
+            self.stacked_widget.setCurrentIndex(4)
 
             # 检查test_report对象是否有filter_by_scheduler方法
             if hasattr(self.test_report, "filter_by_scheduler"):
@@ -486,17 +376,46 @@ class InterfaceAutoTab(QWidget):
             print("无法调用trigger_initial_business_change方法，条件不满足")
 
     def on_nav_changed(self, index):
-        """处理导航栏切换事件"""
-        # 设置堆叠窗口的当前页面
-        self.stacked_widget.setCurrentIndex(index)
+        """处理导航栏切换事件（已弃用，保留方法签名）"""
+        # 由于移除了左侧导航栏，此方法不再需要
+        # 现在使用switch_to_subpage方法来切换页面
+        pass
 
-        # 如果切换到业务管理页面（索引为0），重新检查并更新操作按钮的显示状态
-        if index == 0 and self.business_management:
-            # 检查business_management是否有更新操作按钮状态的方法
-            if hasattr(self.business_management, "update_operation_buttons_visibility"):
-                self.business_management.update_operation_buttons_visibility()
-            elif hasattr(
-                self.business_management, "hide_all_operation_buttons_except_current"
-            ):
-                # 如果没有专门的更新方法，调用现有的按钮隐藏方法
-                self.business_management.hide_all_operation_buttons_except_current()
+    def switch_to_subpage(self, subpage_name):
+        """切换到指定的子页面
+        
+        Args:
+            subpage_name: 子页面名称，如"业务管理"、"接口模板"等
+        """
+        # 检查是否已经初始化了实际界面
+        if not hasattr(self, 'stacked_widget') or self.stacked_widget is None:
+            print("接口自动化tab尚未初始化，无法切换子页面")
+            return
+        
+        # 映射子页面名称到索引
+        subpage_mapping = {
+            "业务管理": 0,
+            "接口模板": 1,
+            "用例管理": 2,
+            "定时调度": 3,
+            "测试报告": 4,
+            "全局工具": 5,
+            "变量管理": 6
+        }
+        
+        if subpage_name in subpage_mapping:
+            subpage_index = subpage_mapping[subpage_name]
+            # 切换到对应的子页面
+            self.stacked_widget.setCurrentIndex(subpage_index)
+            self.current_page_index = subpage_index
+            print(f"已切换到接口自动化tab的{subpage_name}页面")
+            
+            # 如果切换到业务管理页面，更新操作按钮状态
+            if subpage_index == 0 and self.business_management:
+                if hasattr(self.business_management, "update_operation_buttons_visibility"):
+                    self.business_management.update_operation_buttons_visibility()
+        else:
+            print(f"未知的子页面名称: {subpage_name}")
+            # 默认显示第一个页面
+            self.stacked_widget.setCurrentIndex(0)
+            self.current_page_index = 0

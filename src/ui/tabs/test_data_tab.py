@@ -67,6 +67,16 @@ class TestDataTab(QWidget):
 
         # 创建主容器
         main_container = QWidget()
+        main_container.setStyleSheet(
+            """
+            QWidget {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f8fafc, stop: 1 #f1f5f9);
+            }
+            QLineEdit, QComboBox, QTextEdit, QSpinBox {
+                background-color: white;
+            }
+        """
+        )
         main_layout = QHBoxLayout(main_container)
         main_layout.setSpacing(8)
         main_layout.setContentsMargins(15, 15, 15, 15)
@@ -100,6 +110,16 @@ class TestDataTab(QWidget):
         )
 
         preview_container = QWidget()
+        preview_container.setStyleSheet(
+            """
+            QWidget {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f8fafc, stop: 1 #f1f5f9);
+            }
+            QLineEdit, QComboBox, QTextEdit, QSpinBox {
+                background-color: white;
+            }
+        """
+        )
         preview_layout = QHBoxLayout(preview_container)
         preview_layout.setSpacing(8)  # 设置第三栏和第四栏之间的间隙为8px
         preview_layout.setContentsMargins(0, 0, 0, 0)

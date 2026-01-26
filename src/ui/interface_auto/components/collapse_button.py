@@ -28,17 +28,18 @@ class CollapseButton(QPushButton):
         self.setStyleSheet(
             """
             QPushButton {
-                background-color: #f0f0f0;
-                border: 1px solid #ccc;
-                border-radius: 12px;
-                font-size: 12px;
+                background-color: transparent;
+                border: none;
+                font-size: 16px;
+                color: #ffffff;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
-                border: 1px solid #999;
+                background-color: transparent;
+                color: rgba(255, 255, 255, 0.8);
             }
             QPushButton:pressed {
-                background-color: #d0d0d0;
+                background-color: transparent;
+                color: rgba(255, 255, 255, 0.6);
             }
         """
         )

@@ -8,12 +8,16 @@ from PyQt5.QtWidgets import (
     QAction,
     QApplication,
     QHBoxLayout,
+    QVBoxLayout,
     QWidget,
     QPushButton,
     QLabel,
+    QFrame,
+    QScrollArea,
+    QSizePolicy,
 )
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
-from PyQt5.QtCore import Qt, QTimer, QEvent
+from PyQt5.QtCore import Qt, QTimer, QEvent, QSize
 
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_filler import IDCardFiller
@@ -44,8 +48,18 @@ except ImportError as e:
 # 条件导入接口自动化标签页
 try:
     from src.ui.tabs.interface_auto_tab import InterfaceAutoTab
-
     INTERFACE_AUTO_AVAILABLE = True
+except ImportError as e:
+    print(f"接口自动化模块不可用: {e}")
+    INTERFACE_AUTO_AVAILABLE = False
+
+# 条件导入CollapseButton组件
+try:
+    from src.ui.interface_auto.components.collapse_button import CollapseButton
+    COLLAPSE_BUTTON_AVAILABLE = True
+except ImportError as e:
+    print(f"CollapseButton模块不可用: {e}")
+    COLLAPSE_BUTTON_AVAILABLE = False
 except ImportError as e:
     print(f"接口自动化模块不可用: {e}")
     INTERFACE_AUTO_AVAILABLE = False
@@ -334,40 +348,61 @@ class MainWindow(QMainWindow):
         """
         )
 
-        # 创建Tab Widget
-        tab_widget = QTabWidget()
-        tab_widget.setContentsMargins(0, 0, 0, 0)
+        # 创建主布局
+        main_widget = QWidget()
+        main_layout = QHBoxLayout(main_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # 设置Tab位置为上方（默认），并设置对齐方式为左对齐
-        tab_widget.setTabPosition(QTabWidget.North)
-        tab_widget.setUsesScrollButtons(False)
+        # 创建左侧菜单栏
+        self.left_menu = self.create_left_menu()
+        main_layout.addWidget(self.left_menu)
+        
+        # 创建收起按钮（放在菜单容器的外部右侧）
+        self.collapse_button = self.create_collapse_button()
+        self.collapse_button.state_changed.connect(self.on_collapse_state_changed)
+        main_layout.addWidget(self.collapse_button, 0, Qt.AlignLeft)
 
+        # 创建右侧内容区域
+        self.content_area = QWidget()
+        self.content_layout = QVBoxLayout(self.content_area)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 创建内容堆栈窗口
+        self.content_stack = QWidget()
+        self.content_stack_layout = QVBoxLayout(self.content_stack)
+        self.content_stack_layout.setContentsMargins(0, 0, 0, 0)
+        
         # 创建各个Tab
         self.test_data_tab = TestDataTab(self)
         self.data_query_tab = DataQueryTab(self)
         self.api_tool_tab = ApiToolTab(self)
 
-        # 添加Tab到Tab Widget
-        tab_widget.addTab(self.test_data_tab, "测试数据")
+        # 添加Tab到内容堆栈
+        self.content_stack_layout.addWidget(self.test_data_tab)
+        self.test_data_tab.hide()
 
         # 条件加载卡片工具标签页
         if self.enable_tool_cards and TOOL_CARDS_AVAILABLE:
             try:
                 self.tool_cards_tab = ToolCardsTab(self)
-                tab_widget.addTab(self.tool_cards_tab, "卡片工具")
+                self.content_stack_layout.addWidget(self.tool_cards_tab)
+                self.tool_cards_tab.hide()
                 print("卡片工具标签页已加载")
             except Exception as e:
                 print(f"加载卡片工具标签页失败: {e}")
         else:
             print("卡片工具功能已禁用或模块不可用")
 
-        tab_widget.addTab(self.api_tool_tab, "接口工具")
+        self.content_stack_layout.addWidget(self.api_tool_tab)
+        self.api_tool_tab.hide()
 
         # 条件加载接口自动化标签页
         if self.enable_interface_auto and INTERFACE_AUTO_AVAILABLE:
             try:
                 self.interface_auto_tab = InterfaceAutoTab(self)
-                tab_widget.addTab(self.interface_auto_tab, "接口自动化")
+                self.content_stack_layout.addWidget(self.interface_auto_tab)
+                self.interface_auto_tab.hide()
                 print("接口自动化标签页已加载")
 
                 # 延迟初始化接口自动化标签页，避免启动时出现短暂小窗口
@@ -381,7 +416,8 @@ class MainWindow(QMainWindow):
         if self.enable_api_management and API_MANAGEMENT_AVAILABLE:
             try:
                 self.api_management_tab = ApiManagementTab(self)
-                tab_widget.addTab(self.api_management_tab, "API管理")
+                self.content_stack_layout.addWidget(self.api_management_tab)
+                self.api_management_tab.hide()
                 print("API管理标签页已加载")
             except Exception as e:
                 print(f"加载API管理标签页失败: {e}")
@@ -389,79 +425,30 @@ class MainWindow(QMainWindow):
             print("API管理功能已禁用或模块不可用")
 
         # 数据查询放到最后
-        tab_widget.addTab(self.data_query_tab, "数据查询")
+        self.content_stack_layout.addWidget(self.data_query_tab)
+        self.data_query_tab.hide()
 
-        # 设置Tab Widget为中心部件
-        self.setCentralWidget(tab_widget)
+        # 添加设置和退出页面
+        self.settings_tab = self.create_fake_settings_tab()
+        self.content_stack_layout.addWidget(self.settings_tab)
+        self.settings_tab.hide()
+        
+        self.logout_tab = self.create_fake_logout_tab()
+        self.content_stack_layout.addWidget(self.logout_tab)
+        self.logout_tab.hide()
 
-        # 创建右上角按钮容器
-        corner_widget = QWidget()
-        corner_layout = QHBoxLayout(corner_widget)
-        corner_layout.setContentsMargins(0, 0, 0, 0)
-        corner_layout.setSpacing(2)
+        # 将内容堆栈添加到内容区域
+        self.content_layout.addWidget(self.content_stack)
+        
+        # 添加内容区域到主布局
+        main_layout.addWidget(self.content_area)
+        main_layout.setStretchFactor(self.content_area, 1)
 
-        # 创建设置按钮（仅admin用户可见）
-        self.settings_button = QPushButton()
-        self.settings_button.setIcon(
-            QIcon(resource_path("src/resources/icons/settings.png"))
-        )
-        self.settings_button.setToolTip("全局设置")
-        self.settings_button.setFixedSize(30, 25)
-        self.settings_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 3px;
-                margin: 2px;
-            }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
-            QPushButton:pressed {
-                background-color: #d0d0d0;
-            }
-        """
-        )
-        self.settings_button.clicked.connect(self.handle_settings)
+        # 设置主部件为中心部件
+        self.setCentralWidget(main_widget)
 
-        # 创建退出按钮
-        self.logout_button = QPushButton()
-        self.logout_button.setIcon(
-            QIcon(resource_path("src/resources/icons/logout.png"))
-        )
-        self.logout_button.setToolTip("退出登录")
-        self.logout_button.setFixedSize(30, 25)
-        self.logout_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 3px;
-                margin: 2px;
-            }
-            QPushButton:hover {
-                background-color: #e0e0e0;
-            }
-            QPushButton:pressed {
-                background-color: #d0d0d0;
-            }
-        """
-        )
-        self.logout_button.clicked.connect(self.handle_logout)
-
-        # 将按钮添加到布局
-        corner_layout.addWidget(self.settings_button)
-        corner_layout.addWidget(self.logout_button)
-
-        # 将按钮容器添加到tab widget的右上角
-        tab_widget.setCornerWidget(corner_widget, Qt.TopRightCorner)
-
-        # 存储tab widget引用
-        self.tab_widget = tab_widget
-
-        # 连接tab切换信号
-        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        # 默认显示第一个tab
+        self.show_tab(0)
 
         # 标记UI已初始化
         self._ui_initialized = True
@@ -572,51 +559,38 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def on_tab_changed(self, index):
-        """Tab切换事件处理
-
-        Args:
-            index: 新选中的tab索引
-        """
-        try:
-            # 获取当前tab的widget
-            current_widget = self.tab_widget.widget(index)
-
-            # 如果切换到接口自动化tab，隐藏业务管理页面的操作按钮
-            if (
-                self.enable_interface_auto
-                and INTERFACE_AUTO_AVAILABLE
-                and hasattr(self, "interface_auto_tab")
-                and current_widget == self.interface_auto_tab
-            ):
-
-                # 检查接口自动化tab是否已经初始化
-                if hasattr(self.interface_auto_tab, "business_management"):
-                    business_management = self.interface_auto_tab.business_management
-
-                    # 如果业务管理页面存在，隐藏操作按钮
-                    if business_management:
-                        # 调用业务管理页面的按钮隐藏方法
-                        if hasattr(
-                            business_management,
-                            "hide_all_operation_buttons_except_current",
-                        ):
-                            business_management.hide_all_operation_buttons_except_current()
-
-                        print("Tab切换：已隐藏业务管理页面的操作按钮")
-
-        except Exception as e:
-            print(f"处理tab切换事件时出错: {e}")
+        """Tab切换事件处理 - 已弃用，使用新的左侧菜单系统"""
+        # 这个方法现在由show_tab方法处理
+        pass
 
     def set_current_user(self, user):
         """设置当前登录用户"""
         self.current_user = user
         # 更新窗口标题
         self.setWindowTitle(f"测试工具-{user.username}")
-        self.create_user_menu()
-
-        # 控制设置按钮的可见性（仅admin用户可见）
-        if hasattr(self, "settings_button"):
-            self.settings_button.setVisible(user.is_admin)
+        
+        # 重新创建左侧菜单以更新权限相关的菜单项
+        if hasattr(self, "left_menu"):
+            # 保存当前显示的tab索引
+            current_tab_index = 0
+            if hasattr(self, "menu_items") and self.menu_items:
+                for item in self.menu_items:
+                    if hasattr(item, 'tab_index') and hasattr(item, 'styleSheet'):
+                        if "background-color: #007bff" in item.styleSheet():
+                            current_tab_index = item.tab_index
+                            break
+            
+            # 重新创建左侧菜单
+            self.left_menu.deleteLater()
+            self.left_menu = self.create_left_menu()
+            
+            # 将新的左侧菜单添加到主布局
+            main_widget = self.centralWidget()
+            main_layout = main_widget.layout()
+            main_layout.insertWidget(0, self.left_menu)
+            
+            # 恢复之前显示的tab
+            self.show_tab(current_tab_index)
 
     def create_user_menu(self):
         """创建用户菜单 - 已弃用，退出功能已移至tab菜单栏"""
@@ -755,3 +729,789 @@ class MainWindow(QMainWindow):
     def get_current_user(self):
         """获取当前用户"""
         return self.current_user
+
+    def create_fake_settings_tab(self):
+        """创建假的设置tab"""
+        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+        
+        class FakeSettingsTab(QWidget):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.parent = parent
+                self.init_ui()
+            
+            def init_ui(self):
+                layout = QVBoxLayout(self)
+                layout.setAlignment(Qt.AlignCenter)
+                
+                label = QLabel("点击设置标签将打开全局设置对话框")
+                label.setStyleSheet("font-size: 16px; color: #666;")
+                layout.addWidget(label)
+        
+        return FakeSettingsTab(self)
+
+    def create_fake_logout_tab(self):
+        """创建假的退出tab"""
+        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+        
+        class FakeLogoutTab(QWidget):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.parent = parent
+                self.init_ui()
+            
+            def init_ui(self):
+                layout = QVBoxLayout(self)
+                layout.setAlignment(Qt.AlignCenter)
+                
+                label = QLabel("点击退出标签将退出当前登录")
+                label.setStyleSheet("font-size: 16px; color: #666;")
+                layout.addWidget(label)
+        
+        return FakeLogoutTab(self)
+
+    def create_left_menu(self):
+        """创建左侧菜单栏"""
+        # 创建左侧菜单容器
+        menu_container = QFrame()
+        menu_container.setFixedWidth(250)
+        menu_container.setStyleSheet("""
+            QFrame {
+                background-color: rgb(48, 65, 86);
+                border-right: 1px solid rgb(48, 65, 86);
+            }
+        """)
+        
+        # 创建水平布局来放置菜单
+        container_layout = QHBoxLayout(menu_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+        
+        # 创建菜单框架
+        menu_frame = QFrame()
+        menu_frame.setFixedWidth(250)
+        menu_frame.setStyleSheet("""
+            QFrame {
+                background-color: rgb(48, 65, 86);
+                border: none;
+            }
+        """)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: rgb(48, 65, 86);
+            }
+            QScrollBar:vertical {
+                background-color: rgb(48, 65, 86);
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #1890ff;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #40a9ff;
+            }
+        """)
+        
+        # 创建菜单内容容器
+        menu_content = QWidget()
+        menu_content.setStyleSheet("""
+            QWidget {
+                background-color: rgb(48, 65, 86);
+            }
+        """)
+        menu_layout = QVBoxLayout(menu_content)
+        menu_layout.setContentsMargins(0, 0, 0, 10)
+        menu_layout.setSpacing(0)
+        
+        # 创建菜单项
+        self.menu_items = []
+        
+        # 初始化子菜单项列表
+        self.submenu_items = []
+        
+        # 当前选中的子菜单项索引
+        self.current_submenu_index = None
+        
+        # 测试数据菜单项
+        test_data_item = self.create_menu_item("测试数据", 0)
+        menu_layout.addWidget(test_data_item)
+        
+        # 卡片工具菜单项（如果可用）
+        if self.enable_tool_cards and TOOL_CARDS_AVAILABLE:
+            tool_cards_item = self.create_menu_item("卡片工具", 1)
+            menu_layout.addWidget(tool_cards_item)
+        
+        # 接口工具菜单项
+        api_tool_item = self.create_menu_item("接口工具", 2)
+        menu_layout.addWidget(api_tool_item)
+        
+        # 接口自动化菜单项（如果可用）
+        if self.enable_interface_auto and INTERFACE_AUTO_AVAILABLE:
+            interface_auto_item = self.create_expandable_menu_item("接口自动化", 3)
+            menu_layout.addWidget(interface_auto_item)
+        
+        # API管理菜单项（如果可用）
+        if self.enable_api_management and API_MANAGEMENT_AVAILABLE:
+            api_management_item = self.create_menu_item("API管理", 4)
+            menu_layout.addWidget(api_management_item)
+        
+        # 数据查询菜单项
+        data_query_item = self.create_menu_item("数据查询", 5)
+        menu_layout.addWidget(data_query_item)
+        
+        # 添加弹性空间
+        menu_layout.addStretch(1)
+        
+        # 创建左下角图标区域
+        self.create_bottom_icon_area(menu_layout)
+        
+        # 设置滚动区域的内容
+        scroll_area.setWidget(menu_content)
+        
+        # 创建菜单框架布局
+        menu_frame_layout = QVBoxLayout(menu_frame)
+        menu_frame_layout.setContentsMargins(0, 0, 0, 0)
+        menu_frame_layout.addWidget(scroll_area)
+        
+        # 添加菜单到容器
+        container_layout.addWidget(menu_frame)
+        
+        return menu_container
+
+    def create_menu_item(self, text, tab_index):
+        """创建普通菜单项"""
+        item_frame = QFrame()
+        item_frame.setFixedHeight(45)
+        item_frame.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border: none;
+            }
+            QFrame:hover {
+                background-color: #1890ff;
+            }
+            QFrame[pressed="true"] {
+                background-color: #096dd9;
+            }
+        """)
+        
+        layout = QHBoxLayout(item_frame)
+        layout.setContentsMargins(20, 0, 10, 0)
+        layout.setSpacing(10)
+        
+        # 菜单项文本
+        label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: #ffffff;
+                font-weight: bold;
+                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            }
+        """)
+        
+        layout.addWidget(label)
+        layout.addStretch(1)
+        
+        # 存储tab索引
+        item_frame.tab_index = tab_index
+        
+        # 添加点击事件
+        item_frame.mousePressEvent = lambda event: self.on_menu_item_clicked(item_frame)
+        
+        self.menu_items.append(item_frame)
+        return item_frame
+
+    def create_expandable_menu_item(self, text, tab_index):
+        """创建可展开的菜单项"""
+        item_frame = QFrame()
+        item_frame.setMinimumHeight(45)
+        item_frame.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border: none;
+            }
+            QFrame:hover {
+                background-color: #1890ff;
+            }
+            QFrame[pressed="true"] {
+                background-color: #096dd9;
+            }
+        """)
+        
+        layout = QVBoxLayout(item_frame)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # 主菜单项
+        main_item = QFrame()
+        main_item.setFixedHeight(45)
+        main_item.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        
+        main_layout = QHBoxLayout(main_item)
+        main_layout.setContentsMargins(20, 0, 10, 0)
+        
+        # 菜单项文本
+        label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: #ffffff;
+                font-weight: bold;
+                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            }
+        """)
+        
+        # 展开/折叠箭头 - 使用图片资源
+        arrow_label = QLabel()
+        arrow_label.setFixedSize(16, 16)
+        arrow_label.setStyleSheet("""
+            QLabel {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        
+        # 设置初始图标（折叠状态）
+        expand_icon = self.get_icon("exband_w_left.png")
+        if not expand_icon.isNull():
+            pixmap = expand_icon.pixmap(16, 16)
+            arrow_label.setPixmap(pixmap)
+        else:
+            # 如果图标加载失败，使用文本作为备用
+            arrow_label.setText("▶")
+            arrow_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    color: #ffffff;
+                    background-color: transparent;
+                    border: none;
+                }
+            """)
+        
+        main_layout.addWidget(label)
+        main_layout.addStretch(1)
+        main_layout.addWidget(arrow_label)
+        
+        # 子菜单容器（初始隐藏）
+        submenu_frame = QFrame()
+        submenu_frame.setVisible(False)
+        submenu_frame.setStyleSheet("""
+            QFrame {
+                background-color: rgb(48, 65, 86);
+                border: none;
+            }
+        """)
+        submenu_layout = QVBoxLayout(submenu_frame)
+        submenu_layout.setContentsMargins(30, 0, 0, 0)
+        submenu_layout.setSpacing(0)
+        
+        # 动态获取接口自动化tab的子页面名称
+        submenu_items = self.get_interface_auto_submenu_items()
+        
+        for sub_text, sub_index in submenu_items:
+            sub_item = self.create_submenu_item(sub_text, sub_index)
+            submenu_layout.addWidget(sub_item)
+        
+        layout.addWidget(main_item)
+        layout.addWidget(submenu_frame)
+        
+        # 存储展开状态和引用
+        item_frame.is_expanded = False
+        item_frame.arrow_label = arrow_label
+        item_frame.submenu_frame = submenu_frame
+        item_frame.tab_index = tab_index
+        
+        # 计算子菜单总高度（动态计算）
+        item_frame.submenu_height = len(submenu_items) * 40
+        
+        # 添加点击事件
+        main_item.mousePressEvent = lambda event: self.toggle_expandable_menu(item_frame)
+        
+        self.menu_items.append(item_frame)
+        return item_frame
+
+    def create_submenu_item(self, text, tab_index):
+        """创建子菜单项"""
+        item_frame = QFrame()
+        item_frame.setFixedHeight(40)
+        item_frame.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border: none;
+            }
+            QFrame:hover {
+                background-color: #1890ff;
+            }
+            QFrame[pressed="true"] {
+                background-color: #096dd9;
+            }
+        """)
+        
+        layout = QHBoxLayout(item_frame)
+        layout.setContentsMargins(20, 0, 10, 0)
+        
+        # 子菜单项文本
+        label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 15px;
+                color: #ffffff;
+                font-weight: bold;
+                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            }
+        """)
+        
+        layout.addWidget(label)
+        
+        # 存储tab索引
+        item_frame.tab_index = tab_index
+        item_frame.submenu_text = text
+        
+        # 初始选中状态为False
+        item_frame.is_selected = False
+        
+        # 添加点击事件
+        item_frame.mousePressEvent = lambda event: self.on_submenu_item_clicked(item_frame)
+        
+        # 添加到子菜单项列表
+        self.submenu_items.append(item_frame)
+        
+        return item_frame
+
+    def toggle_expandable_menu(self, menu_frame):
+        """切换可展开菜单的状态"""
+        menu_frame.is_expanded = not menu_frame.is_expanded
+        
+        if menu_frame.is_expanded:
+            # 展开状态：使用向下箭头图标
+            expand_icon = self.get_icon("exband_w_down.png")
+            if not expand_icon.isNull():
+                pixmap = expand_icon.pixmap(16, 16)
+                menu_frame.arrow_label.setPixmap(pixmap)
+            else:
+                # 如果图标加载失败，使用文本作为备用
+                menu_frame.arrow_label.setText("▼")
+            
+            # 展开后自动展示所有子菜单
+            menu_frame.submenu_frame.setVisible(True)
+            
+            # 动态调整菜单项高度
+            menu_frame.setFixedHeight(45 + menu_frame.submenu_height)
+        else:
+            # 折叠状态：使用向右箭头图标
+            expand_icon = self.get_icon("exband_w_left.png")
+            if not expand_icon.isNull():
+                pixmap = expand_icon.pixmap(16, 16)
+                menu_frame.arrow_label.setPixmap(pixmap)
+            else:
+                # 如果图标加载失败，使用文本作为备用
+                menu_frame.arrow_label.setText("▶")
+            
+            menu_frame.submenu_frame.setVisible(False)
+            
+            # 恢复菜单项高度
+            menu_frame.setFixedHeight(45)
+        
+        # 强制刷新布局，确保下方tab自动下移
+        menu_frame.parent().updateGeometry()
+        menu_frame.parent().adjustSize()
+
+    def on_menu_item_clicked(self, item_frame):
+        """处理菜单项点击"""
+        # 清除所有子菜单项的选中状态（当点击主菜单项时）
+        if hasattr(self, 'submenu_items') and self.submenu_items:
+            for sub_item in self.submenu_items:
+                if hasattr(sub_item, 'is_selected'):
+                    sub_item.is_selected = False
+        
+        # 更新选中状态
+        self.update_menu_selection(item_frame.tab_index)
+        
+        # 显示对应的tab
+        self.show_tab(item_frame.tab_index)
+
+    def on_submenu_item_clicked(self, item_frame):
+        """处理子菜单项点击"""
+        # 首先清除所有子菜单项的选中状态
+        if hasattr(self, 'submenu_items') and self.submenu_items:
+            for sub_item in self.submenu_items:
+                if hasattr(sub_item, 'is_selected'):
+                    sub_item.is_selected = False
+        
+        # 设置当前子菜单项为选中状态
+        item_frame.is_selected = True
+        
+        # 设置当前选中的子菜单项索引
+        self.current_submenu_index = item_frame.tab_index
+        
+        # 更新选中状态
+        self.update_menu_selection(item_frame.tab_index)
+        
+        # 显示对应的tab
+        self.show_tab(item_frame.tab_index)
+        
+        # 这里可以添加子菜单项特定的逻辑
+        print(f"点击了子菜单项: {item_frame.submenu_text}")
+        
+        # 如果是接口自动化tab的子菜单项，需要切换到对应的子页面
+        if item_frame.tab_index == 3 and hasattr(self, 'interface_auto_tab'):
+            self.switch_interface_auto_subpage(item_frame.submenu_text)
+
+    def get_interface_auto_submenu_items(self):
+        """获取接口自动化tab的子菜单项"""
+        # 定义接口自动化tab的实际子页面名称
+        submenu_items = [
+            ("业务管理", 3),
+            ("接口模板", 3),
+            ("用例管理", 3),
+            ("定时调度", 3),
+            ("测试报告", 3),
+            ("全局工具", 3),
+            ("变量管理", 3)
+        ]
+        return submenu_items
+
+    def switch_interface_auto_subpage(self, subpage_name):
+        """切换接口自动化tab的子页面"""
+        if not hasattr(self, 'interface_auto_tab') or not self.interface_auto_tab:
+            print("接口自动化tab未加载，无法切换子页面")
+            return
+        
+        # 切换到接口自动化tab
+        self.show_tab(3)
+        
+        # 调用接口自动化tab的切换方法
+        if hasattr(self.interface_auto_tab, 'switch_to_subpage'):
+            self.interface_auto_tab.switch_to_subpage(subpage_name)
+            
+            # 更新对应的子菜单项选中状态
+            if hasattr(self, 'submenu_items') and self.submenu_items:
+                for sub_item in self.submenu_items:
+                    if hasattr(sub_item, 'submenu_text') and sub_item.submenu_text == subpage_name:
+                        # 清除所有子菜单项的选中状态
+                        for item in self.submenu_items:
+                            if hasattr(item, 'is_selected'):
+                                item.is_selected = False
+                        
+                        # 设置当前子菜单项为选中状态
+                        sub_item.is_selected = True
+                        break
+            
+            # 更新菜单选中状态
+            self.update_menu_selection(3)
+        else:
+            print("接口自动化tab没有switch_to_subpage方法")
+
+    def update_menu_selection(self, selected_index):
+        """更新菜单选中状态"""
+        # 更新主菜单项选中状态
+        for item in self.menu_items:
+            if hasattr(item, 'tab_index'):
+                if item.tab_index == selected_index:
+                    item.setStyleSheet("""
+                        QFrame {
+                            background-color: #1890ff;
+                            border: none;
+                        }
+                        QLabel {
+                            font-size: 14px;
+                            color: #ffffff;
+                            font-weight: bold;
+                            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+                        }
+                    """)
+                else:
+                    item.setStyleSheet("""
+                        QFrame {
+                            background-color: transparent;
+                            border: none;
+                        }
+                        QFrame:hover {
+                            background-color: #1890ff;
+                        }
+                        QLabel {
+                            font-size: 14px;
+                            color: #ffffff;
+                            font-weight: bold;
+                            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+                        }
+                    """)
+        
+        # 更新子菜单项选中状态
+        if hasattr(self, 'submenu_items') and self.submenu_items:
+            for sub_item in self.submenu_items:
+                if hasattr(sub_item, 'tab_index'):
+                    # 检查是否是当前选中的子菜单项
+                    if hasattr(sub_item, 'is_selected') and sub_item.is_selected:
+                        sub_item.setStyleSheet("""
+                            QFrame {
+                                background-color: #1890ff;
+                                border: none;
+                            }
+                            QLabel {
+                                font-size: 15px;
+                                color: #ffffff;
+                                font-weight: bold;
+                                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+                            }
+                        """)
+                    else:
+                        sub_item.setStyleSheet("""
+                            QFrame {
+                                background-color: transparent;
+                                border: none;
+                            }
+                            QFrame:hover {
+                                background-color: #1890ff;
+                            }
+                            QLabel {
+                                font-size: 15px;
+                                color: #ffffff;
+                                font-weight: bold;
+                                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+                            }
+                        """)
+
+    def create_bottom_icon_area(self, menu_layout):
+        """创建左下角图标区域"""
+        # 创建图标容器
+        icon_container = QFrame()
+        icon_container.setFixedHeight(60)
+        icon_container.setStyleSheet("""
+            QFrame {
+                background-color: rgb(48, 65, 86);
+                border-top: 1px solid #1890ff;
+                border-radius: 0px;
+            }
+        """)
+        
+        icon_layout = QHBoxLayout(icon_container)
+        icon_layout.setContentsMargins(10, 5, 10, 5)
+        icon_layout.setSpacing(15)
+        
+        # 添加弹性空间，使图标靠左对齐
+        icon_layout.addStretch(1)
+        
+        # 创建设置图标按钮（仅管理员可见）
+        if hasattr(self, 'current_user') and self.current_user and self.current_user.is_admin:
+            settings_icon = self.create_icon_button("settings.png", "设置", self.handle_settings)
+            icon_layout.addWidget(settings_icon)
+        
+        # 创建退出图标按钮
+        logout_icon = self.create_icon_button("logout.png", "退出", self.handle_logout)
+        icon_layout.addWidget(logout_icon)
+        
+        # 添加弹性空间，使图标靠左对齐
+        icon_layout.addStretch(1)
+        
+        menu_layout.addWidget(icon_container)
+
+    def create_icon_button(self, icon_name, tooltip_text, click_handler):
+        """创建图标按钮"""
+        icon_frame = QFrame()
+        icon_frame.setFixedSize(40, 40)
+        icon_frame.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border: none;
+                border-radius: 20px;
+            }
+            QFrame:hover {
+                background-color: #1890ff;
+                border: none;
+            }
+            QFrame:pressed {
+                background-color: #096dd9;
+                border: none;
+            }
+        """)
+        
+        icon_layout = QVBoxLayout(icon_frame)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setAlignment(Qt.AlignCenter)
+        
+        # 图标标签 - 使用图片资源
+        icon_label = QLabel()
+        icon_label.setFixedSize(24, 24)
+        icon_label.setStyleSheet("""
+            QLabel {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        
+        # 获取图标并设置
+        icon = self.get_icon(icon_name)
+        if not icon.isNull():
+            pixmap = icon.pixmap(24, 24)
+            icon_label.setPixmap(pixmap)
+        else:
+            # 如果图标加载失败，使用文本作为备用
+            icon_label.setText(icon_name.replace(".png", ""))
+            icon_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    color: #ffffff;
+                    background-color: transparent;
+                    border: none;
+                }
+            """)
+        
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_layout.addWidget(icon_label)
+        
+        # 设置工具提示
+        icon_frame.setToolTip(tooltip_text)
+        
+        # 添加点击事件
+        icon_frame.mousePressEvent = lambda event: click_handler()
+        
+        return icon_frame
+
+    def get_icon(self, icon_name):
+        """获取图标，支持exe打包后的资源路径"""
+        import os
+        import sys
+
+        # 尝试多种路径方式加载图标
+        icon_paths = [
+            # 开发环境路径
+            os.path.join("src", "resources", "icons", icon_name),
+            # exe打包后路径
+            os.path.join(
+                os.path.dirname(sys.executable), "src", "resources", "icons", icon_name
+            ),
+            # 相对路径（如果exe在项目根目录）
+            os.path.join("src", "resources", "icons", icon_name),
+            # 临时解压路径（PyInstaller）
+            (
+                os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name)
+                if hasattr(sys, "_MEIPASS")
+                else None
+            ),
+        ]
+
+        for path in icon_paths:
+            if path and os.path.exists(path):
+                return QIcon(path)
+
+        # 如果所有路径都找不到，返回空图标
+        return QIcon()
+
+    def show_tab(self, tab_index):
+        """显示指定的tab"""
+        # 隐藏所有tab
+        tabs = [
+            self.test_data_tab,
+            self.tool_cards_tab if self.enable_tool_cards and TOOL_CARDS_AVAILABLE else None,
+            self.api_tool_tab,
+            self.interface_auto_tab if self.enable_interface_auto and INTERFACE_AUTO_AVAILABLE else None,
+            self.api_management_tab if self.enable_api_management and API_MANAGEMENT_AVAILABLE else None,
+            self.data_query_tab
+        ]
+        
+        for tab in tabs:
+            if tab:
+                tab.hide()
+        
+        # 显示选中的tab
+        if tab_index < len(tabs) and tabs[tab_index]:
+            tabs[tab_index].show()
+
+        # 更新菜单选中状态
+        self.update_menu_selection(tab_index)
+
+    def create_collapse_button(self):
+        """创建收起按钮"""
+        if COLLAPSE_BUTTON_AVAILABLE:
+            # 使用现有的CollapseButton组件
+            button = CollapseButton(is_expanded=True)
+        else:
+            # 如果CollapseButton不可用，创建简单的按钮
+            button = QPushButton()
+            button.setFixedSize(24, 24)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    border: none;
+                    color: #ffffff;
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin: 0px;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: transparent;
+                    color: rgba(255, 255, 255, 0.8);
+                }
+                QPushButton:pressed {
+                    background-color: transparent;
+                    color: rgba(255, 255, 255, 0.6);
+                }
+            """)
+            button.setText("◀")
+            button.setToolTip("收起左侧菜单栏")
+            
+            # 手动实现状态切换
+            button._is_expanded = True
+            button.toggle_state = lambda: self._toggle_simple_collapse_button(button)
+            button.state_changed = lambda expanded: self.on_collapse_state_changed(expanded)
+            button.clicked.connect(button.toggle_state)
+        
+        return button
+
+    def _toggle_simple_collapse_button(self, button):
+        """切换简单收起按钮的状态"""
+        button._is_expanded = not button._is_expanded
+        if button._is_expanded:
+            button.setText("◀")
+            button.setToolTip("收起左侧菜单栏")
+        else:
+            button.setText("▶")
+            button.setToolTip("展开左侧菜单栏")
+        button.state_changed.emit(button._is_expanded)
+
+    def on_collapse_state_changed(self, is_expanded):
+        """处理展开/收缩状态变化"""
+        # 获取主布局和左侧菜单容器
+        main_widget = self.centralWidget()
+        main_layout = main_widget.layout()
+        
+        # 找到左侧菜单容器（第一个widget）
+        if main_layout.count() > 1:
+            left_menu_container = main_layout.itemAt(0).widget()
+            
+            if is_expanded:
+                # 展开状态：恢复菜单宽度并显示
+                left_menu_container.setFixedWidth(250)
+                left_menu_container.show()
+                # 确保菜单内容可见
+                for i in range(left_menu_container.layout().count()):
+                    widget = left_menu_container.layout().itemAt(i).widget()
+                    if widget:
+                        widget.show()
+            else:
+                # 收起状态：隐藏菜单容器
+                left_menu_container.setFixedWidth(0)
+                left_menu_container.hide()
+            
+            # 强制刷新布局
+            main_widget.updateGeometry()
+            main_widget.adjustSize()

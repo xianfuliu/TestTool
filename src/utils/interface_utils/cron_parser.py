@@ -95,7 +95,8 @@ class CronParser:
                 year_field = "*"  # 默认年字段为*
 
             # 使用更高效的算法：从当前时间开始，逐级查找下一个匹配的时间
-            current_time = base_time.replace(microsecond=0) + timedelta(seconds=1)
+            # 修复：从当前时间（而不是+1秒）开始计算，确保能匹配当前时间点的执行
+            current_time = base_time.replace(microsecond=0)
             max_iterations = 1000  # 防止无限循环，最多检查1000天
 
             for _ in range(max_iterations):
