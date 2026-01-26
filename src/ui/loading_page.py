@@ -1,14 +1,12 @@
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QLabel,
     QProgressBar,
-    QFrame,
     QApplication,
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot
-from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QPen, QLinearGradient
+from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QLinearGradient
 from src.utils.resource_utils import resource_path
 import os
 import time

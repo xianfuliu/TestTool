@@ -1,11 +1,7 @@
 import os
 from PyQt5.QtWidgets import (
     QMainWindow,
-    QTabWidget,
     QMessageBox,
-    QMenuBar,
-    QMenu,
-    QAction,
     QApplication,
     QHBoxLayout,
     QVBoxLayout,
@@ -13,11 +9,10 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QLabel,
     QFrame,
-    QScrollArea,
-    QSizePolicy,
+    QScrollArea
 )
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
-from PyQt5.QtCore import Qt, QTimer, QEvent, QSize
+from PyQt5.QtCore import Qt, QTimer
 
 from src.utils.id_card_generator import UserInfoGenerator
 from src.utils.id_card_filler import IDCardFiller

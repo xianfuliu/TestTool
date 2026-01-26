@@ -993,6 +993,14 @@ class BusinessManagement(QWidget):
         # 页面隐藏时，确保所有操作按钮都隐藏
         self.hide_all_operation_buttons_except_current()
 
+    def resizeEvent(self, event):
+        """页面大小变化事件处理"""
+        super().resizeEvent(event)
+        # 页面大小变化时（如菜单栏收起/展开），重新评估操作按钮可见性
+        # 使用极短延迟确保UI更新完成后再执行操作
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(10, self.hide_all_operation_buttons_except_current)
+
     def get_tree_expanded_states(self):
         """获取树形结构中所有分组的展开状态"""
         expanded_states = {}

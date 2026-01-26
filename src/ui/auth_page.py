@@ -1,8 +1,3 @@
-"""
-认证页面 - 集成登录和注册功能
-"""
-
-import sys
 import os
 import logging
 from PyQt5.QtWidgets import (
@@ -13,12 +8,10 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QStackedWidget,
-    QFrame,
-    QMessageBox,
     QCheckBox,
     QComboBox,
 )
-from PyQt5.QtGui import QFont, QPixmap, QIcon
+from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtCore import QThread, pyqtSignal
 
