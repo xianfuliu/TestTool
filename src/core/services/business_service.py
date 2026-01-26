@@ -29,7 +29,7 @@ class BusinessService:
                         """
                         SELECT id, name, description, created_by, created_at, updated_at
                         FROM business_groups 
-                        ORDER BY created_at DESC
+                        ORDER BY created_at ASC
                     """
                     )
                     return cursor.fetchall()

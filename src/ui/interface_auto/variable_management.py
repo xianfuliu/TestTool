@@ -356,7 +356,7 @@ class VariableManagement(QWidget):
                 font-size: 13px;
                 padding: 12px 8px;
                 border: none;
-                border-bottom: 2px solid #1976d2;
+                border-bottom: 2px solid #dee2e6;
                 min-height: 25px;
                 text-align: center;
             }
@@ -471,7 +471,7 @@ class VariableManagement(QWidget):
                 font-size: 13px;
                 padding: 12px 8px;
                 border: none;
-                border-bottom: 2px solid #1976d2;
+                border-bottom: 2px solid #dee2e6;
                 min-height: 25px;
                 text-align: center;
             }
@@ -567,6 +567,13 @@ class VariableManagement(QWidget):
                 )
                 project_item.setIcon(0, self.get_icon("project.png"))
 
+            # 如果有项目，自动选择第一个项目
+            if projects and self.project_tree.topLevelItemCount() > 0:
+                first_item = self.project_tree.topLevelItem(0)
+                self.project_tree.setCurrentItem(first_item)
+                # 触发项目选择事件
+                self.on_project_selected(first_item)
+
         except Exception as e:
             print(f"加载项目数据失败: {e}")
 
@@ -587,9 +594,6 @@ class VariableManagement(QWidget):
         # 更新当前业务ID
         self.current_business_id = business_id
 
-        # 根据业务ID重新加载项目列表
-        self.load_projects(business_id)
-
         # 清空当前选中的项目和变量数据
         self.current_project = None
         self.project_info_label.show()
@@ -598,6 +602,9 @@ class VariableManagement(QWidget):
         # 清空变量树形控件
         self.system_tree.clear()
         self.global_tree.clear()
+
+        # 根据业务ID重新加载项目列表 - 确保自动选中第一个项目
+        self.load_projects(business_id)
 
         # 更新状态栏信息
         if business_id:

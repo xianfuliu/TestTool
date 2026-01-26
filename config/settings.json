@@ -4,7 +4,7 @@
     "tool_cards": true
   },
   "app": {
-    "name": "测试工具",
+    "name": "测试工具管理",
     "version": "1.0.0"
   },
   "auth": {

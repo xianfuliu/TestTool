@@ -70,7 +70,7 @@ class VerificationEmailService:
 
     def _generate_subject(self) -> str:
         """生成邮件主题"""
-        return "【测试工具】邮箱验证码"
+        return "【测试工具管理】邮箱验证码"
 
     def _generate_html_content(self, verification_code: str) -> str:
         """生成HTML邮件内容"""
@@ -131,7 +131,7 @@ class VerificationEmailService:
             <div class="container">
                 <div class="header">
                     <h1>邮箱验证码</h1>
-                    <p>您正在注册测试工具账号，请使用以下验证码完成验证</p>
+                    <p>您正在注册测试工具管理账号，请使用以下验证码完成验证</p>
                 </div>
                 
                 <div class="code-container">
@@ -148,7 +148,7 @@ class VerificationEmailService:
                 </div>
                 
                 <div class="footer">
-                    <p>此邮件由测试工具自动发送，请勿回复。</p>
+                    <p>此邮件由测试工具管理自动发送，请勿回复。</p>
                     <p>发送时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
                 </div>
             </div>
@@ -163,7 +163,7 @@ class VerificationEmailService:
         text = f"""
 邮箱验证码
 
-您正在注册测试工具账号，请使用以下验证码完成验证：
+您正在注册测试工具管理账号，请使用以下验证码完成验证：
 
 验证码：{verification_code}
 
@@ -172,7 +172,7 @@ class VerificationEmailService:
 - 请勿将此验证码透露给他人
 - 如非本人操作，请忽略此邮件
 
-此邮件由测试工具自动发送，请勿回复。
+此邮件由测试工具管理自动发送，请勿回复。
 发送时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
 

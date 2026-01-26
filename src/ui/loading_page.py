@@ -220,7 +220,7 @@ class LoadingPage(QWidget):
     def init_ui(self):
         """初始化UI"""
         # 设置窗口标题
-        self.setWindowTitle("测试工具 - 启动中")
+        self.setWindowTitle("测试工具管理 - 启动中")
 
         # 设置窗口大小和位置，优化宽高比
         screen = QApplication.primaryScreen()
@@ -316,7 +316,7 @@ class LoadingPage(QWidget):
             header_layout.addWidget(icon_label)
 
         # 应用标题
-        title_label = QLabel("测试工具")
+        title_label = QLabel("测试工具管理")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(QFont("Microsoft YaHei", 26, QFont.Bold))
         title_label.setStyleSheet(

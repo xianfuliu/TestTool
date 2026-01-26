@@ -18,7 +18,7 @@ class ProjectService:
                         SELECT id, business_group_id as group_id, name, description, created_at, updated_at
                         FROM projects 
                         WHERE business_group_id = %s
-                        ORDER BY created_at DESC
+                        ORDER BY created_at ASC
                     """,
                         (group_id,),
                     )
@@ -130,7 +130,7 @@ class ProjectService:
                                bg.name as group_name
                         FROM projects p
                         LEFT JOIN business_groups bg ON p.business_group_id = bg.id
-                        ORDER BY p.created_at DESC
+                        ORDER BY p.created_at ASC
                     """
                     )
                     return cursor.fetchall()

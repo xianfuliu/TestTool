@@ -21,7 +21,7 @@ def load_config():
     config_path = resource_path("config/settings.json")
     default_config = {
         "features": {"interface_automation": False},
-        "app": {"name": "测试工具", "version": "1.0.0"},
+        "app": {"name": "测试工具管理", "version": "1.0.0"},
     }
 
     try:

@@ -2562,7 +2562,7 @@ class TestReportManager(QWidget):
                 font-size: 13px;
                 padding: 12px 8px;
                 border: none;
-                border-bottom: 2px solid #1976d2;
+                border-bottom: 2px solid #dee2e6;
                 min-height: 25px;
                 text-align: center;
             }
@@ -2878,15 +2878,15 @@ class TestReportManager(QWidget):
             # 根据业务分组重新加载项目列表
             self.load_projects(business_id)
 
-            # 重新加载调度任务列表
-            self.load_schedulers()
-
             # 清空调度任务选择状态
             self.current_scheduler_id = None
             self.scheduler_list_widget.clearSelection()
 
             # 清空报告列表
             self.tree_widget.clear()
+
+            # 重新加载调度任务列表 - 确保自动选中第一个测试用例集
+            self.load_schedulers()
 
         except Exception as e:
             print(f"处理业务切换事件失败: {e}")
@@ -2964,9 +2964,10 @@ class TestReportManager(QWidget):
             if schedulers and self.scheduler_list_widget.count() > 0:
                 first_item = self.scheduler_list_widget.item(0)
                 self.scheduler_list_widget.setCurrentItem(first_item)
-                self.current_scheduler_id = first_item.data(Qt.UserRole)
-                # 触发报告加载
-                self.load_reports()
+                scheduler_id = first_item.data(Qt.UserRole)
+                self.current_scheduler_id = scheduler_id
+                # 触发报告加载 - 使用专门的方法确保正确筛选
+                self.load_reports_by_scheduler(scheduler_id)
 
         except Exception as e:
             print(f"加载测试用例集失败: {e}")

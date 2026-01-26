@@ -15,7 +15,7 @@ def build_app():
     # 创建默认配置文件
     default_config = {
         "features": {"interface_automation": False},
-        "app": {"name": "测试工具", "version": "1.0.0"},
+        "app": {"name": "测试工具管理", "version": "1.0.0"},
     }
 
     config_file = os.path.join(config_dir, "settings.json")

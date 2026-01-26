@@ -909,7 +909,7 @@ class GlobalToolsManager(QWidget):
                 font-size: 13px;
                 padding: 12px 8px;
                 border: none;
-                border-bottom: 2px solid #1976d2;
+                border-bottom: 2px solid #dee2e6;
                 min-height: 25px;
                 text-align: center;
             }

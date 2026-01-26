@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
             "api_management", True
         )
 
-        self.setWindowTitle("测试工具")
+        self.setWindowTitle("测试平台")
         # 设置更合适的初始窗口大小，避免全屏时界面元素显示不全
         # 延迟到show之后再获取屏幕尺寸
         self.initial_width = 1720
@@ -562,7 +562,7 @@ class MainWindow(QMainWindow):
         """设置当前登录用户"""
         self.current_user = user
         # 更新窗口标题
-        self.setWindowTitle(f"测试工具-{user.username}")
+        self.setWindowTitle(f"测试工具管理-{user.username}")
         
         # 重新创建左侧菜单以更新权限相关的菜单项
         if hasattr(self, "left_menu"):

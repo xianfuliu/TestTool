@@ -217,7 +217,7 @@ class AuthPage(QWidget):
             brand_layout.addWidget(icon_label)
 
         # 应用标题
-        title_label = QLabel("测试工具平台")
+        title_label = QLabel("测试工具管理")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(QFont("Microsoft YaHei", 32, QFont.Bold))
         title_label.setStyleSheet(

@@ -163,7 +163,7 @@ class EmailService:
             </div>
             
             <p>报告ID: {report_id}</p>
-            <p>此邮件由测试工具自动发送，请勿回复。</p>
+            <p>此邮件由测试工具管理自动发送，请勿回复。</p>
         </body>
         </html>
         """
@@ -203,7 +203,7 @@ class EmailService:
 - 失败: {failed_cases}
 - 错误: {error_cases}
 
-此邮件由测试工具自动发送，请勿回复。
+此邮件由测试工具管理自动发送，请勿回复。
         """
 
         return text.strip()
