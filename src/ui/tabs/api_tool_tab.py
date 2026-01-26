@@ -922,8 +922,8 @@ class ApiToolTab(QWidget):
 
                 # 设置固定的大小策略，不拉伸
                 combo_box.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-                combo_box.setMinimumWidth(120)  # 设置最小宽度
-                combo_box.setMaximumWidth(250)  # 设置最大宽度
+                combo_box.setMinimumWidth(150)  # 设置最小宽度
+                combo_box.setMaximumWidth(350)  # 设置最大宽度
                 combo_box.setStyleSheet(get_combobox_style())
 
                 # 设置默认值 - 修复：使用配置的默认值而不是第一个选项
@@ -1171,12 +1171,13 @@ class ApiToolTab(QWidget):
         text_width = font_metrics.horizontalAdvance(current_text) if current_text else 0
 
         if current_text:
-            # 有内容时根据内容宽度调整，加上下拉箭头和边距
-            content_width = text_width + 35  # 增加边距和下拉箭头空间
-            new_width = max(120, min(content_width, 250))
+            # 有内容时根据内容宽度调整，增加边距和下拉箭头空间
+            # 增加边距计算，考虑下拉箭头和完整文本显示
+            content_width = text_width + 50  # 增加边距和下拉箭头空间
+            new_width = max(150, min(content_width, 350))  # 增加最小和最大宽度限制
         else:
             # 无内容时使用固定宽度
-            new_width = 120
+            new_width = 150
 
         combo_box.setFixedWidth(new_width)
 

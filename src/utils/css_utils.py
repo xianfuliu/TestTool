@@ -23,7 +23,7 @@ def get_combobox_style():
         QComboBox {{
             border: 1px solid #ced4da;
             border-radius: 4px;
-            padding: 6px 30px 6px 12px;  /* 增加左侧内边距，右侧留出下拉箭头空间 */
+            padding: 6px 20px 6px 12px;  /* 减少右侧内边距，为文本留出更多空间 */
             background-color: white;
             min-width: 150px;
             font-size: 14px;
