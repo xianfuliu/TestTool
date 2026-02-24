@@ -330,6 +330,45 @@ DB_TABLES = {
             INDEX idx_expires_at (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
+
+    "tool_card_folders": """
+        CREATE TABLE IF NOT EXISTS tool_card_folders (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            parent_id INT DEFAULT NULL COMMENT '父文件夹ID，支持层级结构',
+            sort_order INT DEFAULT 0 COMMENT '排序字段',
+            is_default BOOLEAN DEFAULT FALSE COMMENT '是否为默认文件夹',
+            created_by VARCHAR(50) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (parent_id) REFERENCES tool_card_folders(id) ON DELETE SET NULL,
+            INDEX idx_parent_id (parent_id),
+            INDEX idx_sort_order (sort_order),
+            INDEX idx_is_default (is_default)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    "tool_card_items": """
+        CREATE TABLE IF NOT EXISTS tool_card_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            folder_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            card_type ENUM('sql', 'http', 'python') DEFAULT 'sql' COMMENT '卡片类型',
+            config JSON COMMENT '卡片配置（JSON格式）',
+            mappings JSON COMMENT '参数映射配置（JSON格式）',
+            sort_order INT DEFAULT 0 COMMENT '排序字段',
+            enabled BOOLEAN DEFAULT TRUE COMMENT '是否启用',
+            created_by VARCHAR(50) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (folder_id) REFERENCES tool_card_folders(id) ON DELETE CASCADE,
+            INDEX idx_folder_id (folder_id),
+            INDEX idx_card_type (card_type),
+            INDEX idx_sort_order (sort_order),
+            INDEX idx_enabled (enabled)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
     "user_settings": """
         CREATE TABLE IF NOT EXISTS user_settings (
             id INT AUTO_INCREMENT PRIMARY KEY,
