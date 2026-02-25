@@ -2089,17 +2089,21 @@ class ToolCardsTab(QWidget):
 
     def delete_card(self, card_data):
         """删除卡片"""
-        reply = QMessageBox.question(
-            self, "确认删除", 
-            f"确定要删除卡片 '{card_data.get('name')}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
+        # 创建消息框对象并设置按钮文本
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("确认删除")
+        msg_box.setText(f"确定要删除卡片 '{card_data.get('name')}' 吗？")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         
-        # 将按钮文本改为中文
-        reply.setButtonText(QMessageBox.Yes, "确定")
-        reply.setButtonText(QMessageBox.No, "取消")
+        # 正确设置按钮文本
+        yes_button = msg_box.button(QMessageBox.Yes)
+        no_button = msg_box.button(QMessageBox.No)
+        if yes_button:
+            yes_button.setText("确定")
+        if no_button:
+            no_button.setText("取消")
         
-        if reply.exec_() == QMessageBox.Yes:
+        if msg_box.exec_() == QMessageBox.Yes:
             # 使用数据库服务删除卡片
             success = self.tool_cards_service.delete_card(card_data["id"])
             
