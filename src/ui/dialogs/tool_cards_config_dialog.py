@@ -14,12 +14,15 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
 )
+from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 import json
+import os
+import sys
 
 from src.ui.widgets.toast_tips import Toast
 from src.core.services.tool_cards_service import ToolCardsService
-from src.utils.css_utils import get_combobox_style
+from src.utils.css_utils import get_combobox_style, get_config_combobox_style
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox
 from src.utils.field_types import FieldType
 
@@ -41,8 +44,9 @@ class ToolCardsConfigDialog(QDialog):
         base_title = "卡片配置" if self.is_edit else "添加卡片"
         self.setWindowTitle(f"{base_title} - {folder_name}")
         self.setModal(True)
-        self.setMinimumWidth(1200)
-        self.setMinimumHeight(400)
+        self.setMinimumWidth(1400)  # 增加最小宽度以适应关联字段
+        self.setMinimumHeight(850)
+        self.resize(1400, 850)  # 设置默认大小
 
         self.init_ui()
 
@@ -52,6 +56,36 @@ class ToolCardsConfigDialog(QDialog):
     def get_updated_data(self):
         """获取更新后的数据（已弃用，数据直接保存到数据库）"""
         return None
+
+    def get_icon(self, icon_name):
+        """获取图标，支持exe打包后的资源路径"""
+        import os
+        import sys
+
+        # 尝试多种路径方式加载图标
+        icon_paths = [
+            # 开发环境路径
+            os.path.join("src", "resources", "icons", icon_name),
+            # exe打包后路径
+            os.path.join(
+                os.path.dirname(sys.executable), "src", "resources", "icons", icon_name
+            ),
+            # 相对路径（如果exe在项目根目录）
+            os.path.join("src", "resources", "icons", icon_name),
+            # 临时解压路径（PyInstaller）
+            (
+                os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name)
+                if hasattr(sys, "_MEIPASS")
+                else None
+            ),
+        ]
+
+        for path in icon_paths:
+            if path and os.path.exists(path):
+                return QIcon(path)
+
+        # 如果所有路径都找不到，返回空图标
+        return QIcon()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -76,39 +110,8 @@ class ToolCardsConfigDialog(QDialog):
         self.type_combo = NoWheelComboBox()
         self.type_combo.addItems(["SQL工具", "HTTP接口", "Python类"])
         self.type_combo.currentTextChanged.connect(self.on_type_changed)
-        # 使用紧凑的下拉框样式，适合配置弹窗
-        self.type_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                padding: 6px 20px 6px 12px;
-                background-color: white;
-                min-width: 150px;
-                max-width: 150px;
-                font-size: 14px;
-            }
-            QComboBox:focus {
-                border-color: #0078d4;
-                outline: none;
-            }
-            QComboBox:hover {
-                border-color: #adb5bd;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 24px;
-                border-left: 1px solid #ced4da;
-                border-top-right-radius: 4px;
-                border-bottom-right-radius: 4px;
-                background-color: #f8f9fa;
-            }
-            QComboBox::down-arrow {
-                image: url(D:/workspace/TestTool/src/resources/icons/combobox.png);
-                width: 12px;
-                height: 12px;
-            }
-        """)
+        # 使用配置弹窗专用的下拉框样式
+        self.type_combo.setStyleSheet(get_config_combobox_style())
         
         # 编辑模式下不允许修改类型
         if self.is_edit:
@@ -277,6 +280,152 @@ class ToolCardsConfigDialog(QDialog):
     def on_type_changed(self, new_type):
         """类型改变时的处理"""
         self.init_dynamic_config_ui()
+
+    def on_association_changed(self, state):
+        """关联复选框状态改变时的处理"""
+        if state == 2:  # Qt.Checked 的值是 2
+            self.association_combo.show()
+            self.populate_association_combo()
+        else:
+            self.association_combo.hide()
+            self.association_combo.clear()
+
+    def on_param_association_changed(self, state, combo, value_combo):
+        """参数行关联复选框状态改变时的处理"""
+        if state == 2:  # Qt.Checked 的值是 2
+            combo.show()
+            self.populate_param_association_combo(combo)
+        else:
+            combo.hide()
+            combo.clear()
+            value_combo.hide()
+            value_combo.clear()
+
+    def on_association_field_changed(self, text, value_combo):
+        """关联字段选择改变时的处理"""
+        if text and text != "请选择关联字段":
+            value_combo.show()
+            self.populate_association_value_combo(text, value_combo)
+        else:
+            value_combo.hide()
+            value_combo.clear()
+
+    def populate_param_association_combo(self, combo):
+        """填充参数行关联字段下拉框"""
+        combo.clear()
+        combo.addItem("请选择关联字段", "")
+        
+        # 获取所有参数映射（包括所有参数行）
+        # 需要从数据库或配置中获取完整的参数映射，而不是当前收集的部分映射
+        mappings = {}
+        
+        # 尝试从卡片数据中获取完整的参数映射
+        if hasattr(self, 'card_data') and self.card_data:
+            mappings = self.card_data.get("mappings", {})
+            print(f"[DEBUG] 从卡片数据获取参数映射: {len(mappings)} 个字段")
+        else:
+            # 如果没有卡片数据，使用当前收集的映射
+            mappings = self.collect_parameter_mappings()
+            print(f"[DEBUG] 从当前收集获取参数映射: {len(mappings)} 个字段")
+        
+        # 筛选符合条件的字段：下拉框-单选或点选类型
+        eligible_fields = []
+        for field_name, mapping_config in mappings.items():
+            field_type = mapping_config.get("type", "")
+            display_name = mapping_config.get("display_name", field_name)
+            
+            print(f"[DEBUG] 检查字段: {field_name}, 类型: {field_type}, 显示名: {display_name}")
+            
+            # 检查字段类型是否为下拉框-单选或点选
+            if field_type in [FieldType.SELECT, FieldType.RADIO]:
+                eligible_fields.append((field_name, display_name))
+                print(f"[DEBUG] 字段 {field_name} 符合条件，添加到下拉框")
+            else:
+                print(f"[DEBUG] 字段 {field_name} 不符合条件，跳过")
+        
+        print(f"[DEBUG] 可关联字段数量: {len(eligible_fields)}")
+        
+        # 按显示名称排序并添加到下拉框
+        eligible_fields.sort(key=lambda x: x[1])
+        for field_name, display_name in eligible_fields:
+            # 确保正确设置数据和显示文本
+            combo.addItem(f"{display_name} ({field_name})", field_name)
+        
+        print(f"[DEBUG] 关联字段下拉框填充完成，添加了 {combo.count()} 个选项")
+        
+        # 调试：检查下拉框的数据设置
+        for i in range(combo.count()):
+            item_text = combo.itemText(i)
+            item_data = combo.itemData(i)
+            print(f"[DEBUG] 下拉框选项 {i}: 文本='{item_text}', 数据='{item_data}'")
+
+    def populate_association_value_combo(self, field_text, value_combo):
+        """填充关联字段值的下拉框"""
+        value_combo.clear()
+        value_combo.addItem("请选择关联字段值", "")
+        
+        # 从字段文本中提取字段名
+        # 格式："显示名称 (字段名)"
+        field_name = ""
+        if "(" in field_text and ")" in field_text:
+            field_name = field_text.split("(")[1].split(")")[0]
+        
+        if not field_name:
+            return
+        
+        # 获取所有参数映射（包括所有参数行）
+        mappings = {}
+        
+        # 尝试从卡片数据中获取完整的参数映射
+        if hasattr(self, 'card_data') and self.card_data:
+            mappings = self.card_data.get("mappings", {})
+            print(f"[DEBUG] 关联字段值填充 - 从卡片数据获取参数映射: {len(mappings)} 个字段")
+        else:
+            # 如果没有卡片数据，使用当前收集的映射
+            mappings = self.collect_parameter_mappings()
+            print(f"[DEBUG] 关联字段值填充 - 从当前收集获取参数映射: {len(mappings)} 个字段")
+        
+        # 查找关联字段的配置
+        if field_name in mappings:
+            field_config = mappings[field_name]
+            print(f"[DEBUG] 找到关联字段配置: {field_config}")
+            
+            # 检查是否有枚举选项
+            if "options" in field_config:
+                options = field_config["options"]
+                print(f"[DEBUG] 找到 {len(options)} 个枚举选项")
+                for option in options:
+                    value = option.get("value", "")
+                    description = option.get("description", value)
+                    value_combo.addItem(description, value)
+                    print(f"[DEBUG] 添加枚举选项: {description} -> {value}")
+            else:
+                print(f"[DEBUG] 关联字段 {field_name} 没有枚举选项")
+        else:
+            print(f"[DEBUG] 未找到关联字段 {field_name} 的配置")
+
+    def populate_association_combo(self):
+        """填充关联字段下拉框"""
+        self.association_combo.clear()
+        self.association_combo.addItem("请选择关联字段", "")
+        
+        # 获取当前所有参数映射
+        mappings = self.collect_parameter_mappings()
+        
+        # 筛选符合条件的字段：下拉框-单选或点选类型
+        eligible_fields = []
+        for field_name, mapping_config in mappings.items():
+            field_type = mapping_config.get("type", "")
+            display_name = mapping_config.get("display_name", field_name)
+            
+            # 检查字段类型是否为下拉框-单选或点选
+            if field_type in [FieldType.SELECT, FieldType.RADIO]:
+                eligible_fields.append((field_name, display_name))
+        
+        # 按显示名称排序并添加到下拉框
+        eligible_fields.sort(key=lambda x: x[1])
+        for field_name, display_name in eligible_fields:
+            self.association_combo.addItem(f"{display_name} ({field_name})", field_name)
 
     def reset_config_fields(self):
         """重置所有配置字段变量，避免类型切换时数据残留"""
@@ -616,39 +765,8 @@ class ToolCardsConfigDialog(QDialog):
         
         http_method_combo = NoWheelComboBox()
         http_method_combo.addItems(["GET", "POST", "PUT", "DELETE", "PATCH"])
-        # 使用紧凑的下拉框样式
-        http_method_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                padding: 6px 20px 6px 12px;
-                background-color: white;
-                min-width: 100px;
-                max-width: 100px;
-                font-size: 12px;
-            }
-            QComboBox:focus {
-                border-color: #0078d4;
-                outline: none;
-            }
-            QComboBox:hover {
-                border-color: #adb5bd;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 24px;
-                border-left: 1px solid #ced4da;
-                border-top-right-radius: 4px;
-                border-bottom-right-radius: 4px;
-                background-color: #f8f9fa;
-            }
-            QComboBox::down-arrow {
-                image: url(D:/workspace/TestTool/src/resources/icons/combobox.png);
-                width: 12px;
-                height: 12px;
-            }
-        """)
+        # 使用CSS工具类设置下拉框样式
+        http_method_combo.setStyleSheet(get_combobox_style())
         
         row1_layout.addWidget(QLabel("方法:"))
         row1_layout.addWidget(http_method_combo)
@@ -1019,39 +1137,8 @@ class ToolCardsConfigDialog(QDialog):
         # 类型选择下拉框
         type_combo = NoWheelComboBox()
         type_combo.addItems(FieldType.DISPLAY_TYPES)
-        # 使用紧凑的下拉框样式
-        type_combo.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                padding: 6px 20px 6px 12px;
-                background-color: white;
-                min-width: 120px;
-                max-width: 120px;
-                font-size: 14px;
-            }
-            QComboBox:focus {
-                border-color: #0078d4;
-                outline: none;
-            }
-            QComboBox:hover {
-                border-color: #adb5bd;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 24px;
-                border-left: 1px solid #ced4da;
-                border-top-right-radius: 4px;
-                border-bottom-right-radius: 4px;
-                background-color: #f8f9fa;
-            }
-            QComboBox::down-arrow {
-                image: url(D:/workspace/TestTool/src/resources/icons/combobox.png);
-                width: 12px;
-                height: 12px;
-            }
-        """)
+        # 使用配置弹窗专用的下拉框样式
+        type_combo.setStyleSheet(get_config_combobox_style())
         
         # 默认值输入框
         default_value_edit = QLineEdit()
@@ -1117,6 +1204,35 @@ class ToolCardsConfigDialog(QDialog):
         info_layout.addWidget(default_value_edit)
         info_layout.addWidget(QLabel("类型:"))
         info_layout.addWidget(type_combo)
+        
+        # 关联字段配置
+        association_checkbox = QCheckBox()
+        association_checkbox.setStyleSheet("QCheckBox { font-size: 10px; }")
+        association_checkbox.setToolTip("关联")
+        association_checkbox.setChecked(False)  # 默认未选中
+        
+        # 关联字段下拉框（初始隐藏）
+        association_combo = NoWheelComboBox()
+        # 使用配置弹窗专用的下拉框样式
+        association_combo.setStyleSheet(get_config_combobox_style())
+        association_combo.hide()  # 初始隐藏
+        
+        # 关联字段值下拉框（初始隐藏）
+        association_value_combo = NoWheelComboBox()
+        # 使用配置弹窗专用的下拉框样式
+        association_value_combo.setStyleSheet(get_config_combobox_style())
+        association_value_combo.hide()  # 初始隐藏
+        
+        # 连接复选框状态改变事件
+        association_checkbox.stateChanged.connect(lambda state, combo=association_combo, value_combo=association_value_combo: self.on_param_association_changed(state, combo, value_combo))
+        
+        # 连接关联字段选择改变事件
+        association_combo.currentTextChanged.connect(lambda text, value_combo=association_value_combo: self.on_association_field_changed(text, value_combo))
+        
+        info_layout.addWidget(QLabel("关联:"))
+        info_layout.addWidget(association_checkbox)
+        info_layout.addWidget(association_combo)
+        info_layout.addWidget(association_value_combo)
         info_layout.addWidget(QLabel("必填:"))  # 增加"必填："标签
         info_layout.addWidget(required_checkbox)
         info_layout.addWidget(delete_btn)
@@ -1335,8 +1451,8 @@ class ToolCardsConfigDialog(QDialog):
                     # 查找必填复选框
                     checkboxes = param_widget.findChildren(QCheckBox)
                     required = False
-                    if checkboxes:
-                        required = checkboxes[0].isChecked()
+                    if len(checkboxes) >= 2:
+                        required = checkboxes[1].isChecked()  # 第2个是必填复选框
                     
                     print(f"[DEBUG] 参数信息 - 字段名: '{field_name}', 显示名: '{display_name}', 类型: {param_type}, 必填: {required}")
                     
@@ -1352,6 +1468,53 @@ class ToolCardsConfigDialog(QDialog):
                         # 添加默认值（如果有）
                         if default_value:
                             mapping_config["default_value"] = default_value
+                        
+                        # 收集关联配置
+                        # 查找关联复选框和下拉框
+                        association_checkboxes = param_widget.findChildren(QCheckBox)
+                        association_combos = param_widget.findChildren(NoWheelComboBox)
+                        
+                        print(f"[DEBUG] 关联配置收集 - 找到 {len(association_checkboxes)} 个复选框, {len(association_combos)} 个下拉框")
+                        
+                        # 修复：第一个复选框是关联，第二个是必填
+                        if len(association_checkboxes) >= 2:
+                            association_enabled = association_checkboxes[0].isChecked()  # 第1个是关联复选框
+                            mapping_config["association_enabled"] = association_enabled
+                            
+                            print(f"[DEBUG] 关联启用状态: {association_enabled}")
+                            
+                            # 如果关联启用，收集关联字段和值
+                            if association_enabled:
+                                # 收集关联字段（第二个下拉框是关联字段下拉框）
+                                if len(association_combos) >= 2:
+                                    # 第二个下拉框是关联字段下拉框
+                                    association_field = association_combos[1].currentData()
+                                    
+                                    # 如果currentData()返回空，尝试从当前文本中提取
+                                    if not association_field or association_field == "":
+                                        current_text = association_combos[1].currentText()
+                                        print(f"[DEBUG] 当前关联字段文本: '{current_text}'")
+                                        if "(" in current_text and ")" in current_text:
+                                            association_field = current_text.split("(")[1].split(")")[0]
+                                            print(f"[DEBUG] 从文本中提取的关联字段: '{association_field}'")
+                                    
+                                    print(f"[DEBUG] 最终关联字段数据: '{association_field}'")
+                                    if association_field and association_field != "" and association_field != "请选择关联字段":
+                                        mapping_config["association_field"] = association_field
+                                
+                                # 收集关联值（第三个下拉框是关联字段值下拉框）
+                                if len(association_combos) >= 3:
+                                    # 第三个下拉框是关联字段值下拉框
+                                    association_value = association_combos[2].currentData()
+                                    if not association_value:
+                                        # 如果currentData()返回空，尝试使用当前文本
+                                        association_value = association_combos[2].currentText()
+                                    
+                                    print(f"[DEBUG] 关联字段值数据: {association_value}")
+                                    if association_value and association_value != "请选择关联字段值":
+                                        mapping_config["association_value"] = association_value
+                        
+                        print(f"[DEBUG] 最终关联配置: {mapping_config.get('association_enabled', False)}, {mapping_config.get('association_field', '')}, {mapping_config.get('association_value', '')}")
                         
                         # 如果是枚举类型（下拉框或点选），收集枚举配置
                         if FieldType.is_any_enum_type(param_type):
@@ -1568,9 +1731,9 @@ class ToolCardsConfigDialog(QDialog):
                 
                 # 设置必填复选框状态
                 checkboxes = param_widget.findChildren(QCheckBox)
-                if checkboxes:
+                if len(checkboxes) >= 2:
                     required = mapping_config.get("required", False) if isinstance(mapping_config, dict) else False
-                    checkboxes[0].setChecked(required)
+                    checkboxes[1].setChecked(required)  # 第2个是必填复选框
                 
                 # 设置参数类型
                 combos = param_widget.findChildren(QComboBox)
@@ -1578,6 +1741,53 @@ class ToolCardsConfigDialog(QDialog):
                     index = combos[0].findText(control_type)
                     if index >= 0:
                         combos[0].setCurrentIndex(index)
+                
+                # 设置关联配置
+                association_checkboxes = param_widget.findChildren(QCheckBox)
+                association_combos = param_widget.findChildren(NoWheelComboBox)
+                
+                print(f"[DEBUG] 关联配置加载 - 找到 {len(association_checkboxes)} 个复选框, {len(association_combos)} 个下拉框")
+                
+                # 修复：第一个复选框是关联，第二个是必填
+                if len(association_checkboxes) >= 2:
+                    association_enabled = mapping_config.get("association_enabled", False) if isinstance(mapping_config, dict) else False
+                    association_checkboxes[0].setChecked(association_enabled)  # 第1个是关联复选框
+                    
+                    print(f"[DEBUG] 关联启用状态: {association_enabled}")
+                    print(f"[DEBUG] 关联字段配置: {mapping_config.get('association_field', '')}")
+                    print(f"[DEBUG] 关联字段值配置: {mapping_config.get('association_value', '')}")
+                    
+                    # 如果关联启用，设置关联字段和值
+                    if association_enabled:
+                        # 设置关联字段（第二个下拉框是关联字段下拉框）
+                        if len(association_combos) >= 2:
+                            association_field = mapping_config.get("association_field", "") if isinstance(mapping_config, dict) else ""
+                            print(f"[DEBUG] 要设置的关联字段: '{association_field}'")
+                            if association_field:
+                                # 先填充下拉框
+                                self.populate_param_association_combo(association_combos[1])
+                                # 设置选中的关联字段
+                                index = association_combos[1].findData(association_field)
+                                print(f"[DEBUG] 关联字段下拉框查找结果: 索引={index}")
+                                if index >= 0:
+                                    association_combos[1].setCurrentIndex(index)
+                                    print(f"[DEBUG] 关联字段下拉框设置成功")
+                                association_combos[1].show()
+                        
+                        # 设置关联字段值（第三个下拉框是关联字段值下拉框）
+                        if len(association_combos) >= 3:
+                            association_value = mapping_config.get("association_value", "") if isinstance(mapping_config, dict) else ""
+                            print(f"[DEBUG] 要设置的关联字段值: '{association_value}'")
+                            if association_value:
+                                # 填充关联字段值下拉框
+                                self.populate_association_value_combo(association_combos[1].currentText(), association_combos[2])
+                                # 设置选中的关联字段值
+                                index = association_combos[2].findData(association_value)
+                                print(f"[DEBUG] 关联字段值下拉框查找结果: 索引={index}")
+                                if index >= 0:
+                                    association_combos[2].setCurrentIndex(index)
+                                    print(f"[DEBUG] 关联字段值下拉框设置成功")
+                                association_combos[2].show()
                     
                     # 如果是枚举类型（下拉框或点选），显示枚举容器和添加按钮
                     if FieldType.is_any_enum_type(control_type):
@@ -1755,6 +1965,9 @@ class ToolCardsConfigDialog(QDialog):
         type_map = {"SQL工具": "sql", "HTTP接口": "http", "Python类": "python"}
         card_type = type_map.get(type_display, "sql")
         
+        # 收集关联配置（现在每个参数行独立）
+        # 关联配置将在参数映射中单独处理
+        
         # 创建卡片数据
         card_data = {
             "folder_id": self.current_folder_id,
@@ -1798,6 +2011,9 @@ class ToolCardsConfigDialog(QDialog):
         type_display = self.type_combo.currentText()
         type_map = {"SQL工具": "sql", "HTTP接口": "http", "Python类": "python"}
         card_type = type_map.get(type_display, "sql")
+        
+        # 收集关联配置（现在每个参数行独立）
+        # 关联配置将在参数映射中单独处理
         
         # 创建卡片数据
         card_data = {

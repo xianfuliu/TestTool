@@ -4,7 +4,7 @@
 
 from PyQt5.QtWidgets import QComboBox, QListWidget, QCheckBox, QVBoxLayout, QWidget, QLineEdit
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QMouseEvent
+from PyQt5.QtGui import QMouseEvent, QWheelEvent
 
 
 class MultiSelectComboBox(QComboBox):
@@ -36,6 +36,11 @@ class MultiSelectComboBox(QComboBox):
             self.showPopup()
             return True
         return super().eventFilter(obj, event)
+    
+    def wheelEvent(self, event):
+        """禁用鼠标滚轮事件，防止滚动切换选项"""
+        # 忽略鼠标滚轮事件，防止滚动切换选项
+        event.ignore()
     
     def addItem(self, text, userData=None):
         """添加选项"""

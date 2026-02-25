@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
     QButtonGroup,
     QSizePolicy,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt5.QtGui import QIcon
 import json
 import os
@@ -33,7 +33,7 @@ from src.ui.dialogs.tool_cards_config_dialog import ToolCardsConfigDialog
 from src.utils.sql_worker import SQLWorker
 from src.utils.database_config_manager import DatabaseConfigManager
 from src.core.services.tool_cards_service import ToolCardsService
-from src.utils.css_utils import get_combobox_style
+from src.utils.css_utils import get_combobox_style, get_card_combobox_style, get_card_multiselect_combobox_style
 from src.ui.interface_auto.components.no_wheel_widgets import NoWheelComboBox
 from src.utils.field_types import FieldType
 from src.ui.widgets.multi_select_combo import MultiSelectComboBox
@@ -50,7 +50,7 @@ class ToolCardWidget(QFrame):
 
     def init_ui(self):
         # 设置固定宽度和高度，增加卡片尺寸
-        self.setFixedSize(380, 300)  # 增加卡片宽度和高度
+        self.setFixedSize(420, 350)  # 增加卡片宽度和高度
         
         self.setStyleSheet(
             """
@@ -106,7 +106,7 @@ class ToolCardWidget(QFrame):
 
         # 操作按钮区域 - 编辑、复制、删除
         self.edit_btn = QPushButton()
-        self.edit_btn.setIcon(QIcon("src/resources/icons/edit_card.png"))
+        self.edit_btn.setIcon(self.parent_tab.get_icon("edit_card.png"))
         self.edit_btn.setIconSize(QSize(14, 14))
         self.edit_btn.setStyleSheet(
             """
@@ -131,7 +131,7 @@ class ToolCardWidget(QFrame):
         self.edit_btn.clicked.connect(lambda: self.parent_tab.edit_card(self.card_data))
 
         self.copy_btn = QPushButton()
-        self.copy_btn.setIcon(QIcon("src/resources/icons/copy.png"))
+        self.copy_btn.setIcon(self.parent_tab.get_icon("copy.png"))
         self.copy_btn.setIconSize(QSize(14, 14))
         self.copy_btn.setStyleSheet(
             """
@@ -156,7 +156,7 @@ class ToolCardWidget(QFrame):
         self.copy_btn.clicked.connect(lambda: self.parent_tab.copy_card(self.card_data))
 
         self.delete_btn = QPushButton()
-        self.delete_btn.setIcon(QIcon("src/resources/icons/delete.png"))
+        self.delete_btn.setIcon(self.parent_tab.get_icon("delete.png"))
         self.delete_btn.setIconSize(QSize(14, 14))
         self.delete_btn.setStyleSheet(
             """
@@ -293,27 +293,28 @@ class ToolCardWidget(QFrame):
         layout.addWidget(header)
         layout.addWidget(scroll_area)
 
-    def get_type_display(self):
-        card_type = self.card_data.get("type", "sql")
-        type_map = {"sql": "SQL", "http": "HTTP", "python": "Python"}
-        return type_map.get(card_type, card_type)
-
     def generate_input_fields(self, body_layout):
         """根据卡片类型生成输入字段"""
+        print(f"[DEBUG] generate_input_fields 方法被调用！卡片名称: {self.card_data.get('name', '未知')}")
+        print(f"[DEBUG] 卡片数据: {self.card_data}")
+        
         config = self.card_data.get("config", {})
         mappings = self.card_data.get("mappings", {})
+        
+        print(f"[DEBUG] 映射配置: {mappings}")
         
         if not mappings:
             # 如果没有映射配置，显示默认信息
             no_mapping_label = QLabel("暂无输入字段配置")
             no_mapping_label.setStyleSheet("QLabel { color: #a0aec0; font-sie: 11px; font-style: italic; margin-top: 8px; }")
             body_layout.addWidget(no_mapping_label)
+            print("[DEBUG] 没有映射配置，显示默认信息")
             return
         
         # 创建输入字段的滚动区域 - 现代化设计
         input_scroll_area = QScrollArea()
         input_scroll_area.setWidgetResizable(True)
-        input_scroll_area.setMaximumHeight(200)  # 增加高度以提供更多显示空间
+        input_scroll_area.setMaximumHeight(280)  # 增加高度以提供更多显示空间
         input_scroll_area.setStyleSheet(
             """
             QScrollArea {
@@ -360,6 +361,9 @@ class ToolCardWidget(QFrame):
         input_layout.setContentsMargins(8, 8, 8, 8)  # 增加内边距
         input_layout.setSpacing(12)  # 增加行间距
         
+        # 初始化字段依赖关系跟踪
+        self.field_dependencies = {}
+        
         # 根据卡片类型生成不同的输入字段
         card_type = self.card_data.get("type", "sql")
         
@@ -375,6 +379,9 @@ class ToolCardWidget(QFrame):
         
         input_scroll_area.setWidget(input_widget)
         body_layout.addWidget(input_scroll_area)
+        
+        # 设置所有字段的依赖监听器
+        self.setup_all_field_dependencies()
 
     def generate_sql_input_fields(self, input_layout, config, mappings):
         """生成SQL卡片的输入字段"""
@@ -406,9 +413,70 @@ class ToolCardWidget(QFrame):
             key=lambda x: x[1].get("order", 0) if isinstance(x[1], dict) else 0
         )
         
-        # 生成每个映射字段的输入控件
+        # 首先生成所有字段
+        field_widgets = {}
         for field_name, field_config in sorted_mappings:
-            self.generate_single_input_field(input_layout, field_name, field_config)
+            field_widget = self.generate_single_input_field(input_layout, field_name, field_config)
+            field_widgets[field_name] = field_widget
+        
+        # 然后设置所有关联字段的监听器
+        for field_name, field_config in sorted_mappings:
+            if isinstance(field_config, dict):
+                association_enabled = field_config.get("association_enabled", False)
+                if association_enabled:
+                    association_field = field_config.get("association_field", "")
+                    association_value = field_config.get("association_value", "")
+                    if association_field and field_name in field_widgets:
+                        print(f"[DEBUG] 设置关联关系: 字段 '{field_name}' -> 关联字段 '{association_field}' 值='{association_value}'")
+                        
+                        # 记录字段依赖关系
+                        if association_field not in self.field_dependencies:
+                            self.field_dependencies[association_field] = []
+                        self.field_dependencies[association_field].append({
+                            "dependent_field": field_name,
+                            "expected_value": association_value,
+                            "widget": field_widgets[field_name]
+                        })
+                        
+                        print(f"[DEBUG] 已记录依赖关系: {association_field} -> {field_name} (期望值: {association_value})")
+                        # 为关联字段设置直接的切换处理
+                        self._setup_direct_field_handler(association_field)
+                        
+                        # 初始检查关联条件
+                        print(f"[DEBUG] 开始初始关联检查: 字段 '{field_name}' 关联字段 '{association_field}' 期望值='{association_value}'")
+                        
+                        # 直接使用数据库配置中的默认值，而不是实时获取字段值
+                        current_association_value = self._get_default_field_value(association_field, sorted_mappings)
+                        
+                        # 使用修复后的比较逻辑
+                        current_str = str(current_association_value) if current_association_value is not None else ""
+                        assoc_str = str(association_value) if association_value is not None else ""
+                        
+                        # 清理字符串：去除前后空格
+                        current_str = current_str.strip()
+                        assoc_str = assoc_str.strip()
+                        
+                        should_show = current_str == assoc_str
+                        
+                        # 额外检查：如果期望值是数字2，当前值是字符串"2"，也应该显示
+                        if not should_show and association_value is not None and current_association_value is not None:
+                            try:
+                                # 尝试将值转换为数字进行比较
+                                current_num = float(current_str) if current_str else None
+                                assoc_num = float(assoc_str) if assoc_str else None
+                                if current_num is not None and assoc_num is not None:
+                                    should_show = current_num == assoc_num
+                                    print(f"[DEBUG] 数字比较结果: {current_num} == {assoc_num} -> {should_show}")
+                            except (ValueError, TypeError):
+                                # 转换失败，保持原比较结果
+                                print(f"[DEBUG] 数字转换失败: current_str='{current_str}', assoc_str='{assoc_str}'")
+                                pass
+                        
+                        # 调试输出比较详情
+                        print(f"[DEBUG] 初始比较详情: current_str='{current_str}'({type(current_str)}), assoc_str='{assoc_str}'({type(assoc_str)}), should_show={should_show}")
+                        
+                        field_widgets[field_name].setVisible(should_show)
+                        print(f"[DEBUG] 初始关联检查完成: 字段 '{field_name}' 关联字段 '{association_field}' 当前值='{current_association_value}'({type(current_association_value)}), 期望值='{association_value}'({type(association_value)}), 显示={should_show}")
 
     def generate_single_input_field(self, input_layout, field_name, field_config):
         """生成单个输入字段"""
@@ -420,11 +488,16 @@ class ToolCardWidget(QFrame):
             # 兼容旧格式：如果包含"下拉框"则认为是下拉框类型
             control_type = FieldType.SELECT_DISPLAY if "下拉框" in field_config else FieldType.INPUT_DISPLAY
             required = False  # 旧格式不支持必填
+            association_enabled = False  # 旧格式不支持关联
         else:
             # 新格式：结构化JSON对象
             display_name = field_config.get("display_name", field_name)
             control_type = FieldType.get_display_from_type(field_config.get("type", FieldType.INPUT))
             required = field_config.get("required", False)
+            association_enabled = field_config.get("association_enabled", False)
+            
+            # 调试输出：检查必填字段数据
+            print(f"[DEBUG] 字段 '{field_name}': 必填={required}, 关联={association_enabled}, 显示名='{display_name}'")
         
         # 创建字段容器 - 现代化设计
         field_widget = QWidget()
@@ -450,34 +523,52 @@ class ToolCardWidget(QFrame):
             combo_box = NoWheelComboBox()
             # 设置字段标识符
             combo_box.setProperty("field_name", field_name)
-            # 使用紧凑的下拉框样式，适合卡片工具
-            combo_box.setStyleSheet("""
-                QComboBox {
-                    height: 32px;
-                    font-size: 14px;
-                    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-                    min-width: 120px;
-                    max-width: 120px;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 6px;
-                    padding: 0 8px;
-                    background: white;
-                }
-                QComboBox:hover {
-                    border-color: #cbd5e1;
-                }
-                QComboBox::drop-down {
-                    border: none;
-                    width: 24px;
-                    subcontrol-origin: padding;
-                    subcontrol-position: top right;
-                }
-                QComboBox::down-arrow {
-                    image: url(D:/workspace/TestTool/src/resources/icons/combobox.png);
-                    width: 12px;
-                    height: 12px;
-                }
-            """)
+            
+            # 为下拉框直接添加切换事件处理
+            def on_combo_index_changed(index):
+                current_value = combo_box.currentData() if combo_box.currentData() is not None else combo_box.currentText()
+                print(f"[DEBUG] 下拉框 '{field_name}' 切换为: {current_value}")
+                
+                # 直接校验该字段是否被其他字段关联
+                if field_name in self.field_dependencies:
+                    print(f"[DEBUG] 字段 '{field_name}' 被其他字段关联，开始校验")
+                    dependencies = self.field_dependencies[field_name]
+                    for dependency in dependencies:
+                        dependent_field = dependency["dependent_field"]
+                        expected_value = dependency["expected_value"]
+                        dependent_widget = dependency["widget"]
+                        
+                        # 直接比较逻辑
+                        current_str = str(current_value) if current_value is not None else ""
+                        expected_str = str(expected_value) if expected_value is not None else ""
+                        
+                        # 清理字符串：去除前后空格
+                        current_str = current_str.strip()
+                        expected_str = expected_str.strip()
+                        
+                        should_show = current_str == expected_str
+                        
+                        # 额外检查：如果期望值是数字2，当前值是字符串"2"，也应该显示
+                        if not should_show and expected_value is not None and current_value is not None:
+                            try:
+                                # 尝试将值转换为数字进行比较
+                                current_num = float(current_str) if current_str else None
+                                expected_num = float(expected_str) if expected_str else None
+                                if current_num is not None and expected_num is not None:
+                                    should_show = current_num == expected_num
+                            except (ValueError, TypeError):
+                                # 转换失败，保持原比较结果
+                                pass
+                        
+                        print(f"[DEBUG] 字段 '{dependent_field}' 显示状态: {should_show} (当前值='{current_value}', 期望值='{expected_value}')")
+                        dependent_widget.setVisible(should_show)
+                else:
+                    print(f"[DEBUG] 字段 '{field_name}' 没有被其他字段关联")
+            
+            combo_box.currentIndexChanged.connect(on_combo_index_changed)
+            
+            # 使用卡片内部专用的下拉框样式
+            combo_box.setStyleSheet(get_card_combobox_style())
             
             # 处理枚举配置
             self.setup_combo_options(combo_box, field_config)
@@ -503,34 +594,8 @@ class ToolCardWidget(QFrame):
             multi_combo = MultiSelectComboBox()
             # 设置字段标识符
             multi_combo.setProperty("field_name", field_name)
-            # 使用紧凑的下拉框样式，适合卡片工具
-            multi_combo.setStyleSheet("""
-                QComboBox {
-                    height: 32px;
-                    font-size: 14px;
-                    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-                    min-width: 120px;
-                    max-width: 300px;
-                    border: 1px solid #e2e8f0;
-                    border-radius: 6px;
-                    padding: 0 8px;
-                    background: white;
-                }
-                QComboBox:hover {
-                    border-color: #cbd5e1;
-                }
-                QComboBox::drop-down {
-                    border: none;
-                    width: 24px;
-                    subcontrol-origin: padding;
-                    subcontrol-position: top right;
-                }
-                QComboBox::down-arrow {
-                    image: url(D:/workspace/TestTool/src/resources/icons/combobox.png);
-                    width: 12px;
-                    height: 12px;
-                }
-            """)
+            # 使用卡片内部专用的多选下拉框样式
+            multi_combo.setStyleSheet(get_card_multiselect_combobox_style())
             
             # 处理枚举配置
             self.setup_combo_options(multi_combo, field_config)
@@ -598,6 +663,51 @@ class ToolCardWidget(QFrame):
                 # 为每个单选按钮设置字段标识符
                 radio_btn.setProperty("field_name", field_name)
                 radio_btn.setProperty("value", option.get("value", option.get("description", "")))
+                
+                # 为单选按钮直接添加切换事件处理
+                def on_radio_toggled(checked, btn=radio_btn, fname=field_name):
+                    if checked:
+                        current_value = btn.property("value")
+                        print(f"[DEBUG] 单选按钮 '{fname}' 切换为: {current_value}")
+                        
+                        # 直接校验该字段是否被其他字段关联
+                        if fname in self.field_dependencies:
+                            print(f"[DEBUG] 字段 '{fname}' 被其他字段关联，开始校验")
+                            dependencies = self.field_dependencies[fname]
+                            for dependency in dependencies:
+                                dependent_field = dependency["dependent_field"]
+                                expected_value = dependency["expected_value"]
+                                dependent_widget = dependency["widget"]
+                                
+                                # 直接比较逻辑
+                                current_str = str(current_value) if current_value is not None else ""
+                                expected_str = str(expected_value) if expected_value is not None else ""
+                                
+                                # 清理字符串：去除前后空格
+                                current_str = current_str.strip()
+                                expected_str = expected_str.strip()
+                                
+                                should_show = current_str == expected_str
+                                
+                                # 额外检查：如果期望值是数字2，当前值是字符串"2"，也应该显示
+                                if not should_show and expected_value is not None and current_value is not None:
+                                    try:
+                                        # 尝试将值转换为数字进行比较
+                                        current_num = float(current_str) if current_str else None
+                                        expected_num = float(expected_str) if expected_str else None
+                                        if current_num is not None and expected_num is not None:
+                                            should_show = current_num == expected_num
+                                    except (ValueError, TypeError):
+                                        # 转换失败，保持原比较结果
+                                        pass
+                                
+                                print(f"[DEBUG] 字段 '{dependent_field}' 显示状态: {should_show} (当前值='{current_value}', 期望值='{expected_value}')")
+                                dependent_widget.setVisible(should_show)
+                        else:
+                            print(f"[DEBUG] 字段 '{fname}' 没有被其他字段关联")
+                
+                radio_btn.toggled.connect(on_radio_toggled)
+                
                 # 使用简洁的默认样式，参考测试数据tab的模式和性别字段
                 radio_layout.addWidget(radio_btn)
                 button_group.addButton(radio_btn)
@@ -651,7 +761,453 @@ class ToolCardWidget(QFrame):
         
         field_layout.addStretch()
         input_layout.addWidget(field_widget)
+        
+        return field_widget
 
+
+    def get_current_field_value(self, field_name):
+        """获取指定字段的当前值"""
+        # 查找当前卡片内的控件
+        line_edits = self.findChildren(QLineEdit)
+        combo_boxes = self.findChildren(QComboBox)
+        multi_select_combos = self.findChildren(MultiSelectComboBox)
+        radio_buttons = self.findChildren(QRadioButton)
+        
+        print(f"[DEBUG] get_current_field_value: 开始查找字段 '{field_name}'")
+        print(f"[DEBUG] 找到 {len(line_edits)} 个输入框, {len(combo_boxes)} 个下拉框, {len(multi_select_combos)} 个多选框, {len(radio_buttons)} 个单选按钮")
+        
+        # 查找输入框
+        for line_edit in line_edits:
+            if line_edit.property("field_name") == field_name:
+                value = line_edit.text().strip()
+                print(f"[DEBUG] 在输入框中找到字段 '{field_name}', 值='{value}'")
+                return value
+        
+        # 查找多选框
+        for multi_combo in multi_select_combos:
+            if multi_combo.property("field_name") == field_name:
+                selected_data = multi_combo.get_selected_data()
+                if selected_data:
+                    value = selected_data[0] if len(selected_data) == 1 else selected_data
+                    print(f"[DEBUG] 在多选框中找到字段 '{field_name}', 值='{value}'")
+                    return value
+                print(f"[DEBUG] 在多选框中找到字段 '{field_name}', 但无选中值")
+                return ""
+        
+        # 查找下拉框
+        for combo_box in combo_boxes:
+            field_name_prop = combo_box.property("field_name")
+            if field_name_prop == field_name:
+                current_data = combo_box.currentData()
+                current_text = combo_box.currentText()
+                if current_data is not None:
+                    print(f"[DEBUG] 在下拉框中找到字段 '{field_name}', currentData='{current_data}', currentText='{current_text}'")
+                    return current_data
+                print(f"[DEBUG] 在下拉框中找到字段 '{field_name}', currentData=None, currentText='{current_text}'")
+                return current_text
+            else:
+                print(f"[DEBUG] 下拉框属性不匹配: property('field_name')='{field_name_prop}', 期望='{field_name}'")
+        
+        # 查找单选按钮
+        for radio_btn in radio_buttons:
+            if radio_btn.property("field_name") == field_name and radio_btn.isChecked():
+                value = radio_btn.property("value")
+                print(f"[DEBUG] 在单选按钮中找到字段 '{field_name}', 选中值='{value}'")
+                return value
+        
+        print(f"[DEBUG] 未找到字段 '{field_name}'，返回空字符串")
+        return ""
+
+
+    def setup_association_listener(self, field_widget, field_name, association_field, association_value):
+        """设置关联字段变化监听器"""
+        # 查找关联字段的控件
+        line_edits = self.findChildren(QLineEdit)
+        combo_boxes = self.findChildren(QComboBox)
+        multi_select_combos = self.findChildren(MultiSelectComboBox)
+        radio_buttons = self.findChildren(QRadioButton)
+        
+        print(f"[DEBUG] setup_association_listener: 字段 '{field_name}' 关联到字段 '{association_field}' 值='{association_value}'")
+        print(f"[DEBUG] 找到 {len(line_edits)} 个输入框, {len(combo_boxes)} 个下拉框, {len(multi_select_combos)} 个多选框, {len(radio_buttons)} 个单选按钮")
+        
+        # 调试：显示所有找到的下拉框的field_name属性
+        print(f"[DEBUG] 检查所有下拉框的field_name属性:")
+        for i, combo_box in enumerate(combo_boxes):
+            field_name_prop = combo_box.property("field_name")
+            print(f"[DEBUG]   下拉框 {i}: property('field_name') = '{field_name_prop}'")
+            if field_name_prop == association_field:
+                print(f"[DEBUG]   -> 匹配到关联字段 '{association_field}'")
+        
+        # 查找关联字段的输入框
+        for line_edit in line_edits:
+            if line_edit.property("field_name") == association_field:
+                print(f"[DEBUG] 在输入框中找到关联字段 '{association_field}'，设置文本变化监听器")
+                line_edit.textChanged.connect(lambda text, widget=field_widget, assoc_value=association_value: 
+                    self.update_field_visibility(widget, text, assoc_value))
+                return
+        
+        # 查找关联字段的多选框
+        for multi_combo in multi_select_combos:
+            if multi_combo.property("field_name") == association_field:
+                print(f"[DEBUG] 在多选框中找到关联字段 '{association_field}'，设置文本变化监听器")
+                # 多选框需要自定义信号监听，这里简化处理
+                multi_combo.currentTextChanged.connect(lambda text, widget=field_widget, assoc_value=association_value: 
+                    self.update_field_visibility(widget, text, assoc_value))
+                return
+        
+        # 查找关联字段的下拉框
+        for combo_box in combo_boxes:
+            if combo_box.property("field_name") == association_field:
+                print(f"[DEBUG] 在下拉框中找到关联字段 '{association_field}'，设置索引变化监听器")
+                
+                # 记录字段依赖关系到全局字典
+                if association_field not in self.field_dependencies:
+                    self.field_dependencies[association_field] = []
+                self.field_dependencies[association_field].append({
+                    "dependent_field": field_name,
+                    "expected_value": association_value,
+                    "widget": field_widget
+                })
+                print(f"[DEBUG] 已记录下拉框依赖关系: {association_field} -> {field_name} (期望值: {association_value})")
+                
+                # 监听下拉框索引变化，获取实际值
+                combo_box.currentIndexChanged.connect(lambda index, field=association_field, combo=combo_box: 
+                    self._handle_combo_index_changed_for_dependency(index, field, combo))
+                
+                # 立即触发一次初始检查，确保字段状态正确
+                current_data = combo_box.currentData()
+                current_value = current_data if current_data is not None else combo_box.currentText()
+                print(f"[DEBUG] 关联字段 '{association_field}' 初始值检查: currentData='{current_data}', currentText='{combo_box.currentText()}', 最终值='{current_value}'")
+                
+                # 使用全局依赖关系更新逻辑
+                self.on_field_value_changed(association_field, current_value)
+                
+                print(f"[DEBUG] 下拉框监听器设置完成，关联字段 '{association_field}' 已连接")
+                return
+        
+        # 查找关联字段的单选按钮
+        for radio_btn in radio_buttons:
+            if radio_btn.property("field_name") == association_field:
+                print(f"[DEBUG] 在单选按钮中找到关联字段 '{association_field}'，设置切换监听器")
+                radio_btn.toggled.connect(lambda checked, widget=field_widget, assoc_value=association_value, btn=radio_btn: 
+                    self.update_field_visibility(widget, btn.property("value") if checked else "", assoc_value))
+                return
+        
+        print(f"[DEBUG] 警告：未找到关联字段 '{association_field}' 的控件，无法设置监听器")
+
+    def setup_all_field_dependencies(self):
+        """设置所有字段的依赖监听器"""
+        print(f"[DEBUG] 开始设置所有字段依赖监听器，依赖关系: {self.field_dependencies}")
+        
+        # 为每个有依赖关系的字段设置监听器
+        for field_name in self.field_dependencies.keys():
+            print(f"[DEBUG] 为字段 '{field_name}' 设置值监听器")
+            self.setup_field_value_listener(field_name)
+    
+    def setup_field_value_listener(self, field_name):
+        """为指定字段设置值变化监听器"""
+        print(f"[DEBUG] 为字段 '{field_name}' 设置值变化监听器")
+        
+        # 查找字段控件
+        line_edits = self.findChildren(QLineEdit)
+        combo_boxes = self.findChildren(QComboBox)
+        multi_select_combos = self.findChildren(MultiSelectComboBox)
+        radio_buttons = self.findChildren(QRadioButton)
+        
+        print(f"[DEBUG] 找到控件数量: 输入框={len(line_edits)}, 下拉框={len(combo_boxes)}, 多选框={len(multi_select_combos)}, 单选按钮={len(radio_buttons)}")
+        
+        # 查找输入框
+        for line_edit in line_edits:
+            if line_edit.property("field_name") == field_name:
+                print(f"[DEBUG] 为输入框字段 '{field_name}' 设置文本变化监听器")
+                line_edit.textChanged.connect(lambda text, field=field_name: 
+                    self.on_field_value_changed(field, text))
+                return
+        
+        # 查找多选框
+        for multi_combo in multi_select_combos:
+            if multi_combo.property("field_name") == field_name:
+                print(f"[DEBUG] 为多选框字段 '{field_name}' 设置文本变化监听器")
+                multi_combo.currentTextChanged.connect(lambda text, field=field_name: 
+                    self.on_field_value_changed(field, text))
+                return
+        
+        # 查找下拉框
+        for combo_box in combo_boxes:
+            field_name_prop = combo_box.property("field_name")
+            print(f"[DEBUG] 检查下拉框: property('field_name')='{field_name_prop}', 期望='{field_name}'")
+            if field_name_prop == field_name:
+                print(f"[DEBUG] 为下拉框字段 '{field_name}' 设置索引变化监听器")
+                combo_box.currentIndexChanged.connect(lambda index, field=field_name, combo=combo_box: 
+                    self._handle_combo_index_changed_for_dependency(index, field, combo))
+                print(f"[DEBUG] 已为下拉框字段 '{field_name}' 设置监听器")
+                
+                # 立即触发一次初始检查，确保字段状态正确
+                current_data = combo_box.currentData()
+                current_value = current_data if current_data is not None else combo_box.currentText()
+                print(f"[DEBUG] 字段 '{field_name}' 初始值检查: currentData='{current_data}', currentText='{combo_box.currentText()}', 最终值='{current_value}'")
+                
+                # 使用全局依赖关系更新逻辑
+                self.on_field_value_changed(field_name, current_value)
+                
+                return
+        
+        # 查找单选按钮
+        for radio_btn in radio_buttons:
+            if radio_btn.property("field_name") == field_name:
+                print(f"[DEBUG] 为单选按钮字段 '{field_name}' 设置切换监听器")
+                radio_btn.toggled.connect(lambda checked, field=field_name, btn=radio_btn: 
+                    self.on_field_value_changed(field, btn.property("value") if checked else ""))
+                return
+        
+        print(f"[DEBUG] 警告：未找到字段 '{field_name}' 的控件，无法设置监听器")
+    
+    def _handle_combo_index_changed_for_dependency(self, index, field_name, combo):
+        """处理下拉框索引变化事件（用于依赖关系）"""
+        current_data = combo.currentData()
+        current_text = combo.currentText()
+        final_value = current_data if current_data is not None else current_text
+        print(f"[DEBUG] 下拉框索引变化（依赖）: 字段='{field_name}', 索引={index}, currentData='{current_data}', currentText='{current_text}', 最终值='{final_value}'")
+        print(f"[DEBUG] 触发字段值变化事件: {field_name} = {final_value}")
+        self.on_field_value_changed(field_name, final_value)
+    
+    def on_field_value_changed(self, field_name, new_value):
+        """当字段值发生变化时，更新所有依赖该字段的字段可见性"""
+        print(f"[DEBUG] 字段值变化: '{field_name}' = '{new_value}'")
+        
+        # 检查该字段是否有依赖关系
+        if field_name not in self.field_dependencies:
+            print(f"[DEBUG] 字段 '{field_name}' 没有依赖关系，无需更新")
+            return
+        
+        # 更新所有依赖该字段的字段可见性
+        dependencies = self.field_dependencies[field_name]
+        for dependency in dependencies:
+            dependent_field = dependency["dependent_field"]
+            expected_value = dependency["expected_value"]
+            widget = dependency["widget"]
+            
+            print(f"[DEBUG] 检查依赖字段 '{dependent_field}' 的可见性，期望值='{expected_value}'")
+            
+            # 使用修复后的比较逻辑
+            current_str = str(new_value) if new_value is not None else ""
+            expected_str = str(expected_value) if expected_value is not None else ""
+            
+            # 清理字符串：去除前后空格
+            current_str = current_str.strip()
+            expected_str = expected_str.strip()
+            
+            # 主要比较：直接字符串比较
+            should_show = current_str == expected_str
+            
+            # 额外检查：如果期望值是数字2，当前值是字符串"2"，也应该显示
+            if not should_show and expected_value is not None and new_value is not None:
+                try:
+                    # 尝试将值转换为数字进行比较
+                    current_num = float(current_str) if current_str else None
+                    expected_num = float(expected_str) if expected_str else None
+                    if current_num is not None and expected_num is not None:
+                        should_show = current_num == expected_num
+                        print(f"[DEBUG] 数字比较结果: {current_num} == {expected_num} -> {should_show}")
+                except (ValueError, TypeError):
+                    # 转换失败，保持原比较结果
+                    print(f"[DEBUG] 数字转换失败: current_str='{current_str}', expected_str='{expected_str}'")
+                    pass
+            
+            # 调试输出比较详情
+            print(f"[DEBUG] 比较详情: current_str='{current_str}'({type(current_str)}), expected_str='{expected_str}'({type(expected_str)}), should_show={should_show}")
+            
+            widget.setVisible(should_show)
+            print(f"[DEBUG] 更新字段 '{dependent_field}' 可见性: {should_show} (当前值='{new_value}', 期望值='{expected_value}')")
+
+
+    def _delayed_setup_association_listener(self, field_widget, field_name, association_field, association_value):
+        """延迟设置关联字段监听器"""
+        print(f"[DEBUG] 延迟设置关联监听器: 字段 '{field_name}' 关联字段 '{association_field}' 值='{association_value}'")
+        self.setup_association_listener(field_widget, field_name, association_field, association_value)
+        
+        # 初始检查关联条件
+        current_association_value = self.get_current_field_value(association_field)
+        
+        # 使用修复后的比较逻辑
+        current_str = str(current_association_value) if current_association_value is not None else ""
+        assoc_str = str(association_value) if association_value is not None else ""
+        
+        # 清理字符串：去除前后空格
+        current_str = current_str.strip()
+        assoc_str = assoc_str.strip()
+        
+        should_show = current_str == assoc_str
+        
+        # 额外检查：如果期望值是数字2，当前值是字符串"2"，也应该显示
+        if not should_show and association_value is not None and current_association_value is not None:
+            try:
+                # 尝试将值转换为数字进行比较
+                current_num = float(current_str) if current_str else None
+                assoc_num = float(assoc_str) if assoc_str else None
+                if current_num is not None and assoc_num is not None:
+                    should_show = current_num == assoc_num
+            except (ValueError, TypeError):
+                # 转换失败，保持原比较结果
+                pass
+        
+        field_widget.setVisible(should_show)
+        print(f"[DEBUG] 延迟关联检查完成: 字段 '{field_name}' 关联字段 '{association_field}' 当前值='{current_association_value}'({type(current_association_value)}), 期望值='{association_value}'({type(association_value)}), 显示={should_show}")
+
+
+    def _handle_combo_index_changed(self, index, widget, assoc_value, combo):
+        """处理下拉框索引变化事件"""
+        current_data = combo.currentData()
+        current_text = combo.currentText()
+        final_value = current_data if current_data is not None else current_text
+        print(f"[DEBUG] 下拉框索引变化: 索引={index}, currentData='{current_data}', currentText='{current_text}', 最终值='{final_value}'")
+        self.update_field_visibility(widget, final_value, assoc_value)
+
+
+    def _setup_direct_field_handler(self, field_name):
+        """为字段设置直接的切换处理"""
+        print(f"[DEBUG] 为字段 '{field_name}' 设置直接切换处理")
+        
+        # 查找字段控件
+        combo_boxes = self.findChildren(QComboBox)
+        radio_buttons = self.findChildren(QRadioButton)
+        
+        # 为下拉框设置直接的切换处理
+        for combo_box in combo_boxes:
+            if combo_box.property("field_name") == field_name:
+                print(f"[DEBUG] 为下拉框字段 '{field_name}' 设置直接切换处理")
+                
+                # 直接重写下拉框的切换事件
+                original_index_changed = combo_box.currentIndexChanged
+                
+                def direct_combo_handler(index):
+                    # 先执行原始处理
+                    if original_index_changed:
+                        original_index_changed.emit(index)
+                    
+                    # 直接校验关联字段
+                    self._check_field_associations_directly(field_name, combo_box)
+                
+                combo_box.currentIndexChanged.disconnect()
+                combo_box.currentIndexChanged.connect(direct_combo_handler)
+                return
+        
+        # 为单选按钮设置直接的切换处理
+        for radio_btn in radio_buttons:
+            if radio_btn.property("field_name") == field_name:
+                print(f"[DEBUG] 为单选按钮字段 '{field_name}' 设置直接切换处理")
+                
+                # 直接重写单选按钮的切换事件
+                original_toggled = radio_btn.toggled
+                
+                def direct_radio_handler(checked):
+                    # 先执行原始处理
+                    if original_toggled:
+                        original_toggled.emit(checked)
+                    
+                    # 直接校验关联字段
+                    self._check_field_associations_directly(field_name, radio_btn)
+                
+                radio_btn.toggled.disconnect()
+                radio_btn.toggled.connect(direct_radio_handler)
+                return
+        
+        print(f"[DEBUG] 未找到字段 '{field_name}' 的控件，无法设置直接处理")
+    
+    def _check_field_associations_directly(self, field_name, widget):
+        """直接校验字段关联关系"""
+        print(f"[DEBUG] 直接校验字段 '{field_name}' 的关联关系")
+        
+        # 获取当前值
+        if isinstance(widget, QComboBox):
+            current_value = widget.currentData() if widget.currentData() is not None else widget.currentText()
+        elif isinstance(widget, QRadioButton):
+            current_value = widget.property("value") if widget.isChecked() else ""
+        else:
+            current_value = ""
+        
+        print(f"[DEBUG] 字段 '{field_name}' 当前值: '{current_value}'")
+        
+        # 检查该字段是否有依赖关系
+        if field_name not in self.field_dependencies:
+            print(f"[DEBUG] 字段 '{field_name}' 没有依赖关系，无需处理")
+            return
+        
+        # 更新所有依赖该字段的字段可见性
+        dependencies = self.field_dependencies[field_name]
+        for dependency in dependencies:
+            dependent_field = dependency["dependent_field"]
+            expected_value = dependency["expected_value"]
+            dependent_widget = dependency["widget"]
+            
+            print(f"[DEBUG] 检查依赖字段 '{dependent_field}' 的可见性，期望值='{expected_value}'")
+            
+            # 直接比较逻辑
+            current_str = str(current_value) if current_value is not None else ""
+            expected_str = str(expected_value) if expected_value is not None else ""
+            
+            # 清理字符串：去除前后空格
+            current_str = current_str.strip()
+            expected_str = expected_str.strip()
+            
+            should_show = current_str == expected_str
+            
+            # 额外检查：如果期望值是数字2，当前值是字符串"2"，也应该显示
+            if not should_show and expected_value is not None and current_value is not None:
+                try:
+                    # 尝试将值转换为数字进行比较
+                    current_num = float(current_str) if current_str else None
+                    expected_num = float(expected_str) if expected_str else None
+                    if current_num is not None and expected_num is not None:
+                        should_show = current_num == expected_num
+                        print(f"[DEBUG] 数字比较结果: {current_num} == {expected_num} -> {should_show}")
+                except (ValueError, TypeError):
+                    # 转换失败，保持原比较结果
+                    pass
+            
+            # 调试输出比较详情
+            print(f"[DEBUG] 比较详情: current_str='{current_str}'({type(current_str)}), expected_str='{expected_str}'({type(expected_str)}), should_show={should_show}")
+            
+            dependent_widget.setVisible(should_show)
+            print(f"[DEBUG] 更新字段 '{dependent_field}' 可见性: {should_show}")
+
+    def _get_default_field_value(self, field_name, sorted_mappings):
+        """从数据库配置中获取字段的默认值"""
+        print(f"[DEBUG] 获取字段 '{field_name}' 的默认值")
+        
+        # sorted_mappings 是一个列表，包含 (field_name, field_config) 元组
+        for mapping_field_name, field_config in sorted_mappings:
+            if mapping_field_name == field_name and isinstance(field_config, dict):
+                default_value = field_config.get("default_value", "")
+                print(f"[DEBUG] 找到字段 '{field_name}' 的默认值: '{default_value}'")
+                return default_value
+        
+        print(f"[DEBUG] 未找到字段 '{field_name}' 的默认值，返回空字符串")
+        return ""
+
+    def update_field_visibility(self, field_widget, current_value, association_value):
+        """根据关联字段值更新字段可见性"""
+        # 修复值比较逻辑：处理空值、None值和字符串转换
+        current_str = str(current_value) if current_value is not None else ""
+        assoc_str = str(association_value) if association_value is not None else ""
+        
+        # 特殊处理：如果期望值是数字2，但当前值是字符串"2"，也应该匹配
+        should_show = current_str == assoc_str
+        
+        # 额外检查：如果期望值是数字2，当前值是字符串"2"，也应该显示
+        if not should_show and association_value is not None and current_value is not None:
+            try:
+                # 尝试将值转换为数字进行比较
+                current_num = float(current_str) if current_str else None
+                assoc_num = float(assoc_str) if assoc_str else None
+                if current_num is not None and assoc_num is not None:
+                    should_show = current_num == assoc_num
+            except (ValueError, TypeError):
+                # 转换失败，保持原比较结果
+                pass
+        
+        field_widget.setVisible(should_show)
+        print(f"[DEBUG] 关联字段值变化: 当前值='{current_value}'({type(current_value)}), 期望值='{association_value}'({type(association_value)}), 显示={should_show}")
 
 
     def setup_combo_options(self, combo_box, field_config):
@@ -727,12 +1283,30 @@ class ToolCardWidget(QFrame):
                 # 兼容旧格式：如果包含"下拉框"则认为是下拉框类型
                 control_type = FieldType.SELECT_DISPLAY if "下拉框" in field_config else FieldType.INPUT_DISPLAY
                 required = False  # 旧格式不支持必填
+                association_enabled = False  # 旧格式不支持关联
             else:
                 display_name = field_config.get("display_name", field_name)
                 control_type = FieldType.get_display_from_type(field_config.get("type", FieldType.INPUT))
                 required = field_config.get("required", False)
+                association_enabled = field_config.get("association_enabled", False)
             
-            print(f"[DEBUG] 卡片级别查找字段: {field_name}, 显示名: {display_name}, 类型: {control_type}, 必填: {required}")
+            print(f"[DEBUG] 卡片级别查找字段: {field_name}, 显示名: {display_name}, 类型: {control_type}, 必填: {required}, 关联: {association_enabled}")
+            
+            # 检查关联字段条件，如果字段被隐藏则不参与参数收集
+            if association_enabled and isinstance(field_config, dict):
+                association_field = field_config.get("association_field", "")
+                association_value = field_config.get("association_value", "")
+                
+                if association_field and association_value:
+                    # 获取关联字段的当前值
+                    current_association_value = self.get_current_field_value(association_field)
+                    should_include_field = str(current_association_value) == str(association_value)
+                    
+                    if not should_include_field:
+                        print(f"[DEBUG] 字段 '{field_name}' 因关联条件不满足被隐藏，不参与参数收集")
+                        # 对于隐藏的字段，如果必填则跳过校验，直接提供空值
+                        input_params[field_name] = ""
+                        continue
             
             # 基于字段英文名称精确查找对应的控件
             field_value = None
@@ -1051,8 +1625,8 @@ class ToolCardsTab(QWidget):
         # 卡片容器 - 使用网格布局实现自动换行
         self.cards_container = QWidget()
         self.cards_layout = QGridLayout(self.cards_container)
-        self.cards_layout.setSpacing(8)  # 紧凑卡片间距
-        self.cards_layout.setContentsMargins(8, 8, 8, 8)  # 紧凑边距
+        self.cards_layout.setSpacing(16)  # 增加卡片间距
+        self.cards_layout.setContentsMargins(16, 16, 16, 16)  # 增加边距
         self.cards_layout.setAlignment(Qt.AlignTop)
 
         scroll_area.setWidget(self.cards_container)
@@ -1199,6 +1773,13 @@ class ToolCardsTab(QWidget):
                 "config": card.get("config", {}),
                 "mappings": card.get("mappings", {})
             }
+            
+            # 调试输出：检查映射数据中是否包含必填字段信息
+            print(f"[DEBUG] 加载卡片: {card_data.get('name')}")
+            if card_data.get("mappings"):
+                for field_name, field_config in card_data["mappings"].items():
+                    required = field_config.get("required", False) if isinstance(field_config, dict) else False
+                    print(f"[DEBUG] 字段 '{field_name}': 必填状态 = {required}")
             
             card_widget = ToolCardWidget(card_data, self)
             self.cards_layout.addWidget(card_widget, row, col)
@@ -1473,7 +2054,38 @@ class ToolCardsTab(QWidget):
 
     def copy_card(self, card_data):
         """复制卡片"""
-        Toast.info(self, "复制卡片", f"复制卡片: {card_data.get('name')}")
+        try:
+            # 获取当前文件夹ID
+            if not self.current_folder_id:
+                Toast.error(self, "复制失败", "请先选择文件夹")
+                return
+            
+            # 创建复制后的卡片数据
+            copied_card_data = {
+                "folder_id": self.current_folder_id,
+                "name": f"{card_data.get('name', '未命名卡片')}_副本",
+                "description": card_data.get('description', ''),
+                "card_type": card_data.get('type', 'sql'),
+                "config": card_data.get('config', {}).copy(),
+                "mappings": card_data.get('mappings', {}).copy(),
+                "sort_order": 0,
+                "enabled": True,
+                "created_by": "admin"
+            }
+            
+            # 使用数据库服务创建复制卡片
+            new_card_id = self.tool_cards_service.create_card(copied_card_data)
+            
+            if new_card_id:
+                # 刷新卡片显示
+                self.load_cards_for_folder(self.current_folder_id)
+                Toast.success(self, "复制成功", f"卡片 '{card_data.get('name')}' 已复制")
+            else:
+                Toast.error(self, "复制失败", "无法创建复制卡片，请检查数据库连接")
+                
+        except Exception as e:
+            print(f"复制卡片时发生错误: {e}")
+            Toast.error(self, "复制失败", f"复制过程中发生错误: {str(e)}")
 
     def delete_card(self, card_data):
         """删除卡片"""
@@ -1483,7 +2095,11 @@ class ToolCardsTab(QWidget):
             QMessageBox.Yes | QMessageBox.No
         )
         
-        if reply == QMessageBox.Yes:
+        # 将按钮文本改为中文
+        reply.setButtonText(QMessageBox.Yes, "确定")
+        reply.setButtonText(QMessageBox.No, "取消")
+        
+        if reply.exec_() == QMessageBox.Yes:
             # 使用数据库服务删除卡片
             success = self.tool_cards_service.delete_card(card_data["id"])
             
@@ -1720,31 +2336,6 @@ class ToolCardsTab(QWidget):
         
         return result
     
-    def format_json_with_colors(self, json_str):
-        """格式化JSON并添加颜色（键黑色，值绿色）"""
-        import re
-        
-        # 转义HTML特殊字符
-        json_str = json_str.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        
-        # 键：黑色，值：绿色
-        # 匹配键（双引号包围的字符串后跟冒号）
-        json_str = re.sub(r'("[^"]+"):', r'<span style="color: #000000; font-weight: bold;">\1</span>:', json_str)
-        
-        # 匹配字符串值（双引号包围的字符串）
-        json_str = re.sub(r':\s*"([^"]*)"', r': <span style="color: #059669;">"\1"</span>', json_str)
-        
-        # 匹配数字值
-        json_str = re.sub(r':\s*(\d+)', r': <span style="color: #059669;">\1</span>', json_str)
-        
-        # 匹配布尔值和null
-        json_str = re.sub(r':\s*(true|false|null)', r': <span style="color: #059669;">\1</span>', json_str)
-        
-        # 添加等宽字体和缩进
-        formatted = f'<pre style="font-family: monospace; white-space: pre-wrap;">{json_str}</pre>'
-        
-        return formatted
-    
     def on_sql_execution_error(self, query_name, error_message):
         """SQL执行错误"""
         print(f"[ERROR] SQL执行错误: {query_name}")
@@ -1753,7 +2344,6 @@ class ToolCardsTab(QWidget):
         Toast.error(self, "执行失败", 
                    f"查询: {query_name}\n错误: {error_message}")
         
-        Toast.error(self, "执行失败", error_message)
         print(f"[ERROR] SQL执行错误处理完成")
     
     def get_input_parameters(self, card_data):
