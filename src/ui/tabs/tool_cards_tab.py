@@ -243,6 +243,7 @@ class ToolCardWidget(QFrame):
         body_layout = QVBoxLayout(content_widget)
         body_layout.setContentsMargins(12, 8, 12, 8)  # 紧凑间距
         body_layout.setSpacing(6)  # 紧凑间距
+        body_layout.setAlignment(Qt.AlignTop)  # 设置顶部对齐，避免字段隐藏时间距拉伸
 
         # 根据卡片类型生成输入字段
         self.generate_input_fields(body_layout)
@@ -360,6 +361,7 @@ class ToolCardWidget(QFrame):
         input_layout = QVBoxLayout(input_widget)
         input_layout.setContentsMargins(8, 8, 8, 8)  # 增加内边距
         input_layout.setSpacing(12)  # 增加行间距
+        input_layout.setAlignment(Qt.AlignTop)  # 设置顶部对齐，避免字段隐藏时间距拉伸
         
         # 初始化字段依赖关系跟踪
         self.field_dependencies = {}
