@@ -45,8 +45,9 @@ class ToolCardsConfigDialog(QDialog):
         self.setWindowTitle(f"{base_title} - {folder_name}")
         self.setModal(True)
         self.setMinimumWidth(1400)  # 增加最小宽度以适应关联字段
-        self.setMinimumHeight(850)
-        self.resize(1400, 850)  # 设置默认大小
+        # 调整高度以平衡布局拉伸和内容显示
+        self.setMinimumHeight(800)  # 设置合适的最小高度，确保参数区域完全显示
+        self.resize(1400, 800)  # 设置合适的默认高度
 
         self.init_ui()
 
@@ -91,6 +92,7 @@ class ToolCardsConfigDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
         layout.setContentsMargins(15, 15, 15, 15)
+        layout.setAlignment(Qt.AlignTop)  # 主布局从顶部开始排列，避免整个弹窗被拉伸
 
 
 
@@ -182,6 +184,8 @@ class ToolCardsConfigDialog(QDialog):
         self.dynamic_config_widget = QWidget()
         self.dynamic_config_layout = QVBoxLayout(self.dynamic_config_widget)
         self.dynamic_config_layout.setContentsMargins(0, 0, 0, 0)
+        self.dynamic_config_layout.setSpacing(2)  # 减少各个配置部分之间的间距
+        self.dynamic_config_layout.setAlignment(Qt.AlignTop)  # 从顶部开始排列，避免拉伸
         
         self.form_layout.addRow(self.dynamic_config_widget)
         
@@ -467,7 +471,7 @@ class ToolCardsConfigDialog(QDialog):
         db_layout.setContentsMargins(0, 0, 0, 0)
         db_layout.setSpacing(2)  # 减少行间距
         
-        # 第一行：主机和端口
+        # 第一行：主机、端口和库名
         row1_widget = QWidget()
         row1_layout = QHBoxLayout(row1_widget)
         row1_layout.setContentsMargins(0, 0, 0, 0)
@@ -511,18 +515,6 @@ class ToolCardsConfigDialog(QDialog):
             }
         """)
         
-        row1_layout.addWidget(QLabel("主机:"))
-        row1_layout.addWidget(db_host_edit)
-        row1_layout.addWidget(QLabel("端口:"))
-        row1_layout.addWidget(db_port_edit)
-        row1_layout.addStretch()
-        
-        # 第二行：库名和用户名
-        row2_widget = QWidget()
-        row2_layout = QHBoxLayout(row2_widget)
-        row2_layout.setContentsMargins(0, 0, 0, 0)
-        row2_layout.setSpacing(6)
-        
         db_name_edit = QLineEdit()
         db_name_edit.setPlaceholderText("库名")
         db_name_edit.setStyleSheet("""
@@ -542,6 +534,20 @@ class ToolCardsConfigDialog(QDialog):
             }
         """)
         
+        row1_layout.addWidget(QLabel("主机:"))
+        row1_layout.addWidget(db_host_edit)
+        row1_layout.addWidget(QLabel("端口:"))
+        row1_layout.addWidget(db_port_edit)
+        row1_layout.addWidget(QLabel("库名:"))
+        row1_layout.addWidget(db_name_edit)
+        row1_layout.addStretch()
+        
+        # 第二行：用户和密码
+        row2_widget = QWidget()
+        row2_layout = QHBoxLayout(row2_widget)
+        row2_layout.setContentsMargins(0, 0, 0, 0)
+        row2_layout.setSpacing(6)
+        
         db_user_edit = QLineEdit()
         db_user_edit.setPlaceholderText("用户")
         db_user_edit.setStyleSheet("""
@@ -560,18 +566,6 @@ class ToolCardsConfigDialog(QDialog):
                 outline: none;
             }
         """)
-        
-        row2_layout.addWidget(QLabel("库名:"))
-        row2_layout.addWidget(db_name_edit)
-        row2_layout.addWidget(QLabel("用户:"))
-        row2_layout.addWidget(db_user_edit)
-        row2_layout.addStretch()
-        
-        # 第三行：密码
-        row3_widget = QWidget()
-        row3_layout = QHBoxLayout(row3_widget)
-        row3_layout.setContentsMargins(0, 0, 0, 0)
-        row3_layout.setSpacing(6)
         
         db_password_edit = QLineEdit()
         db_password_edit.setEchoMode(QLineEdit.Password)
@@ -593,13 +587,14 @@ class ToolCardsConfigDialog(QDialog):
             }
         """)
         
-        row3_layout.addWidget(QLabel("密码:"))
-        row3_layout.addWidget(db_password_edit)
-        row3_layout.addStretch()
+        row2_layout.addWidget(QLabel("用户:"))
+        row2_layout.addWidget(db_user_edit)
+        row2_layout.addWidget(QLabel("密码:"))
+        row2_layout.addWidget(db_password_edit)
+        row2_layout.addStretch()
         
         db_layout.addWidget(row1_widget)
         db_layout.addWidget(row2_widget)
-        db_layout.addWidget(row3_widget)
         
         # SQL查询配置
         sql_widget = QWidget()
@@ -700,7 +695,7 @@ class ToolCardsConfigDialog(QDialog):
         param_layout.addWidget(param_scroll_area)
         
         # 添加参数按钮
-        add_param_btn = QPushButton("+ 添加参数")
+        add_param_btn = QPushButton("+ 参数")
         add_param_btn.clicked.connect(self.add_sql_parameter)
         add_param_btn.setStyleSheet(
             """
@@ -711,10 +706,10 @@ class ToolCardsConfigDialog(QDialog):
                 border-radius: 2px;
                 font-size: 10px;
                 font-weight: normal;
-                min-width: 70px;
+                min-width: 35px;
                 height: 22px;
                 padding: 0px 6px;
-                max-width: 70px;
+                max-width: 35px;
                 text-align: left;
                 padding-left: 8px;
             }
@@ -926,7 +921,7 @@ class ToolCardsConfigDialog(QDialog):
         param_layout.addWidget(param_scroll_area)
         
         # 添加参数按钮
-        add_param_btn = QPushButton("+ 添加参数")
+        add_param_btn = QPushButton("+ 参数")
         add_param_btn.clicked.connect(self.add_http_parameter)
         add_param_btn.setStyleSheet(
             """
@@ -937,10 +932,10 @@ class ToolCardsConfigDialog(QDialog):
                 border-radius: 2px;
                 font-size: 10px;
                 font-weight: normal;
-                min-width: 70px;
+                min-width: 35px;
                 height: 22px;
                 padding: 0px 6px;
-                max-width: 70px;
+                max-width: 35px;
                 text-align: left;
                 padding-left: 8px;
             }
@@ -1174,7 +1169,7 @@ class ToolCardsConfigDialog(QDialog):
         delete_btn.clicked.connect(lambda: self.delete_parameter_row(param_widget))
         
         # 枚举配置添加按钮（紧贴删除按钮）
-        add_enum_btn = QPushButton("+枚举")
+        add_enum_btn = QPushButton("+ 枚举")
         add_enum_btn.setStyleSheet(
             """
             QPushButton {
@@ -1198,7 +1193,7 @@ class ToolCardsConfigDialog(QDialog):
         
         info_layout.addWidget(QLabel("字段:"))
         info_layout.addWidget(field_name_edit)
-        info_layout.addWidget(QLabel("显示:"))
+        info_layout.addWidget(QLabel("描述:"))
         info_layout.addWidget(display_name_edit)
         info_layout.addWidget(QLabel("默认:"))
         info_layout.addWidget(default_value_edit)
@@ -1304,7 +1299,7 @@ class ToolCardsConfigDialog(QDialog):
         enum_desc_edit.setFixedWidth(120)
         
         # 删除枚举按钮
-        delete_enum_btn = QPushButton("×")
+        delete_enum_btn = QPushButton("X")
         delete_enum_btn.setStyleSheet(
             """
             QPushButton {
