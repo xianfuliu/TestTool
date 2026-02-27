@@ -7,6 +7,7 @@ import socket
 import uuid
 import json
 import threading
+import tempfile
 from datetime import datetime
 from typing import Dict, List, Optional
 import logging
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 class InstanceManager:
     """实例管理器，处理多实例运行和端口分配"""
 
-    _instances_file = os.path.join(os.getcwd(), "config", "active_instances.json")
+    _instances_file = os.path.join(tempfile.gettempdir(), "TestTool", "active_instances.json")
     _lock = threading.Lock()
 
     def __init__(self):

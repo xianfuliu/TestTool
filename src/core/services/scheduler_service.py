@@ -30,12 +30,20 @@ from src.core.services.test_report_service import TestReportService
 from src.utils.interface_utils.report_generator import HTMLReportGenerator
 
 # 配置日志
+import tempfile
+import os
+
+# 创建临时目录中的日志文件路径
+log_dir = os.path.join(tempfile.gettempdir(), "TestTool")
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "scheduler_service.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("scheduler_service.log", encoding="utf-8", mode="w"),
+        logging.FileHandler(log_file, encoding="utf-8", mode="w"),
     ],
 )
 
