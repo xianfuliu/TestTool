@@ -1,7 +1,8 @@
 {
   "features": {
     "interface_automation": true,
-    "tool_cards": true
+    "tool_cards": true,
+    "api_management": true
   },
   "app": {
     "name": "测试工具管理",
@@ -9,5 +10,9 @@
   },
   "auth": {
     "enable_login": true
+  },
+  "api": {
+    "auto_start": true,
+    "default_port": 8000
   }
 }

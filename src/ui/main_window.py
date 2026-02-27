@@ -410,7 +410,9 @@ class MainWindow(QMainWindow):
         # 条件加载API管理标签页
         if self.enable_api_management and API_MANAGEMENT_AVAILABLE:
             try:
-                self.api_management_tab = ApiManagementTab(self)
+                # 获取API配置
+                api_config = self.config.get("api", {})
+                self.api_management_tab = ApiManagementTab(self, api_config)
                 self.content_stack_layout.addWidget(self.api_management_tab)
                 self.api_management_tab.hide()
                 print("API管理标签页已加载")

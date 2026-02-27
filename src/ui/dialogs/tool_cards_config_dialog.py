@@ -746,8 +746,6 @@ class ToolCardsConfigDialog(QDialog):
         http_url_edit = QLineEdit()
         http_url_edit.setPlaceholderText("https://api.example.com/endpoint")
         http_url_edit.setMinimumWidth(400)  # 增加最小宽度
-        # 设置文本显示开始部分而不是末尾
-        http_url_edit.textChanged.connect(lambda: http_url_edit.setCursorPosition(0))
         http_url_edit.setStyleSheet("""
             QLineEdit {
                 height: 22px;

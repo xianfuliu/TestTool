@@ -2496,9 +2496,22 @@ class ToolCardsTab(QWidget):
                 # 替换URL中的变量
                 url = self._replace_http_variables(url, input_params)
                 
+                # 替换请求头中的变量
+                if headers:
+                    headers = self._replace_http_variables_in_dict(headers, input_params)
+                
                 # 替换请求体中的变量
                 if body:
                     body = self._replace_http_variables_in_dict(body, input_params)
+            
+            # 打印调试信息：变量替换后的请求信息
+            print("=" * 60)
+            print("HTTP卡片执行调试信息:")
+            print(f"请求URL（变量替换后）: {url}")
+            print(f"请求方法: {method}")
+            print(f"请求头（变量替换后）: {json.dumps(headers, ensure_ascii=False, indent=2)}")
+            print(f"请求体（变量替换后）: {json.dumps(body, ensure_ascii=False, indent=2)}")
+            print("=" * 60)
             
             # 执行HTTP请求
             response = self._execute_http_request(method, url, headers, body)

@@ -55,9 +55,9 @@ class RouteMapper:
             self.router.patch(path, summary=summary, tags=tags)(controller_method)
 
 
-# 导入控制器
-from .controllers.data_sync_controller import DataSyncController
-from .controllers.health_controller import HealthController
+# 导入API服务
+from .api_services.addMerchantAndSuppliers import AddMerchantAndSuppliers
+from .api_services.creditOrderApproval import CreditOrderApproval
 
 # 创建主路由器
 api_router = APIRouter()
@@ -65,34 +65,27 @@ api_router = APIRouter()
 # 创建路由映射器
 mapper = RouteMapper(api_router)
 
-# 创建控制器实例
-health_controller = HealthController()
+# 创建API实例
+add_merchant_and_suppliers_api = AddMerchantAndSuppliers()
+credit_order_approval_api = CreditOrderApproval()
 
 # 路由配置 - 使用create_route_config函数
 url_routes = [
-    create_route_config(
-        "GET", "/health", health_controller.health_check, "健康检查接口", ["健康检查"]
-    ),
-    create_route_config(
-        "GET",
-        "/health/system",
-        health_controller.system_info,
-        "系统信息接口",
-        ["健康检查", "系统信息"],
-    ),
-    create_route_config(
-        "GET",
-        "/system/status",
-        health_controller.system_status,
-        "系统状态接口",
-        ["健康检查", "系统状态"],
-    ),
+    # 商户管理接口
     create_route_config(
         "POST",
-        "/data/data-sync",
-        DataSyncController().sync_data,
-        "数据同步接口",
-        ["数据同步"],
+        "/merchant/add-and-suppliers",
+        add_merchant_and_suppliers_api.add_merchant_and_suppliers,
+        "新增商户和供应商接口",
+        ["商户管理"],
+    ),
+    # 授信订单审批接口
+    create_route_config(
+        "POST",
+        "/credit-order/approval",
+        credit_order_approval_api.credit_order_approval,
+        "授信订单审批接口",
+        ["授信订单审批"],
     ),
 ]
 

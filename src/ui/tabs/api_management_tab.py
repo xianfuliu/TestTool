@@ -3,6 +3,8 @@ import subprocess
 import time
 import logging
 from typing import Optional
+import os
+import sys
 
 from PyQt5.QtWidgets import (
     QWidget,
@@ -18,9 +20,13 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QSplitter,
     QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QApplication,
 )
 from PyQt5.QtCore import QTimer, pyqtSignal, Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon, QColor
 
 from src.ui.widgets.toast_tips import Toast
 
@@ -30,11 +36,20 @@ logger = logging.getLogger(__name__)
 class FastAPIService:
     """FastAPI服务管理器"""
 
-    def __init__(self):
+    def __init__(self, config=None):
         self.process: Optional[subprocess.Popen] = None
         self.thread: Optional[threading.Thread] = None
         self.is_running = False
         self.port = 8000
+        self.config = config or {}
+        self.auto_start = self.config.get("auto_start", False)
+        self.default_port = self.config.get("default_port", 8000)
+        self._stop_event = threading.Event()
+        
+        # 如果配置了自动启动，则立即启动服务
+        if self.auto_start:
+            logger.info("检测到自动启动配置，正在启动FastAPI服务...")
+            self.start(self.default_port)
 
     def start(self, port: int = 8000) -> bool:
         """启动FastAPI服务"""
@@ -44,17 +59,24 @@ class FastAPIService:
                 return False
 
             self.port = port
+            self._stop_event.clear()
 
             # 使用线程启动FastAPI服务
             self.thread = threading.Thread(target=self._run_fastapi, daemon=True)
             self.thread.start()
 
-            # 等待服务启动
-            time.sleep(2)
+            # 等待服务启动，最多等待5秒
+            for i in range(5):
+                if self.is_running:
+                    break
+                time.sleep(1)
 
-            self.is_running = True
-            logger.info(f"FastAPI服务启动成功，端口: {self.port}")
-            return True
+            if self.is_running:
+                logger.info(f"FastAPI服务启动成功，端口: {self.port}")
+                return True
+            else:
+                logger.error("FastAPI服务启动超时")
+                return False
 
         except Exception as e:
             logger.error(f"启动FastAPI服务失败: {e}")
@@ -70,6 +92,9 @@ class FastAPIService:
             # 设置端口
             fastapi_app.instance_manager.port = self.port
 
+            # 标记服务为运行中
+            self.is_running = True
+            
             # 运行应用
             fastapi_app.run()
 
@@ -84,9 +109,13 @@ class FastAPIService:
                 logger.warning("FastAPI服务未在运行")
                 return False
 
-            # 这里可以实现优雅关闭逻辑
-            # 目前通过设置标志位让线程自然结束
+            # 设置停止事件
+            self._stop_event.set()
             self.is_running = False
+
+            # 等待线程结束，最多等待3秒
+            if self.thread and self.thread.is_alive():
+                self.thread.join(timeout=3)
 
             logger.info("FastAPI服务已停止")
             return True
@@ -118,157 +147,76 @@ class ApiManagementTab(QWidget):
 
     status_updated = pyqtSignal(dict)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, config=None):
         super().__init__(parent)
-        self.api_service = FastAPIService()
+        self.config = config or {}
+        self.api_service = FastAPIService(self.config)
         self.init_ui()
         self.setup_timer()
+        # 初始化按钮状态
+        self.update_button_states()
+        
+        # 加载并刷新接口列表
+        self.refresh_interface_list()
+
+    def get_icon(self, icon_name):
+        """获取图标，支持exe打包后的资源路径"""
+        import os
+        import sys
+
+        # 尝试多种路径方式加载图标
+        icon_paths = [
+            # 开发环境路径
+            os.path.join("src", "resources", "icons", icon_name),
+            # exe打包后路径
+            os.path.join(
+                os.path.dirname(sys.executable), "src", "resources", "icons", icon_name
+            ),
+            # 相对路径（如果exe在项目根目录）
+            os.path.join("src", "resources", "icons", icon_name),
+            # 临时解压路径（PyInstaller）
+            (
+                os.path.join(sys._MEIPASS, "src", "resources", "icons", icon_name)
+                if hasattr(sys, "_MEIPASS")
+                else None
+            ),
+        ]
+
+        for path in icon_paths:
+            if path and os.path.exists(path):
+                return QIcon(path)
+
+        # 如果所有路径都找不到，返回空图标
+        return QIcon()
 
     def init_ui(self):
-        """初始化界面"""
+        """初始化界面 - 统一布局版"""
         # 主布局
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(15)
 
-        # 创建分割器，支持调整大小
-        splitter = QSplitter(Qt.Vertical)
+        # 创建统一的服务状态容器
+        unified_panel = self.create_unified_panel()
+        main_layout.addWidget(unified_panel, stretch=0)  # 不拉伸，固定高度
+        
+        # 创建接口列表容器
+        interface_panel = self.create_interface_panel()
+        main_layout.addWidget(interface_panel, stretch=1)  # 拉伸，占据剩余空间
 
-        # 上半部分：状态和控制面板
-        top_widget = QWidget()
-        top_layout = QHBoxLayout(top_widget)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.setSpacing(15)
-
-        # 左侧：状态面板
-        status_panel = self.create_status_panel()
-        top_layout.addWidget(status_panel, 1)
-
-        # 右侧：控制面板
-        control_panel = self.create_control_panel()
-        top_layout.addWidget(control_panel, 1)
-
-        # 下半部分：日志和链接面板
-        bottom_widget = QWidget()
-        bottom_layout = QHBoxLayout(bottom_widget)
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_layout.setSpacing(15)
-
-        # 左侧：日志面板
-        log_panel = self.create_log_panel()
-        bottom_layout.addWidget(log_panel, 2)
-
-        # 右侧：链接面板
-        link_panel = self.create_link_panel()
-        bottom_layout.addWidget(link_panel, 1)
-
-        # 添加到分割器
-        splitter.addWidget(top_widget)
-        splitter.addWidget(bottom_widget)
-        splitter.setSizes([300, 200])
-
-        main_layout.addWidget(splitter)
-
-    def create_status_panel(self):
-        """创建状态面板"""
-        panel = QGroupBox("服务状态")
+    def create_unified_panel(self):
+        """创建统一的服务状态面板"""
+        panel = QGroupBox("")  # 标题置为空
         panel.setStyleSheet(
             """
             QGroupBox {
-                font-weight: bold;
-                font-size: 14px;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
+                border: none;  /* 隐藏边框 */
+                background-color: transparent;  /* 透明背景 */
+                margin-top: 0px;
+                padding-top: 0px;
             }
             QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """
-        )
-
-        layout = QVBoxLayout()
-        layout.setSpacing(10)
-
-        # 状态指示器
-        status_frame = QFrame()
-        status_frame.setFrameStyle(QFrame.StyledPanel)
-        status_layout = QHBoxLayout(status_frame)
-
-        self.status_indicator = QLabel()
-        self.status_indicator.setFixedSize(20, 20)
-        self.status_indicator.setStyleSheet(
-            """
-            QLabel {
-                border-radius: 10px;
-                background-color: #f44336;
-            }
-        """
-        )
-
-        self.status_label = QLabel("服务未启动")
-        self.status_label.setFont(QFont("Arial", 12, QFont.Bold))
-
-        status_layout.addWidget(self.status_indicator)
-        status_layout.addWidget(self.status_label)
-        status_layout.addStretch()
-
-        layout.addWidget(status_frame)
-
-        # 详细信息
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(8)
-
-        # 端口信息
-        port_layout = QHBoxLayout()
-        port_layout.addWidget(QLabel("端口:"))
-        self.port_label = QLabel("-")
-        self.port_label.setFont(QFont("Arial", 10, QFont.Bold))
-        port_layout.addWidget(self.port_label)
-        port_layout.addStretch()
-        info_layout.addLayout(port_layout)
-
-        # 启动时间
-        time_layout = QHBoxLayout()
-        time_layout.addWidget(QLabel("启动时间:"))
-        self.time_label = QLabel("-")
-        time_layout.addWidget(self.time_label)
-        time_layout.addStretch()
-        info_layout.addLayout(time_layout)
-
-        # 运行时长
-        duration_layout = QHBoxLayout()
-        duration_layout.addWidget(QLabel("运行时长:"))
-        self.duration_label = QLabel("-")
-        duration_layout.addWidget(self.duration_label)
-        duration_layout.addStretch()
-        info_layout.addLayout(duration_layout)
-
-        layout.addLayout(info_layout)
-
-        panel.setLayout(layout)
-        return panel
-
-    def create_control_panel(self):
-        """创建控制面板"""
-        panel = QGroupBox("服务控制")
-        panel.setStyleSheet(
-            """
-            QGroupBox {
-                font-weight: bold;
-                font-size: 14px;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
+                display: none;  /* 隐藏标题 */
             }
         """
         )
@@ -276,46 +224,81 @@ class ApiManagementTab(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
 
-        # 端口设置
-        port_group = QGroupBox("端口配置")
-        port_layout = QVBoxLayout()
+        # 状态指示器
+        status_frame = QFrame()
+        status_layout = QHBoxLayout(status_frame)
 
-        port_input_layout = QHBoxLayout()
-        port_input_layout.addWidget(QLabel("服务端口:"))
+        self.status_indicator = QLabel()
+        self.status_indicator.setFixedSize(16, 16)
+        self.status_indicator.setStyleSheet(
+            """
+            QLabel {
+                border-radius: 8px;
+                background-color: #dc3545;
+            }
+        """
+        )
+
+        self.status_label = QLabel("服务未启动")
+        self.status_label.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
+        self.status_label.setStyleSheet("color: #495057;")
+
+        status_layout.addWidget(self.status_indicator)
+        status_layout.addWidget(self.status_label)
+        status_layout.addStretch()
+
+        layout.addWidget(status_frame)
+
+        # 详细信息网格布局
+        info_grid = QVBoxLayout()
+        info_grid.setSpacing(8)
+        info_grid.setAlignment(Qt.AlignTop)  # 居上对齐
+
+        # 端口配置和图标按钮在同一行
+        control_row = QHBoxLayout()
+        control_row.setAlignment(Qt.AlignLeft)  # 左对齐
+        
+        # 端口配置
+        port_layout = QHBoxLayout()
+        port_layout.setAlignment(Qt.AlignLeft)  # 左对齐
+        port_label = QLabel("端口:")
+        port_label.setFont(QFont("Microsoft YaHei", 10))
+        port_label.setStyleSheet("color: #6c757d; min-width: 40px;")
+        port_layout.addWidget(port_label)
+        
         self.port_spinbox = QSpinBox()
         self.port_spinbox.setRange(8000, 9000)
         self.port_spinbox.setValue(8000)
-        self.port_spinbox.setFixedWidth(100)
-        port_input_layout.addWidget(self.port_spinbox)
-        port_input_layout.addStretch()
+        self.port_spinbox.setFixedWidth(80)
+        self.port_spinbox.setStyleSheet("""
+            QSpinBox {
+                border: 1px solid #ced4da;
+                border-radius: 3px;
+                padding: 4px;
+                background-color: white;
+            }
+        """)
+        port_layout.addWidget(self.port_spinbox)
+        
+        # 图标按钮贴着端口配置右侧
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(6)
+        button_layout.setContentsMargins(10, 0, 0, 0)  # 左侧间距10px
 
-        port_layout.addLayout(port_input_layout)
-        port_group.setLayout(port_layout)
-        layout.addWidget(port_group)
-
-        # 控制按钮
-        button_layout = QVBoxLayout()
-        button_layout.setSpacing(8)
-
-        # 启动按钮
-        self.start_button = QPushButton("🚀 启动服务")
+        # 启动按钮 - 只显示图标，无背景色
+        self.start_button = QPushButton()
+        self.start_button.setIcon(self.get_icon("start.png"))
+        self.start_button.setToolTip("启动服务")
+        self.start_button.setFixedSize(24, 24)
         self.start_button.setStyleSheet(
             """
             QPushButton {
-                background-color: #4CAF50;
-                color: white;
+                background-color: transparent;
                 border: none;
-                border-radius: 5px;
-                padding: 10px;
-                font-weight: bold;
-                font-size: 12px;
+                border-radius: 3px;
             }
             QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
+                background-color: #f0f0f0;
             }
         """
         )
@@ -323,128 +306,162 @@ class ApiManagementTab(QWidget):
         button_layout.addWidget(self.start_button)
 
         # 停止按钮
-        self.stop_button = QPushButton("⏹️ 停止服务")
+        self.stop_button = QPushButton()
+        self.stop_button.setIcon(self.get_icon("stoping.png"))
+        self.stop_button.setToolTip("停止服务")
+        self.stop_button.setFixedSize(24, 24)
         self.stop_button.setStyleSheet(
             """
             QPushButton {
-                background-color: #f44336;
-                color: white;
+                background-color: transparent;
                 border: none;
-                border-radius: 5px;
-                padding: 10px;
-                font-weight: bold;
-                font-size: 12px;
+                border-radius: 3px;
             }
             QPushButton:hover {
-                background-color: #da190b;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
+                background-color: #f0f0f0;
             }
         """
         )
         self.stop_button.clicked.connect(self.stop_service)
-        self.stop_button.setEnabled(False)
         button_layout.addWidget(self.stop_button)
 
         # 重启按钮
-        self.restart_button = QPushButton("🔄 重启服务")
+        self.restart_button = QPushButton()
+        self.restart_button.setIcon(self.get_icon("refresh.png"))
+        self.restart_button.setToolTip("重启服务")
+        self.restart_button.setFixedSize(24, 24)
         self.restart_button.setStyleSheet(
             """
             QPushButton {
-                background-color: #2196F3;
-                color: white;
+                background-color: transparent;
                 border: none;
-                border-radius: 5px;
-                padding: 10px;
-                font-weight: bold;
-                font-size: 12px;
+                border-radius: 3px;
             }
             QPushButton:hover {
-                background-color: #0b7dda;
+                background-color: #f0f0f0;
             }
         """
         )
         self.restart_button.clicked.connect(self.restart_service)
         button_layout.addWidget(self.restart_button)
+        
+        port_layout.addLayout(button_layout)
+        control_row.addLayout(port_layout)
+        control_row.addStretch()  # 在右侧添加弹性空间
+        info_grid.addLayout(control_row)
 
-        layout.addLayout(button_layout)
-        layout.addStretch()
+        # 服务详细信息
+        details_layout = QVBoxLayout()
+        details_layout.setSpacing(6)
+        details_layout.setAlignment(Qt.AlignTop)  # 居上对齐
 
-        panel.setLayout(layout)
-        return panel
+        # 启动模式
+        mode_layout = QHBoxLayout()
+        mode_layout.setAlignment(Qt.AlignLeft)  # 左对齐
+        mode_layout.addWidget(QLabel("启动模式:"))
+        self.mode_label = QLabel("-")
+        self.mode_label.setFont(QFont("Microsoft YaHei", 9, QFont.Bold))
+        self.mode_label.setStyleSheet("color: #495057;")
+        mode_layout.addWidget(self.mode_label)
+        mode_layout.addStretch()
+        details_layout.addLayout(mode_layout)
 
-    def create_log_panel(self):
-        """创建日志面板"""
-        panel = QGroupBox("服务日志")
-        panel.setStyleSheet(
-            """
-            QGroupBox {
-                font-weight: bold;
-                font-size: 14px;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """
-        )
+        # 启动时间
+        time_layout = QHBoxLayout()
+        time_layout.setAlignment(Qt.AlignLeft)  # 左对齐
+        time_layout.addWidget(QLabel("启动时间:"))
+        self.time_label = QLabel("-")
+        self.time_label.setFont(QFont("Microsoft YaHei", 9, QFont.Bold))
+        self.time_label.setStyleSheet("color: #495057;")
+        time_layout.addWidget(self.time_label)
+        time_layout.addStretch()
+        details_layout.addLayout(time_layout)
 
-        layout = QVBoxLayout()
+        # 运行时长
+        duration_layout = QHBoxLayout()
+        duration_layout.setAlignment(Qt.AlignLeft)  # 左对齐
+        duration_layout.addWidget(QLabel("运行时长:"))
+        self.duration_label = QLabel("-")
+        self.duration_label.setFont(QFont("Microsoft YaHei", 9, QFont.Bold))
+        self.duration_label.setStyleSheet("color: #495057;")
+        duration_layout.addWidget(self.duration_label)
+        duration_layout.addStretch()
+        details_layout.addLayout(duration_layout)
+
+        info_grid.addLayout(details_layout)
+        layout.addLayout(info_grid)
+
+        # 日志区域
+        log_section = QVBoxLayout()
+        log_section.setSpacing(8)
+        
+        log_label = QLabel("服务日志:")
+        log_label.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
+        log_label.setStyleSheet("color: #495057;")
+        log_section.addWidget(log_label)
 
         # 日志文本框
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        self.log_text.setFixedHeight(100)  # 固定高度，避免拉伸
         self.log_text.setStyleSheet(
             """
             QTextEdit {
-                background-color: #f5f5f5;
-                border: 1px solid #ddd;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
                 border-radius: 4px;
-                padding: 8px;
-                font-family: 'Courier New', monospace;
-                font-size: 10px;
+                padding: 6px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 9px;
+                color: #495057;
             }
         """
         )
-        layout.addWidget(self.log_text)
+        log_section.addWidget(self.log_text)
 
         # 日志控制按钮
         log_control_layout = QHBoxLayout()
 
         clear_button = QPushButton("清空日志")
+        clear_button.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 4px 8px;
+                font-size: 9px;
+                font-family: Microsoft YaHei;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
         clear_button.clicked.connect(self.log_text.clear)
         log_control_layout.addWidget(clear_button)
 
         log_control_layout.addStretch()
-        layout.addLayout(log_control_layout)
+        log_section.addLayout(log_control_layout)
+
+        layout.addLayout(log_section)
+        layout.addStretch()  # 在底部添加弹性空间，避免内容被拉伸
 
         panel.setLayout(layout)
         return panel
 
-    def create_link_panel(self):
-        """创建链接面板"""
-        panel = QGroupBox("API文档区域")
+    def create_interface_panel(self):
+        """创建接口列表面板"""
+        panel = QGroupBox("")  # 标题置为空
         panel.setStyleSheet(
             """
             QGroupBox {
-                font-weight: bold;
-                font-size: 14px;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
+                border: none;  /* 隐藏边框 */
+                background-color: transparent;  /* 透明背景 */
+                margin-top: 0px;
+                padding-top: 0px;
             }
             QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
+                display: none;  /* 隐藏标题 */
             }
         """
         )
@@ -452,222 +469,202 @@ class ApiManagementTab(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(10)
 
-        # API文档链接
-        api_doc_frame = self.create_link_frame("📚 API文档", "http://localhost:-")
-        layout.addWidget(api_doc_frame)
+        # 刷新按钮
+        refresh_layout = QHBoxLayout()
+        
+        refresh_button = QPushButton("刷新接口列表")
+        refresh_button.setStyleSheet("""
+            QPushButton {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 12px;
+                font-size: 10px;
+                font-family: Microsoft YaHei;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+        """)
+        refresh_button.clicked.connect(self.refresh_interface_list)
+        refresh_layout.addWidget(refresh_button)
+        refresh_layout.addStretch()
+        
+        layout.addLayout(refresh_layout)
 
-        # 已配置的URL路由展示
-        routes_frame = self.create_routes_frame()
-        layout.addWidget(routes_frame)
-
-        layout.addStretch()
-
+        # 创建表格
+        self.interface_table = QTableWidget()
+        self.interface_table.setColumnCount(3)
+        self.interface_table.setHorizontalHeaderLabels(["请求方式", "请求路径", "中文描述"])
+        
+        # 设置表格样式
+        self.interface_table.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                gridline-color: #dee2e6;
+                font-size: 12px;
+                font-family: Microsoft YaHei;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #f0f0f0;
+                color: black;
+            }
+            QTableWidget::item:selected {
+                background-color: #e3f2fd;
+                color: black;
+                outline: none;
+            }
+            QTableWidget::item:focus {
+                outline: none;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                padding: 8px;
+                border: none;
+                border-bottom: 2px solid #dee2e6;
+                font-weight: bold;
+                font-size: 12px;
+            }
+        """)
+        
+        # 设置表格属性
+        self.interface_table.setAlternatingRowColors(True)
+        self.interface_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.interface_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.interface_table.setFocusPolicy(Qt.NoFocus)  # 移除焦点虚线
+        self.interface_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.interface_table.verticalHeader().setVisible(False)
+        
+        # 连接双击事件
+        self.interface_table.doubleClicked.connect(self.on_table_double_click)
+        
+        layout.addWidget(self.interface_table)
+        
         panel.setLayout(layout)
         return panel
 
-    def create_link_frame(self, title, url_template):
-        """创建链接框架"""
-        frame = QFrame()
-        frame.setFrameStyle(QFrame.StyledPanel)
-        frame_layout = QVBoxLayout(frame)
+    def refresh_interface_list(self):
+        """刷新接口列表"""
+        try:
+            # 加载接口数据
+            interface_list = self.load_interface_list()
+            
+            # 清空表格
+            self.interface_table.setRowCount(0)
+            
+            if not interface_list:
+                # 如果没有接口数据，显示提示信息
+                self.interface_table.setRowCount(1)
+                
+                item1 = QTableWidgetItem("-")
+                item1.setTextAlignment(Qt.AlignCenter)
+                self.interface_table.setItem(0, 0, item1)
+                
+                item2 = QTableWidgetItem("未找到接口数据")
+                item2.setTextAlignment(Qt.AlignCenter)
+                self.interface_table.setItem(0, 1, item2)
+                
+                item3 = QTableWidgetItem("请检查src/api/urls.py文件")
+                item3.setTextAlignment(Qt.AlignCenter)
+                self.interface_table.setItem(0, 2, item3)
+                
+                # 合并单元格显示提示信息
+                self.interface_table.setSpan(0, 1, 1, 2)
+                return
+            
+            # 设置行数
+            self.interface_table.setRowCount(len(interface_list))
+            
+            # 填充数据
+            for row, interface in enumerate(interface_list):
+                method = interface.get("method", "-")
+                path = interface.get("path", "-")
+                summary = interface.get("summary", "-")
+                
+                # 设置方法单元格，添加样式
+                method_item = QTableWidgetItem(method.upper())
+                method_item.setTextAlignment(Qt.AlignCenter)
+                if method.upper() == "GET":
+                    method_item.setBackground(QColor("#007bff"))
+                elif method.upper() == "POST":
+                    method_item.setBackground(QColor("#28a745"))
+                elif method.upper() == "PUT":
+                    method_item.setBackground(QColor("#ffc107"))
+                elif method.upper() == "DELETE":
+                    method_item.setBackground(QColor("#dc3545"))
+                elif method.upper() == "PATCH":
+                    method_item.setBackground(QColor("#17a2b8"))
+                
+                # 统一设置黑色字体
+                method_item.setForeground(QColor("black"))
+                
+                self.interface_table.setItem(row, 0, method_item)
+                
+                # 设置路径单元格，居中对齐，并显示完整地址
+                full_url = f"http://localhost:{self.api_service.port}/api/v1{path}"
+                path_item = QTableWidgetItem(full_url)
+                path_item.setTextAlignment(Qt.AlignCenter)
+                path_item.setData(Qt.UserRole, full_url)  # 存储完整URL用于复制
+                self.interface_table.setItem(row, 1, path_item)
+                
+                # 设置描述单元格，居中对齐
+                summary_item = QTableWidgetItem(summary)
+                summary_item.setTextAlignment(Qt.AlignCenter)
+                self.interface_table.setItem(row, 2, summary_item)
+            
+            # 调整列宽
+            self.interface_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            self.interface_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+            self.interface_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+            
+            logger.info(f"接口列表已刷新，共 {len(interface_list)} 个接口")
+            
+        except Exception as e:
+            logger.error(f"刷新接口列表失败: {e}")
+            # 显示错误信息
+            self.interface_table.setRowCount(1)
+            
+            item1 = QTableWidgetItem("错误")
+            item1.setTextAlignment(Qt.AlignCenter)
+            self.interface_table.setItem(0, 0, item1)
+            
+            item2 = QTableWidgetItem("加载接口列表失败")
+            item2.setTextAlignment(Qt.AlignCenter)
+            self.interface_table.setItem(0, 1, item2)
+            
+            item3 = QTableWidgetItem(str(e))
+            item3.setTextAlignment(Qt.AlignCenter)
+            self.interface_table.setItem(0, 2, item3)
+            self.interface_table.setSpan(0, 1, 1, 2)
 
-        # 标题
-        title_label = QLabel(title)
-        title_label.setFont(QFont("Arial", 10, QFont.Bold))
-        frame_layout.addWidget(title_label)
-
-        # URL标签
-        url_label = QLabel(url_template)
-        url_label.setStyleSheet(
-            """
-            QLabel {
-                color: #2196F3;
-                font-size: 9px;
-                font-family: 'Courier New', monospace;
-                background-color: #f0f0f0;
-                padding: 4px;
-                border-radius: 3px;
-            }
-        """
-        )
-        url_label.setWordWrap(True)
-        frame_layout.addWidget(url_label)
-
-        # 存储URL模板用于后续更新
-        if title == "📚 API文档":
-            self.api_doc_label = url_label
-            self.api_doc_template = url_template
-        elif title == "❤️ 健康检查":
-            self.health_label = url_label
-            self.health_template = url_template
-        elif title == "📊 系统状态":
-            self.status_label_link = url_label
-            self.status_template = url_template
-        elif title == "👥 用户管理":
-            self.user_label = url_label
-            self.user_template = url_template
-
-        return frame
-
-    def create_routes_frame(self):
-        """创建已配置URL路由展示框架"""
-        frame = QFrame()
-        frame.setFrameStyle(QFrame.StyledPanel)
-        frame_layout = QVBoxLayout(frame)
-        frame_layout.setSpacing(8)
-
-        # 标题
-        title_label = QLabel("📋 已配置的URL路由")
-        title_label.setFont(QFont("Arial", 10, QFont.Bold))
-        frame_layout.addWidget(title_label)
-
-        # 创建滚动区域用于显示路由列表
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(200)
-        scroll_area.setStyleSheet(
-            """
-            QScrollArea {
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background-color: #f8f9fa;
-            }
-            QScrollArea > QWidget > QWidget {
-                background-color: #f8f9fa;
-            }
-        """
-        )
-
-        # 路由列表容器
-        routes_widget = QWidget()
-        routes_layout = QVBoxLayout(routes_widget)
-        routes_layout.setSpacing(6)
-        routes_layout.setContentsMargins(8, 8, 8, 8)
-
-        # 获取并显示已配置的路由
-        self.display_configured_routes(routes_layout)
-
-        scroll_area.setWidget(routes_widget)
-        frame_layout.addWidget(scroll_area)
-
-        return frame
-
-    def display_configured_routes(self, layout):
-        """显示已配置的路由信息"""
-        # 定义当前支持的API路由
-        api_routes = [
-            {
-                "method": "GET",
-                "path": "/api/v1/health",
-                "description": "健康检查接口",
-                "tags": ["健康检查"]
-            },
-            {
-                "method": "GET", 
-                "path": "/api/v1/health/system",
-                "description": "系统信息接口",
-                "tags": ["健康检查", "系统信息"]
-            },
-            {
-                "method": "GET",
-                "path": "/api/v1/system/status", 
-                "description": "系统状态接口",
-                "tags": ["健康检查", "系统状态"]
-            },
-            {
-                "method": "POST",
-                "path": "/api/v1/data/data-sync",
-                "description": "数据同步接口", 
-                "tags": ["数据同步"]
-            }
-        ]
-
-        # 显示路由信息
-        for route in api_routes:
-            route_frame = self.create_route_item_frame(route)
-            layout.addWidget(route_frame)
-
-    def create_route_item_frame(self, route):
-        """创建单个路由项框架"""
-        frame = QFrame()
-        frame.setFrameStyle(QFrame.StyledPanel)
-        frame.setStyleSheet(
-            """
-            QFrame {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, 
-                                          stop: 0 #e3f2fd, stop: 1 #f3e5f5);
-                border: 1px solid #bbdefb;
-                border-radius: 6px;
-                padding: 8px;
-            }
-        """
-        )
-
-        route_layout = QVBoxLayout(frame)
-        route_layout.setSpacing(4)
-
-        # 方法标签
-        method_label = QLabel(f"{route['method']}")
-        method_label.setStyleSheet(
-            f"""
-            QLabel {{
-                color: {'#4CAF50' if route['method'] == 'GET' else '#2196F3'};
-                font-weight: bold;
-                font-size: 10px;
-                background-color: {'#e8f5e8' if route['method'] == 'GET' else '#e3f2fd'};
-                padding: 2px 6px;
-                border-radius: 3px;
-                max-width: 40px;
-            }}
-        """
-        )
-
-        # 路径和描述
-        path_label = QLabel(f"{route['path']}")
-        path_label.setStyleSheet(
-            """
-            QLabel {
-                color: #333;
-                font-family: 'Courier New', monospace;
-                font-size: 9px;
-                font-weight: bold;
-            }
-        """
-        )
-
-        desc_label = QLabel(route['description'])
-        desc_label.setStyleSheet(
-            """
-            QLabel {
-                color: #666;
-                font-size: 9px;
-            }
-        """
-        )
-
-        # 标签显示
-        tags_label = QLabel(f"标签: {', '.join(route['tags'])}")
-        tags_label.setStyleSheet(
-            """
-            QLabel {
-                color: #888;
-                font-size: 8px;
-                font-style: italic;
-            }
-        """
-        )
-
-        # 水平布局：方法 + 路径
-        header_layout = QHBoxLayout()
-        header_layout.addWidget(method_label)
-        header_layout.addWidget(path_label)
-        header_layout.addStretch()
-
-        route_layout.addLayout(header_layout)
-        route_layout.addWidget(desc_label)
-        route_layout.addWidget(tags_label)
-
-        return frame
+    def on_table_double_click(self, index):
+        """表格双击事件 - 复制请求地址"""
+        try:
+            # 只处理第二列（请求地址）的双击
+            if index.column() == 1:
+                item = self.interface_table.item(index.row(), 1)
+                if item:
+                    # 获取存储的完整URL
+                    full_url = item.data(Qt.UserRole)
+                    if full_url:
+                        # 复制到剪贴板
+                        clipboard = QApplication.clipboard()
+                        clipboard.setText(full_url)
+                        
+                        # 显示提示信息
+                        Toast.information(
+                            self, 
+                            "复制成功", 
+                            f"已复制请求地址到剪贴板\n{full_url}"
+                        )
+                        logger.info(f"已复制请求地址: {full_url}")
+        except Exception as e:
+            logger.error(f"复制请求地址失败: {e}")
+            Toast.warning(self, "错误", "复制请求地址失败")
 
     def setup_timer(self):
         """设置定时器更新状态"""
@@ -676,6 +673,19 @@ class ApiManagementTab(QWidget):
         self.timer.start(2000)  # 每2秒更新一次状态
 
         self.start_time = None
+
+    def update_button_states(self):
+        """更新按钮状态 - 启动和停止按钮根据状态只显示一个"""
+        status = self.api_service.get_status()
+        
+        if status["is_running"]:
+            # 服务运行中：显示停止按钮，隐藏启动按钮
+            self.start_button.setVisible(False)
+            self.stop_button.setVisible(True)
+        else:
+            # 服务停止中：显示启动按钮，隐藏停止按钮
+            self.start_button.setVisible(True)
+            self.stop_button.setVisible(False)
 
     def update_status(self):
         """更新服务状态"""
@@ -686,58 +696,109 @@ class ApiManagementTab(QWidget):
             self.status_indicator.setStyleSheet(
                 """
                 QLabel {
-                    border-radius: 10px;
-                    background-color: #4CAF50;
+                    border-radius: 8px;
+                    background-color: #28a745;
+                    border: 2px solid #c3e6cb;
                 }
             """
             )
             self.status_label.setText("服务运行中")
-            self.status_label.setStyleSheet("color: #4CAF50;")
+            self.status_label.setStyleSheet("color: #155724; font-weight: bold;")
 
-            self.port_label.setText(str(status["port"]))
+            # 更新端口SpinBox的值
+            self.port_spinbox.setValue(status["port"])
+            
+            # 显示启动模式
+            if self.api_service.auto_start:
+                self.mode_label.setText("自动启动")
+            else:
+                self.mode_label.setText("手动启动")
 
-            # 更新启动时间
-            if not self.start_time:
-                self.start_time = status.get("start_time")
-                self.time_label.setText(self.start_time or "-")
+            # 设置启动时间
+            if self.start_time is None:
+                self.start_time = time.time()
+                self.time_label.setText(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.start_time)))
 
-            # 更新运行时长
+            # 计算运行时长
             if self.start_time:
-                # 这里可以计算运行时长
-                self.duration_label.setText("运行中...")
+                duration = int(time.time() - self.start_time)
+                hours = duration // 3600
+                minutes = (duration % 3600) // 60
+                seconds = duration % 60
+                self.duration_label.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
             # 更新按钮状态
-            self.start_button.setEnabled(False)
-            self.stop_button.setEnabled(True)
-
-            # 更新链接
-            port = status["port"]
-            self.api_doc_label.setText(self.api_doc_template.replace(":-", f":{port}"))
+            self.update_button_states()
 
         else:
             # 服务未运行
             self.status_indicator.setStyleSheet(
                 """
                 QLabel {
-                    border-radius: 10px;
-                    background-color: #f44336;
+                    border-radius: 8px;
+                    background-color: #dc3545;
+                    border: 2px solid #f5c6cb;
                 }
             """
             )
             self.status_label.setText("服务未启动")
-            self.status_label.setStyleSheet("color: #f44336;")
+            self.status_label.setStyleSheet("color: #721c24; font-weight: bold;")
 
-            self.port_label.setText("-")
+            # 重置端口为默认值
+            self.port_spinbox.setValue(8000)
+            self.mode_label.setText("-")
             self.time_label.setText("-")
             self.duration_label.setText("-")
 
             # 更新按钮状态
-            self.start_button.setEnabled(True)
-            self.stop_button.setEnabled(False)
+            self.update_button_states()
 
             self.start_time = None
 
         self.status_updated.emit(status)
+
+    def load_interface_list(self):
+        """加载接口列表"""
+        try:
+            # 获取项目根目录
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            urls_file = os.path.join(project_root, "src", "api", "urls.py")
+            
+            if not os.path.exists(urls_file):
+                logger.warning(f"URL路由文件不存在: {urls_file}")
+                return []
+            
+            # 动态导入urls模块
+            sys.path.insert(0, project_root)
+            try:
+                from src.api.urls import url_routes
+                
+                # 解析路由信息
+                interface_list = []
+                for route in url_routes:
+                    method = route.get("method", "")
+                    path = route.get("path", "")
+                    summary = route.get("summary", "")
+                    
+                    interface_list.append({
+                        "method": method,
+                        "path": path,
+                        "summary": summary
+                    })
+                
+                return interface_list
+                
+            except ImportError as e:
+                logger.error(f"导入URL路由模块失败: {e}")
+                return []
+            finally:
+                # 恢复sys.path
+                if project_root in sys.path:
+                    sys.path.remove(project_root)
+                    
+        except Exception as e:
+            logger.error(f"加载接口列表失败: {e}")
+            return []
 
     def start_service(self):
         """启动服务"""
@@ -748,6 +809,8 @@ class ApiManagementTab(QWidget):
             Toast.information(
                 self, "成功", f"FastAPI服务启动成功！\n端口: {port}"
             )
+            # 更新按钮状态
+            self.update_button_states()
         else:
             self.log_text.append("[ERROR] ❌ FastAPI服务启动失败")
             Toast.warning(self, "错误", "FastAPI服务启动失败")
@@ -757,6 +820,8 @@ class ApiManagementTab(QWidget):
         if self.api_service.stop():
             self.log_text.append("[INFO] ⏹️ FastAPI服务已停止")
             Toast.information(self, "成功", "FastAPI服务已停止")
+            # 更新按钮状态
+            self.update_button_states()
         else:
             self.log_text.append("[ERROR] ❌ FastAPI服务停止失败")
             Toast.warning(self, "错误", "FastAPI服务停止失败")
@@ -770,6 +835,8 @@ class ApiManagementTab(QWidget):
             Toast.information(
                 self, "成功", f"FastAPI服务重启成功！\n端口: {port}"
             )
+            # 更新按钮状态
+            self.update_button_states()
         else:
             self.log_text.append("[ERROR] ❌ FastAPI服务重启失败")
             Toast.warning(self, "错误", "FastAPI服务重启失败")
