@@ -3,6 +3,7 @@
 """
 
 import os
+import sys
 import json
 from typing import Dict, Any
 import logging
@@ -14,7 +15,14 @@ class ConfigManager:
     """FastAPI配置管理器"""
 
     def __init__(self):
-        self.config_file = os.path.join(os.getcwd(), "config", "api_config.json")
+        # 处理打包后的路径问题
+        if getattr(sys, 'frozen', False):
+            # 打包后的路径
+            base_path = os.path.dirname(sys.executable)
+        else:
+            # 开发环境路径
+            base_path = os.getcwd()
+        self.config_file = os.path.join(base_path, "config", "api_config.json")
         self.default_config = {
             "api": {
                 "title": "TestTool API",

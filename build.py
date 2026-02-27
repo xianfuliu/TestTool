@@ -34,6 +34,7 @@ def build_app():
         "--add-data=config/products_config.json;config",
         "--add-data=src/resources/icons;src/resources/icons",  # 添加所有图标文件
         "--add-data=src/resources/images;src/resources/images",  # 添加所有图片文件
+        "--add-data=src/api;src/api",  # 添加API相关文件
         "--name",
         "TestTool",
         "main.py",

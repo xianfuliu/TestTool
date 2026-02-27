@@ -75,16 +75,45 @@ class FastAPIApp:
 
     def run(self):
         """运行FastAPI应用"""
+        import sys
+        import logging
         server_config = self.config_manager.get_server_config()
 
-        uvicorn.run(
-            self.app,
-            host=server_config.get("host", "0.0.0.0"),
-            port=self.instance_manager.port,
-            reload=server_config.get("reload", False),
-            workers=server_config.get("workers", 1),
-            access_log=server_config.get("access_log", True),
-        )
+        # 在打包环境下，使用Server类启动以避免控制台问题
+        if getattr(sys, 'frozen', False):
+            # 打包环境：简化日志配置，避免格式化器问题
+            config = uvicorn.Config(
+                self.app,
+                host=server_config.get("host", "0.0.0.0"),
+                port=self.instance_manager.port,
+                reload=server_config.get("reload", False),
+                workers=server_config.get("workers", 1),
+                access_log=server_config.get("access_log", True),
+                log_config=None,  # 禁用默认日志配置
+                log_level=None,   # 禁用日志级别
+            )
+            
+            # 手动配置简单的日志处理器
+            logger = logging.getLogger("uvicorn")
+            logger.setLevel(logging.INFO)
+            if not logger.handlers:
+                handler = logging.StreamHandler()
+                handler.setFormatter(logging.Formatter("%(message)s"))
+                logger.addHandler(handler)
+                logger.propagate = False
+            
+            server = uvicorn.Server(config)
+            server.run()
+        else:
+            # 开发环境：使用原来的方式
+            uvicorn.run(
+                self.app,
+                host=server_config.get("host", "0.0.0.0"),
+                port=self.instance_manager.port,
+                reload=server_config.get("reload", False),
+                workers=server_config.get("workers", 1),
+                access_log=server_config.get("access_log", True),
+            )
 
 
 def create_app() -> FastAPI:

@@ -1,77 +1,5 @@
 [
   {
-    "instance_id": "768baa45-4f38-40e6-9d05-ec660b50e81f",
-    "port": 8003,
-    "status": "running",
-    "start_time": "2026-02-27T15:11:25.214330",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 26428
-  },
-  {
-    "instance_id": "ce002e67-d32d-4645-8826-81a6e6608869",
-    "port": 8009,
-    "status": "running",
-    "start_time": "2026-02-27T15:14:16.567391",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 10504
-  },
-  {
-    "instance_id": "03b481e8-b628-46bc-8bce-f55f71cab150",
-    "port": 8004,
-    "status": "running",
-    "start_time": "2026-02-27T15:17:38.479034",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 3992
-  },
-  {
-    "instance_id": "88f5195a-c30d-465e-bfac-ca6bbff8298a",
-    "port": 8005,
-    "status": "running",
-    "start_time": "2026-02-27T15:25:14.816916",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 14784
-  },
-  {
-    "instance_id": "c04b30b6-4387-4bad-a869-6612c9358c3f",
-    "port": 8006,
-    "status": "running",
-    "start_time": "2026-02-27T15:30:46.924375",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 11320
-  },
-  {
-    "instance_id": "567eeef6-ee91-4f52-943b-dbc53ee2cdda",
-    "port": 8007,
-    "status": "running",
-    "start_time": "2026-02-27T15:33:04.248757",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 25964
-  },
-  {
-    "instance_id": "704eb7bd-06e2-4f58-9350-4140a7f2d503",
-    "port": 8010,
-    "status": "running",
-    "start_time": "2026-02-27T15:34:45.152259",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 8800
-  },
-  {
-    "instance_id": "4df962cf-c535-48fa-b1f6-fdcd7c4e83bd",
-    "port": 8011,
-    "status": "running",
-    "start_time": "2026-02-27T15:37:02.436579",
-    "active_connections": 0,
-    "hostname": "lxf",
-    "pid": 24248
-  },
-  {
     "instance_id": "0bde57da-a465-4b34-86c5-9d0c5a1ef6f4",
     "port": 8000,
     "status": "running",
@@ -79,5 +7,14 @@
     "active_connections": 0,
     "hostname": "lxf",
     "pid": 25668
+  },
+  {
+    "instance_id": "46b5ad78-43ee-4321-9673-78139dc7637e",
+    "port": 8001,
+    "status": "running",
+    "start_time": "2026-02-27T17:02:21.420813",
+    "active_connections": 0,
+    "hostname": "lxf",
+    "pid": 800
   }
 ]

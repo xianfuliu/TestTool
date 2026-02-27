@@ -22,7 +22,7 @@ class CreditOrderApproval:
     def __init__(self):
         self.credit_order_approval_impl = CreditOrderApprovalImpl()
 
-    async def credit_order_approval(self, request: CreditOrderApprovalRequest) -> Dict[str, Any]:
+    def credit_order_approval(self, request: CreditOrderApprovalRequest) -> Dict[str, Any]:
         """授信订单审批完整流程：查询未分配任务 -> 领取任务 -> 查询待审批任务 -> 审批任务"""
         try:
             # 从请求模型中获取参数
@@ -36,7 +36,7 @@ class CreditOrderApproval:
                 raise HTTPException(status_code=400, detail="申请编号(applyNo)不能为空")
             
             # 执行完整的授信订单审批流程
-            result = await self.credit_order_approval_impl.execute_complete_approval_flow(
+            result = self.credit_order_approval_impl.execute_complete_approval_flow(
                 applyNo=applyNo,
                 remark=remark,
                 rtfState=rtfState,
