@@ -307,7 +307,7 @@ class ToolCardWidget(QFrame):
         if not mappings:
             # 如果没有映射配置，显示默认信息
             no_mapping_label = QLabel("暂无输入字段配置")
-            no_mapping_label.setStyleSheet("QLabel { color: #a0aec0; font-sie: 11px; font-style: italic; margin-top: 8px; }")
+            no_mapping_label.setStyleSheet("QLabel { color: #a0aec0; font-size: 11px; font-style: italic; margin-top: 8px; }")
             body_layout.addWidget(no_mapping_label)
             print("[DEBUG] 没有映射配置，显示默认信息")
             return
@@ -1707,6 +1707,47 @@ class ToolCardsTab(QWidget):
                 return found
         return None
 
+    def expand_folder_by_id(self, folder_id):
+        """根据文件夹ID展开对应的树节点"""
+        item = self.find_tree_item_by_id(folder_id)
+        if item:
+            item.setExpanded(True)
+            # 确保父文件夹也被展开
+            parent = item.parent()
+            while parent:
+                parent.setExpanded(True)
+                parent = parent.parent()
+
+    def check_folder_has_cards_recursive(self, folder_id):
+        """递归检查文件夹及其所有子文件夹是否包含卡片"""
+        # 检查当前文件夹下的卡片
+        cards = self.tool_cards_service.get_cards_by_folder(folder_id)
+        if cards:
+            return True, folder_id, len(cards)
+        
+        # 获取所有子文件夹
+        subfolders = self.tool_cards_service.get_subfolders_by_parent(folder_id)
+        
+        # 递归检查每个子文件夹
+        for subfolder in subfolders:
+            subfolder_id = subfolder['id']
+            has_cards, problem_folder_id, card_count = self.check_folder_has_cards_recursive(subfolder_id)
+            if has_cards:
+                return True, problem_folder_id, card_count
+        
+        return False, None, 0
+
+    def select_folder_by_id(self, folder_id):
+        """根据文件夹ID选择对应的树节点"""
+        item = self.find_tree_item_by_id(folder_id)
+        if item:
+            self.folder_tree.setCurrentItem(item)
+            # 确保父文件夹也被展开
+            parent = item.parent()
+            while parent:
+                parent.setExpanded(True)
+                parent = parent.parent()
+
     def get_folder_depth(self, folder_id):
         """获取文件夹的层级深度"""
         def get_depth_recursive(item, current_depth):
@@ -1814,27 +1855,66 @@ class ToolCardsTab(QWidget):
 
     def add_folder(self):
         """添加文件夹"""
-        name, ok = QInputDialog.getText(self, "添加文件夹", "请输入文件夹名称:")
-        if ok and name:
-            # 创建新文件夹数据
-            folder_data = {
-                "name": name,
-                "description": "",
-                "parent_id": None,
-                "sort_order": len(self.folder_data),
-                "is_default": False,
-                "created_by": "admin"
-            }
-            
-            # 使用数据库服务创建文件夹
-            folder_id = self.tool_cards_service.create_folder(folder_data)
-            
-            if folder_id:
-                # 重新加载数据
-                self.load_data()
-                Toast.success(self, "添加成功", f"文件夹 '{name}' 已添加")
-            else:
-                Toast.error(self, "添加失败", "无法创建文件夹，请检查数据库连接")
+        # 创建自定义输入对话框
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("添加文件夹")
+        dialog.setFixedSize(300, 140)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # 提示文本
+        label = QLabel("请输入文件夹名称:")
+        layout.addWidget(label)
+        
+        # 输入框
+        name_input = QLineEdit()
+        layout.addWidget(name_input)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        
+        confirm_btn = QPushButton("确认")
+        cancel_btn = QPushButton("取消")
+        
+        confirm_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(confirm_btn)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # 设置焦点到输入框
+        name_input.setFocus()
+        
+        # 显示对话框
+        if dialog.exec_() == QDialog.Accepted:
+            name = name_input.text().strip()
+            if name:
+                # 创建新文件夹数据
+                folder_data = {
+                    "name": name,
+                    "description": "",
+                    "parent_id": None,
+                    "sort_order": 0,  # 使用默认值，排序由created_at决定
+                    "is_default": False,
+                    "created_by": "admin"
+                }
+                
+                # 使用数据库服务创建文件夹
+                folder_id = self.tool_cards_service.create_folder(folder_data)
+                
+                if folder_id:
+                    # 重新加载数据
+                    self.load_data()
+                    # 自动定位到新增的文件夹
+                    self.select_folder_by_id(folder_id)
+                    Toast.success(self, f"添加成功：文件夹 '{name}' 已添加")
+                else:
+                    Toast.error(self, "添加失败", "无法创建文件夹，请检查数据库连接")
 
     def delete_folder(self):
         """删除文件夹"""
@@ -1845,29 +1925,59 @@ class ToolCardsTab(QWidget):
         folder_id = current_item.data(0, Qt.UserRole)
         folder_name = current_item.text(0)
 
-        # 检查文件夹下是否有卡片
-        cards = self.tool_cards_service.get_cards_by_folder(folder_id)
+        # 创建自定义确认对话框
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
         
-        if cards:
-            # 使用Toast确认对话框替代QMessageBox
-            from PyQt5.QtWidgets import QMessageBox
-            reply = QMessageBox.question(
-                self, "确认删除", 
-                f"文件夹 '{folder_name}' 下有 {len(cards)} 个卡片，确定要删除吗？",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
-                return
-
-        # 使用数据库服务删除文件夹（外键约束会自动删除关联卡片）
-        # 由于数据库有外键约束，我们需要先删除关联的卡片，或者让数据库自动处理
-        # 这里我们让数据库自动处理级联删除
+        dialog = QDialog(self)
+        dialog.setWindowTitle("确认删除")
+        dialog.setFixedSize(300, 120)
         
+        layout = QVBoxLayout(dialog)
+        
+        # 统一提示文本，不显示卡片信息
+        label = QLabel(f"确定要删除文件夹 '{folder_name}' 吗？")
+        layout.addWidget(label)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        
+        confirm_btn = QPushButton("确认")
+        cancel_btn = QPushButton("取消")
+        
+        confirm_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(confirm_btn)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # 显示对话框
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        
+        # 确认后递归检查文件夹及其所有子文件夹下是否有卡片
+        has_cards, problem_folder_id, card_count = self.check_folder_has_cards_recursive(folder_id)
+        if has_cards:
+            # 获取问题文件夹的名称
+            problem_folder = self.tool_cards_service.get_folder_by_id(problem_folder_id)
+            problem_folder_name = problem_folder['name'] if problem_folder else "未知文件夹"
+            
+            # 如果问题文件夹就是当前要删除的文件夹
+            if problem_folder_id == folder_id:
+                Toast.error(self, f"删除失败：文件夹 '{folder_name}' 下有 {card_count} 个卡片，请先删除或移动这些卡片后再删除文件夹")
+            else:
+                # 如果问题文件夹是子文件夹
+                Toast.error(self, f"删除失败：子文件夹 '{problem_folder_name}' 下有 {card_count} 个卡片，请先删除或移动这些卡片后再删除父文件夹")
+            return
+        
+        # 使用数据库服务删除文件夹
         # 由于数据库设计使用了CASCADE删除，我们只需要删除文件夹
         # 但需要先检查文件夹是否存在
         folder = self.tool_cards_service.get_folder_by_id(folder_id)
         if not folder:
-            Toast.error(self, "删除失败", "找不到指定的文件夹")
+            Toast.error(self, "删除失败：文件夹不存在或已被删除")
             return
             
         # 使用数据库服务删除文件夹
@@ -1876,11 +1986,11 @@ class ToolCardsTab(QWidget):
             if success:
                 # 重新加载数据
                 self.load_data()
-                Toast.success(self, "删除成功", f"文件夹 '{folder_name}' 已删除")
+                Toast.success(self, f"删除成功：文件夹 '{folder_name}' 已删除")
             else:
-                Toast.error(self, "删除失败", "无法删除文件夹，请检查数据库连接")
+                Toast.error(self, "删除失败：数据库操作失败，请检查数据库连接或联系管理员")
         except Exception as e:
-            Toast.error(self, "删除失败", f"删除文件夹时发生错误: {str(e)}")
+            Toast.error(self, f"删除失败：删除文件夹时发生错误: {str(e)}")
 
     def edit_folder(self):
         """编辑文件夹"""
@@ -1897,32 +2007,69 @@ class ToolCardsTab(QWidget):
             Toast.error(self, "编辑失败", "找不到指定的文件夹")
             return
         
-        # 弹出输入对话框让用户编辑文件夹名称
-        new_name, ok = QInputDialog.getText(self, "编辑文件夹", "请输入新的文件夹名称:", text=folder_name)
-        if ok and new_name and new_name.strip():
-            # 更新文件夹数据
-            folder_data = {
-                "name": new_name.strip(),
-                "description": folder.get("description", ""),
-                "parent_id": folder.get("parent_id"),
-                "sort_order": folder.get("sort_order", 0),
-                "is_default": folder.get("is_default", False),
-                "created_by": folder.get("created_by", "admin")
-            }
-            
-            # 使用数据库服务更新文件夹
-            success = self.tool_cards_service.update_folder(folder_id, folder_data)
-            
-            if success:
-                # 重新加载数据
-                self.folder_data = self.tool_cards_service.get_all_folders()
+        # 创建自定义输入对话框
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("编辑文件夹")
+        dialog.setFixedSize(300, 140)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # 提示文本
+        label = QLabel("请输入新的文件夹名称:")
+        layout.addWidget(label)
+        
+        # 输入框
+        name_input = QLineEdit(folder_name)
+        layout.addWidget(name_input)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        
+        confirm_btn = QPushButton("确认")
+        cancel_btn = QPushButton("取消")
+        
+        confirm_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(confirm_btn)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # 设置焦点到输入框
+        name_input.setFocus()
+        name_input.selectAll()
+        
+        # 显示对话框
+        if dialog.exec_() == QDialog.Accepted:
+            new_name = name_input.text().strip()
+            if new_name:
+                # 更新文件夹数据
+                folder_data = {
+                    "name": new_name,
+                    "description": folder.get("description", ""),
+                    "parent_id": folder.get("parent_id"),
+                    "sort_order": folder.get("sort_order", 0),
+                    "is_default": folder.get("is_default", False),
+                    "created_by": folder.get("created_by", "admin")
+                }
                 
-                # 重新构建文件夹树
-                self.load_folder_tree()
+                # 使用数据库服务更新文件夹
+                success = self.tool_cards_service.update_folder(folder_id, folder_data)
                 
-                Toast.success(self, "编辑成功", f"文件夹已重命名为 '{new_name}'")
-            else:
-                Toast.error(self, "编辑失败", "无法更新文件夹，请检查数据库连接")
+                if success:
+                    # 重新加载数据
+                    self.folder_data = self.tool_cards_service.get_all_folders()
+                    
+                    # 重新构建文件夹树
+                    self.load_folder_tree()
+                    
+                    Toast.success(self, "编辑成功", f"文件夹已重命名为 '{new_name}'")
+                else:
+                    Toast.error(self, "编辑失败", "无法更新文件夹，请检查数据库连接")
 
     def show_folder_context_menu(self, position):
         """显示文件夹右键菜单"""
@@ -1981,34 +2128,75 @@ class ToolCardsTab(QWidget):
             Toast.warning(self, "操作受限", "最多只能有两级文件夹，无法在第二级文件夹下添加子文件夹")
             return
         
-        name, ok = QInputDialog.getText(self, "添加子文件夹", f"在 '{parent_folder_name}' 下添加子文件夹:\n请输入子文件夹名称:")
-        if ok and name:
-            # 创建新子文件夹数据
-            folder_data = {
-                "name": name,
-                "description": "",
-                "parent_id": parent_folder_id,
-                "sort_order": 0,
-                "is_default": False,
-                "created_by": "admin"
-            }
-            
-            # 使用数据库服务创建子文件夹
-            folder_id = self.tool_cards_service.create_folder(folder_data)
-            
-            if folder_id:
-                # 强制重新从数据库加载数据
-                self.folder_data = self.tool_cards_service.get_all_folders()
+        # 创建自定义输入对话框
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("添加子文件夹")
+        dialog.setFixedSize(350, 140)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # 提示文本
+        label = QLabel(f"在 '{parent_folder_name}' 下添加子文件夹:\n请输入子文件夹名称:")
+        layout.addWidget(label)
+        
+        # 输入框
+        name_input = QLineEdit()
+        layout.addWidget(name_input)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        
+        confirm_btn = QPushButton("确认")
+        cancel_btn = QPushButton("取消")
+        
+        confirm_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(confirm_btn)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # 设置焦点到输入框
+        name_input.setFocus()
+        
+        # 显示对话框
+        if dialog.exec_() == QDialog.Accepted:
+            name = name_input.text().strip()
+            if name:
+                # 创建新子文件夹数据
+                folder_data = {
+                    "name": name,
+                    "description": "",
+                    "parent_id": parent_folder_id,
+                    "sort_order": 0,  # 使用默认值，排序由created_at决定
+                    "is_default": False,
+                    "created_by": "admin"
+                }
                 
-                # 重新构建文件夹树
-                self.load_folder_tree()
+                # 使用数据库服务创建子文件夹
+                folder_id = self.tool_cards_service.create_folder(folder_data)
                 
-                # 展开父文件夹以显示新添加的子文件夹
-                current_item.setExpanded(True)
-                
-                Toast.success(self, "添加成功", f"子文件夹 '{name}' 已添加到 '{parent_folder_name}'")
-            else:
-                Toast.error(self, "添加失败", "无法创建子文件夹，请检查数据库连接")
+                if folder_id:
+                    # 强制重新从数据库加载数据
+                    self.folder_data = self.tool_cards_service.get_all_folders()
+                    
+                    # 重新构建文件夹树
+                    self.load_folder_tree()
+                    
+                    # 展开父文件夹以显示新添加的子文件夹
+                    # 注意：重新构建文件夹树后，原来的current_item已被删除，需要重新查找
+                    self.expand_folder_by_id(parent_folder_id)
+                    
+                    # 自动定位到新增的子文件夹
+                    self.select_folder_by_id(folder_id)
+                    
+                    Toast.success(self, f"添加成功：子文件夹 '{name}' 已添加到 '{parent_folder_name}'")
+                else:
+                    Toast.error(self, "添加失败", "无法创建子文件夹，请检查数据库连接")
 
     def save_data(self):
         """保存数据到配置文件"""

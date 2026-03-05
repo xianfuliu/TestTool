@@ -1,0 +1,73 @@
+hl_user_info表
+INSERT INTO `cfloan_biz`.`hl_user_info` (`guarantor_loan_no`, `loan_apply_no`, `phone`, `phone_enc`, `phone_md5`, `marital`, `monthly_income`, `education`, `job`, `province`, `city`, `district`, `work_unit`, `work_addr`, `work_property`, `addr_detail`, `industry`, `create_time`, `update_time`) VALUES ('APPLY_1478322789253599232', '5687678201131270661', '18575618081', NULL, NULL, 2, 7, 4, 1, '310000', '310100', '310112', '深圳哈行网络科技有限公司', '', NULL, '上海上海市闵行区疏影路711号东苑新天地33-1301', 109, '2024-9-27 21:27:09', '2024-9-27 21:27:08');
+要求：
+phone作为入参传入，入参未填写，则随机生成（重要字段）
+guarantor_loan_no前缀固定APPLY_随机生成数字，位数保持一致，造数需要保持所有表的唯一性，比如同一个用户只有一个guarantor_loan_no，和其他表的guarantor_loan_no一样
+
+
+hl_linkman_info表
+INSERT INTO `cfloan_biz`.`hl_linkman_info` (`guarantor_loan_no`, `loan_apply_no`, `relationship_A`, `name_A`, `phone_A`, `phone_A_enc`, `phone_A_md5`, `relationship_B`, `name_B`, `phone_B`, `phone_B_enc`, `phone_B_md5`, `create_time`, `update_time`) VALUES ('APPLY_1289337558739476480', '5687678201131270661', '3', '任可啊', '13750067061', NULL, NULL, '1', '崔玉', '18065936361', NULL, NULL, '2024-9-27 21:27:09', '2024-9-27 21:27:08');
+要求：
+relationship_A和relationship_B作为入参，入参未填写，则写死
+phone_A和phone_B作为入参，入参未填写，则随机生成
+name_A和name_B作为入参，入参未填写，则随机生成
+guarantor_loan_no前缀固定APPLY_随机生成数字，位数保持一致，造数需要保持所有表的唯一性，比如同一个用户只有一个guarantor_loan_no，和其他表的guarantor_loan_no一样
+
+
+hl_id_card_info表
+INSERT INTO `cfloan_biz`.`hl_id_card_info` (`guarantor_loan_no`, `loan_apply_no`, `id_type`, `name_OCR`, `id_card_no_OCR`, `id_card_no_ocr_enc`, `id_card_no_ocr_md5`, `begin_time_OCR`, `duetime_OCR`, `id_address_province`, `id_address_city`, `id_address_area`, `address_ocr`, `sex_OCR`, `ethnic_OCR`, `issue_org_OCR`, `nationality`, `front_file_id`, `opposite_file_id`, `living_influence_file_id`, `living_time`, `create_time`, `update_time`) VALUES ('APPLY_1289337558739476480', '5687678201131270661', '1', '崔葳一', '352201199111290011', NULL, NULL, '20181019', '20381019', '440000', '440300', '440305', '广东省深圳市南山区高新南四道10号', 1, '汉', '深圳市公安局南山分局', 'CHN', 'FILE_1289337563810390016', 'FILE_1289337566939340800', 'FILE_1289337569665638400', NULL, '2024-9-27 21:27:09', '2024-9-27 21:27:11');
+要求：
+loan_apply_no作为入参传入，入参未填写，则随机生成（重要字段）和其他表的loan_apply_no保持一致
+name_OCR作为入参传入，入参未填写，则随机生成（重要字段）
+id_card_no_OCR作为入参传入，入参未填写，则随机生成（重要字段）
+
+
+hl_contract_info表
+INSERT INTO `cfloan_biz`.`hl_contract_info` (`order_no`, `contract_no`, `contract_type`, `contract_name`, `file_id`, `create_time`, `update_time`, `app_status`) VALUES ('APPLY_1333302094625525760', 'dcpz_1465773865354158080', 'hgpz', '回购凭证', 'FILE_1350185086018932902', '2026-01-27 18:22:02', '2026-02-04 20:33:43', NULL);
+INSERT INTO `cfloan_biz`.`hl_contract_info` (`order_no`, `contract_no`, `contract_type`, `contract_name`, `file_id`, `create_time`, `update_time`, `app_status`) VALUES ('APPLY_1333302094625525760', 'fkpz_1465773865354158080', 'fkpz', '放款凭证', 'FILE_1350185086018932901', '2026-01-27 18:22:02', '2026-02-04 20:27:50', 'N');
+INSERT INTO `cfloan_biz`.`hl_contract_info` (`order_no`, `contract_no`, `contract_type`, `contract_name`, `file_id`, `create_time`, `update_time`, `app_status`) VALUES ('APPLY_1333302094625525760', 'dkxy_1333708402344349696', 'dkxy', '贷款协议', 'FILE_1350185086018932736', '2025-01-28 08:01:02', '2025-03-14 19:13:30', NULL);
+INSERT INTO `cfloan_biz`.`hl_contract_info` (`order_no`, `contract_no`, `contract_type`, `contract_name`, `file_id`, `create_time`, `update_time`, `app_status`) VALUES ('APPLY_1333302094625525760', 'zxxy_1333302103597932544', 'zxxy', '担保咨询协议', 'FILE_1333640877107597312', '2025-01-27 05:06:33', '2025-01-28 03:32:43', NULL);
+INSERT INTO `cfloan_biz`.`hl_contract_info` (`order_no`, `contract_no`, `contract_type`, `contract_name`, `file_id`, `create_time`, `update_time`, `app_status`) VALUES ('APPLY_1333302094625525760', 'sfxxsqs_1333302103576961024', 'sfxxsqs', '三方信息授权书', 'FILE_1333640873647296512', '2025-01-27 05:06:33', '2025-01-28 03:32:42', NULL);
+INSERT INTO `cfloan_biz`.`hl_contract_info` (`order_no`, `contract_no`, `contract_type`, `contract_name`, `file_id`, `create_time`, `update_time`, `app_status`) VALUES ('APPLY_1333302094625525760', 'dbxy_1333302103555989504', 'dbxy', '担保协议', 'FILE_1333640870317019136', '2025-01-27 05:06:33', '2025-01-28 03:32:41', NULL);
+要求：
+每个用户都有5份文件，每个用户都需要插入，文件id所有插入用户都一样
+order_no与其他表的guarantor_loan_no一致
+contract_no前缀_随机生成，位数保持一致
+
+
+hl_bank_card_info表
+INSERT INTO `cfloan_biz`.`hl_bank_card_info` (`guarantor_loan_no`, `loan_apply_no`, `bank_code`, `id_card_no`, `id_card_no_enc`, `id_card_no_md5`, `user_mobile`, `user_mobile_enc`, `user_mobile_md5`, `user_name`, `bank_card_no`, `bank_card_no_enc`, `bank_card_no_md5`, `create_time`, `update_time`) VALUES ('APPLY_1327503586975571968', '6000325536632448110', '0104', '430681199207114011', NULL, NULL, '18670083288', NULL, NULL, '周啊', '6216607500333135291', NULL, NULL, '2025-01-11 05:05:19', '2025-01-11 05:05:18');
+要求：
+guarantor_loan_no前缀固定APPLY_随机生成数字，位数保持一致，造数需要保持所有表的唯一性，比如同一个用户只有一个guarantor_loan_no，和其他表的guarantor_loan_no一样
+loan_apply_no作为入参传入，入参未填写，则随机生成（重要字段）和其他表的loan_apply_no保持一致
+id_card_no与hl_id_card_info表的id_card_no_OCR字段一致
+user_mobile与hl_user_info表phone字段一致
+user_name与hl_id_card_info表的name_OCR字段一致
+bank_card_no作为入参传入，入参未填写，则随机生成（重要字段）
+
+
+hl_attachment_info表
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1350185086018932902', 'APPLY_1333302094625525760', '回购凭证', NULL, '2019027099670659073', 'pdf', NULL, '2025-03-14 19:13:30', '2026-02-04 20:37:45');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1350185086018932901', 'APPLY_1333302094625525760', '放款凭证', NULL, '2019026963636797442', 'pdf', NULL, '2025-03-14 19:13:30', '2026-02-04 20:37:45');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1350185086018932736', 'APPLY_1333302094625525760', '贷款协议', NULL, '2018562913064800257', 'pdf', NULL, '2025-03-14 19:13:30', '2026-02-03 13:51:28');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1333640877107597312', 'APPLY_1333302094625525760', '担保咨询协议', NULL, '2018563130451382274', 'pdf', NULL, '2025-01-28 03:32:43', '2026-02-03 13:52:18');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1333640873647296512', 'APPLY_1333302094625525760', '三方信息授权书', NULL, '2018562124283990017', 'pdf', NULL, '2025-01-28 03:32:42', '2026-02-03 13:48:25');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1333640870317019136', 'APPLY_1333302094625525760', '担保协议', NULL, '2018562662580965378', 'pdf', NULL, '2025-01-28 03:32:41', '2026-02-03 13:50:31');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1333302103514046464', 'APPLY_1333302094625525760', '活体影像', NULL, '2018534178924089346', 'jpg', NULL, '2025-01-27 05:06:33', '2026-02-03 11:57:09');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1333302100859052032', 'APPLY_1333302094625525760', '身份证反面', NULL, '2018523245912870913', 'jpg', NULL, '2025-01-27 05:06:32', '2026-02-03 11:17:53');
+INSERT INTO `cfloan_biz`.`hl_attachment_info` (`attachments_id`, `order_no`, `file_name`, `file_path`, `file_oss_id`, `file_type`, `attachment_info`, `create_time`, `update_time`) VALUES ('FILE_1333302097881096192', 'APPLY_1333302094625525760', '身份证正面', NULL, '2018530226300080130', 'jpg', NULL, '2025-01-27 05:06:32', '2026-02-03 11:41:30');
+要求：
+每个用户都需要插入这9份文件
+attachments_id固定每个用户都有着9份
+file_oss_id固定每个用户都有着9份
+order_no与其他表的guarantor_loan_no一致
+
+hl_loan_app_info表
+INSERT INTO `cfloan_biz`.`hl_loan_app_info` (`guarantor_loan_no`, `loan_apply_no`, `open_id`, `order_type`, `loan_purpose`, `term`, `repay_method`, `order_status`, `order_desc`, `apply_time`, `apply_status`, `failure_node`, `apply_channel`, `cap_code`, `product_no`, `hq_examine_time`, `zf_examine_time`, `create_time`, `update_time`, `module_type`) VALUES ('APPLY_1333302094625525760', '6047824404733766175', '_FWFNDjvdHWtTEni9majeQub0CIMwwds', 'loan', '1', '12', '2', 'S', '成功', '2025-01-27 05:06:31', 'ZFS', NULL, 'hl', NULL, 'hlLoan', '2025-01-27 05:06:36', '2025-01-27 00:00:00', '2025-01-27 05:06:31', '2025-01-28 08:01:02', '70019');
+要求：
+guarantor_loan_no前缀固定APPLY_随机生成数字，位数保持一致，造数需要保持所有表的唯一性，比如同一个用户只有一个guarantor_loan_no，和其他表的guarantor_loan_no一样
+loan_apply_no作为入参传入，入参未填写，则随机生成（重要字段）和其他表的loan_apply_no保持一致
+open_id下划线开头拼接随机数，位数保持一致
+term作为入参传入，入参必填，则随机生成（重要字段）
+module_type作为入参传入，入参必填，则随机生成（重要字段）70019和70016
+

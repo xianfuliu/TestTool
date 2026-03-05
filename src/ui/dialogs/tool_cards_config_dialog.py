@@ -868,6 +868,10 @@ class ToolCardsConfigDialog(QDialog):
         self.http_headers_edit = http_headers_edit
         self.http_body_edit = http_body_edit
         
+        # 添加请求体JSON格式验证
+        self.http_body_edit.textChanged.connect(self.validate_http_body_json)
+        self.http_body_edit.focusOutEvent = self.http_body_focus_out_event
+        
         # 参数配置
         param_widget = QWidget()
         param_layout = QVBoxLayout(param_widget)
@@ -1399,6 +1403,103 @@ class ToolCardsConfigDialog(QDialog):
         print(f"[DEBUG] 最终HTTP配置: {config}")
         return config
 
+    def validate_http_body_json(self):
+        """验证HTTP请求体JSON格式"""
+        body_text = self.http_body_edit.toPlainText().strip()
+        
+        # 如果为空，认为是有效的（允许空请求体）
+        if not body_text:
+            self.set_http_body_valid(True)
+            return True
+        
+        # 尝试解析JSON
+        try:
+            json.loads(body_text)
+            self.set_http_body_valid(True)
+            return True
+        except json.JSONDecodeError as e:
+            self.set_http_body_valid(False)
+            return False
+    
+    def set_http_body_valid(self, is_valid):
+        """设置HTTP请求体输入框的验证状态"""
+        if is_valid:
+            # 有效状态：绿色边框
+            self.http_body_edit.setStyleSheet("""
+                QTextEdit {
+                    border: 1px solid #10b981;
+                    border-radius: 4px;
+                    padding: 4px;
+                    font-size: 14px;
+                    background-color: #ffffff;
+                }
+                QTextEdit QScrollBar:vertical {
+                    background-color: #f3f4f6;
+                    width: 12px;
+                    margin: 0px;
+                    border-radius: 6px;
+                }
+                QTextEdit QScrollBar::handle:vertical {
+                    background-color: #9ca3af;
+                    border-radius: 6px;
+                    min-height: 20px;
+                }
+                QTextEdit QScrollBar::handle:vertical:hover {
+                    background-color: #6b7280;
+                }
+                QTextEdit QScrollBar::add-line:vertical, QTextEdit QScrollBar::sub-line:vertical {
+                    border: none;
+                    background: none;
+                }
+            """)
+        else:
+            # 无效状态：红色边框
+            self.http_body_edit.setStyleSheet("""
+                QTextEdit {
+                    border: 2px solid #ef4444;
+                    border-radius: 4px;
+                    padding: 4px;
+                    font-size: 14px;
+                    background-color: #ffffff;
+                }
+                QTextEdit QScrollBar:vertical {
+                    background-color: #f3f4f6;
+                    width: 12px;
+                    margin: 0px;
+                    border-radius: 6px;
+                }
+                QTextEdit QScrollBar::handle:vertical {
+                    background-color: #9ca3af;
+                    border-radius: 6px;
+                    min-height: 20px;
+                }
+                QTextEdit QScrollBar::handle:vertical:hover {
+                    background-color: #6b7280;
+                }
+                QTextEdit QScrollBar::add-line:vertical, QTextEdit QScrollBar::sub-line:vertical {
+                    border: none;
+                    background: none;
+                }
+            """)
+    
+    def http_body_focus_out_event(self, event):
+        """HTTP请求体输入框失去焦点事件"""
+        # 调用父类的focusOutEvent
+        from PyQt5.QtWidgets import QTextEdit
+        QTextEdit.focusOutEvent(self.http_body_edit, event)
+        
+        # 验证JSON格式
+        self.validate_http_body_json()
+        
+        # 如果格式无效，显示提示
+        body_text = self.http_body_edit.toPlainText().strip()
+        if body_text:
+            try:
+                json.loads(body_text)
+            except json.JSONDecodeError as e:
+                from src.ui.widgets.toast_tips import Toast
+                Toast.error(self, "请求体格式有误，请检查")
+
     def collect_python_config(self):
         """收集Python配置数据"""
         config = {
@@ -1925,6 +2026,12 @@ class ToolCardsConfigDialog(QDialog):
         mapping_data = {}
         
         print(f"[DEBUG] 开始保存配置，类型: {current_type}, 名称: {name}")
+        
+        # 如果是HTTP接口，验证请求体JSON格式
+        if current_type == "HTTP接口":
+            if not self.validate_http_body_json():
+                Toast.error(self, "保存失败", "请求体格式有误，请检查")
+                return
         
         if current_type == "SQL工具":
             config_data = self.collect_sql_config()

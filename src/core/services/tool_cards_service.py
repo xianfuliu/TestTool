@@ -68,7 +68,7 @@ class ToolCardsService:
                         SELECT id, name, description, parent_id, sort_order, is_default,
                                created_by, created_at, updated_at
                         FROM tool_card_folders
-                        ORDER BY parent_id IS NULL DESC, sort_order ASC, id ASC
+                        ORDER BY parent_id IS NULL DESC, created_at ASC, id ASC
                     """)
                     folders = cursor.fetchall()
                     
@@ -125,6 +125,26 @@ class ToolCardsService:
                     return cards
         except Exception as e:
             print(f"获取工具卡片失败: {e}")
+            return []
+
+    def get_subfolders_by_parent(self, parent_folder_id: int) -> List[Dict[str, Any]]:
+        """根据父文件夹ID获取所有子文件夹"""
+        if not self.database_available:
+            return []
+
+        try:
+            with self.db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT id, name, description, parent_id, sort_order, is_default,
+                               created_by, created_at, updated_at
+                        FROM tool_card_folders
+                        WHERE parent_id = %s
+                        ORDER BY created_at ASC, id ASC
+                    """, (parent_folder_id,))
+                    return cursor.fetchall()
+        except Exception as e:
+            print(f"获取子文件夹失败: {e}")
             return []
 
     def get_card_by_id(self, card_id: int) -> Optional[Dict[str, Any]]:
@@ -311,20 +331,42 @@ class ToolCardsService:
             return False
 
     def delete_folder(self, folder_id: int) -> bool:
-        """删除工具文件夹"""
+        """删除工具文件夹（包含级联删除子文件夹）"""
         if not self.database_available:
             return False
 
         try:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # 由于外键约束设置为CASCADE，删除文件夹会自动删除关联的卡片
+                    # 先递归删除所有子文件夹
+                    self._delete_subfolders_recursive(conn, folder_id)
+                    
+                    # 然后删除当前文件夹
                     cursor.execute("DELETE FROM tool_card_folders WHERE id = %s", (folder_id,))
                     conn.commit()
                     return cursor.rowcount > 0
         except Exception as e:
             print(f"删除工具文件夹失败: {e}")
             return False
+
+    def _delete_subfolders_recursive(self, conn, folder_id: int):
+        """递归删除子文件夹"""
+        try:
+            with conn.cursor() as cursor:
+                # 获取所有子文件夹
+                cursor.execute("SELECT id FROM tool_card_folders WHERE parent_id = %s", (folder_id,))
+                subfolders = cursor.fetchall()
+                
+                # 递归删除每个子文件夹
+                for subfolder in subfolders:
+                    subfolder_id = subfolder['id']
+                    self._delete_subfolders_recursive(conn, subfolder_id)
+                    
+                    # 删除子文件夹
+                    cursor.execute("DELETE FROM tool_card_folders WHERE id = %s", (subfolder_id,))
+        except Exception as e:
+            print(f"递归删除子文件夹失败: {e}")
+            raise
 
     def initialize_default_data(self) -> bool:
         """初始化默认数据"""

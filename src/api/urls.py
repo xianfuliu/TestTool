@@ -58,6 +58,8 @@ class RouteMapper:
 # 导入API服务
 from .api_services.addMerchantAndSuppliers import AddMerchantAndSuppliers
 from .api_services.creditOrderApproval import CreditOrderApproval
+from .api_services.generateUserData import GenerateUserData
+from .api_services.deleteUserData import DeleteUserData
 
 # 创建主路由器
 api_router = APIRouter()
@@ -68,6 +70,8 @@ mapper = RouteMapper(api_router)
 # 创建API实例
 add_merchant_and_suppliers_api = AddMerchantAndSuppliers()
 credit_order_approval_api = CreditOrderApproval()
+generate_user_data_api = GenerateUserData()
+delete_user_data_api = DeleteUserData()
 
 # 路由配置 - 使用create_route_config函数
 url_routes = [
@@ -86,6 +90,22 @@ url_routes = [
         credit_order_approval_api.credit_order_approval,
         "授信订单审批接口",
         ["授信订单审批"],
+    ),
+    # 用户造数接口
+    create_route_config(
+        "POST",
+        "/user/generate-data",
+        generate_user_data_api.generate_user_data,
+        "用户造数接口",
+        ["用户管理"],
+    ),
+    # 用户删除接口
+    create_route_config(
+        "POST",
+        "/user/delete-data",
+        delete_user_data_api.delete_user_data,
+        "用户删除接口",
+        ["用户管理"],
     ),
 ]
 
