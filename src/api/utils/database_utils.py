@@ -26,6 +26,18 @@ class DatabaseConfig:
         "autocommit": False
     }
     
+    # 征信前置操作专用配置
+    CREDIT_PRE_OPERATION_CONFIG = {
+        "host": "rm-bp1ah1feb2dt774376o.mysql.rds.aliyuncs.com",
+        "port": 3306,
+        "user": "indiv_auth_test", 
+        "password": "QnMvOBVnVNMviOi8",
+        "database": "indiv_auth",
+        "charset": "utf8mb4",
+        "cursorclass": DictCursor,
+        "autocommit": False
+    }
+    
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         初始化数据库配置
