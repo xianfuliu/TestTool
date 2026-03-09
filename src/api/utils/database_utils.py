@@ -38,6 +38,30 @@ class DatabaseConfig:
         "autocommit": False
     }
     
+    # 风控库配置
+    RISK_CONTROL_CONFIG = {
+        "host": "47.106.192.83",
+        "port": 3306,
+        "user": "xvdba", 
+        "password": "xvdba@2022",
+        "database": "micro_rimsdb",
+        "charset": "utf8mb4",
+        "cursorclass": DictCursor,
+        "autocommit": False
+    }
+    
+    # 进件库配置
+    APPLICATION_CONFIG = {
+        "host": "47.106.192.83",
+        "port": 3306,
+        "user": "xvdba", 
+        "password": "xvdba@2022",
+        "database": "micro_cdmsdb",
+        "charset": "utf8mb4",
+        "cursorclass": DictCursor,
+        "autocommit": False
+    }
+    
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         初始化数据库配置

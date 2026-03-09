@@ -14,6 +14,7 @@ class AddMerchantAndSuppliersRequest(BaseModel):
     enterpriseName: str = None
     creditCode: str = None
     legalPersonName: str = None
+    idNumber: str = None  # 身份证号，法人身份证号，必填
     bankCardNo: str = None
     bankName: str = None
     openBankName: str = None
@@ -34,6 +35,7 @@ class AddMerchantAndSuppliers:
             enterpriseName = request.enterpriseName
             creditCode = request.creditCode
             legalPersonName = request.legalPersonName
+            idNumber = request.idNumber  # 身份证号，法人身份证号
             bankCardNo = request.bankCardNo
             bankName = request.bankName
             openBankName = request.openBankName
@@ -48,12 +50,12 @@ class AddMerchantAndSuppliers:
                     merchantId = f"SHID{self.add_merchant_and_suppliers_impl._get_timestamp()}"
                     
             elif type_value == 2:  # 新增供应商
-                if not all([merchantId, legalPersonName, bankCardNo, bankName, openBankName]):
-                    raise HTTPException(status_code=400, detail="新增供应商缺少必填参数: merchantId, legalPersonName, bankCardNo, bankName, openBankName")
+                if not all([merchantId, legalPersonName, idNumber, bankCardNo, bankName, openBankName]):
+                    raise HTTPException(status_code=400, detail="新增供应商缺少必填参数: merchantId, legalPersonName, idNumber, bankCardNo, bankName, openBankName")
                     
             elif type_value == 3:  # 新增商户和供应商
-                if not all([enterpriseName, creditCode, legalPersonName, bankCardNo, bankName, openBankName]):
-                    raise HTTPException(status_code=400, detail="新增商户和供应商缺少必填参数")
+                if not all([enterpriseName, creditCode, legalPersonName, idNumber, bankCardNo, bankName, openBankName]):
+                    raise HTTPException(status_code=400, detail="新增商户和供应商缺少必填参数: enterpriseName, creditCode, legalPersonName, idNumber, bankCardNo, bankName, openBankName")
                 # 如果未传入merchantId，则随机生成
                 if not merchantId:
                     merchantId = f"SHID{self.add_merchant_and_suppliers_impl._get_timestamp()}"
@@ -90,6 +92,7 @@ class AddMerchantAndSuppliers:
                 supplier_result = self.add_merchant_and_suppliers_impl.edit_suppliers(
                     merchantId=merchantId,
                     legalPersonName=legalPersonName,
+                    idNumber=idNumber,
                     bankCardNo=bankCardNo,
                     bankName=bankName,
                     openBankName=openBankName,

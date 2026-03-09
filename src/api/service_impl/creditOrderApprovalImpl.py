@@ -14,6 +14,16 @@ class CreditOrderApprovalImpl:
     def __init__(self):
         self.base_url = "http://47.106.192.83/stage-rims-api"
         self.micro_login = MicroLogin()
+        self._cached_token = None  # 缓存登录token，避免重复登录
+
+    def _get_token(self, force_refresh: bool = False) -> str:
+        """获取登录token，每次调用接口都刷新token缓存"""
+        if self._cached_token is None or force_refresh:
+            logger.info("登录小微系统获取token")
+            self._cached_token = self.micro_login.login()
+        else:
+            logger.info("使用缓存的token进行请求")
+        return self._cached_token
 
     def _build_headers(self, token: str = None) -> Dict[str, str]:
         """构建请求头"""
@@ -28,19 +38,38 @@ class CreditOrderApprovalImpl:
         
         return headers
 
-    def _make_request(self, method: str, url: str, headers: Dict[str, str], data: Dict = None) -> Dict[str, Any]:
-        """发送HTTP请求"""
+    def _make_request(self, method: str, url: str, headers: Dict[str, str], data: Dict = None, content_type: str = "application/json", retry_count: int = 1) -> Dict[str, Any]:
+        """发送HTTP请求，支持认证失败重试"""
         try:
+            # 根据内容类型设置请求头
+            request_headers = headers.copy()
+            request_headers["Content-Type"] = content_type
+            
             if method.upper() == "GET":
-                response = requests.get(url, headers=headers)
-                logger.info(f"GET请求响应: {response.text}")
-                return response.json()
+                response = requests.get(url, headers=request_headers)
             elif method.upper() == "POST":
-                response = requests.post(url, headers=headers, json=data)
-                logger.info(f"POST请求响应: {response.text}")
-                return response.json()
+                if content_type == "application/x-www-form-urlencoded":
+                    response = requests.post(url, headers=request_headers, data=data)
+                else:
+                    response = requests.post(url, headers=request_headers, json=data)
             else:
                 raise HTTPException(status_code=400, detail=f"不支持的HTTP方法: {method}")
+            
+            logger.info(f"{method}请求响应: {response.text}")
+            result = response.json()
+            
+            # 检查是否认证失败，如果是则重试
+            if result.get("success") == False and result.get("code") in ["9997", "9999"] and retry_count > 0:
+                logger.warning(f"认证失败，尝试重新登录并重试，剩余重试次数: {retry_count}")
+                # 强制刷新token
+                self._get_token(force_refresh=True)
+                # 更新headers
+                new_headers = self._build_headers(self._cached_token)
+                # 递归调用，减少重试次数
+                return self._make_request(method, url, new_headers, data, content_type, retry_count - 1)
+            
+            return result
+            
         except requests.RequestException as e:
             logger.error(f"HTTP请求失败: {str(e)}")
             raise HTTPException(status_code=500, detail=f"HTTP请求失败: {str(e)}")
@@ -51,15 +80,16 @@ class CreditOrderApprovalImpl:
     def fetch_unassigned_task_list(self, applyNo: str) -> Dict[str, Any]:
         """查询未分配审批任务"""
         try:
-            token = self.micro_login.login()
+            token = self._get_token()
             headers = self._build_headers(token)
             
-            url = f"{self.base_url}/rims/workbench/fetchUnAssignedTaskList?criteriaMap[applyNo]={applyNo}"
+            url = f"{self.base_url}/rims/workbench/fetchUnAssignedTaskList"
+            data = {"criteriaMap[applyNo]": applyNo}
             
-            result = self._make_request("POST", url, headers)
+            result = self._make_request("POST", url, headers, data, "application/x-www-form-urlencoded")
             
             # 处理响应数据，提取taskId和applyNo
-            if result.get("code") == 200 and "data" in result and "rowList" in result["data"]:
+            if result.get("success") and result.get("code") == "0000" and "data" in result and "rowList" in result["data"]:
                 row_list = result["data"]["rowList"]
                 if row_list and len(row_list) > 0:
                     task_info = row_list[0]
@@ -70,7 +100,13 @@ class CreditOrderApprovalImpl:
                     logger.info(f"提取的任务信息: {extracted_data}")
                     return extracted_data
                 else:
-                    raise HTTPException(status_code=404, detail="未找到未分配的审批任务")
+                    # 没有未分配任务，返回空结果而不是抛出异常
+                    logger.info(f"未找到未分配的审批任务，applyNo: {applyNo}")
+                    return {
+                        "taskId": None,
+                        "applyNo": applyNo,
+                        "message": "未找到未分配的审批任务"
+                    }
             else:
                 raise HTTPException(status_code=500, detail=f"查询未分配任务失败: {result.get('message', '未知错误')}")
                 
@@ -83,7 +119,7 @@ class CreditOrderApprovalImpl:
     def claim_task(self, applyNo: str, taskId: str) -> Dict[str, Any]:
         """领取审批任务"""
         try:
-            token = self.micro_login.login()
+            token = self._get_token()
             headers = self._build_headers(token)
             
             url = f"{self.base_url}/rims/workbench/claimTask"
@@ -92,12 +128,12 @@ class CreditOrderApprovalImpl:
                 "taskId": taskId
             }
             
-            result = self._make_request("POST", url, headers, data)
+            result = self._make_request("POST", url, headers, data, "application/json")
             
-            if result.get("code") == 200:
+            if result.get("success") and result.get("code") == "0000":
                 return {"message": "任务领取成功"}
             else:
-                raise HTTPException(status_code=500, detail=f"任务领取失败: {result.get('message', '未知错误')}")
+                raise HTTPException(status_code=500, detail=f"任务领取失败: {result.get('message', '未知错误')})")
                 
         except HTTPException:
             raise
@@ -108,15 +144,16 @@ class CreditOrderApprovalImpl:
     def fetch_assigned_task_list(self, applyNo: str) -> Dict[str, Any]:
         """查询待审批任务"""
         try:
-            token = self.micro_login.login()
+            token = self._get_token()
             headers = self._build_headers(token)
             
-            url = f"{self.base_url}/rims/workbench/fetchAssignedTaskList?criteriaMap[applyNo]={applyNo}"
+            url = f"{self.base_url}/rims/workbench/fetchAssignedTaskList"
+            data = {"criteriaMap[applyNo]": applyNo}
             
-            result = self._make_request("POST", url, headers)
+            result = self._make_request("POST", url, headers, data, "application/x-www-form-urlencoded")
             
             # 处理响应数据，提取taskId和applyNo
-            if result.get("code") == 200 and "data" in result and "rowList" in result["data"]:
+            if result.get("success") and result.get("code") == "0000" and "data" in result and "rowList" in result["data"]:
                 row_list = result["data"]["rowList"]
                 if row_list and len(row_list) > 0:
                     task_info = row_list[0]
@@ -140,7 +177,7 @@ class CreditOrderApprovalImpl:
     def commit_approval(self, applyNo: str, taskId: str, remark: str = "1", rtfState: str = "Pass", rejectionReasonCode: List[str] = ["风控成功"]) -> Dict[str, Any]:
         """提交审批"""
         try:
-            token = self.micro_login.login()
+            token = self._get_token()
             headers = self._build_headers(token)
             
             url = f"{self.base_url}/rims/basicCheck/commit"
@@ -152,12 +189,12 @@ class CreditOrderApprovalImpl:
                 "rejectionReasonCode": rejectionReasonCode
             }
             
-            result = self._make_request("POST", url, headers, data)
+            result = self._make_request("POST", url, headers, data, "application/json")
             
-            if result.get("code") == 200:
+            if result.get("success") and result.get("code") == "0000":
                 return {"message": "审批提交成功"}
             else:
-                raise HTTPException(status_code=500, detail=f"审批提交失败: {result.get('message', '未知错误')}")
+                raise HTTPException(status_code=500, detail=f"审批提交失败: {result.get('message', '未知错误')})")
                 
         except HTTPException:
             raise
@@ -176,46 +213,96 @@ class CreditOrderApprovalImpl:
             taskId = unassigned_result.get("taskId")
             extracted_applyNo = unassigned_result.get("applyNo")
             
-            if not taskId:
-                raise HTTPException(status_code=404, detail="未找到可用的任务ID")
-            
-            flow_steps.append({
-                "step": "查询未分配任务", 
-                "status": "成功", 
-                "taskId": taskId,
-                "applyNo": extracted_applyNo
-            })
-            
-            # 步骤2: 领取任务 - 使用获取到的taskId和applyNo
-            logger.info("开始领取审批任务")
-            claim_result = self.claim_task(extracted_applyNo, taskId)
-            flow_steps.append({"step": "领取审批任务", "status": "成功"})
-            
-            # 步骤3: 查询待审批任务 - 再次获取taskId和applyNo（确认）
-            logger.info("开始查询待审批任务")
-            assigned_result = self.fetch_assigned_task_list(extracted_applyNo)
-            confirmed_taskId = assigned_result.get("taskId")
-            confirmed_applyNo = assigned_result.get("applyNo")
-            
-            flow_steps.append({
-                "step": "查询待审批任务", 
-                "status": "成功",
-                "taskId": confirmed_taskId,
-                "applyNo": confirmed_applyNo
-            })
-            
-            # 步骤4: 提交审批 - 使用确认后的taskId和applyNo
-            logger.info("开始提交审批")
-            approval_result = self.commit_approval(confirmed_applyNo, confirmed_taskId, remark, rtfState, rejectionReasonCode)
-            flow_steps.append({"step": "提交审批", "status": "成功"})
-            
-            return {
-                "flow_steps": flow_steps,
-                "original_applyNo": applyNo,
-                "final_taskId": confirmed_taskId,
-                "final_applyNo": confirmed_applyNo,
-                "final_result": approval_result
-            }
+            if taskId:
+                # 有未分配任务，需要先领取
+                flow_steps.append({
+                    "step": "查询未分配任务", 
+                    "status": "成功", 
+                    "taskId": taskId,
+                    "applyNo": extracted_applyNo
+                })
+                
+                # 步骤2: 领取任务 - 使用获取到的taskId和applyNo
+                logger.info("开始领取审批任务")
+                claim_result = self.claim_task(extracted_applyNo, taskId)
+                flow_steps.append({"step": "领取审批任务", "status": "成功"})
+                
+                # 步骤3: 查询待审批任务 - 再次获取taskId和applyNo（确认）
+                logger.info("开始查询待审批任务")
+                assigned_result = self.fetch_assigned_task_list(extracted_applyNo)
+                confirmed_taskId = assigned_result.get("taskId")
+                confirmed_applyNo = assigned_result.get("applyNo")
+                
+                flow_steps.append({
+                    "step": "查询待审批任务", 
+                    "status": "成功",
+                    "taskId": confirmed_taskId,
+                    "applyNo": confirmed_applyNo
+                })
+                
+                # 步骤4: 提交审批 - 使用确认后的taskId和applyNo
+                logger.info("开始提交审批")
+                approval_result = self.commit_approval(confirmed_applyNo, confirmed_taskId, remark, rtfState, rejectionReasonCode)
+                flow_steps.append({"step": "提交审批", "status": "成功"})
+                
+                return {
+                    "flow_steps": flow_steps,
+                    "original_applyNo": applyNo,
+                    "final_taskId": confirmed_taskId,
+                    "final_applyNo": confirmed_applyNo,
+                    "final_result": approval_result
+                }
+            else:
+                # 没有未分配任务，直接查询待审批任务
+                flow_steps.append({
+                    "step": "查询未分配任务", 
+                    "status": "无任务", 
+                    "taskId": None,
+                    "applyNo": applyNo
+                })
+                
+                # 直接查询待审批任务
+                logger.info("未找到未分配任务，直接查询待审批任务")
+                assigned_result = self.fetch_assigned_task_list(applyNo)
+                confirmed_taskId = assigned_result.get("taskId")
+                confirmed_applyNo = assigned_result.get("applyNo")
+                
+                if confirmed_taskId:
+                    flow_steps.append({
+                        "step": "查询待审批任务", 
+                        "status": "成功",
+                        "taskId": confirmed_taskId,
+                        "applyNo": confirmed_applyNo
+                    })
+                    
+                    # 提交审批
+                    logger.info("开始提交审批")
+                    approval_result = self.commit_approval(confirmed_applyNo, confirmed_taskId, remark, rtfState, rejectionReasonCode)
+                    flow_steps.append({"step": "提交审批", "status": "成功"})
+                    
+                    return {
+                        "flow_steps": flow_steps,
+                        "original_applyNo": applyNo,
+                        "final_taskId": confirmed_taskId,
+                        "final_applyNo": confirmed_applyNo,
+                        "final_result": approval_result
+                    }
+                else:
+                    # 既没有未分配任务，也没有待审批任务
+                    flow_steps.append({
+                        "step": "查询待审批任务", 
+                        "status": "无任务",
+                        "taskId": None,
+                        "applyNo": applyNo
+                    })
+                    
+                    return {
+                        "flow_steps": flow_steps,
+                        "original_applyNo": applyNo,
+                        "final_taskId": None,
+                        "final_applyNo": applyNo,
+                        "final_result": {"message": "未找到可审批的任务"}
+                    }
             
         except HTTPException:
             raise

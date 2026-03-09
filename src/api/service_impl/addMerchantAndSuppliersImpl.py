@@ -84,7 +84,7 @@ class AddMerchantAndSuppliersImpl:
         else:
             raise Exception(f"HTTP错误: {response.status_code}")
 
-    def edit_suppliers(self, merchantId: str, legalPersonName: str, bankCardNo: str, bankName: str, openBankName: str, token: str) -> Dict[str, Any]:
+    def edit_suppliers(self, merchantId: str, legalPersonName: str, idNumber: str, bankCardNo: str, bankName: str, openBankName: str, token: str) -> Dict[str, Any]:
         """编辑供应商接口 - 合并现有供应商和新增供应商"""
         timestamp = self._get_timestamp()
         
@@ -103,13 +103,13 @@ class AddMerchantAndSuppliersImpl:
         for supplier in existing_suppliers:
             suppliers_dto_list.append({
                 "supplierName": supplier.get("supplierName", ""),
-                "bankCardName": legalPersonName,  # 银行户名使用法人姓名
+                "bankAccount": supplier.get("bankAccount", ""),  # 银行户名
+                "idNumber": supplier.get("idNumber", ""),  # 身份证号
                 "bankCardNo": supplier.get("bankCardNo", ""),
                 "bankName": supplier.get("bankName", ""),
                 "openBankName": supplier.get("openBankName", ""),
                 "unionBankNo": supplier.get("unionBankNo", ""),
                 "accountType": supplier.get("accountType", "1"),
-                "accountType_name": "对公" if supplier.get("accountType") == "1" else "对私",
                 "index": index
             })
             index += 1
@@ -117,13 +117,13 @@ class AddMerchantAndSuppliersImpl:
         # 3. 添加新增供应商
         suppliers_dto_list.append({
             "supplierName": f"GYSMC{timestamp}",
-            "bankCardName": legalPersonName,
+            "bankAccount": legalPersonName,  # 银行户名使用法人姓名
+            "idNumber": idNumber,  # 身份证号，必填
             "bankCardNo": bankCardNo,
             "bankName": bankName,
             "openBankName": openBankName,
             "unionBankNo": f"LHH{timestamp}",
             "accountType": "1",
-            "accountType_name": "对公",
             "index": index
         })
         

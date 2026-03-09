@@ -29,7 +29,7 @@ class CreditPreOperationImpl:
         征信前置操作
         
         Args:
-            operation_type: 操作类型 (1-更新人脸, 2-更新签章手机号, 3-还原手机号)
+            operation_type: 操作类型 (1-更新人脸, 2-还原手机号)
             business_num: 业务号
             mobile: 手机号
             
@@ -40,8 +40,6 @@ class CreditPreOperationImpl:
             if operation_type == 1:
                 return await self._update_face_operation(business_num)
             elif operation_type == 2:
-                return await self._update_mobile_operation(business_num, mobile)
-            elif operation_type == 3:
                 return await self._restore_mobile_operation(mobile)
             else:
                 raise ValueError(f"不支持的操作类型: {operation_type}")
@@ -102,45 +100,6 @@ class CreditPreOperationImpl:
         finally:
             connection.close()
 
-    async def _update_mobile_operation(self, business_num: str, mobile: str) -> Dict[str, Any]:
-        """更新签章手机号操作"""
-        sql = """
-        UPDATE indiv_auth.auth_flow_info 
-        SET mobile = %s 
-        WHERE business_num = %s
-        """
-        
-        params = (mobile, business_num)
-        
-        connection = self.db_manager.get_connection()
-        try:
-            with connection.cursor() as cursor:
-                affected_rows = cursor.execute(sql, params)
-                connection.commit()
-                
-                if affected_rows == 0:
-                    return {
-                        "operation_type": 2,
-                        "business_num": business_num,
-                        "mobile": mobile,
-                        "affected_rows": 0,
-                        "message": "未找到匹配的业务号，更新失败"
-                    }
-                
-                return {
-                    "operation_type": 2,
-                    "business_num": business_num,
-                    "mobile": mobile,
-                    "affected_rows": affected_rows,
-                    "message": "签章手机号更新成功"
-                }
-                
-        except Exception as e:
-            connection.rollback()
-            raise e
-        finally:
-            connection.close()
-
     async def _restore_mobile_operation(self, mobile: str) -> Dict[str, Any]:
         """还原手机号操作"""
         connection = self.db_manager.get_connection()
@@ -171,7 +130,7 @@ class CreditPreOperationImpl:
                 connection.commit()
                 
                 return {
-                    "operation_type": 3,
+                    "operation_type": 2,
                     "mobile": mobile,
                     "affected_rows": total_affected_rows,
                     "psn_account_affected": affected_rows1,

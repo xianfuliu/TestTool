@@ -61,6 +61,8 @@ from .api_services.creditOrderApproval import CreditOrderApproval
 from .api_services.generateUserData import GenerateUserData
 from .api_services.deleteUserData import DeleteUserData
 from .api_services.creditPreOperation import CreditPreOperation
+from .api_services.modifyPhone import ModifyPhone
+from .api_services.riskControlReRun import RiskControlReRun
 
 # 创建主路由器
 api_router = APIRouter()
@@ -74,6 +76,8 @@ credit_order_approval_api = CreditOrderApproval()
 generate_user_data_api = GenerateUserData()
 delete_user_data_api = DeleteUserData()
 credit_pre_operation_api = CreditPreOperation()
+modify_phone_api = ModifyPhone()
+risk_control_rerun_api = RiskControlReRun()
 
 # 路由配置 - 使用create_route_config函数
 url_routes = [
@@ -116,6 +120,22 @@ url_routes = [
         credit_pre_operation_api.credit_pre_operation,
         "征信前置操作接口",
         ["征信前置"],
+    ),
+    # 修改用户手机号接口
+    create_route_config(
+        "POST",
+        "/user/modify-phone",
+        modify_phone_api.modify_phone,
+        "修改用户手机号接口",
+        ["用户管理"],
+    ),
+    # 风控重跑接口
+    create_route_config(
+        "POST",
+        "/risk-control/rerun",
+        risk_control_rerun_api.risk_control_rerun,
+        "风控重跑接口",
+        ["风控管理"],
     ),
 ]
 

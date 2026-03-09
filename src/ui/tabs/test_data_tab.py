@@ -1222,22 +1222,22 @@ class TestDataTab(QWidget):
             Toast.warning(self, "警告", "请先生成身份证数据")
             return
 
-        data_text = f"""用户姓名: {self.parent_app.id_data['name']}
-身份证号: {self.parent_app.id_data['id_number']}
-手机号码: {self.parent_app.id_data['phone']}
-银行卡号: {self.parent_app.id_data['bank_card_number']}
+        data_text = f"""name: {self.parent_app.id_data['name']}
+idNo: {self.parent_app.id_data['id_number']}
+mobile: {self.parent_app.id_data['phone']}
+bankCard: {self.parent_app.id_data['bank_card_number']}
 """
 
         # 添加公司名称和统一社会信用代码（如果存在）
         if "company_name" in self.parent_app.id_data:
-            data_text += f"公司名称: {self.parent_app.id_data['company_name']}\n"
+            data_text += f"company: {self.parent_app.id_data['company_name']}\n"
         if "unified_social_credit_code" in self.parent_app.id_data:
-            data_text += f"统一社会信用代码: {self.parent_app.id_data['unified_social_credit_code']}\n"
+            data_text += f"creditCode: {self.parent_app.id_data['unified_social_credit_code']}\n"
 
         # 添加法人姓名（如果存在）
         if "legal_representative" in self.parent_app.id_data:
             data_text += (
-                f"法人姓名: {self.parent_app.id_data['legal_representative']}\n"
+                f"legalPerson: {self.parent_app.id_data['legal_representative']}\n"
             )
 
         clipboard = QApplication.clipboard()

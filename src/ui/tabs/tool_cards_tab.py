@@ -104,10 +104,37 @@ class ToolCardWidget(QFrame):
 
         header_layout.addStretch()
 
-        # 操作按钮区域 - 编辑、复制、删除
+        # 操作按钮区域 - 清空、编辑、复制、删除
+        self.clear_btn = QPushButton()
+        self.clear_btn.setIcon(self.parent_tab.get_icon("text_clear.png"))
+        self.clear_btn.setIconSize(QSize(14, 14))
+        self.clear_btn.setToolTip("清空输入字段")
+        self.clear_btn.setStyleSheet(
+            """
+            QPushButton {
+                background: transparent;
+                border: none;
+                border-radius: 3px;
+                padding: 2px;
+                outline: none;
+                min-width: 22px;
+                min-height: 22px;
+            }
+            QPushButton:hover {
+                background: #ced4da;
+            }
+            QPushButton:pressed {
+                background: #adb5bd;
+            }
+        """
+        )
+        self.clear_btn.setCursor(Qt.PointingHandCursor)
+        self.clear_btn.clicked.connect(self.clear_input_fields)
+
         self.edit_btn = QPushButton()
         self.edit_btn.setIcon(self.parent_tab.get_icon("edit_card.png"))
         self.edit_btn.setIconSize(QSize(14, 14))
+        self.edit_btn.setToolTip("编辑卡片")
         self.edit_btn.setStyleSheet(
             """
             QPushButton {
@@ -130,9 +157,36 @@ class ToolCardWidget(QFrame):
         self.edit_btn.setCursor(Qt.PointingHandCursor)
         self.edit_btn.clicked.connect(lambda: self.parent_tab.edit_card(self.card_data))
 
+        self.text_parse_btn = QPushButton()
+        self.text_parse_btn.setIcon(self.parent_tab.get_icon("text_recognition.png"))
+        self.text_parse_btn.setIconSize(QSize(14, 14))
+        self.text_parse_btn.setToolTip("文本解析")
+        self.text_parse_btn.setStyleSheet(
+            """
+            QPushButton {
+                background: transparent;
+                border: none;
+                border-radius: 3px;
+                padding: 2px;
+                outline: none;
+                min-width: 22px;
+                min-height: 22px;
+            }
+            QPushButton:hover {
+                background: #ced4da;
+            }
+            QPushButton:pressed {
+                background: #adb5bd;
+            }
+        """
+        )
+        self.text_parse_btn.setCursor(Qt.PointingHandCursor)
+        self.text_parse_btn.clicked.connect(self.parse_text_fields)
+
         self.copy_btn = QPushButton()
         self.copy_btn.setIcon(self.parent_tab.get_icon("copy.png"))
         self.copy_btn.setIconSize(QSize(14, 14))
+        self.copy_btn.setToolTip("复制卡片")
         self.copy_btn.setStyleSheet(
             """
             QPushButton {
@@ -158,6 +212,7 @@ class ToolCardWidget(QFrame):
         self.delete_btn = QPushButton()
         self.delete_btn.setIcon(self.parent_tab.get_icon("delete.png"))
         self.delete_btn.setIconSize(QSize(14, 14))
+        self.delete_btn.setToolTip("删除卡片")
         self.delete_btn.setStyleSheet(
             """
             QPushButton {
@@ -180,6 +235,8 @@ class ToolCardWidget(QFrame):
         self.delete_btn.setCursor(Qt.PointingHandCursor)
         self.delete_btn.clicked.connect(lambda: self.parent_tab.delete_card(self.card_data))
 
+        header_layout.addWidget(self.clear_btn)
+        header_layout.addWidget(self.text_parse_btn)
         header_layout.addWidget(self.edit_btn)
         header_layout.addWidget(self.copy_btn)
         header_layout.addWidget(self.delete_btn)
@@ -1404,6 +1461,223 @@ class ToolCardWidget(QFrame):
         
         print(f"[DEBUG] 卡片级别最终获取到的输入参数: {input_params}")
         return input_params
+
+    def clear_input_fields(self):
+        """清空卡片的所有输入字段（跳过配置了默认值的字段）"""
+        print(f"[DEBUG] 开始清空卡片 '{self.card_data.get('name', '未命名')}' 的输入字段")
+        
+        # 获取卡片的映射配置
+        mappings = self.card_data.get("mappings", {})
+        
+        # 查找当前卡片内的所有输入控件
+        line_edits = self.findChildren(QLineEdit)
+        combo_boxes = self.findChildren(QComboBox)
+        multi_select_combos = self.findChildren(MultiSelectComboBox)
+        radio_buttons = self.findChildren(QRadioButton)
+        
+        print(f"[DEBUG] 找到控件数量: 输入框={len(line_edits)}, 下拉框={len(combo_boxes)}, 多选框={len(multi_select_combos)}, 单选按钮={len(radio_buttons)}")
+        
+        # 清空所有输入框
+        for line_edit in line_edits:
+            field_name = line_edit.property("field_name")
+            if field_name and field_name in mappings:
+                field_config = mappings[field_name]
+                # 检查是否有默认值配置
+                if isinstance(field_config, dict) and "default_value" in field_config:
+                    # 有默认值配置，不清空
+                    print(f"[DEBUG] 字段 '{field_name}' 有默认值配置，跳过清空")
+                else:
+                    # 没有默认值配置，清空输入框
+                    line_edit.clear()
+                    print(f"[DEBUG] 清空字段 '{field_name}'")
+        
+        # 重置下拉框到默认选项
+        for combo_box in combo_boxes:
+            field_name = combo_box.property("field_name")
+            if field_name and field_name in mappings:
+                field_config = mappings[field_name]
+                # 检查是否有默认值配置
+                if isinstance(field_config, dict) and "default_value" in field_config:
+                    # 有默认值配置，尝试设置到默认值
+                    default_value = field_config["default_value"]
+                    found_index = -1
+                    for i in range(combo_box.count()):
+                        if combo_box.itemData(i) == default_value:
+                            found_index = i
+                            break
+                    if found_index >= 0:
+                        combo_box.setCurrentIndex(found_index)
+                        print(f"[DEBUG] 重置下拉框字段 '{field_name}' 到默认值: {default_value}")
+                    else:
+                        # 默认值不在选项中，选择第一个选项
+                        combo_box.setCurrentIndex(0)
+                        print(f"[DEBUG] 重置下拉框字段 '{field_name}' 到第一个选项")
+                else:
+                    # 没有默认值配置，选择第一个选项
+                    combo_box.setCurrentIndex(0)
+                    print(f"[DEBUG] 重置下拉框字段 '{field_name}' 到第一个选项")
+        
+        # 清空多选框选择
+        for multi_combo in multi_select_combos:
+            field_name = multi_combo.property("field_name")
+            if field_name and field_name in mappings:
+                field_config = mappings[field_name]
+                # 检查是否有默认值配置
+                if isinstance(field_config, dict) and "default_value" in field_config:
+                    # 有默认值配置，尝试设置到默认值
+                    default_value = field_config["default_value"]
+                    if isinstance(default_value, list):
+                        # 基于枚举值（itemData）来匹配默认值
+                        selected_descriptions = []
+                        for i in range(multi_combo.count()):
+                            item_data = multi_combo.itemData(i)
+                            if item_data in default_value:
+                                selected_descriptions.append(multi_combo.itemText(i))
+                        multi_combo.set_selected_items(selected_descriptions)
+                        print(f"[DEBUG] 重置多选框字段 '{field_name}' 到默认值: {default_value}")
+                    elif isinstance(default_value, str) and ',' in default_value:
+                        # 逗号分隔的字符串
+                        default_values = [item.strip() for item in default_value.split(',')]
+                        selected_descriptions = []
+                        for i in range(multi_combo.count()):
+                            item_data = multi_combo.itemData(i)
+                            if item_data in default_values:
+                                selected_descriptions.append(multi_combo.itemText(i))
+                        multi_combo.set_selected_items(selected_descriptions)
+                        print(f"[DEBUG] 重置多选框字段 '{field_name}' 到默认值: {default_value}")
+                    else:
+                        # 单个值
+                        selected_description = ""
+                        for i in range(multi_combo.count()):
+                            item_data = multi_combo.itemData(i)
+                            if item_data == default_value:
+                                selected_description = multi_combo.itemText(i)
+                                break
+                        if selected_description:
+                            multi_combo.set_selected_items([selected_description])
+                            print(f"[DEBUG] 重置多选框字段 '{field_name}' 到默认值: {default_value}")
+                        else:
+                            # 默认值不在选项中，清空选择
+                            multi_combo.clear_selection()
+                            print(f"[DEBUG] 清空多选框字段 '{field_name}' 的选择")
+                else:
+                    # 没有默认值配置，清空选择
+                    multi_combo.clear_selection()
+                    print(f"[DEBUG] 清空多选框字段 '{field_name}' 的选择")
+        
+        # 重置单选按钮到第一个选项
+        for radio_btn in radio_buttons:
+            field_name = radio_btn.property("field_name")
+            if field_name and field_name in mappings:
+                # 找到该字段的所有单选按钮
+                field_radio_buttons = [btn for btn in radio_buttons if btn.property("field_name") == field_name]
+                if field_radio_buttons:
+                    field_config = mappings[field_name]
+                    # 检查是否有默认值配置
+                    if isinstance(field_config, dict) and "default_value" in field_config:
+                        # 有默认值配置，尝试设置到默认值
+                        default_value = field_config["default_value"]
+                        for btn in field_radio_buttons:
+                            if btn.property("value") == default_value:
+                                btn.setChecked(True)
+                                print(f"[DEBUG] 设置单选按钮字段 '{field_name}' 到默认值: {default_value}")
+                                break
+                    else:
+                        # 没有默认值配置，选择第一个选项
+                        if field_radio_buttons:
+                            field_radio_buttons[0].setChecked(True)
+                            print(f"[DEBUG] 重置单选按钮字段 '{field_name}' 到第一个选项")
+        
+        print(f"[DEBUG] 卡片 '{self.card_data.get('name', '未命名')}' 输入字段清空完成")
+
+    def parse_text_fields(self):
+        """解析文本并填充输入字段"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QLabel
+        
+        class TextParseDialog(QDialog):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setWindowTitle("文本解析")
+                self.setFixedSize(500, 400)
+                self.init_ui()
+            
+            def init_ui(self):
+                layout = QVBoxLayout(self)
+                
+                # 说明标签
+                info_label = QLabel("请输入要解析的文本，每行一个字段（如：name: 张三）")
+                layout.addWidget(info_label)
+                
+                # 文本输入框
+                self.text_edit = QTextEdit()
+                self.text_edit.setPlaceholderText("例如：\nname: 张三\nidNo: 140414199612012910\nmobile: 14546580977")
+                self.text_edit.setMinimumHeight(200)
+                layout.addWidget(self.text_edit)
+                
+                # 按钮区域
+                btn_layout = QHBoxLayout()
+                
+                confirm_btn = QPushButton("匹配")
+                confirm_btn.clicked.connect(self.accept)
+                
+                cancel_btn = QPushButton("取消")
+                cancel_btn.clicked.connect(self.reject)
+                
+                btn_layout.addStretch()
+                btn_layout.addWidget(confirm_btn)
+                btn_layout.addWidget(cancel_btn)
+                
+                layout.addLayout(btn_layout)
+            
+            def get_text(self):
+                return self.text_edit.toPlainText()
+        
+        # 创建并显示对话框
+        dialog = TextParseDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            text = dialog.get_text()
+            if text.strip():
+                self._parse_and_fill_fields(text)
+
+    def _parse_and_fill_fields(self, text):
+        """解析文本并填充到对应的输入字段"""
+        # 解析文本，提取字段和值
+        parsed_data = {}
+        lines = text.strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if ':' in line:
+                key, value = line.split(':', 1)
+                key = key.strip().lower()  # 不区分大小写
+                value = value.strip()
+                parsed_data[key] = value
+        
+        print(f"[DEBUG] 解析到的数据: {parsed_data}")
+        
+        # 获取卡片的映射配置
+        mappings = self.card_data.get("mappings", {})
+        
+        # 查找当前卡片内的所有输入控件
+        line_edits = self.findChildren(QLineEdit)
+        
+        # 只填充输入框类型的字段
+        filled_fields = []
+        for line_edit in line_edits:
+            field_name = line_edit.property("field_name")
+            if field_name and field_name in mappings:
+                # 检查字段名是否在解析的数据中（不区分大小写）
+                field_name_lower = field_name.lower()
+                if field_name_lower in parsed_data:
+                    line_edit.setText(parsed_data[field_name_lower])
+                    filled_fields.append(field_name)
+                    print(f"[DEBUG] 填充字段 '{field_name}' 值为: {parsed_data[field_name_lower]}")
+        
+        # 显示成功提示
+        if filled_fields:
+            Toast.success(self, f"成功填充字段: {', '.join(filled_fields)}")
+        else:
+            Toast.info(self, "未找到匹配的输入字段")
 
     # 删除原来的菜单功能，因为操作按钮已移到顶部
 

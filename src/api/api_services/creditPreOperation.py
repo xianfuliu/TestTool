@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 class CreditPreOperationRequest(BaseModel):
     """征信前置操作请求模型"""
-    operation_type: int = Field(..., description="操作类型: 1-更新人脸, 2-更新签章手机号, 3-还原手机号")
-    business_num: Optional[str] = Field(None, description="业务号，类型=1和2时需要")
-    mobile: Optional[str] = Field(None, description="手机号，类型=2和3时需要")
+    operation_type: int = Field(..., description="操作类型: 1-更新人脸, 2-还原手机号")
+    business_num: Optional[str] = Field(None, description="业务号，类型=1时需要")
+    mobile: Optional[str] = Field(None, description="手机号，类型=2时需要")
 
 
 class CreditPreOperation:
@@ -31,20 +31,20 @@ class CreditPreOperation:
         try:
             # 验证操作类型
             is_valid, error_msg = validate_enum_value(
-                str(request.operation_type), ["1", "2", "3"], "操作类型"
+                str(request.operation_type), ["1", "2"], "操作类型"
             )
             if not is_valid:
                 raise HTTPException(status_code=400, detail=error_msg)
             
             # 根据操作类型验证必填参数
-            if request.operation_type in [1, 2]:
+            if request.operation_type == 1:
                 if is_empty_value(request.business_num):
                     raise HTTPException(
                         status_code=400, 
                         detail=f"操作类型{request.operation_type}需要业务号(business_num)参数"
                     )
             
-            if request.operation_type in [2, 3]:
+            if request.operation_type == 2:
                 if is_empty_value(request.mobile):
                     raise HTTPException(
                         status_code=400, 
