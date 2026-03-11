@@ -77,10 +77,11 @@ class CreditOrderApprovalImpl:
             logger.error(f"请求处理失败: {str(e)}")
             raise HTTPException(status_code=500, detail=f"请求处理失败: {str(e)}")
 
-    def fetch_unassigned_task_list(self, applyNo: str) -> Dict[str, Any]:
+    def fetch_unassigned_task_list(self, applyNo: str, token: str = None) -> Dict[str, Any]:
         """查询未分配审批任务"""
         try:
-            token = self._get_token()
+            if token is None:
+                token = self._get_token()
             headers = self._build_headers(token)
             
             url = f"{self.base_url}/rims/workbench/fetchUnAssignedTaskList"
@@ -116,10 +117,11 @@ class CreditOrderApprovalImpl:
             logger.error(f"查询未分配审批任务异常: {str(e)}")
             raise HTTPException(status_code=500, detail=f"查询未分配审批任务异常: {str(e)}")
 
-    def claim_task(self, applyNo: str, taskId: str) -> Dict[str, Any]:
+    def claim_task(self, applyNo: str, taskId: str, token: str = None) -> Dict[str, Any]:
         """领取审批任务"""
         try:
-            token = self._get_token()
+            if token is None:
+                token = self._get_token()
             headers = self._build_headers(token)
             
             url = f"{self.base_url}/rims/workbench/claimTask"
@@ -141,10 +143,11 @@ class CreditOrderApprovalImpl:
             logger.error(f"领取审批任务异常: {str(e)}")
             raise HTTPException(status_code=500, detail=f"领取审批任务异常: {str(e)}")
 
-    def fetch_assigned_task_list(self, applyNo: str) -> Dict[str, Any]:
+    def fetch_assigned_task_list(self, applyNo: str, token: str = None) -> Dict[str, Any]:
         """查询待审批任务"""
         try:
-            token = self._get_token()
+            if token is None:
+                token = self._get_token()
             headers = self._build_headers(token)
             
             url = f"{self.base_url}/rims/workbench/fetchAssignedTaskList"
@@ -174,10 +177,23 @@ class CreditOrderApprovalImpl:
             logger.error(f"查询待审批任务异常: {str(e)}")
             raise HTTPException(status_code=500, detail=f"查询待审批任务异常: {str(e)}")
 
-    def commit_approval(self, applyNo: str, taskId: str, remark: str = "1", rtfState: str = "Pass", rejectionReasonCode: List[str] = ["风控成功"]) -> Dict[str, Any]:
+    def commit_approval(self, applyNo: str, taskId: str, rtfState: str, remark: str = None, rejectionReasonCode: List[str] = None, token: str = None) -> Dict[str, Any]:
         """提交审批"""
         try:
-            token = self._get_token()
+            # 根据rtfState设置默认值
+            if rtfState.lower() == "Reject":
+                if rejectionReasonCode is None:
+                    rejectionReasonCode = ["leo_ts01"]
+                if remark is None:
+                    remark = "拒绝意见"
+            else:  # Pass状态
+                if rejectionReasonCode is None:
+                    rejectionReasonCode = []
+                if remark is None:
+                    remark = "通过意见"
+            
+            if token is None:
+                token = self._get_token()
             headers = self._build_headers(token)
             
             url = f"{self.base_url}/rims/basicCheck/commit"
@@ -205,11 +221,14 @@ class CreditOrderApprovalImpl:
     def execute_complete_approval_flow(self, applyNo: str, remark: str = "1", rtfState: str = "Pass", rejectionReasonCode: List[str] = ["风控成功"]) -> Dict[str, Any]:
         """执行完整的授信订单审批流程"""
         try:
+            # 获取token，确保同一流程内所有接口调用使用相同的token
+            token = self._get_token()
+            
             flow_steps = []
             
             # 步骤1: 查询未分配任务 - 获取taskId和applyNo
             logger.info("开始查询未分配审批任务")
-            unassigned_result = self.fetch_unassigned_task_list(applyNo)
+            unassigned_result = self.fetch_unassigned_task_list(applyNo, token)
             taskId = unassigned_result.get("taskId")
             extracted_applyNo = unassigned_result.get("applyNo")
             
@@ -224,12 +243,12 @@ class CreditOrderApprovalImpl:
                 
                 # 步骤2: 领取任务 - 使用获取到的taskId和applyNo
                 logger.info("开始领取审批任务")
-                claim_result = self.claim_task(extracted_applyNo, taskId)
+                claim_result = self.claim_task(extracted_applyNo, taskId, token)
                 flow_steps.append({"step": "领取审批任务", "status": "成功"})
                 
                 # 步骤3: 查询待审批任务 - 再次获取taskId和applyNo（确认）
                 logger.info("开始查询待审批任务")
-                assigned_result = self.fetch_assigned_task_list(extracted_applyNo)
+                assigned_result = self.fetch_assigned_task_list(extracted_applyNo, token)
                 confirmed_taskId = assigned_result.get("taskId")
                 confirmed_applyNo = assigned_result.get("applyNo")
                 
@@ -242,7 +261,7 @@ class CreditOrderApprovalImpl:
                 
                 # 步骤4: 提交审批 - 使用确认后的taskId和applyNo
                 logger.info("开始提交审批")
-                approval_result = self.commit_approval(confirmed_applyNo, confirmed_taskId, remark, rtfState, rejectionReasonCode)
+                approval_result = self.commit_approval(confirmed_applyNo, confirmed_taskId, rtfState, remark, rejectionReasonCode, token)
                 flow_steps.append({"step": "提交审批", "status": "成功"})
                 
                 return {
@@ -263,7 +282,7 @@ class CreditOrderApprovalImpl:
                 
                 # 直接查询待审批任务
                 logger.info("未找到未分配任务，直接查询待审批任务")
-                assigned_result = self.fetch_assigned_task_list(applyNo)
+                assigned_result = self.fetch_assigned_task_list(applyNo, token)
                 confirmed_taskId = assigned_result.get("taskId")
                 confirmed_applyNo = assigned_result.get("applyNo")
                 
@@ -277,7 +296,7 @@ class CreditOrderApprovalImpl:
                     
                     # 提交审批
                     logger.info("开始提交审批")
-                    approval_result = self.commit_approval(confirmed_applyNo, confirmed_taskId, remark, rtfState, rejectionReasonCode)
+                    approval_result = self.commit_approval(confirmed_applyNo, confirmed_taskId, rtfState, remark, rejectionReasonCode, token)
                     flow_steps.append({"step": "提交审批", "status": "成功"})
                     
                     return {

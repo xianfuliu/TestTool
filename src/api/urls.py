@@ -63,6 +63,7 @@ from .api_services.deleteUserData import DeleteUserData
 from .api_services.creditPreOperation import CreditPreOperation
 from .api_services.modifyPhone import ModifyPhone
 from .api_services.riskControlReRun import RiskControlReRun
+from .api_services.microSchedule import MicroSchedule
 
 # 创建主路由器
 api_router = APIRouter()
@@ -78,6 +79,7 @@ delete_user_data_api = DeleteUserData()
 credit_pre_operation_api = CreditPreOperation()
 modify_phone_api = ModifyPhone()
 risk_control_rerun_api = RiskControlReRun()
+micro_schedule_api = MicroSchedule()
 
 # 路由配置 - 使用create_route_config函数
 url_routes = [
@@ -136,6 +138,14 @@ url_routes = [
         risk_control_rerun_api.risk_control_rerun,
         "风控重跑接口",
         ["风控管理"],
+    ),
+    # 小微定时任务接口
+    create_route_config(
+        "POST",
+        "/micro-schedule",
+        micro_schedule_api.micro_schedule,
+        "小微定时任务接口",
+        ["小微定时任务"],
     ),
 ]
 
