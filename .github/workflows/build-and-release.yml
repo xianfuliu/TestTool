@@ -29,6 +29,7 @@ jobs:
       id: get_version
       run: |
         # 从标签名提取版本号（去掉v前缀）
+        echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
         echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
         
     - name: Build application
