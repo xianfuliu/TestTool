@@ -2,26 +2,91 @@ import os
 import subprocess
 import sys
 import json
+import argparse
+import datetime
+
+
+def get_version():
+    """获取版本号"""
+    # 尝试从环境变量获取版本号（用于CI/CD）
+    version = os.environ.get('APP_VERSION')
+    if version:
+        return version
+    
+    # 尝试从配置文件获取版本号
+    config_file = "config/settings.json"
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                return config.get("app", {}).get("version", "1.0.0")
+        except:
+            pass
+    
+    # 默认版本号
+    return "1.0.0"
+
+
+def update_version_in_config(version):
+    """在配置文件中更新版本号"""
+    config_file = "config/settings.json"
+    config_dir = "config"
+    
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
+    
+    default_config = {
+        "features": {"interface_automation": False},
+        "app": {"name": "测试工具管理", "version": version},
+    }
+    
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            # 更新版本号
+            if "app" not in config:
+                config["app"] = {}
+            config["app"]["version"] = version
+        except:
+            config = default_config
+    else:
+        config = default_config
+    
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
 
 
 def build_app():
     """构建应用程序"""
-
-    # 确保配置文件存在
-    config_dir = "config"
-    if not os.path.exists(config_dir):
-        os.makedirs(config_dir)
-
-    # 创建默认配置文件
-    default_config = {
-        "features": {"interface_automation": False},
-        "app": {"name": "测试工具管理", "version": "1.0.0"},
-    }
-
-    config_file = os.path.join(config_dir, "settings.json")
-    if not os.path.exists(config_file):
-        with open(config_file, "w", encoding="utf-8") as f:
-            json.dump(default_config, f, ensure_ascii=False, indent=2)
+    
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='构建测试工具管理应用程序')
+    parser.add_argument('--version', type=str, help='设置版本号')
+    parser.add_argument('--increment', action='store_true', help='自动递增版本号')
+    args = parser.parse_args()
+    
+    # 处理版本号
+    version = get_version()
+    
+    if args.version:
+        version = args.version
+    elif args.increment:
+        # 自动递增版本号
+        parts = version.split('.')
+        if len(parts) == 3:
+            try:
+                major, minor, patch = map(int, parts)
+                patch += 1
+                version = f"{major}.{minor}.{patch}"
+            except:
+                version = "1.0.1"
+    
+    # 更新配置文件中的版本号
+    update_version_in_config(version)
+    
+    print(f"构建版本: v{version}")
+    print(f"构建时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     # PyInstaller 命令参数
     pyinstaller_cmd = [

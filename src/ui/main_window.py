@@ -9,7 +9,10 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QLabel,
     QFrame,
-    QScrollArea
+    QScrollArea,
+    QMenu,
+    QAction,
+    QSystemTrayIcon
 )
 from PyQt5.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 from PyQt5.QtCore import Qt, QTimer
@@ -76,6 +79,15 @@ try:
 except ImportError as e:
     print(f"变量管理模块不可用: {e}")
     VARIABLE_MANAGEMENT_AVAILABLE = False
+
+# 导入更新管理模块
+try:
+    from src.ui.dialogs.update_dialog import UpdateDialog
+    from src.utils.update_manager import UpdateChecker
+    UPDATE_MANAGEMENT_AVAILABLE = True
+except ImportError as e:
+    print(f"更新管理模块不可用: {e}")
+    UPDATE_MANAGEMENT_AVAILABLE = False
 
 
 class MainWindow(QMainWindow):
@@ -153,6 +165,14 @@ class MainWindow(QMainWindow):
         # 用户管理相关
         self.current_user = None
         self.user_service = UserService()
+
+        # 更新管理相关
+        self.update_checker = None
+        self.github_repo = "xianfuliu/TestTool"  # 需要替换为实际的GitHub仓库
+        self.current_version = self.config.get("app", {}).get("version", "1.0.0")
+
+        # 创建菜单栏
+        self.create_menu_bar()
 
     def show_and_maximize(self):
         """显示窗口并根据屏幕尺寸调整，确保在屏幕尺寸可用后调用"""
@@ -726,6 +746,75 @@ class MainWindow(QMainWindow):
     def get_current_user(self):
         """获取当前用户"""
         return self.current_user
+
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menu_bar = self.menuBar()
+        
+        # 帮助菜单
+        help_menu = menu_bar.addMenu("帮助")
+        
+        # 检查更新菜单项
+        update_action = QAction("检查更新", self)
+        update_action.triggered.connect(self.check_for_updates)
+        help_menu.addAction(update_action)
+        
+        # 关于菜单项
+        about_action = QAction("关于", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+
+    def check_for_updates(self):
+        """检查更新"""
+        if not UPDATE_MANAGEMENT_AVAILABLE:
+            QMessageBox.information(self, "更新检查", "更新管理模块不可用")
+            return
+        
+        try:
+            # 创建更新对话框
+            dialog = UpdateDialog(self.current_version, self)
+            dialog.exec_()
+        except Exception as e:
+            QMessageBox.warning(self, "更新检查", f"检查更新时出错: {e}")
+
+    def show_about(self):
+        """显示关于对话框"""
+        about_text = f"""
+测试工具管理
+版本: v{self.current_version}
+
+这是一个功能强大的测试工具管理平台，
+支持接口自动化、数据查询、API工具等多种功能。
+
+GitHub仓库: {self.github_repo}
+        """.strip()
+        
+        QMessageBox.about(self, "关于", about_text)
+
+    def auto_check_updates(self):
+        """自动检查更新（应用启动时调用）"""
+        if not UPDATE_MANAGEMENT_AVAILABLE:
+            return
+        
+        # 在后台线程中检查更新
+        self.update_checker = UpdateChecker(self.current_version, self.github_repo)
+        self.update_checker.update_found.connect(self.on_update_found)
+        self.update_checker.check_failed.connect(self.on_update_check_failed)
+        self.update_checker.start()
+
+    def on_update_found(self, new_version, release_notes, download_url):
+        """发现新版本"""
+        reply = QMessageBox.question(self, "发现新版本", 
+                                   f"发现新版本 v{new_version}，是否立即更新？\n\n更新说明:\n{release_notes[:200]}...",
+                                   QMessageBox.Yes | QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            self.check_for_updates()
+
+    def on_update_check_failed(self, error_message):
+        """更新检查失败"""
+        # 静默失败，不显示错误信息
+        print(f"自动更新检查失败: {error_message}")
 
     def create_fake_settings_tab(self):
         """创建假的设置tab"""
