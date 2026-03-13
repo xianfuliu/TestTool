@@ -85,8 +85,8 @@ def build_app():
     # 更新配置文件中的版本号
     update_version_in_config(version)
     
-    print(f"构建版本: v{version}")
-    print(f"构建时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Build version: v{version}")
+    print(f"Build time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     # PyInstaller 命令参数
     pyinstaller_cmd = [
@@ -106,12 +106,12 @@ def build_app():
     ]
 
     try:
-        print("开始构建应用程序...")
+        print("Starting application build...")
         subprocess.run(pyinstaller_cmd, check=True)
-        print("构建完成！")
-        print("可执行文件位置: dist/TestTool.exe")
+        print("Build completed!")
+        print("Executable file location: dist/TestTool.exe")
     except subprocess.CalledProcessError as e:
-        print(f"构建失败: {e}")
+        print(f"Build failed: {e}")
         sys.exit(1)
 
 
