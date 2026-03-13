@@ -105,10 +105,21 @@ def start_loading_page(app, config):
     # 设置应用程序图标
     app.setWindowIcon(window.create_icon())
 
-    # 只有在启用登录功能时才初始化数据库相关服务
+    # 初始化服务变量
     token_service = None
     scheduler_service = None
 
+    # 调度服务将在用户登录成功后启动
+    # 这里只创建服务实例，但不启动（无论是否启用登录功能）
+    try:
+        scheduler_service = UnifiedSchedulerService()
+        # 将调度服务实例传递给主窗口，但不启动
+        window.set_scheduler_service(scheduler_service)
+        print("调度服务实例已创建，将在用户登录后启动")
+    except Exception as e:
+        print(f"创建调度服务实例失败: {e}")
+
+    # 只有在启用登录功能时才初始化数据库相关服务
     if enable_login:
         from src.core.services.token_service import TokenService
         from src.core.services.session_service import SessionService
@@ -121,16 +132,6 @@ def start_loading_page(app, config):
             print("Token服务已启动，每周清理任务运行中")
         except Exception as e:
             print(f"启动Token服务失败: {e}")
-
-        # 调度服务将在用户登录成功后启动
-        # 这里只创建服务实例，但不启动
-        try:
-            scheduler_service = UnifiedSchedulerService()
-            # 将调度服务实例传递给主窗口，但不启动
-            window.set_scheduler_service(scheduler_service)
-            print("调度服务实例已创建，将在用户登录后启动")
-        except Exception as e:
-            print(f"创建调度服务实例失败: {e}")
     else:
         print("登录功能已关闭，跳过数据库相关服务初始化")
 
@@ -160,11 +161,8 @@ def start_loading_page(app, config):
             )
             window.set_current_user(anonymous_user)
             window.show_and_maximize()
-            # 只有在启用登录功能时才启动调度服务
-            if enable_login:
-                window.restart_scheduler_service()
-            else:
-                print("登录功能已关闭，跳过调度服务启动")
+            # 启动调度服务（无论是否启用登录功能）
+            window.restart_scheduler_service()
             return
 
         # 只有在启用登录功能时才检查session
