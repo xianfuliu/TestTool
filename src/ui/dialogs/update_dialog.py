@@ -130,10 +130,14 @@ class UpdateDialog(QDialog):
             
     def on_update_error(self, error_message):
         """更新错误"""
-        self.status_label.setText("检查更新失败")
+        self.status_label.setText("检查更新完成")
         self.check_button.setEnabled(True)
         
-        QMessageBox.warning(self, "更新错误", error_message)
+        # 如果是"当前已是最新版本"，显示信息而不是警告
+        if error_message == "当前已是最新版本":
+            QMessageBox.information(self, "检查更新", error_message)
+        else:
+            QMessageBox.warning(self, "更新错误", error_message)
         
     def closeEvent(self, event):
         """关闭事件"""
