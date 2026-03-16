@@ -9,7 +9,7 @@
     "version": "1.0.20"
   },
   "auth": {
-    "enable_login": false
+    "enable_login": true
   },
   "api": {
     "auto_start": true,
