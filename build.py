@@ -88,7 +88,7 @@ def build_app():
     print(f"Build version: v{version}")
     print(f"Build time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # PyInstaller 命令参数
+    # PyInstaller 命令参数 - 修复云端DLL加载问题
     pyinstaller_cmd = [
         "pyinstaller",
         "--onefile",
@@ -100,6 +100,22 @@ def build_app():
         "--add-data=src/resources/icons;src/resources/icons",  # 添加所有图标文件
         "--add-data=src/resources/images;src/resources/images",  # 添加所有图片文件
         "--add-data=src/api;src/api",  # 添加API相关文件
+        # 修复云端DLL加载的关键参数
+        "--hidden-import=PyQt5.QtCore",
+        "--hidden-import=PyQt5.QtGui", 
+        "--hidden-import=PyQt5.QtWidgets",
+        "--hidden-import=PyQt5",
+        "--hidden-import=src",
+        "--hidden-import=src.api",
+        "--hidden-import=src.core",
+        "--hidden-import=src.ui",
+        "--hidden-import=src.utils",
+        "--collect-all=PyQt5",
+        "--collect-all=src",
+        # 云端构建专用参数
+        "--paths=.",
+        "--paths=src",
+        "--clean",  # 清理之前的构建缓存
         "--name",
         "TestTool",
         "main.py",
