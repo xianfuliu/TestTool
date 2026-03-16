@@ -85,8 +85,6 @@ def create_release(version, release_notes=""):
 
 def main():
     parser = argparse.ArgumentParser(description='发布脚本')
-    parser.add_argument('--version', type=str, help='指定版本号')
-    parser.add_argument('--increment', action='store_true', help='自动递增版本号')
     parser.add_argument('--notes', type=str, help='发布说明')
     
     args = parser.parse_args()
@@ -94,28 +92,12 @@ def main():
     # 获取当前版本
     current_version = get_current_version()
     
-    # 确定新版本号
-    if args.version:
-        new_version = args.version
-    elif args.increment:
-        new_version = increment_version(current_version)
-    else:
-        # 如果没有指定版本号，询问用户
-        print(f"当前版本: v{current_version}")
-        choice = input("选择操作: [1]使用当前版本 [2]递增版本 [3]指定版本: ")
-        
-        if choice == "1":
-            new_version = current_version
-        elif choice == "2":
-            new_version = increment_version(current_version)
-        elif choice == "3":
-            new_version = input("请输入新版本号 (格式: x.y.z): ")
-        else:
-            print("无效选择")
-            return
+    # 直接使用当前版本号
+    new_version = current_version
     
     # 确认发布
-    print(f"\n准备发布版本: v{new_version}")
+    print(f"当前版本: v{current_version}")
+    print(f"准备发布版本: v{new_version}")
     confirm = input("确认发布? (y/N): ")
     
     if confirm.lower() != 'y':
