@@ -30,24 +30,25 @@ jobs:
         
     - name: Extract version from tag
       id: get_version
+      shell: bash
       run: |
         # 检查是否是从标签触发
-        if ($env:GITHUB_REF -like "refs/tags/v*") {
-          $VERSION = $env:GITHUB_REF -replace "refs/tags/v", ""
-          Write-Output "从标签提取版本号: $VERSION"
-        } else {
-          Write-Output "警告：不是从标签触发，使用默认版本号"
-          $VERSION = "1.0.0"
-        }
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "从标签提取版本号: $VERSION"
+        else
+          echo "警告：不是从标签触发，使用默认版本号"
+          VERSION="1.0.0"
+        fi
         
         # 验证版本号格式
-        if ([string]::IsNullOrEmpty($VERSION)) {
-          Write-Output "错误：版本号为空，使用默认值"
-          $VERSION = "1.0.0"
-        }
+        if [[ -z "$VERSION" ]]; then
+          echo "错误：版本号为空，使用默认值"
+          VERSION="1.0.0"
+        fi
         
-        Write-Output "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append
-        Write-Output "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         
     - name: Build application
       env:
