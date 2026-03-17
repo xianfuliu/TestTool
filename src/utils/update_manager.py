@@ -140,6 +140,10 @@ class UpdateManager(QObject):
             current_dir = os.path.dirname(current_exe)
             exe_name = os.path.basename(current_exe)
             
+            # 生成新的exe文件名（避免直接覆盖）
+            new_exe_name = f"{exe_name.replace('.exe', '')}_new.exe"
+            new_exe_path = os.path.join(current_dir, new_exe_name)
+            
             # 创建更可靠的批处理文件
             batch_content = f"""
 @echo off
@@ -153,28 +157,47 @@ timeout /t 3 /nobreak >nul
 taskkill /f /im "{exe_name}" >nul 2>&1
 
 :: 等待进程完全退出
-timeout /t 2 /nobreak >nul
+timeout /t 3 /nobreak >nul
 
 :: 再次检查并终止（确保进程已关闭）
 tasklist /fi "imagename eq {exe_name}" | find "{exe_name}" >nul
 if %errorlevel% == 0 (
     echo 检测到进程仍在运行，再次终止...
     taskkill /f /im "{exe_name}" >nul 2>&1
-    timeout /t 1 /nobreak >nul
+    timeout /t 2 /nobreak >nul
 )
 
-:: 复制新版本文件
+:: 复制新版本文件到临时名称（避免DLL冲突）
 echo 正在替换文件...
-copy /y "{update_file_path}" "{current_exe}" >nul
+copy /y "{update_file_path}" "{new_exe_path}" >nul
 
 :: 检查复制是否成功
-if exist "{current_exe}" (
-    echo 更新安装成功！
-    echo 正在启动新版本...
-    start "" /d "{current_dir}" "{exe_name}"
-    echo 启动命令已执行
+if exist "{new_exe_path}" (
+    :: 删除旧版本文件（如果存在）
+    if exist "{current_exe}" (
+        del "{current_exe}" >nul 2>&1
+    )
+    
+    :: 重命名新文件为原始名称
+    ren "{new_exe_path}" "{exe_name}" >nul 2>&1
+    
+    :: 检查重命名是否成功
+    if exist "{current_exe}" (
+        echo 更新安装成功！
+        echo 正在启动新版本...
+        
+        :: 等待文件系统同步
+        timeout /t 1 /nobreak >nul
+        
+        :: 使用完整路径启动新程序，避免临时目录DLL问题
+        start "" "{current_exe}"
+        echo 启动命令已执行
+    ) else (
+        echo 错误：文件重命名失败！
+        pause
+    )
 ) else (
-    echo 错误：文件替换失败！
+    echo 错误：文件复制失败！
     pause
 )
 
