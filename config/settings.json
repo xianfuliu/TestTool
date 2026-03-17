@@ -6,7 +6,7 @@
   },
   "app": {
     "name": "测试工具管理",
-    "version": "1.0.24"
+    "version": "1.0.25"
   },
   "auth": {
     "enable_login": false

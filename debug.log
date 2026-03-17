@@ -89,3 +89,9 @@
 [19004:12700:0317/100841.193:WARNING:t_skinfilemap.cpp(63)] SGRenderLog:CheckUpdate newMem.OpenMem Suc, szNewMem:Local\sgime_skin.Dpi120.v5.filemap.sogouime
 [19004:12700:0317/100841.193:WARNING:t_skinfilemap.cpp(65)] SGRenderLog:CheckUpdate finish: old version:5
 [19004:12700:0317/100841.193:WARNING:t_skinfilemap.cpp(67)] SGRenderLog:CheckUpdate finish: new version:5
+[17328:20736:0317/103810.209:WARNING:t_skinfilemap.cpp(63)] SGRenderLog:CheckUpdate newMem.OpenMem Suc, szNewMem:Local\sgime_skin.v5.filemap.sogouime
+[17328:20736:0317/103810.209:WARNING:t_skinfilemap.cpp(65)] SGRenderLog:CheckUpdate finish: old version:1
+[17328:20736:0317/103810.209:WARNING:t_skinfilemap.cpp(67)] SGRenderLog:CheckUpdate finish: new version:5
+[17328:20736:0317/103810.236:WARNING:t_skinfilemap.cpp(63)] SGRenderLog:CheckUpdate newMem.OpenMem Suc, szNewMem:Local\sgime_skin.Dpi120.v5.filemap.sogouime
+[17328:20736:0317/103810.236:WARNING:t_skinfilemap.cpp(65)] SGRenderLog:CheckUpdate finish: old version:5
+[17328:20736:0317/103810.236:WARNING:t_skinfilemap.cpp(67)] SGRenderLog:CheckUpdate finish: new version:5
