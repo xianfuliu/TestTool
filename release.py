@@ -68,6 +68,15 @@ def create_release(version, release_notes=""):
     tag_name = f"v{version}"
     print(f"创建Git标签: {tag_name}")
     
+    # 检查标签是否已存在
+    tag_exists_result = subprocess.run(f"git tag -l {tag_name}", shell=True, capture_output=True, text=True)
+    if tag_exists_result.returncode == 0 and tag_exists_result.stdout.strip() == tag_name:
+        print(f"标签 {tag_name} 已存在，删除本地标签...")
+        if not run_command(f"git tag -d {tag_name}"):
+            print("删除本地标签失败")
+            return False
+    
+    # 创建新标签
     if not run_command(f"git tag {tag_name}"):
         print("创建标签失败")
         return False
