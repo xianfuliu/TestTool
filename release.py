@@ -11,15 +11,18 @@ import argparse
 import datetime
 
 
-def run_command(cmd, cwd=None):
+def run_command(cmd, cwd=None, timeout=1800):
     """运行命令并返回输出"""
     try:
-        result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+        print(f"执行命令: {cmd}")
+        result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=False, text=True, timeout=timeout)
         if result.returncode != 0:
             print(f"命令执行失败: {cmd}")
-            print(f"错误输出: {result.stderr}")
             return False
         return True
+    except subprocess.TimeoutExpired:
+        print(f"命令执行超时: {cmd}")
+        return False
     except Exception as e:
         print(f"执行命令时出错: {e}")
         return False

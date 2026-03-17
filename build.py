@@ -123,11 +123,31 @@ def build_app():
 
     try:
         print("Starting application build...")
-        subprocess.run(pyinstaller_cmd, check=True)
+        print("This may take several minutes depending on your system...")
+        # 使用Popen来实时显示输出，避免进程挂起
+        process = subprocess.Popen(pyinstaller_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        
+        # 实时输出PyInstaller的进度
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                print(output.strip())
+        
+        # 检查返回码
+        return_code = process.poll()
+        if return_code != 0:
+            print(f"Build failed with return code: {return_code}")
+            sys.exit(1)
+            
         print("Build completed!")
         print("Executable file location: dist/TestTool.exe")
     except subprocess.CalledProcessError as e:
         print(f"Build failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Build error: {e}")
         sys.exit(1)
 
 
