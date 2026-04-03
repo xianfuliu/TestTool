@@ -1,0 +1,24 @@
+{
+  "enable_encryption": false,
+  "encrypt_url": "",
+  "decrypt_url": "",
+  "layout": [
+    {
+      "key": "project_code",
+      "label": "项目编码",
+      "type": "field",
+      "priority": 1
+    },
+    {
+      "key": "module_name",
+      "label": "模块名称",
+      "type": "field",
+      "priority": 2
+    },
+    {
+      "name": "缺陷创建",
+      "type": "interface",
+      "priority": 3
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "default_product": "质量管理平台",
+  "products": {
+    "质量管理平台": "backend/config/products/quality-platform.json"
+  },
+  "locked_products": []
+}

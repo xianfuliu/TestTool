@@ -1,0 +1,296 @@
+{
+  "enable_encryption": false,
+  "encrypt_url": "",
+  "decrypt_url": "",
+  "schedule_tasks": [
+    {
+      "id": "2",
+      "jobGroup": "DEFAULT",
+      "name": "test1"
+    },
+    {
+      "id": "12",
+      "jobGroup": "DEFAULT",
+      "name": "43"
+    }
+  ],
+  "layout": [
+    {
+      "default": "",
+      "key": "name",
+      "label": "姓名",
+      "priority": 1,
+      "type": "field"
+    },
+    {
+      "default": "",
+      "key": "id_card",
+      "label": "身份证号",
+      "priority": 2,
+      "type": "field"
+    },
+    {
+      "default": "",
+      "key": "phone",
+      "label": "手机号",
+      "priority": 3,
+      "type": "field"
+    },
+    {
+      "name": "默认接口",
+      "priority": 4,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "123hahah",
+      "key": "the_filed_hide",
+      "label": "我是隐藏字段",
+      "priority": 5,
+      "show_in_ui": false,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "",
+      "key": "123",
+      "label": "12312",
+      "options": [
+        {
+          "text": "123",
+          "value": "123"
+        }
+      ],
+      "priority": 6,
+      "type": "combo"
+    },
+    {
+      "name": "123",
+      "priority": 7,
+      "type": "interface"
+    },
+    {
+      "data_type": "string",
+      "default": "123",
+      "key": "123",
+      "label": "123",
+      "priority": 8,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "1",
+      "key": "abc",
+      "label": "下拉框1",
+      "options": [
+        {
+          "text": "1",
+          "value": "1"
+        },
+        {
+          "text": "2",
+          "value": "2"
+        },
+        {
+          "text": "3",
+          "value": "3"
+        }
+      ],
+      "priority": 9,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "data_type": "string",
+      "default": "a",
+      "key": "sss",
+      "label": "下拉框2",
+      "options": [
+        {
+          "text": "a",
+          "value": "a"
+        },
+        {
+          "text": "b",
+          "value": "b"
+        },
+        {
+          "text": "c",
+          "value": "c"
+        }
+      ],
+      "priority": 10,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "condition_field": "sss",
+      "key": "hahah",
+      "label": "条件字段",
+      "mappings": {
+        "a": "name",
+        "b": "id_card",
+        "c": "phone"
+      },
+      "priority": 11,
+      "type": "condition"
+    },
+    {
+      "data_type": "string",
+      "default": "1",
+      "key": "test_field",
+      "label": "测试字段1",
+      "priority": 12,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "1",
+      "key": "test_combo",
+      "label": "测试下拉框1",
+      "options": [
+        {
+          "text": "1",
+          "value": "1"
+        },
+        {
+          "text": "3",
+          "value": "3"
+        },
+        {
+          "text": "2",
+          "value": "2"
+        }
+      ],
+      "priority": 13,
+      "show_in_ui": true,
+      "type": "combo"
+    },
+    {
+      "name": "测试接口1",
+      "priority": 14,
+      "type": "interface"
+    },
+    {
+      "condition_field": "test_combo",
+      "key": "test_condition",
+      "label": "测试条件",
+      "mappings": {
+        "1": "the_filed_hide",
+        "3": "id_card"
+      },
+      "priority": 15,
+      "show_in_ui": true,
+      "type": "condition"
+    },
+    {
+      "data_type": "string",
+      "default": "12.05",
+      "key": "num1",
+      "label": "数字1",
+      "priority": 16,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "10.96",
+      "key": "num2",
+      "label": "数字2",
+      "priority": 17,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "formula": "{num1}+{num2}",
+      "formula_type": "numeric",
+      "key": "test1",
+      "label": "测试公式",
+      "priority": 18,
+      "show_in_ui": true,
+      "type": "formula"
+    },
+    {
+      "formula": "{date1}-{date2}",
+      "formula_type": "date",
+      "key": "test2",
+      "label": "日期公式",
+      "priority": 19,
+      "show_in_ui": true,
+      "type": "formula"
+    },
+    {
+      "data_type": "string",
+      "default": "20251104",
+      "key": "date1",
+      "label": "日期1",
+      "priority": 20,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "data_type": "string",
+      "default": "20260104",
+      "key": "date2",
+      "label": "日期2",
+      "priority": 21,
+      "show_in_ui": true,
+      "type": "field"
+    },
+    {
+      "formula": "1*{id_card}",
+      "formula_type": "numeric",
+      "key": "12",
+      "label": "12",
+      "priority": 22,
+      "show_in_ui": true,
+      "type": "formula"
+    }
+  ],
+  "interfaces": {
+    "默认接口": {
+      "body_template": {
+        "requestId": "{request_id}",
+        "userInfo": {
+          "idCard": "{test}",
+          "name": "{hahah}",
+          "phone": "{phone}"
+        }
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": "http://api.example.com/default"
+    },
+    "123": {
+      "body_template": {
+        "requestId": "{request_id}"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": ""
+    },
+    "测试接口1": {
+      "body_template": {
+        "requestId": "{test_condition}",
+        "the": "{test_field}"
+      },
+      "field_types": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "method": "POST",
+      "response_mapping": {},
+      "url": ""
+    }
+  },
+  "sqls": {}
+}

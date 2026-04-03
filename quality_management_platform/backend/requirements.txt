@@ -1,0 +1,4 @@
+Django~=4.2.24
+PyMySQL~=1.0.2
+requests~=2.28.1
+pillow~=11.1.0

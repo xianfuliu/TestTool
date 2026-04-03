@@ -1,0 +1,35 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("overview/", views.overview),
+    path("business-groups/", views.business_groups),
+    path("business-groups/<int:group_id>/", views.business_group_detail),
+    path("business-groups/<int:group_id>/stats/", views.business_group_stats),
+    path("projects/", views.projects),
+    path("projects/<int:project_id>/", views.project_detail),
+    path("projects/<int:project_id>/stats/", views.project_stats),
+    path("api-folders/", views.api_folders),
+    path("api-folders/<int:folder_id>/", views.api_folder_detail),
+    path("api-templates/", views.api_templates),
+    path("api-templates/<int:template_id>/", views.api_template_detail),
+    path("case-folders/", views.case_folders),
+    path("case-folders/<int:folder_id>/", views.case_folder_detail),
+    path("cases/", views.cases),
+    path("cases/<int:case_id>/", views.case_detail),
+    path("cases/<int:case_id>/execute/", views.execute_case),
+    path("schedulers/", views.schedulers),
+    path("schedulers/<int:scheduler_id>/", views.scheduler_detail),
+    path("schedulers/<int:scheduler_id>/status/", views.scheduler_status),
+    path("reports/", views.reports),
+    path("reports/<int:report_id>/", views.report_detail),
+    path("reports/<int:report_id>/steps/", views.report_steps),
+    path("global-tools/", views.global_tools),
+    path("global-tools/<int:tool_id>/", views.global_tool_detail),
+    path("global-tools/<int:tool_id>/status/", views.global_tool_status),
+    path("variables/", views.variables),
+    path("variables/<int:variable_id>/", views.variable_detail),
+    path("environments/", views.environments),
+    path("environments/<int:environment_id>/", views.environment_detail),
+]

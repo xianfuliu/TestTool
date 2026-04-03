@@ -1,0 +1,26 @@
+{
+  "database_connections": {
+    "quality_platform": {
+      "host": "localhost",
+      "port": "3306",
+      "username": "root",
+      "password": "root",
+      "database": "quality_management_platform"
+    }
+  },
+  "sql_queries": {
+    "query_projects": {
+      "display_name": "查询项目列表",
+      "db_connection": "quality_platform",
+      "sql": "SELECT id, name, description, created_at FROM projects ORDER BY created_at DESC LIMIT 100",
+      "required_params": [],
+      "output_fields": {
+        "id": "项目ID",
+        "name": "项目名称",
+        "description": "描述",
+        "created_at": "创建时间"
+      }
+    }
+  },
+  "input_fields": {}
+}

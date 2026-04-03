@@ -1,0 +1,4 @@
+static/
+runtime/
+__pycache__/
+*.pyc

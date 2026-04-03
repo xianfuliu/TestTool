@@ -1,0 +1,20 @@
+[
+  {
+    "instance_id": "0bde57da-a465-4b34-86c5-9d0c5a1ef6f4",
+    "port": 8000,
+    "status": "running",
+    "start_time": "2026-02-27T16:07:27.930868",
+    "active_connections": 0,
+    "hostname": "lxf",
+    "pid": 25668
+  },
+  {
+    "instance_id": "46b5ad78-43ee-4321-9673-78139dc7637e",
+    "port": 8001,
+    "status": "running",
+    "start_time": "2026-02-27T17:02:21.420813",
+    "active_connections": 0,
+    "hostname": "lxf",
+    "pid": 800
+  }
+]
