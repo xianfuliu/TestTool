@@ -267,6 +267,167 @@ SCHEMA_SQL = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
+    CREATE TABLE IF NOT EXISTS api_tool_products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL UNIQUE,
+        legacy_config_path VARCHAR(255) DEFAULT '',
+        enable_encryption BOOLEAN DEFAULT FALSE,
+        encrypt_url VARCHAR(500) DEFAULT '',
+        decrypt_url VARCHAR(500) DEFAULT '',
+        is_locked BOOLEAN DEFAULT FALSE,
+        is_default BOOLEAN DEFAULT FALSE,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_schedule_tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        legacy_task_id VARCHAR(120) DEFAULT '',
+        job_group VARCHAR(120) DEFAULT '',
+        name VARCHAR(255) NOT NULL,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_schedule_product_id (product_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_layout_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        item_type VARCHAR(30) NOT NULL,
+        item_key VARCHAR(120) DEFAULT '',
+        label VARCHAR(255) DEFAULT '',
+        item_name VARCHAR(255) DEFAULT '',
+        data_type VARCHAR(50) DEFAULT '',
+        default_value TEXT NULL,
+        show_in_ui BOOLEAN DEFAULT TRUE,
+        condition_field VARCHAR(120) DEFAULT '',
+        formula TEXT NULL,
+        formula_type VARCHAR(30) DEFAULT '',
+        priority INT DEFAULT 0,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_layout_product_id (product_id),
+        INDEX idx_api_tool_layout_item_type (item_type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_layout_item_options (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        layout_item_id INT NOT NULL,
+        option_text VARCHAR(255) DEFAULT '',
+        option_value VARCHAR(255) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_layout_option_item_id (layout_item_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_layout_item_mappings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        layout_item_id INT NOT NULL,
+        mapping_key VARCHAR(255) DEFAULT '',
+        mapping_value VARCHAR(255) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_layout_mapping_item_id (layout_item_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_interfaces (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        url VARCHAR(1000) DEFAULT '',
+        method VARCHAR(10) DEFAULT 'POST',
+        headers_text LONGTEXT NULL,
+        request_type VARCHAR(30) DEFAULT 'normal',
+        body_template_text LONGTEXT NULL,
+        condition_field VARCHAR(120) DEFAULT '',
+        enable_encryption BOOLEAN DEFAULT TRUE,
+        timeout INT DEFAULT 30,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_api_tool_product_interface (product_id, name),
+        INDEX idx_api_tool_interface_product_id (product_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_interface_condition_cases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        interface_id INT NOT NULL,
+        case_value VARCHAR(255) DEFAULT '',
+        body_template_text LONGTEXT NULL,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_condition_case_interface_id (interface_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_interface_response_mappings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        interface_id INT NOT NULL,
+        field_key VARCHAR(120) DEFAULT '',
+        response_path VARCHAR(500) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_response_mapping_interface_id (interface_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_interface_field_types (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        interface_id INT NOT NULL,
+        field_key VARCHAR(120) DEFAULT '',
+        field_type VARCHAR(50) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_field_type_interface_id (interface_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_sql_configs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        host VARCHAR(255) DEFAULT '',
+        port INT DEFAULT 3306,
+        username VARCHAR(255) DEFAULT '',
+        password VARCHAR(255) DEFAULT '',
+        database_name VARCHAR(255) DEFAULT '',
+        charset VARCHAR(50) DEFAULT 'utf8mb4',
+        sql_text LONGTEXT NULL,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_api_tool_product_sql (product_id, name),
+        INDEX idx_api_tool_sql_product_id (product_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS api_tool_sql_output_fields (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sql_config_id INT NOT NULL,
+        field_name VARCHAR(120) DEFAULT '',
+        description VARCHAR(255) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_api_tool_sql_output_config_id (sql_config_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
     CREATE TABLE IF NOT EXISTS system_config (
         id INT AUTO_INCREMENT PRIMARY KEY,
         config_key VARCHAR(100) NOT NULL UNIQUE,

@@ -9,6 +9,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from test_platform.db import DATABASE_CONFIG, connect, ensure_database, fetch_one, md5_text
 from test_platform.schema import SCHEMA_SQL
+from apps.api_tool.service import bootstrap_from_legacy_json
 
 
 def main() -> None:
@@ -32,7 +33,14 @@ def main() -> None:
                 )
                 connection.commit()
 
+    bootstrap_summary = bootstrap_from_legacy_json(force=False)
+
     print(f"Database ready: {DATABASE_CONFIG['database']} @ {DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}")
+    print(
+        "API tool bootstrap:",
+        f"imported={bootstrap_summary.get('imported')}",
+        f"products={bootstrap_summary.get('product_count')}",
+    )
 
 
 if __name__ == "__main__":

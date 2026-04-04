@@ -2,7 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 
 const AppShell = () => import("@/shared/layouts/AppShell.vue");
 const LoginPage = () => import("@/modules/auth/LoginPage.vue");
-const ApiToolPage = () => import("@/modules/api-tool/ApiToolPage.vue");
+const ApiToolPage = () => import("@/modules/api-tool/ApiToolWorkbenchPage.vue");
 const ModulePlaceholderPage = () => import("@/modules/common/ModulePlaceholderPage.vue");
 const DataQueryPage = () => import("@/modules/data-query/DataQueryPage.vue");
 const InterfaceAutoPage = () => import("@/modules/interface-auto/InterfaceAutoPage.vue");

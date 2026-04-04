@@ -1,7 +1,18 @@
 {
-  "default_product": "质量管理平台",
   "products": {
-    "质量管理平台": "backend/config/products/quality-platform.json"
+    "中银消金": "products/中银消金.json",
+    "数据服务": "products/数据服务.json",
+    "360": "products/360.json",
+    "360-real24": "products/360-real24.json",
+    "测试产品": "products/测试产品.json",
+    "圆通小贷": "products/圆通小贷.json",
+    "哈喽催收": "products/哈喽催收.json",
+    "哈喽兴业": "products/哈喽兴业.json"
   },
-  "locked_products": []
+  "default_product": "中银消金",
+  "locked_products": [
+    "数据服务",
+    "中银消金",
+    "哈喽催收"
+  ]
 }
