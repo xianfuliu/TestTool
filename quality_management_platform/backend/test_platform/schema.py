@@ -267,6 +267,81 @@ SCHEMA_SQL = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
+    CREATE TABLE IF NOT EXISTS tool_card_sql_configs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        card_id INT NOT NULL,
+        host VARCHAR(255) DEFAULT '',
+        port INT DEFAULT 3306,
+        username VARCHAR(255) DEFAULT '',
+        password VARCHAR(255) DEFAULT '',
+        database_name VARCHAR(255) DEFAULT '',
+        query_text LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_tool_card_sql_card_id (card_id),
+        INDEX idx_tool_card_sql_card_id (card_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tool_card_http_configs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        card_id INT NOT NULL,
+        url VARCHAR(1000) DEFAULT '',
+        method VARCHAR(10) DEFAULT 'GET',
+        headers_text LONGTEXT NULL,
+        body_text LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_tool_card_http_card_id (card_id),
+        INDEX idx_tool_card_http_card_id (card_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tool_card_python_configs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        card_id INT NOT NULL,
+        module_name VARCHAR(255) DEFAULT '',
+        class_name VARCHAR(255) DEFAULT '',
+        method_name VARCHAR(255) DEFAULT '',
+        args_text LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_tool_card_python_card_id (card_id),
+        INDEX idx_tool_card_python_card_id (card_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tool_card_parameters (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        card_id INT NOT NULL,
+        field_key VARCHAR(120) NOT NULL,
+        display_name VARCHAR(255) DEFAULT '',
+        field_type VARCHAR(50) DEFAULT 'input',
+        default_value TEXT NULL,
+        required BOOLEAN DEFAULT FALSE,
+        association_enabled BOOLEAN DEFAULT FALSE,
+        association_field VARCHAR(120) DEFAULT '',
+        association_value VARCHAR(255) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_tool_card_param_card_id (card_id),
+        INDEX idx_tool_card_param_field_key (field_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS tool_card_parameter_options (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        parameter_id INT NOT NULL,
+        option_value VARCHAR(255) DEFAULT '',
+        option_label VARCHAR(255) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_tool_card_param_option_param_id (parameter_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
     CREATE TABLE IF NOT EXISTS api_tool_products (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(120) NOT NULL UNIQUE,

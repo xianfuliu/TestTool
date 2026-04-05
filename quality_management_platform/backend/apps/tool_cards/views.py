@@ -1,195 +1,84 @@
 from __future__ import annotations
 
 from apps.common.http import api_view
-from test_platform.db import execute, fetch_all, fetch_one
+
+from .service import (
+    bootstrap_from_legacy_sources,
+    copy_card,
+    create_card,
+    create_folder,
+    delete_card,
+    delete_folder,
+    execute_card,
+    get_card_detail,
+    get_folder_detail,
+    list_cards_by_folder,
+    list_folders,
+    update_card,
+    update_folder,
+)
+
+
+@api_view
+def bootstrap(_request, payload=None):
+    return bootstrap_from_legacy_sources(force=bool((payload or {}).get("force", False)))
 
 
 @api_view
 def overview(_request, payload=None):
-    return {
-        "projects": fetch_all(
-            """
-            SELECT id, name, description, business_group_id, created_at, updated_at
-            FROM projects
-            ORDER BY id ASC
-            """
-        ),
-        "folders": fetch_all(
-            """
-            SELECT id, name, description, parent_id, sort_order, is_default, created_at, updated_at
-            FROM tool_card_folders
-            ORDER BY parent_id IS NULL DESC, created_at ASC
-            """
-        ),
-    }
+    return bootstrap_from_legacy_sources(force=False)
 
 
 @api_view
 def folders(request, payload=None):
     if request.method == "GET":
-        return overview(_request=None)["folders"]
-    folder = payload or {}
-    folder_id = execute(
-        """
-        INSERT INTO tool_card_folders (name, description, parent_id, sort_order, is_default, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-        (
-            folder.get("name"),
-            folder.get("description", ""),
-            folder.get("parent_id"),
-            folder.get("sort_order", 0),
-            folder.get("is_default", False),
-            "admin",
-        ),
-    )
-    return {"folder_id": folder_id}, 201
+        return list_folders()
+    return create_folder(payload or {})
 
 
 @api_view
 def folder_detail(request, folder_id: int, payload=None):
     if request.method == "GET":
-        folder = fetch_one(
-            """
-            SELECT id, name, description, parent_id, sort_order, is_default, created_at, updated_at
-            FROM tool_card_folders
-            WHERE id = %s
-            """,
-            (folder_id,),
-        )
-        if not folder:
-            raise ValueError("文件夹不存在")
-        return {
-            "folder": folder,
-            "cards": fetch_all(
-                """
-                SELECT id, folder_id, name, description, card_type, config, mappings, sort_order, enabled
-                FROM tool_card_items
-                WHERE folder_id = %s
-                ORDER BY sort_order ASC, id ASC
-                """,
-                (folder_id,),
-            ),
-            "children": fetch_all(
-                """
-                SELECT id, name, description, parent_id, sort_order, is_default, created_at, updated_at
-                FROM tool_card_folders
-                WHERE parent_id = %s
-                ORDER BY created_at ASC
-                """,
-                (folder_id,),
-            ),
-        }
+        return get_folder_detail(folder_id)
     if request.method == "PUT":
-        folder = payload or {}
-        updated = execute(
-            """
-            UPDATE tool_card_folders
-            SET name = %s, description = %s, parent_id = %s, sort_order = %s, is_default = %s
-            WHERE id = %s
-            """,
-            (
-                folder.get("name"),
-                folder.get("description", ""),
-                folder.get("parent_id"),
-                folder.get("sort_order", 0),
-                folder.get("is_default", False),
-                folder_id,
-            ),
-        )
-        return {"updated": updated > 0}
-    execute("DELETE FROM tool_card_items WHERE folder_id = %s", (folder_id,))
-    deleted = execute("DELETE FROM tool_card_folders WHERE id = %s", (folder_id,))
-    return {"deleted": deleted > 0}
+        return update_folder(folder_id, payload or {})
+    return delete_folder(folder_id)
 
 
 @api_view
-def cards(_request, payload=None):
-    folder_id = int((payload or {}).get("folder_id", 0))
-    if not folder_id:
-        raise ValueError("folder_id 不能为空")
-    return fetch_all(
-        """
-        SELECT id, folder_id, name, description, card_type, config, mappings, sort_order, enabled
-        FROM tool_card_items
-        WHERE folder_id = %s
-        ORDER BY sort_order ASC, id ASC
-        """,
-        (folder_id,),
-    )
+def cards(request, payload=None):
+    if request.method == "GET":
+        folder_id = int((payload or {}).get("folder_id") or 0)
+        if not folder_id:
+            raise ValueError("folder_id 不能为空")
+        return list_cards_by_folder(folder_id)
+    return create_card(payload or {})
 
 
 @api_view
-def create_card(_request, payload=None):
-    card = payload or {}
-    card_id = execute(
-        """
-        INSERT INTO tool_card_items (folder_id, name, description, card_type, config, mappings, sort_order, enabled, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            card.get("folder_id"),
-            card.get("name"),
-            card.get("description", ""),
-            card.get("card_type", "sql"),
-            card.get("config", "{}"),
-            card.get("mappings", "{}"),
-            card.get("sort_order", 0),
-            card.get("enabled", True),
-            "admin",
-        ),
-    )
-    return {"card_id": card_id}, 201
+def create_card_view(_request, payload=None):
+    return create_card(payload or {})
 
 
 @api_view
 def card_detail(request, card_id: int, payload=None):
     if request.method == "GET":
-        card = fetch_one(
-            """
-            SELECT id, folder_id, name, description, card_type, config, mappings, sort_order, enabled
-            FROM tool_card_items
-            WHERE id = %s
-            """,
-            (card_id,),
-        )
-        if not card:
-            raise ValueError("卡片不存在")
-        return card
+        return get_card_detail(card_id)
     if request.method == "PUT":
-        card = payload or {}
-        updated = execute(
-            """
-            UPDATE tool_card_items
-            SET name = %s, description = %s, card_type = %s, config = %s, mappings = %s, sort_order = %s, enabled = %s
-            WHERE id = %s
-            """,
-            (
-                card.get("name"),
-                card.get("description", ""),
-                card.get("card_type", "sql"),
-                card.get("config", "{}"),
-                card.get("mappings", "{}"),
-                card.get("sort_order", 0),
-                card.get("enabled", True),
-                card_id,
-            ),
-        )
-        return {"updated": updated >= 0}
-    deleted = execute("DELETE FROM tool_card_items WHERE id = %s", (card_id,))
-    return {"deleted": deleted > 0}
+        return update_card(card_id, payload or {})
+    return delete_card(card_id)
+
+
+@api_view
+def card_copy(_request, card_id: int, payload=None):
+    return copy_card(card_id)
+
+
+@api_view
+def card_execute(_request, card_id: int, payload=None):
+    return execute_card(card_id, (payload or {}).get("variables") or {})
 
 
 @api_view
 def initialize_defaults(_request, payload=None):
-    existing = fetch_one("SELECT id FROM tool_card_folders WHERE is_default = TRUE LIMIT 1")
-    if existing:
-        return {"initialized": True, "folder_id": existing["id"]}
-    folder_id = execute(
-        """
-        INSERT INTO tool_card_folders (name, description, parent_id, sort_order, is_default, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-        ("默认工具", "系统默认工具文件夹", None, 0, True, "admin"),
-    )
-    return {"initialized": True, "folder_id": folder_id}
+    return bootstrap_from_legacy_sources(force=bool((payload or {}).get("force", False)))
