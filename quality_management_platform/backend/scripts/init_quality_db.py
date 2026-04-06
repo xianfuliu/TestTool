@@ -10,6 +10,8 @@ if str(BACKEND_ROOT) not in sys.path:
 from test_platform.db import DATABASE_CONFIG, connect, ensure_database, fetch_one, md5_text
 from test_platform.schema import SCHEMA_SQL
 from apps.api_tool.service import bootstrap_from_legacy_json
+from apps.interface_auto.bootstrap import bootstrap_legacy_json as bootstrap_interface_auto_legacy_json
+from apps.interface_auto.bootstrap import ensure_interface_auto_schema_ready
 
 
 def main() -> None:
@@ -19,6 +21,8 @@ def main() -> None:
             for sql in SCHEMA_SQL:
                 cursor.execute(sql)
             connection.commit()
+
+    ensure_interface_auto_schema_ready()
 
     admin_user = fetch_one("SELECT id FROM users WHERE username = %s", ("admin",))
     if not admin_user:
@@ -34,12 +38,19 @@ def main() -> None:
                 connection.commit()
 
     bootstrap_summary = bootstrap_from_legacy_json(force=False)
+    interface_auto_bootstrap_summary = bootstrap_interface_auto_legacy_json(force=False)
 
     print(f"Database ready: {DATABASE_CONFIG['database']} @ {DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}")
     print(
         "API tool bootstrap:",
         f"imported={bootstrap_summary.get('imported')}",
         f"products={bootstrap_summary.get('product_count')}",
+    )
+    print(
+        "Interface auto bootstrap:",
+        f"imported={interface_auto_bootstrap_summary.get('imported')}",
+        f"files={interface_auto_bootstrap_summary.get('file_count')}",
+        f"skipped={interface_auto_bootstrap_summary.get('skipped')}",
     )
 
 

@@ -545,10 +545,10 @@ onMounted(() => {
 
           <TestDataResultPanel
             title="核心结果"
-            description="按需生成后在这里查看常用身份字段"
             :sections="userSections"
             :loading="userLoading"
             generate-label="生成"
+            :show-section-header="false"
             @refresh="handleRefreshUser"
             @copy="handleCopyUser"
             @backfill="handleBackfillUser"
@@ -562,7 +562,6 @@ onMounted(() => {
             <div class="panel-head">
               <div class="panel-title-group">
                 <h2>身份证预览</h2>
-                <span class="panel-meta">点击生成后查看证件图。</span>
               </div>
               <div class="panel-head-actions">
                 <el-button size="small" plain :disabled="!userWorkspace" @click="userDetailVisible = true">
@@ -574,52 +573,32 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="panel-body preview-stack">
-              <div class="preview-box">
-                <div class="preview-box-head">
-                  <span>身份证正面</span>
-                  <el-button
-                    size="small"
-                    link
-                    :disabled="!userWorkspace"
-                    @click="userWorkspace && downloadBase64('身份证正面.jpg', userWorkspace.id_card.images.front)"
-                  >
-                    下载
-                  </el-button>
+            <div
+              class="panel-body preview-stack"
+              :class="{ 'preview-stack--empty': !userFrontImage && !userBackImage }"
+            >
+              <template v-if="userFrontImage || userBackImage">
+                <div v-if="userFrontImage" class="preview-box">
+                  <el-image
+                    class="preview-image preview-image-id"
+                    :src="userFrontImage"
+                    :preview-src-list="userFrontImage ? [userFrontImage] : []"
+                    fit="contain"
+                    preview-teleported
+                  />
                 </div>
-                <el-image
-                  v-if="userFrontImage"
-                  class="preview-image preview-image-id"
-                  :src="userFrontImage"
-                  :preview-src-list="userFrontImage ? [userFrontImage] : []"
-                  fit="contain"
-                  preview-teleported
-                />
-                <div v-else class="preview-empty preview-empty-id">点击生成后查看预览</div>
-              </div>
 
-              <div class="preview-box">
-                <div class="preview-box-head">
-                  <span>身份证反面</span>
-                  <el-button
-                    size="small"
-                    link
-                    :disabled="!userWorkspace"
-                    @click="userWorkspace && downloadBase64('身份证反面.jpg', userWorkspace.id_card.images.back)"
-                  >
-                    下载
-                  </el-button>
+                <div v-if="userBackImage" class="preview-box">
+                  <el-image
+                    class="preview-image preview-image-id"
+                    :src="userBackImage"
+                    :preview-src-list="userBackImage ? [userBackImage] : []"
+                    fit="contain"
+                    preview-teleported
+                  />
                 </div>
-                <el-image
-                  v-if="userBackImage"
-                  class="preview-image preview-image-id"
-                  :src="userBackImage"
-                  :preview-src-list="userBackImage ? [userBackImage] : []"
-                  fit="contain"
-                  preview-teleported
-                />
-                <div v-else class="preview-empty preview-empty-id">点击生成后查看预览</div>
-              </div>
+              </template>
+              <div v-else class="preview-placeholder-text">点击生成后查看预览</div>
             </div>
           </section>
         </div>
@@ -635,10 +614,10 @@ onMounted(() => {
 
           <TestDataResultPanel
             title="核心结果"
-            description="按需生成后查看企业主体字段，完整信息收进详情面板"
             :sections="enterpriseSections"
             :loading="enterpriseLoading"
             generate-label="生成"
+            :show-section-header="false"
             @refresh="handleRefreshEnterprise"
             @copy="handleCopyEnterprise"
             @backfill="handleBackfillEnterprise"
@@ -652,7 +631,6 @@ onMounted(() => {
             <div class="panel-head">
               <div class="panel-title-group">
                 <h2>营业执照预览</h2>
-                <span class="panel-meta">点击生成后查看执照版式，可查看详情。</span>
               </div>
               <div class="panel-head-actions">
                 <el-button size="small" plain :disabled="!enterpriseWorkspace" @click="enterpriseDetailVisible = true">
@@ -665,17 +643,16 @@ onMounted(() => {
             </div>
 
             <div class="panel-body license-body">
-              <div class="preview-box preview-box-license">
+              <div v-if="enterpriseImage" class="preview-box preview-box-license">
                 <el-image
-                  v-if="enterpriseImage"
                   class="preview-image preview-image-license"
                   :src="enterpriseImage"
                   :preview-src-list="enterpriseImage ? [enterpriseImage] : []"
                   fit="contain"
                   preview-teleported
                 />
-                <div v-else class="preview-empty preview-empty-license">点击生成后查看预览</div>
               </div>
+              <div v-else class="preview-placeholder-text">点击生成后查看预览</div>
             </div>
           </section>
         </div>
@@ -802,11 +779,11 @@ onMounted(() => {
 }
 
 .user-grid {
-  grid-template-columns: minmax(320px, 380px) minmax(390px, 400px) minmax(380px, 450px);
+  grid-template-columns: minmax(280px, 314px) minmax(362px, 392px) minmax(348px, 382px);
 }
 
 .enterprise-grid {
-  grid-template-columns: minmax(320px, 380px) minmax(390px, 400px) minmax(380px, 450px);
+  grid-template-columns: minmax(286px, 320px) minmax(362px, 392px) minmax(348px, 382px);
 }
 
 .work-panel {
@@ -823,18 +800,13 @@ onMounted(() => {
 
 .panel-head {
   display: flex;
-  min-height: 68px;
+  min-height: 50px;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid #edf1f6;
   background: linear-gradient(180deg, #fafcff 0%, #ffffff 100%);
-}
-
-.panel-title-group {
-  display: grid;
-  gap: 4px;
 }
 
 .panel-head h2 {
@@ -842,12 +814,6 @@ onMounted(() => {
   color: var(--qm-title);
   font-size: 15px;
   font-weight: 600;
-}
-
-.panel-meta {
-  color: #8a94a6;
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .panel-body {
@@ -861,21 +827,44 @@ onMounted(() => {
   gap: 8px;
 }
 
+.panel-head-actions :deep(.el-button) {
+  min-height: 28px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
 .preview-panel {
   min-width: 0;
 }
 
-.preview-stack {
-  display: grid;
+.preview-panel .panel-body {
+  display: flex;
+  flex: 1;
   min-height: 0;
-  gap: 14px;
+  padding: 12px;
+}
+
+.preview-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 0;
+  gap: 8px;
+  width: 100%;
+}
+
+.preview-stack--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-box {
   border: 1px solid #e9eef5;
   border-radius: 14px;
   background: linear-gradient(180deg, #fafbfc 0%, #f6f8fb 100%);
-  padding: 12px;
+  padding: 10px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
@@ -889,7 +878,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: var(--qm-title);
   font-size: 13px;
   font-weight: 600;
@@ -926,23 +915,50 @@ onMounted(() => {
   height: 214px;
 }
 
+.preview-placeholder-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 120px;
+  color: #a0a8b6;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
 .license-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 1;
   min-height: 0;
+  padding: 6px 0;
 }
 
 .preview-box-license {
   display: flex;
-  min-height: 0;
-  height: 100%;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 360px);
+  min-height: clamp(520px, calc(100vh - 260px), 640px);
+  height: auto;
+  overflow: hidden;
+  margin: 0 auto;
 }
 
 .preview-image-license {
-  height: clamp(520px, calc(100vh - 324px), 660px);
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .preview-empty-license {
-  height: clamp(520px, calc(100vh - 324px), 660px);
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .detail-dialog :deep(.work-panel) {
@@ -963,7 +979,7 @@ onMounted(() => {
 @media (max-width: 1760px) {
   .user-grid,
   .enterprise-grid {
-    grid-template-columns: minmax(374px, 414px) minmax(384px, 424px) minmax(328px, 368px);
+    grid-template-columns: minmax(270px, 302px) minmax(350px, 378px) minmax(332px, 360px);
   }
 }
 

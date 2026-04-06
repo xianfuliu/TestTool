@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("meta/", views.meta),
+    path("runtime-variables/", views.runtime_variables),
     path("workspace/", views.workspace),
     path("user-workspace/", views.user_workspace),
     path("enterprise-workspace/", views.enterprise_workspace),

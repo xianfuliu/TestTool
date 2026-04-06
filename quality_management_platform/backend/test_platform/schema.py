@@ -84,6 +84,8 @@ SCHEMA_SQL = [
         description TEXT,
         sort_order INT DEFAULT 0,
         timeout INT DEFAULT 30,
+        retry_enabled BOOLEAN DEFAULT FALSE,
+        retry_count INT DEFAULT 3,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_project_id (project_id),
@@ -180,9 +182,37 @@ SCHEMA_SQL = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
+    CREATE TABLE IF NOT EXISTS test_suites (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        notify_emails JSON NULL,
+        email_config JSON NULL,
+        created_by VARCHAR(50) DEFAULT 'admin',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_test_suites_project_name (project_id, name),
+        INDEX idx_test_suites_project_id (project_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS test_suite_cases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        suite_id INT NOT NULL,
+        case_id INT NOT NULL,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_test_suite_case (suite_id, case_id),
+        INDEX idx_test_suite_cases_suite_id (suite_id),
+        INDEX idx_test_suite_cases_case_id (case_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
     CREATE TABLE IF NOT EXISTS test_schedulers (
         id INT AUTO_INCREMENT PRIMARY KEY,
         project_id INT NULL,
+        suite_id INT NULL,
         name VARCHAR(100) NOT NULL UNIQUE,
         description TEXT,
         cron_expression VARCHAR(100) DEFAULT '',
@@ -195,13 +225,15 @@ SCHEMA_SQL = [
         next_run_at DATETIME NULL,
         created_by VARCHAR(50) DEFAULT 'system',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_test_schedulers_suite_id (suite_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
     CREATE TABLE IF NOT EXISTS test_reports (
         id INT AUTO_INCREMENT PRIMARY KEY,
         scheduler_id INT NULL,
+        suite_id INT NULL,
         case_id INT NULL,
         project_id INT NULL,
         report_name VARCHAR(255) NOT NULL,
@@ -214,16 +246,22 @@ SCHEMA_SQL = [
         end_time DATETIME NULL,
         duration FLOAT DEFAULT 0,
         log_path VARCHAR(500) DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        trigger_type VARCHAR(50) DEFAULT 'manual',
+        summary_json JSON NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_test_reports_suite_id (suite_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
     CREATE TABLE IF NOT EXISTS test_step_results (
         id INT AUTO_INCREMENT PRIMARY KEY,
         report_id INT NOT NULL,
+        scheduler_id INT NULL,
+        suite_id INT NULL,
         case_id INT NULL,
         step_id INT NULL,
         step_order INT DEFAULT 1,
+        step_name VARCHAR(255) DEFAULT '',
         status VARCHAR(50) DEFAULT 'pending',
         request_data JSON NULL,
         response_data JSON NULL,
@@ -233,7 +271,19 @@ SCHEMA_SQL = [
         end_time DATETIME NULL,
         execution_time FLOAT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_report_id (report_id)
+        INDEX idx_report_id (report_id),
+        INDEX idx_test_step_results_case_id (case_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS interface_auto_bootstrap_records (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        record_key VARCHAR(255) NOT NULL UNIQUE,
+        source_path VARCHAR(500) NOT NULL,
+        file_hash VARCHAR(64) NOT NULL,
+        payload_json JSON NULL,
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """

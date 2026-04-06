@@ -13,7 +13,6 @@ const form = defineModel<TestDataConfig>({ required: true });
     <div class="panel-head">
       <div class="panel-title-group">
         <h2>用户参数</h2>
-        <span class="panel-meta">身份证与基础身份信息配置</span>
       </div>
     </div>
 
@@ -132,14 +131,14 @@ const form = defineModel<TestDataConfig>({ required: true });
 }
 
 .panel-head {
-  padding: 16px 18px;
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid #edf1f6;
   background: linear-gradient(180deg, #fafcff 0%, #ffffff 100%);
-}
-
-.panel-title-group {
-  display: grid;
-  gap: 4px;
 }
 
 .panel-head h2 {
@@ -147,12 +146,6 @@ const form = defineModel<TestDataConfig>({ required: true });
   color: var(--qm-title);
   font-size: 15px;
   font-weight: 600;
-}
-
-.panel-meta {
-  color: #8a94a6;
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .panel-scroll {

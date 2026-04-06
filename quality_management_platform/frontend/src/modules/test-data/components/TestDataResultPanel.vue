@@ -11,12 +11,14 @@ withDefaults(
     showEchoAll?: boolean;
     showClear?: boolean;
     showFooter?: boolean;
+    showSectionHeader?: boolean;
   }>(),
   {
     generateLabel: "生成数据",
     showEchoAll: true,
     showClear: true,
     showFooter: true,
+    showSectionHeader: true,
   },
 );
 
@@ -43,7 +45,7 @@ const emit = defineEmits<{
     <el-scrollbar class="panel-scroll">
       <div class="panel-body">
         <section v-for="section in sections" :key="section.title" class="result-group">
-          <div class="group-head">
+          <div v-if="showSectionHeader" class="group-head">
             <h3>{{ section.title }}</h3>
             <span>{{ section.rows.length }} 项</span>
           </div>
@@ -91,12 +93,12 @@ const emit = defineEmits<{
     </el-scrollbar>
 
     <div v-if="showFooter" class="panel-footer">
-      <el-button type="primary" :loading="loading" @click="emit('generate')">
+      <el-button type="primary" size="small" :loading="loading" @click="emit('generate')">
         {{ generateLabel }}
       </el-button>
-      <el-button @click="emit('copyAll')">复制</el-button>
-      <el-button v-if="showEchoAll" @click="emit('echoAll')">回显</el-button>
-      <el-button v-if="showClear" plain @click="emit('clear')">清空</el-button>
+      <el-button size="small" @click="emit('copyAll')">复制</el-button>
+      <el-button v-if="showEchoAll" size="small" @click="emit('echoAll')">回显</el-button>
+      <el-button v-if="showClear" size="small" plain @click="emit('clear')">清空</el-button>
     </div>
   </section>
 </template>
@@ -114,14 +116,14 @@ const emit = defineEmits<{
 }
 
 .panel-head {
-  padding: 16px 18px;
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid #edf1f6;
   background: linear-gradient(180deg, #fafcff 0%, #ffffff 100%);
-}
-
-.panel-title-group {
-  display: grid;
-  gap: 4px;
 }
 
 .panel-head h2 {
@@ -220,7 +222,9 @@ const emit = defineEmits<{
 .row-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
+  min-width: 112px;
   flex-shrink: 0;
 }
 
@@ -234,16 +238,21 @@ const emit = defineEmits<{
 }
 
 .panel-footer {
-  display: grid;
-  grid-template-columns: 1.15fr repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
-  padding: 14px 18px 18px;
+  padding: 12px 16px 16px;
   border-top: 1px solid #edf1f6;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
 }
 
 .panel-footer :deep(.el-button) {
   margin: 0;
+  min-height: 28px;
+  padding: 6px 12px;
+  font-size: 12px;
+  width: auto;
 }
 
 @media (max-width: 1440px) {

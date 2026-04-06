@@ -2,6 +2,8 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 
+import { fetchGeneratedRuntimeVariables } from "@/shared/api/generatedDataToolkit";
+
 import ApiToolConfigDialog from "./components/ApiToolConfigDialog.vue";
 import {
   createApiToolProduct,
@@ -60,6 +62,7 @@ const creatingProduct = ref(false);
 const deletingProductId = ref<number | null>(null);
 
 const manualValues = ref<Record<string, string>>({});
+const generatedRuntimeValues = ref<Record<string, string>>({});
 const requestPreview = ref<ApiToolPreviewResult | null>(null);
 const requestResult = ref<ApiToolExecuteResult | null>(null);
 const sqlResult = ref<ApiToolSqlExecuteResult | null>(null);
@@ -136,7 +139,14 @@ const runtimeValues = computed<Record<string, string>>(() => {
   if (!currentConfig.value) {
     return {};
   }
-  const values = deriveRuntimeValues(currentConfig.value, manualValues.value, requestId.value);
+  const values = deriveRuntimeValues(
+    currentConfig.value,
+    {
+      ...generatedRuntimeValues.value,
+      ...manualValues.value,
+    },
+    requestId.value,
+  );
   const result: Record<string, string> = {};
   Object.entries(values).forEach(([key, value]) => {
     result[key] = String(value ?? "");
@@ -172,7 +182,7 @@ const responsePlaceholder = computed(() => {
 });
 
 function syncManualValues(config: ApiToolConfig) {
-  const defaults = deriveRuntimeValues(config, {}, requestId.value);
+  const defaults = deriveRuntimeValues(config, generatedRuntimeValues.value, requestId.value);
   const nextValues: Record<string, string> = {};
 
   config.layout.forEach((item) => {
@@ -184,6 +194,16 @@ function syncManualValues(config: ApiToolConfig) {
   });
 
   manualValues.value = nextValues;
+}
+
+async function refreshGeneratedRuntimeValues() {
+  try {
+    const data = await fetchGeneratedRuntimeVariables();
+    generatedRuntimeValues.value = data.variables ?? {};
+  } catch (error) {
+    generatedRuntimeValues.value = {};
+    throw error;
+  }
 }
 
 function resetResultPanels() {
@@ -199,7 +219,7 @@ function resetResultPanels() {
   requestEditor.bodyText = "{\n  \n}";
 }
 
-function refreshRequestId() {
+async function refreshRequestId() {
   requestId.value = buildRequestId();
   requestPreview.value = null;
   requestResult.value = null;
@@ -207,6 +227,11 @@ function refreshRequestId() {
   activeSqlName.value = "";
   runningSqlName.value = "";
   if (currentConfig.value) {
+    try {
+      await refreshGeneratedRuntimeValues();
+    } catch (error) {
+      ElMessage.error(`刷新默认测试数据失败：${(error as Error).message}`);
+    }
     syncManualValues(currentConfig.value);
   }
 }
@@ -234,6 +259,11 @@ async function loadProductDetail(productId: number) {
     const detail = await fetchApiToolProductDetail(productId);
     productDetail.value = detail;
     selectedScheduleRowId.value = detail.config.schedule_tasks[0]?.row_id ?? null;
+    try {
+      await refreshGeneratedRuntimeValues();
+    } catch (error) {
+      ElMessage.error(`加载默认测试数据失败：${(error as Error).message}`);
+    }
     syncManualValues(detail.config);
     resetResultPanels();
   } catch (error) {
@@ -255,6 +285,8 @@ async function loadProducts(preferredProductId?: number | null) {
     } else {
       productDetail.value = null;
       selectedScheduleRowId.value = null;
+      generatedRuntimeValues.value = {};
+      manualValues.value = {};
       resetResultPanels();
     }
   } catch (error) {
@@ -780,8 +812,8 @@ onMounted(() => {
 }
 
 .mini-btn {
-  min-width: 56px;
-  padding: 0 10px;
+  min-width: 48px;
+  padding: 0 8px;
 }
 
 .mini-btn,
@@ -929,12 +961,24 @@ onMounted(() => {
 .send-row {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+}
+
+.send-row::before {
+  content: "响应体";
+  color: #606266;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .send-btn {
-  min-width: 74px;
-  padding: 0 14px;
+  min-width: 62px;
+  padding: 0 10px;
+}
+
+.response-block > .section-label {
+  display: none;
 }
 
 .legacy-textarea {
@@ -976,7 +1020,10 @@ onMounted(() => {
 }
 
 .compact-ui :deep(.el-button) {
-  min-height: 28px;
+  min-height: 24px;
+  height: 24px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .legacy-textarea :deep(.el-textarea__inner) {

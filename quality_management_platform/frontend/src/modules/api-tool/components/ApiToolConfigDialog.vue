@@ -502,37 +502,34 @@ function submit() {
   <el-dialog v-model="visible" title="接口工具配置" width="1180px" top="4vh">
     <el-tabs v-model="activeTab" class="config-tabs">
       <el-tab-pane label="基础配置" name="basic">
-        <div class="config-grid">
-          <el-form label-position="top">
-            <el-form-item label="产品名称">
-              <el-input v-model="productForm.name" />
-            </el-form-item>
-            <el-form-item label="历史路径">
-              <el-input v-model="productForm.legacy_config_path" />
-            </el-form-item>
-            <el-form-item label="排序">
-              <el-input-number v-model="productForm.sort_order" :min="1" />
-            </el-form-item>
-            <el-form-item>
-              <el-checkbox v-model="productForm.locked">锁定配置</el-checkbox>
-            </el-form-item>
-            <el-form-item>
-              <el-checkbox v-model="productForm.is_default">设为默认产品</el-checkbox>
-            </el-form-item>
-            <el-form-item>
-              <el-checkbox v-model="productForm.enable_encryption">启用加解密</el-checkbox>
-            </el-form-item>
-          </el-form>
-
-          <el-form label-position="top">
-            <el-form-item label="加密接口 URL">
+        <el-form class="basic-config-form" label-width="110px">
+          <el-form-item label="产品名称" class="basic-config-item basic-config-item-wide">
+            <el-input v-model="productForm.name" />
+          </el-form-item>
+          <el-form-item label="历史路径" class="basic-config-item basic-config-item-wide">
+            <el-input v-model="productForm.legacy_config_path" />
+          </el-form-item>
+          <el-form-item label="排序" class="basic-config-item basic-config-item-sort">
+            <el-input-number v-model="productForm.sort_order" :min="1" />
+          </el-form-item>
+          <el-form-item class="basic-config-check">
+            <el-checkbox v-model="productForm.locked">锁定配置</el-checkbox>
+          </el-form-item>
+          <el-form-item class="basic-config-check">
+            <el-checkbox v-model="productForm.is_default">设为默认产品</el-checkbox>
+          </el-form-item>
+          <el-form-item class="basic-config-check">
+            <el-checkbox v-model="productForm.enable_encryption">启用加解密</el-checkbox>
+          </el-form-item>
+          <template v-if="productForm.enable_encryption">
+            <el-form-item label="加密接口 URL" class="basic-config-item basic-config-item-wide">
               <el-input v-model="productForm.encrypt_url" />
             </el-form-item>
-            <el-form-item label="解密接口 URL">
+            <el-form-item label="解密接口 URL" class="basic-config-item basic-config-item-wide">
               <el-input v-model="productForm.decrypt_url" />
             </el-form-item>
-          </el-form>
-        </div>
+          </template>
+        </el-form>
       </el-tab-pane>
 
       <el-tab-pane label="定时任务" name="schedule">
@@ -562,7 +559,8 @@ function submit() {
         </div>
         <div class="layout-drag-panel">
           <div class="layout-drag-header">
-            <span>序号</span>
+            <span class="layout-drag-header-placeholder" aria-hidden="true"></span>
+            <span class="layout-drag-header-order">序号</span>
             <span>类型</span>
             <span>名称</span>
             <span>key/name</span>
@@ -586,10 +584,12 @@ function submit() {
             <div class="layout-drag-cell name-cell">{{ row.label || row.name || "--" }}</div>
             <div class="layout-drag-cell key-cell">{{ row.key || row.name || "--" }}</div>
             <div class="layout-drag-cell hidden-cell">{{ row.show_in_ui === false ? "是" : "否" }}</div>
-            <el-space>
-              <el-button link type="primary" @click="openLayoutEditor(index)">编辑</el-button>
-              <el-button link type="danger" @click="removeLayout(index)">删除</el-button>
-            </el-space>
+            <div class="layout-drag-actions">
+              <el-space>
+                <el-button link type="primary" @click="openLayoutEditor(index)">编辑</el-button>
+                <el-button link type="danger" @click="removeLayout(index)">删除</el-button>
+              </el-space>
+            </div>
           </div>
         </div>
       </el-tab-pane>
@@ -1001,6 +1001,39 @@ function submit() {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.basic-config-form {
+  max-width: 760px;
+}
+
+.basic-config-item,
+.basic-config-check {
+  margin-bottom: 12px;
+}
+
+.basic-config-form :deep(.el-form-item__label) {
+  padding-right: 14px;
+  color: var(--qm-title);
+  line-height: 32px;
+}
+
+.basic-config-form :deep(.el-form-item__content) {
+  min-width: 0;
+}
+
+.basic-config-item-wide :deep(.el-input),
+.basic-config-item-wide :deep(.el-input-number) {
+  width: 520px;
+  max-width: 100%;
+}
+
+.basic-config-item-sort :deep(.el-input-number) {
+  width: 180px;
+}
+
+.basic-config-check :deep(.el-form-item__content) {
+  margin-left: 110px;
+}
+
 .section-toolbar,
 .sub-toolbar,
 .case-toolbar {
@@ -1062,8 +1095,24 @@ function submit() {
   background: #ffffff;
 }
 
+.layout-drag-header > span {
+  min-width: 0;
+}
+
+.layout-drag-header-placeholder {
+  display: block;
+}
+
+.layout-drag-header-order {
+  text-align: center;
+}
+
 .layout-drag-header-actions {
-  justify-self: end;
+  justify-self: center;
+}
+
+.layout-drag-actions {
+  justify-self: center;
 }
 
 .layout-drag-item {
