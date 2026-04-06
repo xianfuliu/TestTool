@@ -6,6 +6,7 @@ const ApiToolPage = () => import("@/modules/api-tool/ApiToolWorkbenchPage.vue");
 const ModulePlaceholderPage = () => import("@/modules/common/ModulePlaceholderPage.vue");
 const DataQueryPage = () => import("@/modules/data-query/DataQueryPage.vue");
 const InterfaceAutoPage = () => import("@/modules/interface-auto/InterfaceAutoPage.vue");
+const BusinessManagementPage = () => import("@/modules/requirements/BusinessManagementPage.vue");
 const TestDataPage = () => import("@/modules/test-data/TestDataPage.vue");
 const ToolCardsPage = () => import("@/modules/tool-cards/ToolCardsPage.vue");
 
@@ -46,7 +47,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: "requirements/business",
         name: "requirements-business",
-        component: ModulePlaceholderPage,
+        component: BusinessManagementPage,
         meta: {
           title: "业务管理",
           subtitle: "统一维护业务线、业务域和归属关系。",
@@ -70,6 +71,9 @@ const routes: RouteRecordRaw[] = [
           title: "接口自动化用例管理",
           subtitle: "维护接口自动化用例、场景编排与执行配置。",
           note: "这里可继续接入接口用例目录、步骤编排、断言管理与项目关联能力。",
+          useBusinessContext: true,
+          contextTitle: "接口自动化项目上下文",
+          contextSubtitle: "接口自动化用例管理已切换为读取全局业务组/项目主数据，后续真实页面直接复用该上下文。",
         },
       },
       {
@@ -80,6 +84,9 @@ const routes: RouteRecordRaw[] = [
           title: "接口自动化测试报告",
           subtitle: "查看自动化执行结果、趋势统计与报告详情。",
           note: "这里可继续接入报告列表、执行详情、趋势分析和失败回溯能力。",
+          useBusinessContext: true,
+          contextTitle: "接口自动化报告上下文",
+          contextSubtitle: "报告页已预接全局业务组/项目上下文，后续可按项目维度查询与筛选报告。",
         },
       },
       {
@@ -115,6 +122,9 @@ const routes: RouteRecordRaw[] = [
           title: "用例库",
           subtitle: "统一维护测试用例资产和目录结构。",
           note: "这里可继续接入用例目录、用例详情、标签和版本关联能力。",
+          useBusinessContext: true,
+          contextTitle: "测试中心项目上下文",
+          contextSubtitle: "测试中心用例库已接入全局业务组/项目主数据，后续用例目录和筛选将直接复用。",
         },
       },
       {
@@ -125,6 +135,9 @@ const routes: RouteRecordRaw[] = [
           title: "用例执行",
           subtitle: "查看和执行测试用例，沉淀执行结果。",
           note: "这里可继续接入执行记录、批量执行、结果回填和报告关联能力。",
+          useBusinessContext: true,
+          contextTitle: "测试执行项目上下文",
+          contextSubtitle: "测试执行页已接入全局业务组/项目主数据，后续执行计划、批量运行和报告筛选可直接复用。",
         },
       },
       {
@@ -135,6 +148,9 @@ const routes: RouteRecordRaw[] = [
           title: "缺陷管理",
           subtitle: "统一跟踪缺陷状态、责任人和处理进度。",
           note: "这里可继续接入缺陷池、状态流转、严重级别和回归关联能力。",
+          useBusinessContext: true,
+          contextTitle: "缺陷归属项目上下文",
+          contextSubtitle: "缺陷管理已接入全局业务组/项目主数据，后续缺陷归属和回归关联可直接复用。",
         },
       },
       {
@@ -145,6 +161,9 @@ const routes: RouteRecordRaw[] = [
           title: "UI 自动化",
           subtitle: "预留 UI 自动化编排和执行入口。",
           note: "这里可继续接入 UI 自动化脚本管理、执行任务和报告能力。",
+          useBusinessContext: true,
+          contextTitle: "自动化项目上下文",
+          contextSubtitle: "自动化模块已接入全局业务组/项目主数据，后续 UI 自动化脚本、任务和报告都可直接复用。",
         },
       },
       {

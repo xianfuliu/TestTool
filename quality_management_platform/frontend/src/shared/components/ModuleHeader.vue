@@ -1,16 +1,17 @@
 <script setup lang="ts">
+import { computed, useSlots } from "vue";
+
 defineProps<{
-  title: string;
-  subtitle: string;
+  title?: string;
+  subtitle?: string;
 }>();
+
+const slots = useSlots();
+const hasActions = computed(() => Boolean(slots.default));
 </script>
 
 <template>
-  <div class="module-header">
-    <div class="module-copy">
-      <h1>{{ title }}</h1>
-      <p class="subtitle">{{ subtitle }}</p>
-    </div>
+  <div v-if="hasActions" class="module-header">
     <div class="header-actions">
       <slot />
     </div>
@@ -20,41 +21,15 @@ defineProps<{
 <style scoped>
 .module-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 6px 4px 4px;
-}
-
-.module-copy {
-  min-width: 0;
-}
-
-h1 {
-  margin: 0;
-  color: var(--qm-title);
-  font-size: 26px;
-  font-weight: 600;
-}
-
-.subtitle {
-  margin: 6px 0 0;
-  color: var(--qm-text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
+  justify-content: flex-end;
+  padding: 2px 4px 10px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-@media (max-width: 960px) {
-  .module-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 }
 </style>

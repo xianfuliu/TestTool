@@ -3,13 +3,13 @@ import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 
 import { get } from "@/shared/api/client";
+import BusinessProjectContextBar from "@/shared/components/BusinessProjectContextBar.vue";
 import ModuleHeader from "@/shared/components/ModuleHeader.vue";
+import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
 
 type OverviewItem = Record<string, unknown>;
 
 type OverviewPayload = {
-  business_groups: OverviewItem[];
-  projects: OverviewItem[];
   global_tools: OverviewItem[];
   global_variables: OverviewItem[];
   environments: OverviewItem[];
@@ -18,6 +18,25 @@ type OverviewPayload = {
 
 const overview = ref<OverviewPayload | null>(null);
 const loading = ref(false);
+const context = useBusinessProjectContext();
+const businessGroups = context.groups;
+const projects = context.projects;
+const selectedGroup = context.selectedGroup;
+const selectedProject = context.selectedProject;
+const visibleProjects = computed(() =>
+  context.selectedGroupId.value !== null ? context.projectsOfSelectedGroup.value : context.projects.value,
+);
+const projectSummaryText = computed(() => {
+  const environmentCount = overview.value?.environments.length ?? 0;
+  if (selectedProject.value) {
+    const groupLabel = selectedGroup.value?.name ?? "未分组";
+    return `当前聚焦项目「${selectedProject.value.name}」，所属业务组为「${groupLabel}」，已配置 ${environmentCount} 套环境。`;
+  }
+  if (selectedGroup.value) {
+    return `当前聚焦业务组「${selectedGroup.value.name}」，共维护 ${visibleProjects.value.length} 个项目，已配置 ${environmentCount} 套环境。`;
+  }
+  return `当前共维护 ${projects.value.length} 个项目，配置 ${environmentCount} 套环境。`;
+});
 
 const latestReport = computed(() => overview.value?.reports?.[0] ?? null);
 
@@ -58,7 +77,14 @@ async function loadOverview() {
   }
 }
 
-onMounted(loadOverview);
+async function refreshPage() {
+  await Promise.all([context.refresh(), loadOverview()]);
+}
+
+onMounted(() => {
+  void context.ensureLoaded();
+  void loadOverview();
+});
 </script>
 
 <template>
@@ -67,8 +93,14 @@ onMounted(loadOverview);
       title="接口自动化中心"
       subtitle="统一查看业务组、项目、环境、全局变量、工具以及最近执行报告，让自动化资产拥有标准后台式的总览入口。"
     >
-      <el-button :loading="loading" @click="loadOverview">刷新概览</el-button>
+      <el-button :loading="loading || context.loading.value" @click="refreshPage">刷新概览</el-button>
     </ModuleHeader>
+
+    <BusinessProjectContextBar
+      title="自动化项目上下文"
+      subtitle="接口自动化模块已改成直接读取全局业务组 / 项目主数据，后续各子页继续沿用这套上下文。"
+      compact
+    />
 
     <div class="grid-two">
       <el-card class="surface-card" shadow="never">
@@ -83,7 +115,7 @@ onMounted(loadOverview);
           <div class="summary-item">
             <div>
               <strong>项目与环境映射</strong>
-              <p>当前共维护 {{ overview?.projects.length ?? 0 }} 个项目，配置 {{ overview?.environments.length ?? 0 }} 套环境。</p>
+              <p>{{ projectSummaryText }}</p>
             </div>
             <el-tag type="primary" effect="plain">{{ overview?.environments.length ?? 0 }} 个环境</el-tag>
           </div>
@@ -160,10 +192,10 @@ onMounted(loadOverview);
               <p class="section-title">业务组</p>
               <p class="section-caption">用于隔离不同业务线。</p>
             </div>
-            <span class="muted-text">共 {{ overview?.business_groups.length ?? 0 }} 条</span>
+            <span class="muted-text">共 {{ businessGroups.length }} 条</span>
           </div>
         </template>
-        <el-table :data="overview?.business_groups ?? []" height="280">
+        <el-table :data="businessGroups" height="280">
           <el-table-column prop="id" label="ID" width="72" />
           <el-table-column prop="name" label="名称" min-width="120" />
           <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
@@ -177,10 +209,10 @@ onMounted(loadOverview);
               <p class="section-title">项目</p>
               <p class="section-caption">承接接口模板、用例与执行计划。</p>
             </div>
-            <span class="muted-text">共 {{ overview?.projects.length ?? 0 }} 条</span>
+            <span class="muted-text">共 {{ visibleProjects.length }} 条</span>
           </div>
         </template>
-        <el-table :data="overview?.projects ?? []" height="280">
+        <el-table :data="visibleProjects" height="280">
           <el-table-column prop="id" label="ID" width="72" />
           <el-table-column prop="name" label="名称" min-width="120" />
           <el-table-column prop="group_name" label="业务组" min-width="120" />

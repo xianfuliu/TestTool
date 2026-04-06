@@ -360,14 +360,6 @@ function hideCollapsedTooltip() {
     </aside>
 
     <section class="workspace">
-      <header class="topbar">
-        <p class="breadcrumb">
-          {{ activeModule.groupTitle }}
-          <span v-if="activeModule.parentLabel"> / {{ activeModule.parentLabel }}</span>
-          / {{ activeModule.label }}
-        </p>
-      </header>
-
       <main class="content">
         <router-view />
       </main>
@@ -533,22 +525,11 @@ function hideCollapsedTooltip() {
   overflow: hidden;
 }
 
-.topbar {
-  flex: 0 0 auto;
-  padding: 14px 24px 0;
-}
-
-.breadcrumb {
-  margin: 0;
-  color: var(--qm-text-secondary);
-  font-size: 12px;
-}
-
 .content {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 0 24px 24px;
+  padding: 16px 24px 24px;
 }
 
 .collapsed-tooltip {
@@ -727,8 +708,5 @@ function hideCollapsedTooltip() {
     padding: 0 16px 16px;
   }
 
-  .topbar {
-    padding: 12px 16px 0;
-  }
 }
 </style>
