@@ -572,14 +572,11 @@ void loadData();
 </script>
 
 <template>
-  <div class="page-shell">
+  <div class="page-shell business-page">
     <ModuleHeader
       title="业务管理"
       subtitle="把旧接口自动化里的业务管理迁成质量管理平台的全局主数据，供需求协同、测试中心和自动化模块共同复用。"
-    >
-      <el-button :loading="loading" @click="loadData()">刷新</el-button>
-      <el-button type="primary" @click="openGroupDialog()">新建业务组</el-button>
-    </ModuleHeader>
+    />
 
     <div class="business-summary">
       <div class="business-summary__item">
@@ -646,13 +643,14 @@ void loadData();
                 <el-button
                   v-if="data.type === 'group'"
                   link
+                  size="small"
                   type="primary"
                   @click.stop="openProjectDialog(data.group_id)"
                 >
                   新建项目
                 </el-button>
-                <el-button link type="primary" @click.stop="handleEditNode(data)">编辑</el-button>
-                <el-button link type="danger" @click.stop="handleDeleteNode(data)">删除</el-button>
+                <el-button link size="small" type="primary" @click.stop="handleEditNode(data)">编辑</el-button>
+                <el-button link size="small" type="danger" @click.stop="handleDeleteNode(data)">删除</el-button>
               </div>
             </div>
           </template>
@@ -665,11 +663,6 @@ void loadData();
             <div>
               <p class="section-title">{{ detailTitle }}</p>
               <p class="section-caption">{{ detailSubtitle }}</p>
-            </div>
-            <div class="business-detail__actions">
-              <el-button v-if="selectedGroup" type="primary" @click="openProjectDialog(selectedGroup.id)">新建项目</el-button>
-              <el-button v-if="selectedGroup" @click="openGroupDialog(selectedGroup)">编辑业务组</el-button>
-              <el-button v-if="selectedProject" @click="openProjectDialog(undefined, selectedProject)">编辑项目</el-button>
             </div>
           </div>
         </template>
@@ -712,12 +705,6 @@ void loadData();
                 <el-table :data="groupProjectRows" max-height="260" row-key="id">
                   <el-table-column prop="name" label="项目名称" min-width="180" />
                   <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
-                  <el-table-column label="操作" width="120" fixed="right">
-                    <template #default="{ row }">
-                      <el-button link type="primary" @click="selectProject(row.id)">查看</el-button>
-                      <el-button link type="danger" @click="removeProject(row)">删除</el-button>
-                    </template>
-                  </el-table-column>
                 </el-table>
               </div>
             </el-tab-pane>
@@ -762,8 +749,8 @@ void loadData();
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="groupDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="saveGroup">保存</el-button>
+        <el-button size="small" @click="groupDialog.visible = false">取消</el-button>
+        <el-button size="small" type="primary" @click="saveGroup">保存</el-button>
       </template>
     </el-dialog>
 
@@ -782,27 +769,38 @@ void loadData();
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="projectDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="saveProject">保存</el-button>
+        <el-button size="small" @click="projectDialog.visible = false">取消</el-button>
+        <el-button size="small" type="primary" @click="saveProject">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <style scoped>
+.business-page {
+  min-height: calc(100vh - 56px);
+  gap: 10px;
+}
+
 .business-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .business-summary__item,
 .business-stats__item {
-  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 10px;
   border: 1px solid #e9edf3;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .business-summary__item span,
@@ -810,7 +808,7 @@ void loadData();
 .detail-field span,
 .business-tree-node__main span,
 .related-panel__header span {
-  display: block;
+  display: inline;
   color: var(--qm-text-secondary);
   font-size: 12px;
 }
@@ -818,18 +816,43 @@ void loadData();
 .business-summary__item strong,
 .business-stats__item strong,
 .detail-field strong {
-  display: block;
-  margin-top: 8px;
+  display: inline;
+  margin-top: 0;
   color: var(--qm-title);
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.5;
   word-break: break-word;
+}
+
+.business-summary__item strong,
+.business-stats__item strong {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #1d4ed8;
+  font-weight: 700;
 }
 
 .business-layout {
   display: grid;
   grid-template-columns: 380px minmax(0, 1fr);
-  gap: 16px;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.business-layout > .surface-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.business-layout > .surface-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .business-toolbar,
@@ -843,11 +866,11 @@ void loadData();
 }
 
 .business-toolbar {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .business-toolbar__picker {
-  width: 210px;
+  width: 190px;
 }
 
 .business-toolbar__actions,
@@ -855,27 +878,33 @@ void loadData();
 .business-tree-node__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .business-tree {
-  padding: 4px 0;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 0;
 }
 
 .business-tree-node {
   width: 100%;
-  min-height: 44px;
+  min-height: 30px;
 }
 
 .business-tree-node__main {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .business-tree-node__main strong {
-  display: block;
+  display: inline;
   color: var(--qm-title);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .business-tree-node__actions {
@@ -895,13 +924,18 @@ void loadData();
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .detail-field {
-  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 10px;
   border: 1px solid #e9edf3;
-  border-radius: 14px;
+  border-radius: 8px;
   background: #ffffff;
 }
 
@@ -910,15 +944,15 @@ void loadData();
 }
 
 .related-panel {
-  margin-top: 16px;
-  padding: 14px;
+  margin-top: 10px;
+  padding: 10px;
   border: 1px solid #e9edf3;
-  border-radius: 14px;
+  border-radius: 8px;
   background: #ffffff;
 }
 
 .related-panel__header {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .related-panel__header strong {
@@ -929,16 +963,16 @@ void loadData();
 .business-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .business-note {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 14px;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
   background: #f6f9fc;
   color: var(--qm-text-secondary);
-  line-height: 1.8;
+  line-height: 1.6;
 }
 
 .business-note strong {
@@ -946,7 +980,7 @@ void loadData();
 }
 
 .business-note p {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
 }
 
 .business-empty {
@@ -958,6 +992,39 @@ void loadData();
 
 .business-dialog__full {
   width: 100%;
+}
+
+.page-shell :deep(.el-button) {
+  min-height: 26px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.page-shell :deep(.el-button.is-link) {
+  min-height: auto;
+  padding: 0 2px;
+}
+
+.page-shell :deep(.el-card__header) {
+  padding: 10px 12px;
+}
+
+.page-shell :deep(.el-card__body) {
+  padding: 10px 12px;
+}
+
+.page-shell :deep(.el-input__wrapper),
+.page-shell :deep(.el-select__wrapper) {
+  min-height: 28px;
+  font-size: 12px;
+}
+
+.page-shell :deep(.el-tree-node__content) {
+  min-height: 32px;
+}
+
+.page-shell :deep(.el-tabs__header) {
+  margin-bottom: 10px;
 }
 
 @media (max-width: 1360px) {

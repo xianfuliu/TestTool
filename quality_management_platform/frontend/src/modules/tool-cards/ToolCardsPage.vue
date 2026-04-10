@@ -102,7 +102,8 @@ async function loadBootstrap(force = false) {
     currentFolderId.value = targetFolderId;
     if (targetFolderId) {
       cards.value = data.selected_folder_id === targetFolderId ? data.cards : [];
-      await loadFolder(targetFolderId);
+      await nextTick();
+      treeRef.value?.setCurrentKey(targetFolderId);
     } else {
       cards.value = [];
     }

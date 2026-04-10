@@ -6,6 +6,8 @@ from datetime import datetime
 from apps.common.http import api_view, get_int
 from test_platform.db import execute, fetch_all, fetch_one
 
+from . import template_service
+
 
 def _json_text(value):
     return json.dumps(value or {}, ensure_ascii=False)
@@ -127,19 +129,8 @@ def project_stats(_request, project_id: int, payload=None):
 @api_view
 def api_folders(request, payload=None):
     if request.method == "GET":
-        project_id = get_int((payload or {}).get("project_id"))
-        if not project_id:
-            raise ValueError("project_id 不能为空")
-        return fetch_all("SELECT * FROM api_folders WHERE project_id = %s ORDER BY sort_order, created_at", (project_id,))
-    folder = payload or {}
-    folder_id = execute(
-        """
-        INSERT INTO api_folders (project_id, parent_id, name, description, sort_order)
-        VALUES (%s, %s, %s, %s, %s)
-        """,
-        (folder.get("project_id"), folder.get("parent_id"), folder.get("name"), folder.get("description", ""), folder.get("sort_order", 0)),
-    )
-    return {"folder_id": folder_id}, 201
+        return template_service.list_folders((payload or {}).get("project_id"))
+    return template_service.create_folder(payload or {}), 201
 
 
 @api_view
@@ -147,76 +138,32 @@ def api_folder_detail(request, folder_id: int, payload=None):
     if request.method == "GET":
         return fetch_one("SELECT * FROM api_folders WHERE id = %s", (folder_id,))
     if request.method == "PUT":
-        updated = execute(
-            "UPDATE api_folders SET name = %s, description = %s WHERE id = %s",
-            ((payload or {}).get("name"), (payload or {}).get("description", ""), folder_id),
-        )
-        return {"updated": updated >= 0}
-    execute("DELETE FROM api_templates WHERE folder_id = %s", (folder_id,))
-    return {"deleted": execute("DELETE FROM api_folders WHERE id = %s", (folder_id,)) > 0}
+        return template_service.update_folder(folder_id, payload or {})
+    return template_service.delete_folder(folder_id)
 
 
 @api_view
 def api_templates(request, payload=None):
     if request.method == "GET":
-        folder_id = get_int((payload or {}).get("folder_id"))
-        project_id = get_int((payload or {}).get("project_id"))
-        if folder_id:
-            return fetch_all("SELECT * FROM api_templates WHERE folder_id = %s ORDER BY sort_order, created_at DESC", (folder_id,))
-        if project_id:
-            return fetch_all("SELECT * FROM api_templates WHERE project_id = %s ORDER BY sort_order, created_at DESC", (project_id,))
-        raise ValueError("project_id 或 folder_id 至少传一个")
-    item = payload or {}
-    template_id = execute(
-        """
-        INSERT INTO api_templates (project_id, folder_id, name, method, url_path, headers, params, body, description, sort_order, timeout)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            item.get("project_id"),
-            item.get("folder_id"),
-            item.get("name"),
-            item.get("method", "GET"),
-            item.get("url_path", ""),
-            _json_text(item.get("headers")),
-            _json_text(item.get("params")),
-            _json_text(item.get("body")),
-            item.get("description", ""),
-            item.get("sort_order", 0),
-            item.get("timeout", 30),
-        ),
-    )
-    return {"template_id": template_id}, 201
+        return template_service.list_templates(
+            project_id=(payload or {}).get("project_id"),
+            folder_id=(payload or {}).get("folder_id"),
+        )
+    return template_service.create_template(payload or {}), 201
 
 
 @api_view
 def api_template_detail(request, template_id: int, payload=None):
     if request.method == "GET":
-        return fetch_one("SELECT * FROM api_templates WHERE id = %s", (template_id,))
+        return template_service.get_template(template_id)
     if request.method == "PUT":
-        item = payload or {}
-        updated = execute(
-            """
-            UPDATE api_templates
-            SET name = %s, method = %s, url_path = %s, headers = %s, params = %s, body = %s, description = %s, folder_id = %s, sort_order = %s, timeout = %s
-            WHERE id = %s
-            """,
-            (
-                item.get("name"),
-                item.get("method", "GET"),
-                item.get("url_path", ""),
-                _json_text(item.get("headers")),
-                _json_text(item.get("params")),
-                _json_text(item.get("body")),
-                item.get("description", ""),
-                item.get("folder_id"),
-                item.get("sort_order", 0),
-                item.get("timeout", 30),
-                template_id,
-            ),
-        )
-        return {"updated": updated >= 0}
-    return {"deleted": execute("DELETE FROM api_templates WHERE id = %s", (template_id,)) > 0}
+        return template_service.update_template(template_id, payload or {})
+    return template_service.delete_template(template_id)
+
+
+@api_view
+def api_template_workspace(_request, payload=None):
+    return template_service.template_workspace((payload or {}).get("project_id"))
 
 
 @api_view

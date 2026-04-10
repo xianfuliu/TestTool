@@ -5,7 +5,11 @@ const LoginPage = () => import("@/modules/auth/LoginPage.vue");
 const ApiToolPage = () => import("@/modules/api-tool/ApiToolWorkbenchPage.vue");
 const ModulePlaceholderPage = () => import("@/modules/common/ModulePlaceholderPage.vue");
 const DataQueryPage = () => import("@/modules/data-query/DataQueryPage.vue");
-const InterfaceAutoPage = () => import("@/modules/interface-auto/InterfaceAutoPage.vue");
+const ApiCasePage = () => import("@/modules/interface-auto/ApiCasePage.vue");
+const ApiGlobalToolPage = () => import("@/modules/interface-auto/ApiGlobalToolPage.vue");
+const ApiReportPage = () => import("@/modules/interface-auto/ApiReportPage.vue");
+const ApiTemplatePage = () => import("@/modules/interface-auto/ApiTemplatePage.vue");
+const ApiVariablePage = () => import("@/modules/interface-auto/ApiVariablePage.vue");
 const BusinessManagementPage = () => import("@/modules/requirements/BusinessManagementPage.vue");
 const TestDataPage = () => import("@/modules/test-data/TestDataPage.vue");
 const ToolCardsPage = () => import("@/modules/tool-cards/ToolCardsPage.vue");
@@ -61,12 +65,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: "interface-auto/templates",
         name: "interface-auto-templates",
-        component: InterfaceAutoPage,
+        component: ApiTemplatePage,
       },
       {
         path: "interface-auto/cases",
         name: "interface-auto-cases",
-        component: ModulePlaceholderPage,
+        component: ApiCasePage,
         meta: {
           title: "接口自动化用例管理",
           subtitle: "维护接口自动化用例、场景编排与执行配置。",
@@ -79,7 +83,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: "interface-auto/reports",
         name: "interface-auto-reports",
-        component: ModulePlaceholderPage,
+        component: ApiReportPage,
         meta: {
           title: "接口自动化测试报告",
           subtitle: "查看自动化执行结果、趋势统计与报告详情。",
@@ -92,7 +96,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: "interface-auto/tools",
         name: "interface-auto-tools",
-        component: ModulePlaceholderPage,
+        component: ApiGlobalToolPage,
         meta: {
           title: "接口自动化全局工具",
           subtitle: "统一维护自动化流程依赖的通用工具能力。",
@@ -102,7 +106,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: "interface-auto/variables",
         name: "interface-auto-variables",
-        component: ModulePlaceholderPage,
+        component: ApiVariablePage,
         meta: {
           title: "接口自动化变量管理",
           subtitle: "沉淀全局变量、环境变量与跨项目公共配置。",

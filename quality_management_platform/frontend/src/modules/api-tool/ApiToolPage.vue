@@ -852,7 +852,7 @@ onMounted(() => {
 .left-panel {
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: var(--qm-density-panel-padding);
   background: #f6f9ff;
 }
 
@@ -876,8 +876,8 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 18px 20px;
-  padding: 6px 4px;
+  gap: var(--qm-density-flow-row-gap) var(--qm-density-column-gap);
+  padding: var(--qm-density-control-gap) 4px;
 }
 
 .left-scroll {
@@ -891,7 +891,8 @@ onMounted(() => {
 .layout-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--qm-density-control-gap);
+  min-height: 30px;
 }
 
 .layout-control-item {
@@ -905,6 +906,7 @@ onMounted(() => {
 .layout-label {
   color: #606266;
   font-size: 12px;
+  line-height: 1.35;
   white-space: nowrap;
 }
 

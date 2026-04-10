@@ -19,6 +19,8 @@ from test_platform.schema import SCHEMA_SQL
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+_SCHEMA_READY = False
+_PRODUCTS_BOOTSTRAPPED = False
 LEGACY_PRODUCTS_INDEX_CANDIDATES = [
     REPO_ROOT
     / "quality_management_platform"
@@ -121,12 +123,16 @@ def _find_legacy_products_index() -> Path | None:
 
 
 def _ensure_schema_ready() -> None:
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
     ensure_database()
     with connect() as connection:
         with connection.cursor() as cursor:
             for sql in SCHEMA_SQL:
                 cursor.execute(sql)
         connection.commit()
+    _SCHEMA_READY = True
 
 
 def _resolve_legacy_relative_path(index_path: Path, relative_path: str) -> Path:
@@ -426,13 +432,20 @@ def _replace_all_products(products: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def bootstrap_from_legacy_json(force: bool = False) -> dict[str, Any]:
+    global _PRODUCTS_BOOTSTRAPPED
     _ensure_schema_ready()
+    if _PRODUCTS_BOOTSTRAPPED and not force:
+        return {"imported": False, "product_count": None}
+
     current = fetch_one("SELECT COUNT(*) AS count FROM api_tool_products")
     if current and current["count"] > 0 and not force:
+        _PRODUCTS_BOOTSTRAPPED = True
         return {"imported": False, "product_count": current["count"]}
 
     _, products = _load_legacy_bundle()
-    return _replace_all_products(products)
+    result = _replace_all_products(products)
+    _PRODUCTS_BOOTSTRAPPED = True
+    return result
 
 
 def _product_meta(row: dict[str, Any]) -> dict[str, Any]:
@@ -483,102 +496,114 @@ def _get_product_row(product_id: int) -> dict[str, Any]:
 
 
 def _build_product_config(product_id: int, product_row: dict[str, Any]) -> dict[str, Any]:
-    schedule_rows = fetch_all(
-        """
-        SELECT id, legacy_task_id, job_group, name, sort_order
-        FROM api_tool_schedule_tasks
-        WHERE product_id = %s
-        ORDER BY sort_order ASC, id ASC
-        """,
-        (product_id,),
-    )
-    layout_rows = fetch_all(
-        """
-        SELECT *
-        FROM api_tool_layout_items
-        WHERE product_id = %s
-        ORDER BY priority ASC, sort_order ASC, id ASC
-        """,
-        (product_id,),
-    )
-    option_rows = fetch_all(
-        """
-        SELECT o.layout_item_id, o.option_text, o.option_value, o.sort_order
-        FROM api_tool_layout_item_options o
-        INNER JOIN api_tool_layout_items i ON i.id = o.layout_item_id
-        WHERE i.product_id = %s
-        ORDER BY o.sort_order ASC, o.id ASC
-        """,
-        (product_id,),
-    )
-    mapping_rows = fetch_all(
-        """
-        SELECT m.layout_item_id, m.mapping_key, m.mapping_value, m.sort_order
-        FROM api_tool_layout_item_mappings m
-        INNER JOIN api_tool_layout_items i ON i.id = m.layout_item_id
-        WHERE i.product_id = %s
-        ORDER BY m.sort_order ASC, m.id ASC
-        """,
-        (product_id,),
-    )
-    interface_rows = fetch_all(
-        """
-        SELECT *
-        FROM api_tool_interfaces
-        WHERE product_id = %s
-        ORDER BY sort_order ASC, id ASC
-        """,
-        (product_id,),
-    )
-    case_rows = fetch_all(
-        """
-        SELECT c.interface_id, c.case_value, c.body_template_text, c.sort_order
-        FROM api_tool_interface_condition_cases c
-        INNER JOIN api_tool_interfaces i ON i.id = c.interface_id
-        WHERE i.product_id = %s
-        ORDER BY c.sort_order ASC, c.id ASC
-        """,
-        (product_id,),
-    )
-    response_mapping_rows = fetch_all(
-        """
-        SELECT r.interface_id, r.field_key, r.response_path, r.sort_order
-        FROM api_tool_interface_response_mappings r
-        INNER JOIN api_tool_interfaces i ON i.id = r.interface_id
-        WHERE i.product_id = %s
-        ORDER BY r.sort_order ASC, r.id ASC
-        """,
-        (product_id,),
-    )
-    field_type_rows = fetch_all(
-        """
-        SELECT f.interface_id, f.field_key, f.field_type, f.sort_order
-        FROM api_tool_interface_field_types f
-        INNER JOIN api_tool_interfaces i ON i.id = f.interface_id
-        WHERE i.product_id = %s
-        ORDER BY f.sort_order ASC, f.id ASC
-        """,
-        (product_id,),
-    )
-    sql_rows = fetch_all(
-        """
-        SELECT *
-        FROM api_tool_sql_configs
-        WHERE product_id = %s
-        ORDER BY sort_order ASC, id ASC
-        """,
-        (product_id,),
-    )
-    sql_output_rows = fetch_all(
-        """
-        SELECT o.sql_config_id, o.field_name, o.description, o.sort_order
-        FROM api_tool_sql_output_fields o
-        INNER JOIN api_tool_sql_configs s ON s.id = o.sql_config_id
-        WHERE s.product_id = %s
-        ORDER BY o.sort_order ASC, o.id ASC
-        """,
-        (product_id,),
-    )
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, legacy_task_id, job_group, name, sort_order
+                FROM api_tool_schedule_tasks
+                WHERE product_id = %s
+                ORDER BY sort_order ASC, id ASC
+                """,
+                (product_id,),
+            )
+            schedule_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT *
+                FROM api_tool_layout_items
+                WHERE product_id = %s
+                ORDER BY priority ASC, sort_order ASC, id ASC
+                """,
+                (product_id,),
+            )
+            layout_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT o.layout_item_id, o.option_text, o.option_value, o.sort_order
+                FROM api_tool_layout_item_options o
+                INNER JOIN api_tool_layout_items i ON i.id = o.layout_item_id
+                WHERE i.product_id = %s
+                ORDER BY o.sort_order ASC, o.id ASC
+                """,
+                (product_id,),
+            )
+            option_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT m.layout_item_id, m.mapping_key, m.mapping_value, m.sort_order
+                FROM api_tool_layout_item_mappings m
+                INNER JOIN api_tool_layout_items i ON i.id = m.layout_item_id
+                WHERE i.product_id = %s
+                ORDER BY m.sort_order ASC, m.id ASC
+                """,
+                (product_id,),
+            )
+            mapping_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT *
+                FROM api_tool_interfaces
+                WHERE product_id = %s
+                ORDER BY sort_order ASC, id ASC
+                """,
+                (product_id,),
+            )
+            interface_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT c.interface_id, c.case_value, c.body_template_text, c.sort_order
+                FROM api_tool_interface_condition_cases c
+                INNER JOIN api_tool_interfaces i ON i.id = c.interface_id
+                WHERE i.product_id = %s
+                ORDER BY c.sort_order ASC, c.id ASC
+                """,
+                (product_id,),
+            )
+            case_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT r.interface_id, r.field_key, r.response_path, r.sort_order
+                FROM api_tool_interface_response_mappings r
+                INNER JOIN api_tool_interfaces i ON i.id = r.interface_id
+                WHERE i.product_id = %s
+                ORDER BY r.sort_order ASC, r.id ASC
+                """,
+                (product_id,),
+            )
+            response_mapping_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT f.interface_id, f.field_key, f.field_type, f.sort_order
+                FROM api_tool_interface_field_types f
+                INNER JOIN api_tool_interfaces i ON i.id = f.interface_id
+                WHERE i.product_id = %s
+                ORDER BY f.sort_order ASC, f.id ASC
+                """,
+                (product_id,),
+            )
+            field_type_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT *
+                FROM api_tool_sql_configs
+                WHERE product_id = %s
+                ORDER BY sort_order ASC, id ASC
+                """,
+                (product_id,),
+            )
+            sql_rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT o.sql_config_id, o.field_name, o.description, o.sort_order
+                FROM api_tool_sql_output_fields o
+                INNER JOIN api_tool_sql_configs s ON s.id = o.sql_config_id
+                WHERE s.product_id = %s
+                ORDER BY o.sort_order ASC, o.id ASC
+                """,
+                (product_id,),
+            )
+            sql_output_rows = cursor.fetchall()
 
     options_by_layout: dict[int, list[dict[str, Any]]] = {}
     for row in option_rows:

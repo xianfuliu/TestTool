@@ -13,6 +13,8 @@ from test_platform.schema import SCHEMA_SQL
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+_SCHEMA_READY = False
+_BOOTSTRAP_READY = False
 LEGACY_TOOL_CARD_CONFIG_CANDIDATES = [
     REPO_ROOT / "config" / "tool_cards.json",
 ]
@@ -69,12 +71,16 @@ def _normalize_association_values(value: Any) -> list[str]:
 
 
 def _ensure_schema_ready() -> None:
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
     ensure_database()
     with connect() as connection:
         with connection.cursor() as cursor:
             for sql in SCHEMA_SQL:
                 cursor.execute(sql)
         connection.commit()
+    _SCHEMA_READY = True
 
 
 def _legacy_tool_cards_path() -> Path | None:
@@ -339,24 +345,134 @@ def _build_card_detail(card_row: dict[str, Any]) -> dict[str, Any]:
     card_id = int(card_row["id"])
     sql_config, http_config, python_config = _load_type_configs(card_id)
     parameters = _load_card_parameters(card_id)
+    return _build_card_detail_from_parts(
+        card_row,
+        sql_config,
+        http_config,
+        python_config,
+        parameters,
+    )
+
+
+def _build_card_detail_from_parts(
+    card_row: dict[str, Any],
+    sql_config: dict[str, Any],
+    http_config: dict[str, Any],
+    python_config: dict[str, Any],
+    parameters: list[dict[str, Any]],
+) -> dict[str, Any]:
+    card_id = int(card_row["id"])
+    card_type = card_row.get("card_type") or "sql"
     return {
         "id": card_id,
         "folder_id": int(card_row["folder_id"]),
         "name": card_row["name"],
         "description": card_row.get("description") or "",
-        "card_type": card_row.get("card_type") or "sql",
-        "type": card_row.get("card_type") or "sql",
+        "card_type": card_type,
+        "type": card_type,
         "sort_order": int(card_row.get("sort_order") or 0),
         "enabled": bool(card_row.get("enabled", True)),
         "sql_config": sql_config,
         "http_config": http_config,
         "python_config": python_config,
-        "config": _card_configs_to_legacy(card_row.get("card_type") or "sql", sql_config, http_config, python_config),
+        "config": _card_configs_to_legacy(card_type, sql_config, http_config, python_config),
         "parameters": parameters,
         "mappings": _parameters_to_legacy_mappings(parameters),
         "created_at": card_row.get("created_at"),
         "updated_at": card_row.get("updated_at"),
     }
+
+
+def _build_card_details(card_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not card_rows:
+        return []
+
+    card_ids = [int(row["id"]) for row in card_rows]
+    placeholders = ", ".join(["%s"] * len(card_ids))
+
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT card_id, host, port, username, password, database_name, query_text
+                FROM tool_card_sql_configs
+                WHERE card_id IN ({placeholders})
+                """,
+                card_ids,
+            )
+            sql_configs = {int(row["card_id"]): row for row in cursor.fetchall()}
+
+            cursor.execute(
+                f"""
+                SELECT card_id, url, method, headers_text, body_text
+                FROM tool_card_http_configs
+                WHERE card_id IN ({placeholders})
+                """,
+                card_ids,
+            )
+            http_configs = {int(row["card_id"]): row for row in cursor.fetchall()}
+
+            cursor.execute(
+                f"""
+                SELECT card_id, module_name, class_name, method_name, args_text
+                FROM tool_card_python_configs
+                WHERE card_id IN ({placeholders})
+                """,
+                card_ids,
+            )
+            python_configs = {int(row["card_id"]): row for row in cursor.fetchall()}
+
+            cursor.execute(
+                f"""
+                SELECT id, card_id, field_key, display_name, field_type, default_value, required,
+                       association_enabled, association_field, association_value, sort_order
+                FROM tool_card_parameters
+                WHERE card_id IN ({placeholders})
+                ORDER BY card_id ASC, sort_order ASC, id ASC
+                """,
+                card_ids,
+            )
+            parameter_rows = cursor.fetchall()
+
+            parameter_ids = [int(row["id"]) for row in parameter_rows]
+            option_rows: list[dict[str, Any]] = []
+            if parameter_ids:
+                parameter_placeholders = ", ".join(["%s"] * len(parameter_ids))
+                cursor.execute(
+                    f"""
+                    SELECT id, parameter_id, option_value, option_label, sort_order
+                    FROM tool_card_parameter_options
+                    WHERE parameter_id IN ({parameter_placeholders})
+                    ORDER BY parameter_id ASC, sort_order ASC, id ASC
+                    """,
+                    parameter_ids,
+                )
+                option_rows = cursor.fetchall()
+
+    options_map: dict[int, list[dict[str, Any]]] = {}
+    for option_row in option_rows:
+        options_map.setdefault(int(option_row["parameter_id"]), []).append(option_row)
+
+    parameters_map: dict[int, list[dict[str, Any]]] = {}
+    for parameter_row in parameter_rows:
+        card_id = int(parameter_row["card_id"])
+        parameters_map.setdefault(card_id, []).append(
+            _parameter_row_to_payload(
+                parameter_row,
+                options_map.get(int(parameter_row["id"]), []),
+            )
+        )
+
+    return [
+        _build_card_detail_from_parts(
+            row,
+            sql_configs.get(int(row["id"]), {}),
+            http_configs.get(int(row["id"]), {}),
+            python_configs.get(int(row["id"]), {}),
+            parameters_map.get(int(row["id"]), []),
+        )
+        for row in card_rows
+    ]
 
 
 def _folder_has_cards_recursive(folder_id: int) -> tuple[bool, dict[str, Any] | None, int]:
@@ -590,10 +706,16 @@ def _import_legacy_card_cache(force: bool = False) -> bool:
 
 
 def _ensure_bootstrap(force: bool = False) -> dict[str, Any]:
+    global _BOOTSTRAP_READY
     _ensure_schema_ready()
-    imported_file = _import_legacy_tool_card_file()
-    _create_default_folder_if_needed()
-    imported_cache = _import_legacy_card_cache(force=force)
+    if force or not _BOOTSTRAP_READY:
+        imported_file = _import_legacy_tool_card_file()
+        _create_default_folder_if_needed()
+        imported_cache = _import_legacy_card_cache(force=force)
+        _BOOTSTRAP_READY = True
+    else:
+        imported_file = False
+        imported_cache = False
     folders = list_folders()
     selected_folder_id = next((folder["id"] for folder in folders if folder.get("is_default")), None)
     if selected_folder_id is None and folders:
@@ -671,7 +793,7 @@ def list_cards_by_folder(folder_id: int) -> list[dict[str, Any]]:
         """,
         (folder_id,),
     )
-    return [_build_card_detail(row) for row in rows]
+    return _build_card_details(rows)
 
 
 def get_card_detail(card_id: int) -> dict[str, Any]:

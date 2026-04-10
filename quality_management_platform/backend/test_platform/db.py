@@ -9,7 +9,7 @@ from pymysql.cursors import DictCursor
 
 
 DATABASE_CONFIG = {
-    "host": os.getenv("QUALITY_DB_HOST", "localhost"),
+    "host": os.getenv("QUALITY_DB_HOST", "127.0.0.1"),
     "port": int(os.getenv("QUALITY_DB_PORT", "3306")),
     "user": os.getenv("QUALITY_DB_USER", "root"),
     "password": os.getenv("QUALITY_DB_PASSWORD", "root"),
@@ -45,7 +45,7 @@ def fetch_all(sql: str, params: Iterable[Any] | None = None) -> list[dict[str, A
     with connect() as connection:
         with connection.cursor() as cursor:
             cursor.execute(sql, params or ())
-            return cursor.fetchall()
+            return list(cursor.fetchall())
 
 
 def fetch_one(sql: str, params: Iterable[Any] | None = None) -> dict[str, Any] | None:
