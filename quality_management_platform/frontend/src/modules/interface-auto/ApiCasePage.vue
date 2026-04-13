@@ -1,7 +1,2639 @@
 <script setup lang="ts">
-import ModulePlaceholderPage from "@/modules/common/ModulePlaceholderPage.vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import {
+  CircleCheck,
+  CircleClose,
+  CopyDocument,
+  Delete,
+  Document,
+  Folder,
+  FolderAdd,
+  Lock,
+  Plus,
+  RefreshRight,
+  Search,
+  Unlock,
+  VideoPlay,
+} from "@element-plus/icons-vue";
+
+import { del, get, post, put } from "@/shared/api/client";
+import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
+import type {
+  ApiFolder,
+  ApiTemplate,
+  CaseFolder,
+  CaseStep,
+  CaseToolMap,
+  CaseToolRecord,
+  CascaderOption,
+  EnvironmentRecord,
+  GlobalVariableRecord,
+  JsonMap,
+  TestCaseRecord,
+  TreeNode,
+} from "./types";
+
+type ToolTabKey = "pre_processing" | "assertions" | "post_processing";
+type ToolDialogKind = "http_request" | "sql_tool" | "parameter_extraction" | "assertion" | "generic";
+
+type ToolDraftRow = {
+  rowKey: string;
+  field: string;
+  operator: string;
+  expected: string;
+  variable: string;
+  path: string;
+};
+
+type CaseNavNode = {
+  id: string;
+  rawId: number | null;
+  label: string;
+  type: "folder" | "case";
+  folderId: number | null;
+  parentFolderId: number | null;
+  caseItem?: TestCaseRecord;
+  children?: CaseNavNode[];
+};
+
+type TemplateWorkspacePayload = {
+  folders: ApiFolder[];
+  templates: ApiTemplate[];
+};
+
+type VariableRow = {
+  rowKey: string;
+  id?: number;
+  project_id: number;
+  name: string;
+  value: string;
+  variable_type: string;
+  description: string;
+};
+
+const TOOL_TAB_LABELS: Record<ToolTabKey, string> = {
+  pre_processing: "前置",
+  assertions: "断言",
+  post_processing: "后置",
+};
+
+const TOOL_TABS: ToolTabKey[] = ["pre_processing", "assertions", "post_processing"];
+
+const TOOL_OPTIONS: Record<ToolTabKey, Array<{ type: string; label: string }>> = {
+  pre_processing: [
+    { type: "global_tool", label: "全局工具" },
+    { type: "parameter_extract", label: "参数提取" },
+    { type: "data_prepare", label: "数据准备" },
+    { type: "sql_tool", label: "SQL工具" },
+    { type: "python_script", label: "Python脚本" },
+    { type: "http_request", label: "HTTP请求" },
+  ],
+  assertions: [
+    { type: "json_assert", label: "JSON断言" },
+    { type: "text_assert", label: "文本断言" },
+    { type: "status_assert", label: "状态码断言" },
+  ],
+  post_processing: [
+    { type: "global_tool", label: "全局工具" },
+    { type: "data_prepare", label: "数据准备" },
+    { type: "sql_tool", label: "SQL工具" },
+    { type: "python_script", label: "Python脚本" },
+    { type: "http_request", label: "HTTP请求" },
+  ],
+};
+
+const ASSERTION_OPERATOR_OPTIONS = [
+  { value: "equal", label: "=" },
+  { value: "not_equal", label: "!=" },
+  { value: "contains", label: "~" },
+  { value: "not_contains", label: "!~" },
+  { value: "greater", label: ">" },
+  { value: "less", label: "<" },
+  { value: "greater_equal", label: ">=" },
+  { value: "less_equal", label: "<=" },
+];
+
+const context = useBusinessProjectContext();
+
+const loading = ref(false);
+const saving = ref(false);
+const running = ref(false);
+const caseKeyword = ref("");
+const templateKeyword = ref("");
+const projectPath = ref<number[]>([]);
+const folders = ref<CaseFolder[]>([]);
+const cases = ref<TestCaseRecord[]>([]);
+const apiFolders = ref<ApiFolder[]>([]);
+const templates = ref<ApiTemplate[]>([]);
+const environments = ref<EnvironmentRecord[]>([]);
+const variableRows = ref<VariableRow[]>([]);
+const openedTabs = ref<TestCaseRecord[]>([]);
+const modifiedTabs = reactive<Record<string, boolean>>({});
+const stepTabMap = reactive<Record<string, ToolTabKey>>({});
+const caseContextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  node: null as CaseNavNode | null,
+  blank: false,
+});
+const tabContextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  tabKey: "",
+});
+
+const activeTabKey = ref("");
+const activeStepKey = ref("");
+const selectedCaseNodeId = ref("");
+const selectedTemplateNodeId = ref("");
+const variableDialogVisible = ref(false);
+const logDialogVisible = ref(false);
+const logLines = ref<string[]>([]);
+const toolDialogVisible = ref(false);
+const toolDialogSaving = ref(false);
+const toolDialogKind = ref<ToolDialogKind>("generic");
+const toolDialogTab = ref<ToolTabKey>("pre_processing");
+const toolDialogStepKey = ref("");
+const toolDialogToolId = ref("");
+const toolDialogTitle = ref("");
+const toolRows = ref<ToolDraftRow[]>([]);
+const toolForm = reactive({
+  name: "",
+  summary: "",
+  method: "GET",
+  url: "",
+  timeout: 30,
+  headersText: "{\n  \n}",
+  bodyText: "{\n  \n}",
+  database: "",
+  sqlText: "",
+  outputFieldsText: "",
+});
+const caseTreeRef = ref<any>(null);
+const templateTreeRef = ref<any>(null);
+const draggedTemplateId = ref<number | null>(null);
+const draggedStepKey = ref("");
+const dragOverStepKey = ref("");
+
+const form = reactive<TestCaseRecord>(createDraftCase(0, null));
+let resetting = false;
+
+const cascaderProps = {
+  expandTrigger: "hover" as const,
+  emitPath: true,
+  checkStrictly: false,
+};
+
+const currentProjectId = computed(() => context.selectedProject.value?.id ?? null);
+const currentProjectName = computed(() => context.selectedProject.value?.name ?? "");
+
+const projectOptions = computed<CascaderOption[]>(() =>
+  context.groups.value.map((group) => ({
+    value: group.id,
+    label: group.name,
+    disabled: !context.projects.value.some((item) => item.business_group_id === group.id),
+    children: context.projects.value
+      .filter((item) => item.business_group_id === group.id)
+      .map((item) => ({ value: item.id, label: item.name })),
+  })),
+);
+
+const currentFolder = computed(() => {
+  const selected = findCaseNodeById(caseTreeData.value, selectedCaseNodeId.value);
+  if (!selected || selected.type !== "folder" || selected.folderId === null) {
+    return null;
+  }
+  return folders.value.find((item) => item.id === selected.folderId) ?? null;
+});
+
+const caseTreeData = computed<CaseNavNode[]>(() => {
+  const keyword = caseKeyword.value.trim().toLowerCase();
+  const visibleCases = keyword
+    ? cases.value.filter((item) => {
+        const content = `${item.name} ${item.description ?? ""}`.toLowerCase();
+        return content.includes(keyword);
+      })
+    : cases.value;
+  const childrenMap = new Map<number | null, CaseFolder[]>();
+  folders.value.forEach((folder) => {
+    const children = childrenMap.get(folder.parent_id ?? null) ?? [];
+    children.push(folder);
+    childrenMap.set(folder.parent_id ?? null, children);
+  });
+  const buildFolder = (folder: CaseFolder): CaseNavNode => ({
+    id: `folder-${folder.id}`,
+    rawId: folder.id,
+    label: folder.name,
+    type: "folder",
+    folderId: folder.id,
+    parentFolderId: folder.parent_id ?? null,
+    children: [
+      ...(childrenMap.get(folder.id) ?? []).map(buildFolder),
+      ...visibleCases
+        .filter((item) => item.folder_id === folder.id)
+        .map((item) => ({
+          id: `case-${item.id}`,
+          rawId: item.id ?? null,
+          label: item.name,
+          type: "case" as const,
+          folderId: item.folder_id ?? null,
+          parentFolderId: item.folder_id ?? null,
+          caseItem: item,
+        })),
+    ],
+  });
+  return [
+    ...(childrenMap.get(null) ?? []).map(buildFolder),
+    ...visibleCases
+      .filter((item) => item.folder_id === null)
+      .map((item) => ({
+        id: `case-${item.id}`,
+        rawId: item.id ?? null,
+        label: item.name,
+        type: "case" as const,
+        folderId: null,
+        parentFolderId: null,
+        caseItem: item,
+      })),
+  ];
+});
+
+const templateTreeData = computed<TreeNode[]>(() => {
+  const keyword = templateKeyword.value.trim().toLowerCase();
+  const visibleTemplates = keyword
+    ? templates.value.filter((item) => {
+        const content = `${item.name} ${item.url_path} ${item.description ?? ""}`.toLowerCase();
+        return content.includes(keyword);
+      })
+    : templates.value;
+  const childrenMap = new Map<number | null, ApiFolder[]>();
+  apiFolders.value.forEach((folder) => {
+    const children = childrenMap.get(folder.parent_id ?? null) ?? [];
+    children.push(folder);
+    childrenMap.set(folder.parent_id ?? null, children);
+  });
+  const buildFolder = (folder: ApiFolder): TreeNode => ({
+    id: `template-folder-${folder.id}`,
+    rawId: folder.id,
+    label: folder.name,
+    type: "folder",
+    folderId: folder.id,
+    parentFolderId: folder.parent_id ?? null,
+    children: [
+      ...(childrenMap.get(folder.id) ?? []).map(buildFolder),
+      ...visibleTemplates
+        .filter((item) => item.folder_id === folder.id)
+        .map((item) => ({
+          id: `template-${item.id}`,
+          rawId: item.id ?? null,
+          label: item.name,
+          type: "template" as const,
+          folderId: item.folder_id ?? null,
+          parentFolderId: item.folder_id ?? null,
+          template: item,
+          method: item.method,
+        })),
+    ],
+  });
+  return [
+    ...(childrenMap.get(null) ?? []).map(buildFolder),
+    ...visibleTemplates
+      .filter((item) => item.folder_id === null)
+      .map((item) => ({
+        id: `template-${item.id}`,
+        rawId: item.id ?? null,
+        label: item.name,
+        type: "template" as const,
+        folderId: null,
+        parentFolderId: null,
+        template: item,
+        method: item.method,
+      })),
+  ];
+});
+
+function createKey(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function createDraftCase(projectId: number, folderId: number | null): TestCaseRecord {
+  return {
+    tabKey: createKey("draft"),
+    project_id: projectId,
+    folder_id: folderId,
+    name: "",
+    description: "",
+    environment_id: null,
+    global_vars: {},
+    enable_encryption: false,
+    encrypt_url: "",
+    decrypt_url: "",
+    sort_order: getNextCaseSortOrder(folderId),
+    steps: [],
+  };
+}
+
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function parseMap(value: unknown): JsonMap {
+  if (!value) {
+    return {};
+  }
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value) as JsonMap;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value === "object") {
+    return value as JsonMap;
+  }
+  return {};
+}
+
+function parseBody(value: unknown) {
+  if (!value) {
+    return {};
+  }
+  if (typeof value !== "string") {
+    return value;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeTemplate(item: ApiTemplate): ApiTemplate {
+  return {
+    ...item,
+    headers: parseMap(item.headers),
+    params: parseMap(item.params),
+    body: parseBody(item.body),
+    description: item.description ?? "",
+    timeout: item.timeout ?? 60,
+    retry_enabled: Boolean(item.retry_enabled),
+    retry_count: item.retry_count ?? 0,
+    sort_order: item.sort_order ?? 0,
+  };
+}
+
+function normalizeToolMap(value: unknown): CaseToolMap {
+  if (!value) {
+    return {};
+  }
+  let parsed: Record<string, unknown> = {};
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      parsed = {};
+    }
+  } else if (typeof value === "object") {
+    parsed = value as Record<string, unknown>;
+  }
+  const result: CaseToolMap = {};
+  Object.entries(parsed).forEach(([toolId, rawValue]) => {
+    if (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+      const rawTool = rawValue as Record<string, unknown>;
+      result[toolId] = {
+        id: toolId,
+        name: String(rawTool.name ?? rawTool.tool_name ?? rawTool.label ?? toolId),
+        tool_type: String(rawTool.tool_type ?? rawTool.type ?? "tool"),
+        summary: String(rawTool.summary ?? rawTool.description ?? ""),
+        enabled: rawTool.enabled !== false,
+        config:
+          rawTool.config && typeof rawTool.config === "object" && !Array.isArray(rawTool.config)
+            ? (rawTool.config as Record<string, unknown>)
+            : {},
+        ...rawTool,
+      };
+      return;
+    }
+    result[toolId] = {
+      id: toolId,
+      name: toolId,
+      tool_type: "tool",
+      summary: String(rawValue ?? ""),
+      enabled: true,
+      config: {},
+    };
+  });
+  return result;
+}
+
+function resolveTemplate(templateId: number | null | undefined) {
+  return templates.value.find((item) => item.id === templateId) ?? null;
+}
+
+function normalizeStep(step: Partial<CaseStep>): CaseStep {
+  const template = resolveTemplate(step.api_template_id ?? null);
+  return {
+    id: step.id,
+    case_id: step.case_id,
+    api_template_id: step.api_template_id ?? null,
+    step_order: step.step_order ?? 1,
+    name: step.name ?? step.api_name ?? template?.name ?? "未命名步骤",
+    enabled: step.enabled ?? true,
+    pre_processing: normalizeToolMap(step.pre_processing),
+    assertions: normalizeToolMap(step.assertions),
+    post_processing: normalizeToolMap(step.post_processing),
+    variables: parseMap(step.variables),
+    enable_encryption: Boolean(step.enable_encryption),
+    api_name: step.api_name ?? template?.name ?? step.name ?? "未命名接口",
+    api_method: step.api_method ?? template?.method ?? "GET",
+    api_url_path: step.api_url_path ?? template?.url_path ?? "",
+    api_folder_id: step.api_folder_id ?? template?.folder_id ?? null,
+    api_project_id: step.api_project_id ?? template?.project_id ?? currentProjectId.value ?? null,
+    api_description: step.api_description ?? template?.description ?? "",
+    api_template: template,
+    stepKey: step.stepKey ?? createKey("step"),
+  };
+}
+
+function normalizeCase(item?: Partial<TestCaseRecord>): TestCaseRecord {
+  const draft = createDraftCase(item?.project_id ?? currentProjectId.value ?? 0, item?.folder_id ?? null);
+  return {
+    ...draft,
+    ...item,
+    tabKey: item?.tabKey ?? (item?.id ? `case-${item.id}` : draft.tabKey),
+    project_id: item?.project_id ?? draft.project_id,
+    folder_id: item?.folder_id ?? null,
+    name: item?.name ?? "",
+    description: item?.description ?? "",
+    environment_id: item?.environment_id ?? null,
+    global_vars: parseMap(item?.global_vars),
+    enable_encryption: Boolean(item?.enable_encryption),
+    encrypt_url: item?.encrypt_url ?? "",
+    decrypt_url: item?.decrypt_url ?? "",
+    sort_order: item?.sort_order ?? draft.sort_order,
+    steps: (item?.steps ?? []).map(normalizeStep),
+  };
+}
+
+function getNextCaseSortOrder(folderId: number | null) {
+  const siblingSortOrders = cases.value
+    .filter((item) => item.folder_id === folderId)
+    .map((item) => item.sort_order ?? 0);
+  return (siblingSortOrders.length ? Math.max(...siblingSortOrders) : 0) + 1;
+}
+
+function getTabKey(item: TestCaseRecord) {
+  return item.tabKey ?? (item.id ? `case-${item.id}` : createKey("draft"));
+}
+
+function getTabTitle(item: TestCaseRecord) {
+  const title = item.id ? item.name || "未命名用例" : item.name || "新建用例";
+  return modifiedTabs[getTabKey(item)] ? `*${title}` : title;
+}
+
+function getStepKey(step: CaseStep) {
+  if (!step.stepKey) {
+    step.stepKey = createKey("step");
+  }
+  return step.stepKey;
+}
+
+function getStepTab(step: CaseStep) {
+  const key = getStepKey(step);
+  if (!stepTabMap[key]) {
+    stepTabMap[key] = "pre_processing";
+  }
+  return stepTabMap[key];
+}
+
+function setStepTab(step: CaseStep, tab: ToolTabKey) {
+  stepTabMap[getStepKey(step)] = tab;
+}
+
+function ensureToolMap(step: CaseStep, tab: ToolTabKey) {
+  if (typeof step[tab] === "string" || !step[tab]) {
+    step[tab] = normalizeToolMap(step[tab]);
+  }
+  return step[tab] as CaseToolMap;
+}
+
+function getToolEntries(step: CaseStep, tab: ToolTabKey) {
+  return Object.entries(ensureToolMap(step, tab)).map(([toolId, tool]) => ({
+    toolId,
+    tool,
+  }));
+}
+
+function getStepMethod(step: CaseStep) {
+  return step.api_method ?? step.api_template?.method ?? "GET";
+}
+
+function getStepLabel(step: CaseStep) {
+  return step.api_name ?? step.name ?? "未命名接口";
+}
+
+function getStepPlaceholder(tab: ToolTabKey) {
+  return {
+    pre_processing: "暂无前置处理工具",
+    assertions: "暂无断言处理工具",
+    post_processing: "暂无后置处理工具",
+  }[tab];
+}
+
+function getTemplateMethodClass(method: string) {
+  const normalized = method.toUpperCase();
+  if (normalized === "POST") return "post";
+  if (normalized === "DELETE") return "delete";
+  if (normalized === "PUT") return "put";
+  if (normalized === "PATCH") return "patch";
+  return "get";
+}
+
+function findCaseNodeById(nodes: CaseNavNode[], targetId: string): CaseNavNode | null {
+  for (const node of nodes) {
+    if (node.id === targetId) {
+      return node;
+    }
+    if (node.children?.length) {
+      const match = findCaseNodeById(node.children, targetId);
+      if (match) {
+        return match;
+      }
+    }
+  }
+  return null;
+}
+
+function getFolderById(folderId: number | null | undefined) {
+  if (folderId === null || folderId === undefined) {
+    return null;
+  }
+  return folders.value.find((item) => item.id === folderId) ?? null;
+}
+
+function getTopLevelFolderId(folderId: number | null | undefined): number | null {
+  let current = getFolderById(folderId);
+  if (!current) {
+    return null;
+  }
+  while (current.parent_id !== null) {
+    current = getFolderById(current.parent_id);
+    if (!current) {
+      return null;
+    }
+  }
+  return current.id;
+}
+
+function getCaseCreateFolderIdFromNode(node: CaseNavNode | null, blank = false) {
+  if (blank || !node) {
+    return null;
+  }
+  if (node.type === "folder") {
+    const folder = getFolderById(node.folderId);
+    if (!folder || folder.parent_id !== null) {
+      return null;
+    }
+    return folder.id;
+  }
+  return getTopLevelFolderId(node.folderId);
+}
+
+function syncProjectPath() {
+  const groupId = context.selectedGroupId.value;
+  const projectId = context.selectedProjectId.value;
+  projectPath.value = groupId && projectId ? [groupId, projectId] : [];
+}
+
+function resetForm(caseItem?: TestCaseRecord) {
+  resetting = true;
+  Object.assign(form, normalizeCase(caseItem));
+  form.steps.forEach((step) => getStepTab(step));
+  activeStepKey.value = form.steps[0] ? getStepKey(form.steps[0]) : "";
+  nextTick(() => {
+    resetting = false;
+  });
+}
+
+function syncActiveTabSnapshot() {
+  if (!activeTabKey.value) {
+    return;
+  }
+  const index = openedTabs.value.findIndex((item) => getTabKey(item) === activeTabKey.value);
+  if (index === -1) {
+    return;
+  }
+  openedTabs.value[index] = normalizeCase({
+    ...deepClone(form),
+    tabKey: activeTabKey.value,
+  });
+}
+
+function markActiveModified() {
+  if (resetting || !activeTabKey.value) {
+    return;
+  }
+  syncActiveTabSnapshot();
+  modifiedTabs[activeTabKey.value] = true;
+}
+
+async function loadVariableRows() {
+  if (!currentProjectId.value) {
+    variableRows.value = [];
+    return;
+  }
+  const rows = await get<GlobalVariableRecord[]>("/api/interface-auto/variables/", {
+    project_id: currentProjectId.value,
+  });
+  variableRows.value = rows.map((item) => ({
+    rowKey: createKey("variable"),
+    id: item.id,
+    project_id: item.project_id,
+    name: item.name,
+    value: item.value,
+    variable_type: item.variable_type ?? "string",
+    description: item.description ?? "",
+  }));
+}
+
+async function loadWorkspace() {
+  if (!currentProjectId.value) {
+    folders.value = [];
+    cases.value = [];
+    apiFolders.value = [];
+    templates.value = [];
+    environments.value = [];
+    variableRows.value = [];
+    openedTabs.value = [];
+    activeTabKey.value = "";
+    selectedCaseNodeId.value = "";
+    selectedTemplateNodeId.value = "";
+    resetForm(createDraftCase(0, null));
+    return;
+  }
+  loading.value = true;
+  try {
+    const [folderRows, caseRows, templateWorkspace, environmentRows] = await Promise.all([
+      get<CaseFolder[]>("/api/interface-auto/case-folders/", { project_id: currentProjectId.value }),
+      get<Array<Partial<TestCaseRecord>>>("/api/interface-auto/cases/", { project_id: currentProjectId.value }),
+      get<TemplateWorkspacePayload>("/api/interface-auto/api-template-workspace/", {
+        project_id: currentProjectId.value,
+      }),
+      get<EnvironmentRecord[]>("/api/interface-auto/environments/"),
+    ]);
+    folders.value = folderRows;
+    cases.value = caseRows.map((item) => normalizeCase(item));
+    apiFolders.value = templateWorkspace.folders;
+    templates.value = templateWorkspace.templates.map(normalizeTemplate);
+    environments.value = environmentRows.map((item) => ({
+      ...item,
+      headers: parseMap(item.headers),
+      variables: parseMap(item.variables),
+    }));
+    await loadVariableRows();
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function openCase(caseId: number) {
+  const detail = normalizeCase(await get<Partial<TestCaseRecord>>(`/api/interface-auto/cases/${caseId}/`));
+  const tabKey = getTabKey(detail);
+  const index = openedTabs.value.findIndex((item) => item.id === detail.id || getTabKey(item) === tabKey);
+  const currentTab = index === -1 ? null : openedTabs.value[index];
+  const mergedDetail =
+    currentTab && modifiedTabs[getTabKey(currentTab)]
+      ? normalizeCase({
+          ...detail,
+          ...deepClone(currentTab),
+          id: detail.id,
+          tabKey,
+        })
+      : detail;
+  if (index === -1) {
+    openedTabs.value.push({ ...mergedDetail, tabKey });
+  } else {
+    openedTabs.value[index] = { ...mergedDetail, tabKey };
+  }
+  activeTabKey.value = tabKey;
+  selectedCaseNodeId.value = `case-${caseId}`;
+  resetForm({ ...mergedDetail, tabKey });
+  nextTick(() => {
+    caseTreeRef.value?.setCurrentKey?.(selectedCaseNodeId.value);
+  });
+}
+
+function openDraftCase(folderId: number | null) {
+  if (!currentProjectId.value) {
+    ElMessage.warning("请先选择项目");
+    return;
+  }
+  const topLevelFolderId = getTopLevelFolderId(folderId);
+  if (!topLevelFolderId) {
+    ElMessage.warning("请先选择一级目录，然后在该目录下创建测试用例");
+    return;
+  }
+  const draft = createDraftCase(currentProjectId.value, folderId);
+  openedTabs.value.push(draft);
+  activeTabKey.value = getTabKey(draft);
+  resetForm(draft);
+}
+
+function focusTab(tabKey: string) {
+  const next = openedTabs.value.find((item) => getTabKey(item) === tabKey);
+  if (!next) {
+    return;
+  }
+  activeTabKey.value = tabKey;
+  if (next.id && !modifiedTabs[tabKey]) {
+    void openCase(next.id);
+    return;
+  }
+  resetForm(next);
+}
+
+async function closeTabsWithConfirm(tabKeys: string[]) {
+  const targets = tabKeys.filter(Boolean);
+  if (!targets.length) {
+    return;
+  }
+  syncActiveTabSnapshot();
+
+  const removeTabWithoutConfirm = (tabKey: string) => {
+    const remaining = openedTabs.value.filter((item) => getTabKey(item) !== tabKey);
+    delete modifiedTabs[tabKey];
+    openedTabs.value = remaining;
+    tabContextMenu.visible = false;
+    if (!remaining.length) {
+      activeTabKey.value = "";
+      activeStepKey.value = "";
+      resetForm(createDraftCase(currentProjectId.value ?? 0, null));
+      return;
+    }
+    if (activeTabKey.value === tabKey || !remaining.some((item) => getTabKey(item) === activeTabKey.value)) {
+      focusTab(getTabKey(remaining[remaining.length - 1]));
+    }
+  };
+
+  for (const tabKey of targets) {
+    if (modifiedTabs[tabKey]) {
+      try {
+        await ElMessageBox.confirm(`标签页「${getTabTitle(openedTabs.value.find((item) => getTabKey(item) === tabKey) ?? form)}」有未保存的修改，请选择操作。`, "保存确认", {
+          distinguishCancelAndClose: true,
+          confirmButtonText: "保存",
+          cancelButtonText: "忽略",
+          type: "warning",
+        });
+        const target = openedTabs.value.find((item) => getTabKey(item) === tabKey);
+        if (!target) {
+          continue;
+        }
+        activeTabKey.value = tabKey;
+        resetForm(target);
+        const saved = await saveCase({ silent: true });
+        if (!saved) {
+          return;
+        }
+      } catch (action) {
+        if (action !== "cancel") {
+          return;
+        }
+      }
+    }
+    removeTabWithoutConfirm(tabKey);
+  }
+}
+
+function closeCurrentTab() {
+  void closeTabsWithConfirm(tabContextMenu.tabKey ? [tabContextMenu.tabKey] : []);
+}
+
+function closeOtherTabs() {
+  const targets = openedTabs.value
+    .map((item) => getTabKey(item))
+    .filter((key) => key !== tabContextMenu.tabKey);
+  void closeTabsWithConfirm(targets);
+}
+
+function closeAllTabs() {
+  void closeTabsWithConfirm(openedTabs.value.map((item) => getTabKey(item)));
+}
+
+async function createFolder(parentId: number | null) {
+  if (!currentProjectId.value) {
+    ElMessage.warning("请先选择项目");
+    return;
+  }
+  const { value } = await ElMessageBox.prompt("请输入目录名称", "新建用例目录", {
+    inputPlaceholder: "例如：订单列表查询",
+    confirmButtonText: "创建",
+    cancelButtonText: "取消",
+    inputValidator: (input) => Boolean(input.trim()) || "目录名称不能为空",
+  });
+  await post("/api/interface-auto/case-folders/", {
+    project_id: currentProjectId.value,
+    parent_id: parentId,
+    name: value.trim(),
+    sort_order: 0,
+  });
+  ElMessage.success("目录已创建");
+  await loadWorkspace();
+}
+
+async function renameFolder(node: CaseNavNode | null) {
+  if (!node?.folderId) {
+    return;
+  }
+  const { value } = await ElMessageBox.prompt("请输入新的目录名称", "重命名目录", {
+    inputValue: node.label,
+    confirmButtonText: "保存",
+    cancelButtonText: "取消",
+    inputValidator: (input) => Boolean(input.trim()) || "目录名称不能为空",
+  });
+  await put(`/api/interface-auto/case-folders/${node.folderId}/`, {
+    name: value.trim(),
+    description: "",
+  });
+  ElMessage.success("目录已更新");
+  await loadWorkspace();
+}
+
+async function deleteFolder(node: CaseNavNode | null) {
+  if (!node?.folderId) {
+    return;
+  }
+  await ElMessageBox.confirm("删除目录会同时删除目录内的测试用例，确认继续吗？", "删除目录", {
+    confirmButtonText: "删除",
+    cancelButtonText: "取消",
+    type: "warning",
+  });
+  await del(`/api/interface-auto/case-folders/${node.folderId}/`);
+  if (selectedCaseNodeId.value === node.id) {
+    selectedCaseNodeId.value = "";
+  }
+  ElMessage.success("目录已删除");
+  hideContextMenus();
+  await loadWorkspace();
+}
+
+async function duplicateCase(caseItem?: TestCaseRecord) {
+  if (!caseItem?.id) {
+    return;
+  }
+  const detail = normalizeCase(await get<Partial<TestCaseRecord>>(`/api/interface-auto/cases/${caseItem.id}/`));
+  const payload = buildCasePayload({
+    ...detail,
+    id: undefined,
+    tabKey: createKey("draft"),
+    name: createDuplicateCaseName(detail.name, detail.folder_id, detail.id),
+    sort_order: getNextCaseSortOrder(detail.folder_id),
+  });
+  const result = await post<{ case_id: number }>("/api/interface-auto/cases/", payload);
+  ElMessage.success("测试用例已复制");
+  hideContextMenus();
+  await loadWorkspace();
+  await openCase(result.case_id);
+}
+
+async function deleteCase(caseItem?: TestCaseRecord) {
+  if (!caseItem?.id) {
+    return;
+  }
+  await ElMessageBox.confirm(`确认删除测试用例“${caseItem.name}”吗？`, "删除测试用例", {
+    confirmButtonText: "删除",
+    cancelButtonText: "取消",
+    type: "warning",
+  });
+  await del(`/api/interface-auto/cases/${caseItem.id}/`);
+  const relatedTab = openedTabs.value.find((item) => item.id === caseItem.id);
+  if (relatedTab) {
+    await closeTabsWithConfirm([getTabKey(relatedTab)]);
+  }
+  selectedCaseNodeId.value = "";
+  ElMessage.success("测试用例已删除");
+  hideContextMenus();
+  await loadWorkspace();
+}
+
+function createDuplicateCaseName(baseName: string, folderId: number | null, excludeId?: number) {
+  let index = 1;
+  let nextName = `${baseName}-副本`;
+  const exists = (name: string) =>
+    cases.value.some(
+      (item) =>
+        item.id !== excludeId &&
+        item.folder_id === folderId &&
+        item.name.trim().toLowerCase() === name.trim().toLowerCase(),
+    );
+  while (exists(nextName)) {
+    index += 1;
+    nextName = `${baseName}-副本${index}`;
+  }
+  return nextName;
+}
+
+function buildCasePayload(caseItem: TestCaseRecord) {
+  return {
+    project_id: caseItem.project_id,
+    folder_id: caseItem.folder_id,
+    name: caseItem.name.trim(),
+    description: caseItem.description ?? "",
+    environment_id: caseItem.environment_id,
+    global_vars: parseMap(caseItem.global_vars),
+    enable_encryption: Boolean(caseItem.enable_encryption),
+    encrypt_url: caseItem.encrypt_url ?? "",
+    decrypt_url: caseItem.decrypt_url ?? "",
+    sort_order: caseItem.sort_order ?? getNextCaseSortOrder(caseItem.folder_id),
+    steps: caseItem.steps.map((step, index) => ({
+      id: step.id,
+      api_template_id: step.api_template_id,
+      step_order: index + 1,
+      name: step.name ?? step.api_name ?? "未命名步骤",
+      enabled: step.enabled ?? true,
+      pre_processing: ensureToolMap(step, "pre_processing"),
+      assertions: ensureToolMap(step, "assertions"),
+      post_processing: ensureToolMap(step, "post_processing"),
+      variables: parseMap(step.variables),
+      enable_encryption: Boolean(step.enable_encryption),
+    })),
+  };
+}
+
+async function saveCase(options?: { silent?: boolean }) {
+  if (!currentProjectId.value) {
+    ElMessage.warning("请先选择项目");
+    return null;
+  }
+  if (!activeTabKey.value) {
+    ElMessage.warning("请先新建或打开测试用例");
+    return null;
+  }
+  const name = form.name.trim();
+  if (!name) {
+    ElMessage.warning("请输入用例名称");
+    return null;
+  }
+  const duplicate = cases.value.some(
+    (item) =>
+      item.id !== form.id &&
+      item.folder_id === form.folder_id &&
+      item.name.trim().toLowerCase() === name.toLowerCase(),
+  );
+  if (duplicate) {
+    ElMessage.warning("目标同级目录下已存在同名测试用例");
+    return null;
+  }
+
+  saving.value = true;
+  try {
+    form.project_id = currentProjectId.value;
+    form.sort_order = form.sort_order || getNextCaseSortOrder(form.folder_id);
+    const payload = buildCasePayload(normalizeCase(form));
+    const previousTabKey = activeTabKey.value;
+    let caseId = form.id ?? null;
+    if (form.id) {
+      const result = await put<{ updated: boolean; case?: Partial<TestCaseRecord> }>(
+        `/api/interface-auto/cases/${form.id}/`,
+        payload,
+      );
+      caseId = result.case?.id ?? form.id;
+    } else {
+      const result = await post<{ case_id: number }>("/api/interface-auto/cases/", payload);
+      caseId = result.case_id;
+      openedTabs.value = openedTabs.value.filter((item) => getTabKey(item) !== previousTabKey);
+      delete modifiedTabs[previousTabKey];
+    }
+    if (!caseId) {
+      return null;
+    }
+    await loadWorkspace();
+    await openCase(caseId);
+    modifiedTabs[getTabKey(form)] = false;
+    if (!options?.silent) {
+      ElMessage.success("测试用例已保存");
+    }
+    return caseId;
+  } finally {
+    saving.value = false;
+  }
+}
+
+function triggerSaveCase() {
+  void saveCase();
+}
+
+async function runCase() {
+  if (running.value) {
+    return;
+  }
+  let caseId = form.id ?? null;
+  if (!caseId) {
+    caseId = await saveCase({ silent: true });
+  }
+  if (!caseId) {
+    return;
+  }
+  running.value = true;
+  try {
+    const result = await post<{
+      case_name: string;
+      message: string;
+      steps: Array<{ step_order: number; step_name: string; status: string }>;
+    }>(`/api/interface-auto/cases/${caseId}/execute/`, buildCasePayload(normalizeCase(form)));
+    logLines.value = [
+      `用例：${result.case_name}`,
+      result.message,
+      ...result.steps.map((step) => `step${step.step_order} ${step.step_name} - ${step.status}`),
+    ];
+    logDialogVisible.value = true;
+  } finally {
+    running.value = false;
+  }
+}
+
+async function refreshWorkspace() {
+  await loadWorkspace();
+}
+
+function createCaseFromSelection() {
+  const selected = findCaseNodeById(caseTreeData.value, selectedCaseNodeId.value);
+  const folderId = getCaseCreateFolderIdFromNode(selected);
+  openDraftCase(folderId ?? null);
+}
+
+async function createCaseViaContext(node: CaseNavNode | null, blank = false) {
+  const folderId = getCaseCreateFolderIdFromNode(node, blank);
+  hideContextMenus();
+  openDraftCase(folderId ?? null);
+}
+
+function onCaseTreeClick(node: CaseNavNode) {
+  hideContextMenus();
+  selectedCaseNodeId.value = node.id;
+  if (node.type === "case" && node.caseItem?.id) {
+    void openCase(node.caseItem.id);
+  }
+}
+
+function onTemplateTreeClick(node: TreeNode) {
+  selectedTemplateNodeId.value = node.id;
+  templateTreeRef.value?.setCurrentKey?.(node.id);
+}
+
+function showCaseContextMenu(event: MouseEvent, node: CaseNavNode | null, blank = false) {
+  event.preventDefault();
+  caseContextMenu.visible = true;
+  caseContextMenu.x = event.clientX;
+  caseContextMenu.y = event.clientY;
+  caseContextMenu.node = node;
+  caseContextMenu.blank = blank;
+}
+
+function showTabContextMenu(event: MouseEvent, tabKey: string) {
+  event.preventDefault();
+  tabContextMenu.visible = true;
+  tabContextMenu.x = event.clientX;
+  tabContextMenu.y = event.clientY;
+  tabContextMenu.tabKey = tabKey;
+}
+
+function hideContextMenus() {
+  caseContextMenu.visible = false;
+  tabContextMenu.visible = false;
+}
+
+function handleGlobalPointer() {
+  hideContextMenus();
+}
+
+function handleShortcut(event: KeyboardEvent) {
+  if (event.ctrlKey && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    void saveCase();
+  }
+  if (event.ctrlKey && event.key.toLowerCase() === "w" && activeTabKey.value) {
+    event.preventDefault();
+    void closeTabsWithConfirm([activeTabKey.value]);
+  }
+}
+
+function handleProjectPathChange(value: number[]) {
+  const [groupId, projectId] = value;
+  context.setGroup(groupId ?? null);
+  if (projectId !== undefined) {
+    context.setProject(projectId);
+    return;
+  }
+  context.setProject(null);
+}
+
+function allowCaseDrop(
+  draggingNode: { data: CaseNavNode },
+  dropNode: { data: CaseNavNode },
+  dropType: "prev" | "inner" | "next",
+) {
+  const draggedCase = draggingNode.data.caseItem;
+  if (draggingNode.data.type !== "case" || !draggedCase) {
+    return false;
+  }
+  const draggedTopLevelFolderId = getTopLevelFolderId(draggedCase.folder_id);
+  if (!draggedTopLevelFolderId) {
+    return false;
+  }
+  if (dropType === "inner") {
+    if (dropNode.data.type !== "folder" || !dropNode.data.folderId) {
+      return false;
+    }
+    return getTopLevelFolderId(dropNode.data.folderId) === draggedTopLevelFolderId;
+  }
+  if (dropNode.data.type !== "case" || !dropNode.data.caseItem) {
+    return false;
+  }
+  return getTopLevelFolderId(dropNode.data.caseItem.folder_id) === draggedTopLevelFolderId;
+}
+
+function allowCaseDrag(node: { data: CaseNavNode }) {
+  return node.data.type === "case";
+}
+
+async function onCaseTreeDrop(
+  draggingNode: { data: CaseNavNode },
+  dropNode: { data: CaseNavNode },
+  dropType: "before" | "after" | "inner",
+) {
+  const draggedCase = draggingNode.data.caseItem;
+  if (!draggedCase?.id) {
+    await loadWorkspace();
+    return;
+  }
+
+  let targetFolderId: number | null = null;
+  let insertIndex = 0;
+  if (dropType === "inner") {
+    targetFolderId = dropNode.data.folderId ?? null;
+    insertIndex = cases.value.filter((item) => item.folder_id === targetFolderId && item.id !== draggedCase.id).length;
+  } else {
+    const targetCase = dropNode.data.caseItem;
+    targetFolderId = targetCase?.folder_id ?? null;
+    const siblings = cases.value
+      .filter((item) => item.folder_id === targetFolderId && item.id !== draggedCase.id)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const targetIndex = siblings.findIndex((item) => item.id === targetCase?.id);
+    insertIndex = targetIndex === -1 ? siblings.length : targetIndex + (dropType === "after" ? 1 : 0);
+  }
+
+  const draggedTopLevelFolderId = getTopLevelFolderId(draggedCase.folder_id);
+  const targetTopLevelFolderId = getTopLevelFolderId(targetFolderId);
+  if (!targetFolderId || !draggedTopLevelFolderId || draggedTopLevelFolderId !== targetTopLevelFolderId) {
+    ElMessage.warning("测试用例只能拖动到同一级目录树下的一级目录或子级目录中");
+    await loadWorkspace();
+    return;
+  }
+
+  const sameLevelDuplicate = cases.value.some(
+    (item) =>
+      item.id !== draggedCase.id &&
+      item.folder_id === targetFolderId &&
+      item.name.trim().toLowerCase() === draggedCase.name.trim().toLowerCase() &&
+      draggedCase.folder_id !== targetFolderId,
+  );
+  if (sameLevelDuplicate) {
+    ElMessage.warning("目标同级目录下已存在同名测试用例");
+    await loadWorkspace();
+    return;
+  }
+
+  const ordered = cases.value
+    .filter((item) => item.folder_id === targetFolderId && item.id !== draggedCase.id)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  ordered.splice(Math.max(0, insertIndex), 0, { ...draggedCase, folder_id: targetFolderId });
+
+  await Promise.all(
+    ordered.map((item, index) =>
+      put(`/api/interface-auto/cases/${item.id}/`, {
+        project_id: item.project_id,
+        folder_id: item.folder_id,
+        name: item.name,
+        description: item.description ?? "",
+        environment_id: item.environment_id,
+        global_vars: parseMap(item.global_vars),
+        enable_encryption: Boolean(item.enable_encryption),
+        encrypt_url: item.encrypt_url ?? "",
+        decrypt_url: item.decrypt_url ?? "",
+        sort_order: index + 1,
+      }),
+    ),
+  );
+
+  if (form.id === draggedCase.id) {
+    form.folder_id = targetFolderId;
+  }
+  await loadWorkspace();
+  selectedCaseNodeId.value = `case-${draggedCase.id}`;
+}
+
+function onTemplateDragStart(node: TreeNode) {
+  draggedTemplateId.value = node.template?.id ?? null;
+  selectedTemplateNodeId.value = node.id;
+}
+
+function onTemplateDragEnd() {
+  draggedTemplateId.value = null;
+}
+
+function createStepFromTemplate(template: ApiTemplate): CaseStep {
+  return normalizeStep({
+    api_template_id: template.id ?? null,
+    step_order: form.steps.length + 1,
+    name: template.name,
+    enabled: true,
+    pre_processing: {},
+    assertions: {},
+    post_processing: {},
+    variables: {},
+    enable_encryption: false,
+    api_name: template.name,
+    api_method: template.method,
+    api_url_path: template.url_path,
+    api_folder_id: template.folder_id ?? null,
+    api_project_id: template.project_id,
+    api_description: template.description,
+  });
+}
+
+function reindexSteps() {
+  form.steps.forEach((step, index) => {
+    step.step_order = index + 1;
+  });
+}
+
+function selectStep(step: CaseStep) {
+  activeStepKey.value = getStepKey(step);
+}
+
+function addTemplateToActiveCase(template?: ApiTemplate, insertAfterStepKey?: string) {
+  if (!template) {
+    return;
+  }
+  if (!activeTabKey.value) {
+    ElMessage.warning("请先在左侧新建或打开测试用例");
+    return;
+  }
+  const newStep = createStepFromTemplate(template);
+  const insertIndex =
+    insertAfterStepKey === undefined
+      ? form.steps.length
+      : Math.max(
+          0,
+          form.steps.findIndex((item) => getStepKey(item) === insertAfterStepKey) + 1,
+        );
+  form.steps.splice(insertIndex, 0, newStep);
+  reindexSteps();
+  selectStep(newStep);
+  markActiveModified();
+}
+
+function appendDroppedTemplate() {
+  if (!draggedTemplateId.value) {
+    return;
+  }
+  const template = templates.value.find((item) => item.id === draggedTemplateId.value);
+  addTemplateToActiveCase(template);
+  draggedTemplateId.value = null;
+}
+
+function handleStepCardDrop(step: CaseStep) {
+  if (draggedTemplateId.value) {
+    const template = templates.value.find((item) => item.id === draggedTemplateId.value);
+    addTemplateToActiveCase(template, getStepKey(step));
+    draggedTemplateId.value = null;
+    return;
+  }
+  if (!draggedStepKey.value) {
+    return;
+  }
+  const sourceIndex = form.steps.findIndex((item) => getStepKey(item) === draggedStepKey.value);
+  const targetIndex = form.steps.findIndex((item) => getStepKey(item) === getStepKey(step));
+  if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
+    draggedStepKey.value = "";
+    dragOverStepKey.value = "";
+    return;
+  }
+  const [moved] = form.steps.splice(sourceIndex, 1);
+  const nextIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  form.steps.splice(nextIndex, 0, moved);
+  reindexSteps();
+  draggedStepKey.value = "";
+  dragOverStepKey.value = "";
+  markActiveModified();
+}
+
+function onStepDragStart(step: CaseStep) {
+  draggedStepKey.value = getStepKey(step);
+}
+
+function onStepDragOver(step: CaseStep) {
+  dragOverStepKey.value = getStepKey(step);
+}
+
+function onStepDragEnd() {
+  draggedStepKey.value = "";
+  dragOverStepKey.value = "";
+}
+
+function deleteStep(step: CaseStep) {
+  const index = form.steps.findIndex((item) => getStepKey(item) === getStepKey(step));
+  if (index === -1) {
+    return;
+  }
+  form.steps.splice(index, 1);
+  reindexSteps();
+  if (activeStepKey.value === getStepKey(step)) {
+    activeStepKey.value = form.steps[0] ? getStepKey(form.steps[0]) : "";
+  }
+  markActiveModified();
+}
+
+function duplicateStep(step: CaseStep) {
+  const index = form.steps.findIndex((item) => getStepKey(item) === getStepKey(step));
+  if (index === -1) {
+    return;
+  }
+  const clone = normalizeStep({
+    ...deepClone(step),
+    id: undefined,
+    case_id: undefined,
+    stepKey: createKey("step"),
+  });
+  form.steps.splice(index + 1, 0, clone);
+  reindexSteps();
+  selectStep(clone);
+  markActiveModified();
+}
+
+function toggleStepEnabled(step: CaseStep) {
+  step.enabled = !step.enabled;
+  markActiveModified();
+}
+
+function toggleStepEncryption(step: CaseStep) {
+  step.enable_encryption = !step.enable_encryption;
+  markActiveModified();
+}
+
+function focusTemplateFromStep(step: CaseStep) {
+  if (!step.api_template_id) {
+    return;
+  }
+  selectedTemplateNodeId.value = `template-${step.api_template_id}`;
+  nextTick(() => {
+    templateTreeRef.value?.setCurrentKey?.(selectedTemplateNodeId.value);
+  });
+}
+
+function addToolToStep(step: CaseStep, tab: ToolTabKey, toolType: string) {
+  const toolOption = TOOL_OPTIONS[tab].find((item) => item.type === toolType);
+  const map = ensureToolMap(step, tab);
+  const toolId = createKey(toolType);
+  map[toolId] = {
+    id: toolId,
+    name: toolOption?.label ?? "新工具",
+    tool_type: toolType,
+    summary: "",
+    enabled: true,
+    config: {},
+  };
+  markActiveModified();
+}
+
+function handleToolCommand(step: CaseStep, command: string | number | object) {
+  addToolToStep(step, getStepTab(step), String(command));
+}
+
+function copyTool(step: CaseStep, tab: ToolTabKey, toolId: string) {
+  const map = ensureToolMap(step, tab);
+  const source = map[toolId];
+  if (!source) {
+    return;
+  }
+  const cloneId = createKey(source.tool_type ?? "tool");
+  map[cloneId] = {
+    ...deepClone(source),
+    id: cloneId,
+    name: `${source.name ?? "工具"} 副本`,
+  };
+  markActiveModified();
+}
+
+function removeTool(step: CaseStep, tab: ToolTabKey, toolId: string) {
+  const map = ensureToolMap(step, tab);
+  delete map[toolId];
+  markActiveModified();
+}
+
+async function openVariableDialog() {
+  if (!currentProjectId.value) {
+    ElMessage.warning("请先选择项目");
+    return;
+  }
+  await loadVariableRows();
+  variableDialogVisible.value = true;
+}
+
+function addVariableRow() {
+  variableRows.value.unshift({
+    rowKey: createKey("variable"),
+    project_id: currentProjectId.value ?? 0,
+    name: "",
+    value: "",
+    variable_type: "string",
+    description: "",
+  });
+}
+
+async function saveVariableRow(row: VariableRow) {
+  if (!row.name.trim()) {
+    ElMessage.warning("变量名称不能为空");
+    return;
+  }
+  if (row.id) {
+    await put(`/api/interface-auto/variables/${row.id}/`, {
+      project_id: row.project_id,
+      name: row.name.trim(),
+      value: row.value,
+      variable_type: row.variable_type,
+      description: row.description,
+    });
+  } else {
+    await post("/api/interface-auto/variables/", {
+      project_id: row.project_id,
+      name: row.name.trim(),
+      value: row.value,
+      variable_type: row.variable_type,
+      description: row.description,
+    });
+  }
+  ElMessage.success("变量已保存");
+  await loadVariableRows();
+}
+
+async function deleteVariableRow(row: VariableRow) {
+  if (row.id) {
+    await del(`/api/interface-auto/variables/${row.id}/`);
+    ElMessage.success("变量已删除");
+    await loadVariableRows();
+    return;
+  }
+  variableRows.value = variableRows.value.filter((item) => item.rowKey !== row.rowKey);
+}
+
+watch(currentProjectId, () => {
+  syncProjectPath();
+  openedTabs.value = [];
+  activeTabKey.value = "";
+  activeStepKey.value = "";
+  selectedCaseNodeId.value = "";
+  selectedTemplateNodeId.value = "";
+  void loadWorkspace();
+});
+
+watch(
+  form,
+  () => {
+    markActiveModified();
+  },
+  { deep: true },
+);
+
+onMounted(async () => {
+  window.addEventListener("keydown", handleShortcut);
+  window.addEventListener("click", handleGlobalPointer);
+  window.addEventListener("contextmenu", handleGlobalPointer);
+  await context.ensureLoaded();
+  if (!context.selectedProject.value && context.projects.value.length) {
+    context.setProject(context.projects.value[0].id);
+  }
+  syncProjectPath();
+  await loadWorkspace();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleShortcut);
+  window.removeEventListener("click", handleGlobalPointer);
+  window.removeEventListener("contextmenu", handleGlobalPointer);
+});
 </script>
 
 <template>
-  <ModulePlaceholderPage />
+  <div class="interface-auto-desktop case-desktop" v-loading="loading" @click="hideContextMenus">
+    <div class="case-workbench">
+      <section class="pane pane-left" @contextmenu.prevent="showCaseContextMenu($event, null, true)">
+        <div class="project-toolbar">
+          <span class="toolbar-label">项目：</span>
+          <el-cascader
+            v-model="projectPath"
+            :options="projectOptions"
+            :props="cascaderProps"
+            size="small"
+            class="project-cascader"
+            placeholder="选择业务 / 项目"
+            :show-all-levels="true"
+            @change="handleProjectPathChange"
+          />
+          <button class="icon-button" title="新建目录" @click.stop="createFolder(null)">
+            <el-icon><FolderAdd /></el-icon>
+          </button>
+          <button
+            class="icon-button"
+            :class="{ disabled: !currentFolder }"
+            title="删除目录"
+            :disabled="!currentFolder"
+            @click.stop="deleteFolder(findCaseNodeById(caseTreeData, selectedCaseNodeId))"
+          >
+            <el-icon><Delete /></el-icon>
+          </button>
+          <button class="icon-button" title="刷新" @click.stop="refreshWorkspace">
+            <el-icon><RefreshRight /></el-icon>
+          </button>
+          <button class="icon-button" title="新建测试用例" @click.stop="createCaseFromSelection">
+            +
+          </button>
+        </div>
+
+        <div class="search-line">
+          <el-icon><Search /></el-icon>
+          <input v-model="caseKeyword" class="search-input" placeholder="搜索测试用例名称..." />
+        </div>
+
+        <el-tree
+          ref="caseTreeRef"
+          class="case-tree"
+          node-key="id"
+          :data="caseTreeData"
+          :props="{ label: 'label', children: 'children' }"
+          highlight-current
+          default-expand-all
+          draggable
+          :allow-drag="allowCaseDrag"
+          :allow-drop="allowCaseDrop"
+          @node-click="onCaseTreeClick"
+          @node-drop="onCaseTreeDrop"
+        >
+          <template #default="{ data }">
+            <span class="tree-node" :class="data.type" @contextmenu.stop.prevent="showCaseContextMenu($event, data)">
+              <el-icon v-if="data.type === 'folder'" class="tree-folder-icon"><Folder /></el-icon>
+              <span v-else class="case-badge">TC</span>
+              <span class="tree-label">{{ data.label }}</span>
+            </span>
+          </template>
+        </el-tree>
+
+        <div v-if="!caseTreeData.length" class="pane-empty">No Data</div>
+      </section>
+
+      <section class="pane pane-middle">
+        <div class="project-toolbar pane-heading">
+          <span class="pane-heading-text">接口模板</span>
+        </div>
+
+        <div class="search-line">
+          <el-icon><Search /></el-icon>
+          <input v-model="templateKeyword" class="search-input" placeholder="输入接口名称或描述..." />
+        </div>
+
+        <el-tree
+          ref="templateTreeRef"
+          class="template-tree"
+          node-key="id"
+          :data="templateTreeData"
+          :props="{ label: 'label', children: 'children' }"
+          highlight-current
+          default-expand-all
+          @node-click="onTemplateTreeClick"
+        >
+          <template #default="{ data }">
+            <span
+              class="tree-node template"
+              :class="{ 'is-template': data.type === 'template' }"
+              :draggable="Boolean(data.template)"
+              @dragstart.stop="onTemplateDragStart(data)"
+              @dragend.stop="onTemplateDragEnd"
+              @dblclick.stop="data.template && addTemplateToActiveCase(data.template)"
+            >
+              <template v-if="data.type === 'template'">
+                <b class="method-badge" :class="getTemplateMethodClass(data.method || 'GET')">{{ data.method }}</b>
+                <span class="tree-label">{{ data.label }}</span>
+              </template>
+              <template v-else>
+                <el-icon class="tree-folder-icon"><Folder /></el-icon>
+                <span class="tree-label">{{ data.label }}</span>
+              </template>
+            </span>
+          </template>
+        </el-tree>
+      </section>
+
+      <section class="pane pane-right">
+        <div class="opened-tabs" @contextmenu.prevent>
+          <el-tag
+            v-for="item in openedTabs"
+            :key="getTabKey(item)"
+            closable
+            type="primary"
+            :effect="activeTabKey === getTabKey(item) ? 'light' : 'plain'"
+            class="open-tag case-open-tag"
+            :class="{ inactive: activeTabKey !== getTabKey(item), modified: modifiedTabs[getTabKey(item)] }"
+            @click="focusTab(getTabKey(item))"
+            @close="closeTabsWithConfirm([getTabKey(item)])"
+            @contextmenu.stop.prevent="showTabContextMenu($event, getTabKey(item))"
+          >
+            {{ getTabTitle(item) }}
+          </el-tag>
+        </div>
+
+        <div v-if="openedTabs.length" class="editor-shell">
+          <div class="editor-header">
+            <div class="header-row header-row-main">
+              <div class="header-field header-field-name">
+                <span class="header-label">名称:</span>
+                <input v-model="form.name" class="text-field" placeholder="请输入用例名称" />
+              </div>
+              <div class="header-field header-field-desc">
+                <span class="header-label">描述:</span>
+                <input v-model="form.description" class="text-field" placeholder="请输入用例描述" />
+              </div>
+            </div>
+
+            <div class="header-row">
+              <div class="header-field header-field-env">
+                <span class="header-label">环境:</span>
+                <el-select v-model="form.environment_id" class="env-select" size="small" placeholder="不使用环境" clearable>
+                  <el-option label="不使用环境" :value="null" />
+                  <el-option v-for="item in environments" :key="item.id" :label="item.name" :value="item.id" />
+                </el-select>
+              </div>
+            </div>
+
+            <div class="header-row actions-row">
+              <label class="encryption-check">
+                <input v-model="form.enable_encryption" type="checkbox" />
+                <span>启用加解密</span>
+              </label>
+              <button class="action-button solid" @click="openVariableDialog">变量</button>
+              <button class="action-icon play" :disabled="running" @click="runCase">
+                <el-icon><VideoPlay /></el-icon>
+              </button>
+              <button class="action-icon" @click="logDialogVisible = true">
+                <el-icon><Document /></el-icon>
+              </button>
+              <button class="action-button solid" :disabled="saving" @click="triggerSaveCase">保存</button>
+            </div>
+
+            <div v-if="form.enable_encryption" class="header-row encryption-row">
+              <div class="header-field header-field-name">
+                <span class="header-label">加密URL:</span>
+                <input v-model="form.encrypt_url" class="text-field" placeholder="请输入加密接口地址" />
+              </div>
+              <div class="header-field header-field-desc">
+                <span class="header-label">解密URL:</span>
+                <input v-model="form.decrypt_url" class="text-field" placeholder="请输入解密接口地址" />
+              </div>
+            </div>
+          </div>
+
+          <div class="steps-board" @dragover.prevent @drop.prevent="appendDroppedTemplate">
+            <div v-if="form.steps.length" class="steps-scroller">
+              <article
+                v-for="step in form.steps"
+                :key="getStepKey(step)"
+                class="step-card"
+                :class="{
+                  active: activeStepKey === getStepKey(step),
+                  disabled: !step.enabled,
+                  dragover: dragOverStepKey === getStepKey(step),
+                }"
+                draggable="true"
+                @click="selectStep(step)"
+                @dragstart="onStepDragStart(step)"
+                @dragover.prevent="onStepDragOver(step)"
+                @drop.prevent="handleStepCardDrop(step)"
+                @dragend="onStepDragEnd"
+              >
+                <div class="step-card-header">
+                  <span class="step-title">step{{ step.step_order }}</span>
+                  <div class="step-header-actions">
+                    <button class="step-icon" title="步骤加解密" @click.stop="toggleStepEncryption(step)">
+                      <el-icon v-if="step.enable_encryption"><Lock /></el-icon>
+                      <el-icon v-else><Unlock /></el-icon>
+                    </button>
+                    <button class="step-icon" title="复制步骤" @click.stop="duplicateStep(step)">
+                      <el-icon><CopyDocument /></el-icon>
+                    </button>
+                    <button class="step-icon" title="启停步骤" @click.stop="toggleStepEnabled(step)">
+                      <el-icon v-if="step.enabled"><CircleCheck /></el-icon>
+                      <el-icon v-else><CircleClose /></el-icon>
+                    </button>
+                    <button class="step-icon danger" title="删除步骤" @click.stop="deleteStep(step)">
+                      <el-icon><Delete /></el-icon>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="step-interface-pill">
+                  <span class="request-badge" :class="getTemplateMethodClass(getStepMethod(step))">
+                    {{ getStepMethod(step) }}
+                  </span>
+                  <button
+                    class="api-link"
+                    :title="getStepLabel(step)"
+                    @click.stop="focusTemplateFromStep(step)"
+                  >
+                    {{ getStepLabel(step) }}
+                  </button>
+                  <el-dropdown trigger="click" @command="handleToolCommand(step, $event)">
+                    <button class="step-add-tool" title="添加工具">
+                      <el-icon><Plus /></el-icon>
+                    </button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          v-for="option in TOOL_OPTIONS[getStepTab(step)]"
+                          :key="option.type"
+                          :command="option.type"
+                        >
+                          {{ option.label }}
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
+
+                <div class="step-tabs">
+                  <button
+                    v-for="tab in TOOL_TABS"
+                    :key="tab"
+                    class="step-tab"
+                    :class="{ active: getStepTab(step) === tab }"
+                    @click.stop="setStepTab(step, tab)"
+                  >
+                    {{ TOOL_TAB_LABELS[tab] }}
+                  </button>
+                </div>
+
+                <div class="tool-panel">
+                  <template v-if="getToolEntries(step, getStepTab(step)).length">
+                    <div
+                      v-for="entry in getToolEntries(step, getStepTab(step))"
+                      :key="entry.toolId"
+                      class="tool-item"
+                    >
+                      <div class="tool-item-head">
+                        <span class="tool-chip">{{ entry.tool.tool_type }}</span>
+                        <div class="tool-actions">
+                          <button class="tool-action" title="复制工具" @click.stop="copyTool(step, getStepTab(step), entry.toolId)">
+                            复制
+                          </button>
+                          <button class="tool-action danger" title="删除工具" @click.stop="removeTool(step, getStepTab(step), entry.toolId)">
+                            删除
+                          </button>
+                        </div>
+                      </div>
+                      <input v-model="entry.tool.name" class="tool-input" placeholder="工具名称" />
+                      <input v-model="entry.tool.summary" class="tool-input" placeholder="工具说明" />
+                    </div>
+                  </template>
+                  <div v-else class="tool-empty">{{ getStepPlaceholder(getStepTab(step)) }}</div>
+                </div>
+              </article>
+            </div>
+            <div v-else class="steps-empty">
+              <p>{{ currentProjectName || "当前项目" }} / {{ form.environment_id ? "已选择环境" : "不使用环境" }}</p>
+              <span>暂无测试步骤，请添加步骤或从左侧拖拽接口</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="editor-empty">
+          <div class="editor-empty-box">
+            <p>请先在左侧新增测试用例或选择对应测试用例</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div
+      v-if="caseContextMenu.visible"
+      class="context-menu"
+      :style="{ left: `${caseContextMenu.x}px`, top: `${caseContextMenu.y}px` }"
+      @click.stop
+    >
+      <template v-if="caseContextMenu.blank">
+        <button @click="createFolder(null)">新增一级目录</button>
+        <button @click="createCaseViaContext(null, true)">新建测试用例</button>
+        <button @click="refreshWorkspace">刷新</button>
+      </template>
+      <template v-else-if="caseContextMenu.node?.type === 'folder'">
+        <button @click="createFolder(caseContextMenu.node.folderId)">新增子目录</button>
+        <button @click="createCaseViaContext(caseContextMenu.node)">新建测试用例</button>
+        <button @click="renameFolder(caseContextMenu.node)">重命名目录</button>
+        <button class="danger" @click="deleteFolder(caseContextMenu.node)">删除目录</button>
+      </template>
+      <template v-else>
+        <button @click="duplicateCase(caseContextMenu.node?.caseItem)">复制用例</button>
+        <button class="danger" @click="deleteCase(caseContextMenu.node?.caseItem)">删除用例</button>
+      </template>
+    </div>
+
+    <div
+      v-if="tabContextMenu.visible"
+      class="context-menu"
+      :style="{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }"
+      @click.stop
+    >
+      <button @click="closeCurrentTab">关闭当前</button>
+      <button @click="closeOtherTabs">关闭其他</button>
+      <button @click="closeAllTabs">关闭全部</button>
+    </div>
+
+    <el-dialog v-model="variableDialogVisible" title="变量管理" width="900px">
+      <div class="variable-toolbar">
+        <button class="action-button solid" @click="addVariableRow">新增变量</button>
+      </div>
+      <div class="variable-table">
+        <div class="variable-head">
+          <span>名称</span>
+          <span>值</span>
+          <span>类型</span>
+          <span>描述</span>
+          <span>操作</span>
+        </div>
+        <div v-for="row in variableRows" :key="row.rowKey" class="variable-row">
+          <input v-model="row.name" class="tool-input" placeholder="变量名称" />
+          <input v-model="row.value" class="tool-input" placeholder="变量值" />
+          <input v-model="row.variable_type" class="tool-input" placeholder="string" />
+          <input v-model="row.description" class="tool-input" placeholder="变量描述" />
+          <div class="variable-actions">
+            <button class="tool-action" @click="saveVariableRow(row)">保存</button>
+            <button class="tool-action danger" @click="deleteVariableRow(row)">删除</button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="logDialogVisible" title="执行日志" width="760px">
+      <div class="log-panel">
+        <pre>{{ logLines.join("\n") || "暂无执行日志" }}</pre>
+      </div>
+    </el-dialog>
+  </div>
 </template>
+
+<style scoped>
+.interface-auto-desktop.case-desktop {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #f4f8fc;
+}
+
+.case-workbench {
+  display: grid;
+  grid-template-columns: 336px 336px minmax(760px, 1fr);
+  min-width: 1440px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: #fff;
+}
+
+.pane-left,
+.pane-middle {
+  padding: 8px;
+}
+
+.pane-right {
+  overflow: hidden;
+}
+
+.project-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 6px;
+  color: #2d3a4b;
+  font-size: 12px;
+}
+
+.toolbar-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.project-cascader {
+  width: 160px;
+}
+
+.icon-button,
+.mini-action,
+.action-icon,
+.step-icon,
+.step-add-tool,
+.tool-action,
+.action-button,
+.case-tab-close {
+  border: 1px solid #ccd7e3;
+  background: #fff;
+  cursor: pointer;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  color: #506176;
+}
+
+.icon-button:disabled,
+.icon-button.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.search-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-bottom: 4px;
+  color: #4d5d71;
+}
+
+.pane-heading {
+  margin-bottom: 4px;
+}
+
+.pane-heading-text {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.search-input {
+  width: 100%;
+  height: 28px;
+  border: 1px solid #d7e1ec;
+  border-radius: 6px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  color: #2d3a4b;
+  outline: none;
+}
+
+.search-input:focus,
+.text-field:focus,
+.tool-input:focus {
+  border-color: #75a7ff;
+}
+
+.mini-action {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: #4d5d71;
+}
+
+.case-tree,
+.template-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #dfe6ef;
+}
+
+.tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding-right: 6px;
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.tree-node.is-template {
+  cursor: grab;
+}
+
+.tree-folder-icon {
+  color: #3d7ee8;
+}
+
+.tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #e4eefc;
+  color: #244a86;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.method-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 18px;
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.method-badge.get,
+.request-badge.get {
+  background: #ecf5ff;
+  color: #2f7df6;
+}
+
+.method-badge.post,
+.request-badge.post {
+  background: #fff0dc;
+  color: #d26f00;
+}
+
+.method-badge.delete,
+.request-badge.delete {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.method-badge.put,
+.request-badge.put {
+  background: #f0f9eb;
+  color: #4a9f2e;
+}
+
+.method-badge.patch,
+.request-badge.patch {
+  background: #f4edff;
+  color: #7c3aed;
+}
+
+.pane-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+  color: #98a2b3;
+  font-size: 14px;
+}
+
+.opened-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  margin: 8px 12px 0;
+  border: 1px solid #dce8f5;
+  border-radius: 6px;
+  padding: 0 10px;
+  overflow-x: auto;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8fd 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
+}
+
+.case-open-tag {
+  flex: 0 0 auto;
+}
+
+.open-tag.inactive {
+  border-color: transparent;
+  background: rgb(255 255 255 / 64%);
+  color: #4f6277;
+}
+
+.open-tag.inactive:hover {
+  background: #eef6ff;
+  color: #1677ff;
+}
+
+.open-tag:not(.inactive) {
+  border-color: #bcd7ff;
+  background: #edf5ff;
+  color: #1677ff;
+  box-shadow: 0 4px 12px rgb(22 119 255 / 10%);
+}
+
+.open-tag.modified {
+  border-color: #bcd7ff;
+  color: #1677ff;
+}
+
+.open-tag.modified.inactive {
+  border-color: #d6e4ff;
+  background: #f7fbff;
+  color: #6b85a3;
+}
+
+.open-tag.modified:not(.inactive) {
+  border-color: #7fb0ff;
+  background: #e7f1ff;
+  color: #145ecc;
+  box-shadow: 0 0 0 1px rgb(64 158 255 / 18%), 0 4px 12px rgb(22 119 255 / 12%);
+}
+
+.editor-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100% - 52px);
+  background: #f6f9fd;
+}
+
+.editor-header {
+  flex: 0 0 auto;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid #dbe4ef;
+  background: #fff;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 30px;
+  margin-bottom: 8px;
+}
+
+.header-row:last-child {
+  margin-bottom: 0;
+}
+
+.header-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.header-field-name {
+  flex: 0 0 420px;
+}
+
+.header-field-desc {
+  flex: 1 1 auto;
+}
+
+.header-field-env {
+  width: 100%;
+}
+
+.header-label {
+  flex: 0 0 auto;
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.text-field {
+  width: 100%;
+  height: 30px;
+  border: 1px solid #d7e1ec;
+  border-radius: 8px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  color: #1f2937;
+  outline: none;
+}
+
+.env-select {
+  flex: 1 1 auto;
+}
+
+.actions-row {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.encryption-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.action-button {
+  height: 28px;
+  border-radius: 4px;
+  padding: 0 12px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.action-button.solid {
+  border-color: #61b741;
+  background: #61b741;
+  color: #fff;
+}
+
+.action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  color: #36597e;
+}
+
+.action-icon.play {
+  color: #2f7df6;
+}
+
+.steps-board {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 8px;
+  border: 1px solid #d7e1ec;
+  border-radius: 8px;
+  background: #fff;
+  overflow: auto;
+}
+
+.steps-scroller {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  box-sizing: border-box;
+  align-content: start;
+}
+
+.steps-empty,
+.editor-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.steps-empty {
+  flex-direction: column;
+  gap: 8px;
+  min-height: 300px;
+  color: #7b8ba0;
+  font-size: 14px;
+}
+
+.steps-empty p {
+  margin: 0;
+  color: #415469;
+}
+
+.editor-empty-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
+  margin: 12px;
+  border: 1px dashed #d6dce5;
+  background: #fff;
+  color: #7c8ea3;
+  font-size: 14px;
+}
+
+.step-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 262px;
+  border: 1px solid #d6dce5;
+  border-radius: 10px;
+  padding: 8px 8px 4px;
+  box-sizing: border-box;
+  background: #fff;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+@media (max-width: 1680px) {
+  .steps-scroller {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1280px) {
+  .steps-scroller {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.step-card.active {
+  border-color: #8bb4ff;
+  box-shadow: 0 0 0 1px rgb(94 150 255 / 35%);
+}
+
+.step-card.dragover {
+  border-color: #3d7ee8;
+}
+
+.step-card.disabled {
+  opacity: 0.6;
+}
+
+.step-card-header,
+.tool-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-title {
+  color: #16202d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.step-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: #5d6b7d;
+  font-size: 11px;
+}
+
+.step-icon.danger,
+.tool-action.danger {
+  color: #e25555;
+}
+
+.step-interface-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-top: 8px;
+  border-radius: 16px;
+  padding: 0 8px;
+  background: #fff5e6;
+}
+
+.request-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 22px;
+  border-radius: 7px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.api-link {
+  flex: 1 1 auto;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  color: #202c3a;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.step-add-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.step-tabs {
+  display: flex;
+  gap: 18px;
+  margin-top: 8px;
+  padding: 2px 4px 0;
+  flex: 0 0 auto;
+}
+
+.step-tab {
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 2px 2px 7px;
+  color: #66768a;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.step-tab.active {
+  color: #2f7df6;
+  font-weight: 600;
+}
+
+.step-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: #2f7df6;
+}
+
+.tool-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 156px;
+  margin-top: 6px;
+  border: 1px solid #dbe3ed;
+  border-radius: 6px;
+  padding: 6px;
+  overflow: auto;
+}
+
+.tool-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 100%;
+  color: #c1c7cf;
+  font-size: 12px;
+}
+
+.tool-item {
+  border: 1px solid #e6ebf2;
+  border-radius: 8px;
+  padding: 6px;
+  background: #fafcff;
+}
+
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: #eef4ff;
+  color: #3669c9;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tool-actions,
+.variable-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-action {
+  height: 22px;
+  border-radius: 4px;
+  padding: 0 6px;
+  color: #475569;
+  font-size: 11px;
+}
+
+.tool-input {
+  width: 100%;
+  height: 28px;
+  margin-top: 8px;
+  border: 1px solid #d7e1ec;
+  border-radius: 6px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  color: #1f2937;
+  outline: none;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 4000;
+  min-width: 140px;
+  border: 1px solid #ccd6e0;
+  border-radius: 8px;
+  padding: 4px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(15 23 42 / 18%);
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: transparent;
+  color: #263445;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: #edf5ff;
+  color: #2f7df6;
+}
+
+.context-menu button.danger:hover {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.variable-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.variable-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.variable-head,
+.variable-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.4fr 0.8fr 1.2fr 132px;
+  gap: 8px;
+  align-items: center;
+}
+
+.variable-head {
+  color: #344256;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.log-panel {
+  border: 1px solid #d7e1ec;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 12px;
+}
+
+.log-panel pre {
+  margin: 0;
+  min-height: 260px;
+  color: #263445;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+</style>

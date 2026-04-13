@@ -873,9 +873,14 @@ onBeforeUnmount(() => {
       >
         <template #default="{ data }">
           <span class="tree-node" :class="data.type" @contextmenu.stop="showContextMenu($event, data)">
-            <b v-if="data.method" class="tree-method">{{ data.method }}</b>
-            <el-icon v-else><Folder /></el-icon>
-            <span>{{ data.label }}</span>
+            <template v-if="data.method">
+              <b class="method-badge" :class="String(data.method || 'GET').toLowerCase()">{{ data.method }}</b>
+              <span class="tree-label">{{ data.label }}</span>
+            </template>
+            <template v-else>
+              <el-icon class="tree-folder-icon"><Folder /></el-icon>
+              <span class="tree-label">{{ data.label }}</span>
+            </template>
           </span>
         </template>
       </el-tree>
@@ -1025,8 +1030,8 @@ onBeforeUnmount(() => {
 .interface-auto-desktop {
   display: grid;
   grid-template-columns: 336px minmax(0, 1fr);
-  height: calc(100vh - 32px);
-  min-height: 720px;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: #f4f8fc;
 }
@@ -1036,7 +1041,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 8px;
   border-right: 1px solid #dbe3ec;
-  padding: 12px 14px;
+  padding: 8px;
   background: #fff;
 }
 
@@ -1083,12 +1088,63 @@ onBeforeUnmount(() => {
   gap: 6px;
   width: 100%;
   min-width: 0;
+  height: 24px;
+  padding-right: 6px;
   color: #1f2937;
   font-size: 13px;
 }
 
 .tree-node.template {
   padding-left: 2px;
+}
+
+.tree-folder-icon {
+  color: #3d7ee8;
+}
+
+.tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.method-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 18px;
+  border-radius: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.method-badge.get {
+  background: #ecf5ff;
+  color: #2f7df6;
+}
+
+.method-badge.post {
+  background: #fff0dc;
+  color: #d26f00;
+}
+
+.method-badge.delete {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.method-badge.put {
+  background: #f0f9eb;
+  color: #4a9f2e;
+}
+
+.method-badge.patch {
+  background: #f4edff;
+  color: #7c3aed;
 }
 
 .tree-context-menu {
@@ -1123,15 +1179,11 @@ onBeforeUnmount(() => {
   color: #cf1322;
 }
 
-.tree-method {
-  min-width: 32px;
-  color: #111827;
-  font-size: 10px;
-  font-weight: 800;
-}
-
 .editor-shell {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   border-left: 4px solid #edf2f7;
   background: #fff;
@@ -1173,12 +1225,28 @@ onBeforeUnmount(() => {
 }
 
 .open-tag:not(.inactive) {
+  border-color: #bcd7ff;
+  background: #edf5ff;
+  color: #1677ff;
   box-shadow: 0 4px 12px rgb(22 119 255 / 10%);
 }
 
 .open-tag.modified {
-  border-color: #e6a23c;
-  color: #b88230;
+  border-color: #bcd7ff;
+  color: #1677ff;
+}
+
+.open-tag.modified.inactive {
+  border-color: #d6e4ff;
+  background: #f7fbff;
+  color: #6b85a3;
+}
+
+.open-tag.modified:not(.inactive) {
+  border-color: #7fb0ff;
+  background: #e7f1ff;
+  color: #145ecc;
+  box-shadow: 0 0 0 1px rgb(64 158 255 / 18%), 0 4px 12px rgb(22 119 255 / 12%);
 }
 
 .editor-main {

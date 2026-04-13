@@ -17,6 +17,113 @@ def _empty_list_json(value):
     return json.dumps(value or [], ensure_ascii=False)
 
 
+def _json_value(value, default):
+    if value in (None, ""):
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _hydrate_case_row(case_row):
+    if not case_row:
+        return {}
+    hydrated = dict(case_row)
+    hydrated["global_vars"] = _json_value(hydrated.get("global_vars"), {})
+    return hydrated
+
+
+def _hydrate_step_row(step_row):
+    hydrated = dict(step_row)
+    hydrated["pre_processing"] = _json_value(hydrated.get("pre_processing"), {})
+    hydrated["post_processing"] = _json_value(hydrated.get("post_processing"), {})
+    hydrated["assertions"] = _json_value(hydrated.get("assertions"), {})
+    hydrated["variables"] = _json_value(hydrated.get("variables"), {})
+    return hydrated
+
+
+def _list_case_steps(case_id: int):
+    rows = fetch_all(
+        """
+        SELECT
+            cs.*,
+            at.project_id AS api_project_id,
+            at.folder_id AS api_folder_id,
+            at.name AS api_name,
+            at.method AS api_method,
+            at.url_path AS api_url_path,
+            at.description AS api_description
+        FROM test_case_steps cs
+        LEFT JOIN api_templates at ON cs.api_template_id = at.id
+        WHERE cs.case_id = %s
+        ORDER BY cs.step_order, cs.id
+        """,
+        (case_id,),
+    )
+    return [_hydrate_step_row(row) for row in rows]
+
+
+def _get_case_detail(case_id: int):
+    case_row = _hydrate_case_row(fetch_one("SELECT * FROM test_cases WHERE id = %s", (case_id,)))
+    if not case_row:
+        return {}
+    case_row["steps"] = _list_case_steps(case_id)
+    return case_row
+
+
+def _list_cases(where_sql: str = "", params=()):
+    query = """
+        SELECT *
+        FROM test_cases
+    """
+    if where_sql:
+        query = f"{query} {where_sql}"
+    query = f"{query} ORDER BY sort_order, created_at"
+    return [_hydrate_case_row(row) for row in fetch_all(query, params)]
+
+
+def _write_case_steps(case_id: int, steps):
+    execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
+    for index, step in enumerate(steps or [], start=1):
+        execute(
+            """
+            INSERT INTO test_case_steps (
+                case_id,
+                api_template_id,
+                step_order,
+                name,
+                enabled,
+                pre_processing,
+                post_processing,
+                assertions,
+                variables,
+                enable_encryption
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                case_id,
+                step.get("api_template_id"),
+                step.get("step_order") or index,
+                step.get("name", ""),
+                step.get("enabled", True),
+                _json_text(step.get("pre_processing")),
+                _json_text(step.get("post_processing")),
+                _json_text(step.get("assertions")),
+                _json_text(step.get("variables")),
+                step.get("enable_encryption", False),
+            ),
+        )
+
+
+def _delete_case_with_steps(case_id: int):
+    execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
+    return execute("DELETE FROM test_cases WHERE id = %s", (case_id,)) > 0
+
+
 @api_view
 def overview(_request, payload=None):
     return {
@@ -193,8 +300,20 @@ def case_folder_detail(request, folder_id: int, payload=None):
             (folder.get("name"), folder.get("description", ""), folder_id),
         )
         return {"updated": updated >= 0}
-    execute("DELETE FROM test_cases WHERE folder_id = %s", (folder_id,))
-    return {"deleted": execute("DELETE FROM case_folders WHERE id = %s", (folder_id,)) > 0}
+    folder_ids = [folder_id]
+    queue = [folder_id]
+    while queue:
+        current_folder_id = queue.pop()
+        children = fetch_all("SELECT id FROM case_folders WHERE parent_id = %s", (current_folder_id,))
+        child_ids = [item["id"] for item in children]
+        folder_ids.extend(child_ids)
+        queue.extend(child_ids)
+    placeholders = ", ".join(["%s"] * len(folder_ids))
+    case_rows = fetch_all(f"SELECT id FROM test_cases WHERE folder_id IN ({placeholders})", tuple(folder_ids))
+    for row in case_rows:
+        _delete_case_with_steps(row["id"])
+    execute(f"DELETE FROM case_folders WHERE id IN ({placeholders})", tuple(folder_ids))
+    return {"deleted": True}
 
 
 @api_view
@@ -204,19 +323,17 @@ def cases(request, payload=None):
         folder_id = get_int((payload or {}).get("folder_id"))
         project_id = get_int((payload or {}).get("project_id"))
         if case_id:
-            case = fetch_one("SELECT * FROM test_cases WHERE id = %s", (case_id,))
-            steps = fetch_all("SELECT * FROM test_case_steps WHERE case_id = %s ORDER BY step_order", (case_id,))
-            return {**(case or {}), "steps": steps}
+            return _get_case_detail(case_id)
         if folder_id:
-            return fetch_all("SELECT * FROM test_cases WHERE folder_id = %s ORDER BY sort_order, created_at", (folder_id,))
+            return _list_cases("WHERE folder_id = %s", (folder_id,))
         if project_id:
-            return fetch_all("SELECT * FROM test_cases WHERE project_id = %s ORDER BY sort_order, created_at", (project_id,))
-        return fetch_all("SELECT * FROM test_cases ORDER BY created_at DESC")
+            return _list_cases("WHERE project_id = %s", (project_id,))
+        return _list_cases()
     item = payload or {}
     case_id = execute(
         """
-        INSERT INTO test_cases (project_id, folder_id, name, description, environment_id, global_vars, enable_encryption, encrypt_url, decrypt_url, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO test_cases (project_id, folder_id, name, description, environment_id, global_vars, enable_encryption, encrypt_url, decrypt_url, sort_order, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             item.get("project_id"),
@@ -228,41 +345,24 @@ def cases(request, payload=None):
             item.get("enable_encryption", False),
             item.get("encrypt_url", ""),
             item.get("decrypt_url", ""),
+            item.get("sort_order", 0),
             "admin",
         ),
     )
-    for index, step in enumerate(item.get("steps", []), start=1):
-        execute(
-            """
-            INSERT INTO test_case_steps (case_id, api_template_id, step_order, name, enabled, pre_processing, post_processing, assertions, variables, enable_encryption)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                case_id,
-                step.get("api_template_id"),
-                index,
-                step.get("name", ""),
-                step.get("enabled", True),
-                _json_text(step.get("pre_processing")),
-                _json_text(step.get("post_processing")),
-                _json_text(step.get("assertions")),
-                _json_text(step.get("variables")),
-                step.get("enable_encryption", False),
-            ),
-        )
+    _write_case_steps(case_id, item.get("steps", []))
     return {"case_id": case_id}, 201
 
 
 @api_view
 def case_detail(request, case_id: int, payload=None):
     if request.method == "GET":
-        return cases(_request=None, payload={"case_id": case_id})
+        return _get_case_detail(case_id)
     if request.method == "PUT":
         item = payload or {}
         updated = execute(
             """
             UPDATE test_cases
-            SET name = %s, description = %s, folder_id = %s, environment_id = %s, global_vars = %s, enable_encryption = %s, encrypt_url = %s, decrypt_url = %s
+            SET name = %s, description = %s, folder_id = %s, environment_id = %s, global_vars = %s, enable_encryption = %s, encrypt_url = %s, decrypt_url = %s, sort_order = %s
             WHERE id = %s
             """,
             (
@@ -274,18 +374,20 @@ def case_detail(request, case_id: int, payload=None):
                 item.get("enable_encryption", False),
                 item.get("encrypt_url", ""),
                 item.get("decrypt_url", ""),
+                item.get("sort_order", 0),
                 case_id,
             ),
         )
-        return {"updated": updated >= 0}
-    execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
-    return {"deleted": execute("DELETE FROM test_cases WHERE id = %s", (case_id,)) > 0}
+        if "steps" in item:
+            _write_case_steps(case_id, item.get("steps", []))
+        return {"updated": updated >= 0, "case": _get_case_detail(case_id)}
+    return {"deleted": _delete_case_with_steps(case_id)}
 
 
 @api_view
 def execute_case(_request, case_id: int, payload=None):
-    case = fetch_one("SELECT * FROM test_cases WHERE id = %s", (case_id,))
-    steps = fetch_all("SELECT * FROM test_case_steps WHERE case_id = %s ORDER BY step_order", (case_id,))
+    case = _hydrate_case_row(fetch_one("SELECT * FROM test_cases WHERE id = %s", (case_id,)))
+    steps = _list_case_steps(case_id)
     return {
         "case_id": case_id,
         "case_name": case["name"] if case else "未知用例",

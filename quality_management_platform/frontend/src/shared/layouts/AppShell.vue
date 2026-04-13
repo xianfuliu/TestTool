@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { KeepAlive, computed, reactive, ref } from "vue";
 import type { Component } from "vue";
 import { useRoute } from "vue-router";
 import {
@@ -361,7 +361,11 @@ function hideCollapsedTooltip() {
 
     <section class="workspace">
       <main class="content">
-        <router-view />
+        <router-view v-slot="{ Component, route: currentRoute }">
+          <KeepAlive>
+            <component :is="Component" :key="currentRoute.name ?? currentRoute.path" />
+          </KeepAlive>
+        </router-view>
       </main>
     </section>
 
