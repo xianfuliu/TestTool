@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Delete, Folder, FolderAdd, MagicStick, Search } from "@element-plus/icons-vue";
+import { useRoute, useRouter } from "vue-router";
+import { Delete, Folder, FolderAdd, MagicStick, RefreshRight, Search } from "@element-plus/icons-vue";
 
 import { del, get, post, put } from "@/shared/api/client";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
 import type { ApiFolder, ApiTemplate, CascaderOption, JsonMap, KeyValueRow, TreeNode, WorkspacePayload } from "./types";
 
 const context = useBusinessProjectContext();
+const route = useRoute();
+const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const searchText = ref("");
@@ -184,6 +187,37 @@ function resetForm(template?: ApiTemplate) {
   });
 }
 
+function getRouteTemplateId() {
+  const rawValue = Array.isArray(route.query.openTemplateId) ? route.query.openTemplateId[0] : route.query.openTemplateId;
+  const templateId = Number(rawValue);
+  return Number.isFinite(templateId) && templateId > 0 ? templateId : null;
+}
+
+async function clearRouteTemplateQuery() {
+  if (!("openTemplateId" in route.query)) {
+    return;
+  }
+  const nextQuery = { ...route.query };
+  delete nextQuery.openTemplateId;
+  await router.replace({
+    name: "interface-auto-templates",
+    query: nextQuery,
+  });
+}
+
+async function openTemplateFromRouteQuery() {
+  const templateId = getRouteTemplateId();
+  if (!templateId) {
+    return;
+  }
+  const target = templates.value.find((item) => item.id === templateId);
+  if (!target) {
+    return;
+  }
+  openTemplate(target);
+  await clearRouteTemplateQuery();
+}
+
 async function loadWorkspace() {
   if (!currentProjectId.value) {
     folders.value = [];
@@ -216,11 +250,17 @@ async function loadWorkspace() {
         resetForm(undefined);
       }
     }
+    await openTemplateFromRouteQuery();
   } catch (error) {
     ElMessage.error((error as Error).message);
   } finally {
     loading.value = false;
   }
+}
+
+async function refreshWorkspace() {
+  hideContextMenu();
+  await loadWorkspace();
 }
 
 function onTreeClick(node: TreeNode) {
@@ -798,6 +838,14 @@ watch(currentProjectId, () => {
   selectedNodeType.value = null;
   void loadWorkspace();
 });
+watch(
+  () => route.query.openTemplateId,
+  () => {
+    if (templates.value.length) {
+      void openTemplateFromRouteQuery();
+    }
+  },
+);
 
 watch(form, markActiveModified, { deep: true });
 watch(headerRows, markActiveModified, { deep: true });
@@ -826,7 +874,37 @@ onBeforeUnmount(() => {
 <template>
   <div class="interface-auto-desktop" @click="hideContextMenu">
     <aside class="template-nav">
-      <div class="project-line">
+      <div class="project-toolbar">
+        <span class="toolbar-label">项目：</span>
+        <el-cascader
+          v-model="projectPath"
+          :options="projectOptions"
+          :props="cascaderProps"
+          size="small"
+          class="project-cascader"
+          placeholder="选择业务 / 项目"
+          :show-all-levels="true"
+          @change="handleProjectPathChange"
+        />
+        <button class="icon-button" title="新建目录" @click.stop="createFolder(null)">
+          <el-icon><FolderAdd /></el-icon>
+        </button>
+        <button
+          class="icon-button"
+          :class="{ disabled: selectedNodeType !== 'folder' || !currentFolder }"
+          :disabled="selectedNodeType !== 'folder' || !currentFolder"
+          title="删除目录"
+          @click.stop="deleteTopFolder"
+        >
+          <el-icon><Delete /></el-icon>
+        </button>
+        <button class="icon-button" title="刷新" @click.stop="refreshWorkspace">
+          <el-icon><RefreshRight /></el-icon>
+        </button>
+        <button class="icon-button" title="新建接口模板" @click.stop="createTemplate">+</button>
+      </div>
+
+      <div v-if="false" class="project-toolbar">
         <span>项目：</span>
         <el-cascader
           v-model="projectPath"
@@ -851,6 +929,10 @@ onBeforeUnmount(() => {
         >
           <el-icon><Delete /></el-icon>
         </el-button>
+        <button class="icon-button" title="刷新" @click.stop="refreshWorkspace">
+          <el-icon><RefreshRight /></el-icon>
+        </button>
+        <button class="icon-button" title="新增接口" @click.stop="createTemplate">+</button>
       </div>
 
       <el-input v-model="searchText" size="small" placeholder="输入接口名和描述..." clearable>
@@ -859,9 +941,15 @@ onBeforeUnmount(() => {
         </template>
       </el-input>
 
+      <div class="search-line">
+        <el-icon><Search /></el-icon>
+        <input v-model="searchText" class="search-input" placeholder="输入接口名称或描述..." />
+      </div>
+
       <el-tree
         class="api-tree"
         node-key="id"
+        :current-node-key="selectedTemplateId ? `template-${selectedTemplateId}` : undefined"
         :data="treeData"
         :props="{ label: 'label', children: 'children' }"
         default-expand-all
@@ -1039,39 +1127,95 @@ onBeforeUnmount(() => {
 .template-nav {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   border-right: 1px solid #dbe3ec;
   padding: 8px;
   background: #fff;
 }
 
-.project-line {
+.project-toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #2f4054;
+  min-height: 28px;
+  margin-bottom: 6px;
+  color: #2d3a4b;
   font-size: 12px;
-  white-space: nowrap;
+}
+
+.project-toolbar > span:first-child,
+.toolbar-label {
+  flex: 0 0 auto;
+  font-weight: 600;
 }
 
 .project-cascader {
-  width: 168px;
+  width: 160px;
+}
+
+.icon-tool,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #ccd7e3;
+  border-radius: 4px;
+  padding: 0;
+  background: #fff;
+  color: #506176;
+  cursor: pointer;
 }
 
 .icon-tool {
-  width: 26px;
-  padding: 5px 0 !important;
+  padding: 0 !important;
+}
+
+.icon-tool:disabled,
+.icon-button:disabled,
+.icon-button.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.search-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-bottom: 4px;
+  color: #4d5d71;
+}
+
+.search-input {
+  width: 100%;
+  height: 28px;
+  border: 1px solid #d7e1ec;
+  border-radius: 6px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  color: #2d3a4b;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #75a7ff;
+}
+
+.template-nav > .el-input {
+  display: none;
 }
 
 .delete-tool.active {
-  border-color: #ffccc7;
-  color: #cf1322;
+  border-color: #ccd7e3;
+  color: #506176;
 }
 
 .delete-tool.active:hover {
-  border-color: #ff7875;
-  background: #fff1f0;
-  color: #a8071a;
+  border-color: #ccd7e3;
+  background: #fff;
+  color: #506176;
 }
 
 .api-tree {
@@ -1459,11 +1603,12 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-input--small .el-input__wrapper) {
-  min-height: 28px;
+  min-height: var(--qm-form-control-height-sm);
 }
 
 :deep(.el-textarea__inner) {
-  font-size: 13px;
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-form-font-size);
 }
 
 @media (max-width: 1100px) {

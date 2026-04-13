@@ -1,24 +1,32 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { useRouter } from "vue-router";
 import {
-  CircleCheck,
-  CircleClose,
   CopyDocument,
   Delete,
-  Document,
+  Edit,
   Folder,
   FolderAdd,
-  Lock,
   Plus,
   RefreshRight,
   Search,
-  Unlock,
-  VideoPlay,
 } from "@element-plus/icons-vue";
 
 import { del, get, post, put } from "@/shared/api/client";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
+import apiToolIcon from "@/assets/interface-auto/tool-icons/api.png";
+import assertionToolIcon from "@/assets/interface-auto/tool-icons/assrt.png";
+import extractionToolIcon from "@/assets/interface-auto/tool-icons/extraction.png";
+import httpToolIcon from "@/assets/interface-auto/tool-icons/http.png";
+import lockToolIcon from "@/assets/interface-auto/tool-icons/lock.png";
+import logToolIcon from "@/assets/interface-auto/tool-icons/log.png";
+import runningToolIcon from "@/assets/interface-auto/tool-icons/running.png";
+import sqlToolIcon from "@/assets/interface-auto/tool-icons/sql.png";
+import startToolIcon from "@/assets/interface-auto/tool-icons/start.png";
+import stopingToolIcon from "@/assets/interface-auto/tool-icons/stoping.png";
+import stopToolIcon from "@/assets/interface-auto/tool-icons/stop.png";
+import unlockToolIcon from "@/assets/interface-auto/tool-icons/unlock.png";
 import type {
   ApiFolder,
   ApiTemplate,
@@ -44,6 +52,12 @@ type ToolDraftRow = {
   expected: string;
   variable: string;
   path: string;
+};
+
+type ToolHeaderRow = {
+  rowKey: string;
+  key: string;
+  value: string;
 };
 
 type CaseNavNode = {
@@ -83,23 +97,22 @@ const TOOL_TABS: ToolTabKey[] = ["pre_processing", "assertions", "post_processin
 const TOOL_OPTIONS: Record<ToolTabKey, Array<{ type: string; label: string }>> = {
   pre_processing: [
     { type: "global_tool", label: "全局工具" },
-    { type: "parameter_extract", label: "参数提取" },
+    { type: "parameter_extraction", label: "参数提取" },
     { type: "data_prepare", label: "数据准备" },
     { type: "sql_tool", label: "SQL工具" },
     { type: "python_script", label: "Python脚本" },
     { type: "http_request", label: "HTTP请求" },
   ],
   assertions: [
-    { type: "json_assert", label: "JSON断言" },
-    { type: "text_assert", label: "文本断言" },
-    { type: "status_assert", label: "状态码断言" },
+    { type: "assertion", label: "断言" },
   ],
   post_processing: [
-    { type: "global_tool", label: "全局工具" },
-    { type: "data_prepare", label: "数据准备" },
-    { type: "sql_tool", label: "SQL工具" },
-    { type: "python_script", label: "Python脚本" },
+    { type: "parameter_extraction", label: "参数提取" },
     { type: "http_request", label: "HTTP请求" },
+    { type: "sql_tool", label: "SQL工具" },
+    { type: "data_prepare", label: "数据准备" },
+    { type: "python_script", label: "Python脚本" },
+    { type: "global_tool", label: "全局工具" },
   ],
 };
 
@@ -115,6 +128,7 @@ const ASSERTION_OPERATOR_OPTIONS = [
 ];
 
 const context = useBusinessProjectContext();
+const router = useRouter();
 
 const loading = ref(false);
 const saving = ref(false);
@@ -158,7 +172,12 @@ const toolDialogKind = ref<ToolDialogKind>("generic");
 const toolDialogTab = ref<ToolTabKey>("pre_processing");
 const toolDialogStepKey = ref("");
 const toolDialogToolId = ref("");
+const toolDialogNewType = ref("");
 const toolDialogTitle = ref("");
+const httpToolTab = ref<"headers" | "body">("body");
+const toolDialogIsNew = ref(false);
+const toolDialogCommitted = ref(false);
+const toolHeaderRows = ref<ToolHeaderRow[]>([]);
 const toolRows = ref<ToolDraftRow[]>([]);
 const toolForm = reactive({
   name: "",
@@ -177,6 +196,10 @@ const templateTreeRef = ref<any>(null);
 const draggedTemplateId = ref<number | null>(null);
 const draggedStepKey = ref("");
 const dragOverStepKey = ref("");
+const draggedToolStepKey = ref("");
+const draggedToolTabKey = ref<ToolTabKey | "">("");
+const draggedToolId = ref("");
+const dragOverToolId = ref("");
 
 const form = reactive<TestCaseRecord>(createDraftCase(0, null));
 let resetting = false;
@@ -409,6 +432,7 @@ function normalizeToolMap(value: unknown): CaseToolMap {
         tool_type: String(rawTool.tool_type ?? rawTool.type ?? "tool"),
         summary: String(rawTool.summary ?? rawTool.description ?? ""),
         enabled: rawTool.enabled !== false,
+        priority: Number(rawTool.priority ?? rawTool.sort_order ?? 0) || 0,
         config:
           rawTool.config && typeof rawTool.config === "object" && !Array.isArray(rawTool.config)
             ? (rawTool.config as Record<string, unknown>)
@@ -423,6 +447,7 @@ function normalizeToolMap(value: unknown): CaseToolMap {
       tool_type: "tool",
       summary: String(rawValue ?? ""),
       enabled: true,
+      priority: 0,
       config: {},
     };
   });
@@ -513,6 +538,27 @@ function setStepTab(step: CaseStep, tab: ToolTabKey) {
   stepTabMap[getStepKey(step)] = tab;
 }
 
+function usesAddToolDropdown(tab: ToolTabKey) {
+  return tab !== "assertions";
+}
+
+function getAddToolButtonTitle(tab: ToolTabKey) {
+  if (tab === "assertions") {
+    return "添加断言";
+  }
+  return "添加处理工具";
+}
+
+function handleAddToolButton(step: CaseStep) {
+  const tab = getStepTab(step);
+  if (usesAddToolDropdown(tab)) {
+    return;
+  }
+  if (tab === "assertions") {
+    addToolToStep(step, tab, "assertion");
+  }
+}
+
 function ensureToolMap(step: CaseStep, tab: ToolTabKey) {
   if (typeof step[tab] === "string" || !step[tab]) {
     step[tab] = normalizeToolMap(step[tab]);
@@ -521,10 +567,15 @@ function ensureToolMap(step: CaseStep, tab: ToolTabKey) {
 }
 
 function getToolEntries(step: CaseStep, tab: ToolTabKey) {
-  return Object.entries(ensureToolMap(step, tab)).map(([toolId, tool]) => ({
-    toolId,
-    tool,
-  }));
+  return Object.entries(ensureToolMap(step, tab))
+    .map(([toolId, tool], index) => ({
+      toolId,
+      tool: {
+        ...tool,
+        priority: Number(tool.priority ?? index),
+      },
+    }))
+    .sort((left, right) => Number(left.tool.priority ?? 0) - Number(right.tool.priority ?? 0));
 }
 
 function getStepMethod(step: CaseStep) {
@@ -541,6 +592,544 @@ function getStepPlaceholder(tab: ToolTabKey) {
     assertions: "暂无断言处理工具",
     post_processing: "暂无后置处理工具",
   }[tab];
+}
+
+function getToolLabel(tool: CaseToolRecord) {
+  const toolType = String(tool.tool_type ?? "tool");
+  if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
+    return "参数提取";
+  }
+  const option = Object.values(TOOL_OPTIONS)
+    .flat()
+    .find((item) => item.type === toolType);
+  if (toolType === "assertion" || toolType.includes("assert")) {
+    return "断言";
+  }
+  return String(tool.tool_label ?? option?.label ?? toolType);
+}
+
+function getToolSummary(tool: CaseToolRecord) {
+  const config = (tool.config ?? {}) as Record<string, unknown>;
+  if (tool.tool_type === "http_request") {
+    const method = String(config.method ?? "GET");
+    const url = String(config.url ?? "");
+    return `${method} ${url}`.trim() || "未配置请求地址";
+  }
+  if (tool.tool_type === "sql_tool") {
+    const database = String(config.database ?? "");
+    return database ? `数据库：${database}` : "未配置数据库";
+  }
+  if (tool.tool_type === "parameter_extraction") {
+    const extractions = Array.isArray(tool.extractions) ? tool.extractions : [];
+    return extractions.length ? `提取 ${extractions.length} 个变量` : "未配置提取规则";
+  }
+  if (tool.tool_type === "assertion") {
+    const assertions = Array.isArray(tool.assertions) ? tool.assertions : [];
+    return assertions.length ? `断言 ${assertions.length} 条规则` : "未配置断言规则";
+  }
+  return String(tool.summary ?? "未配置工具说明");
+}
+
+function getToolRowText(tool: CaseToolRecord) {
+  const label = getToolLabel(tool);
+  const name = String(tool.name ?? "").trim();
+  const summary = getToolSummary(tool).trim();
+  if (!name) {
+    return summary || label;
+  }
+  if (!summary || summary === name) {
+    return name;
+  }
+  if (name === label) {
+    return summary;
+  }
+  return `${name} · ${summary}`;
+}
+
+function getToolDisplayName(tool: CaseToolRecord) {
+  return String(tool.name ?? "").trim() || getToolLabel(tool);
+}
+
+function getToolTypeIcon(tool: CaseToolRecord) {
+  const toolType = String(tool.tool_type ?? "");
+  if (toolType === "http_request") {
+    return httpToolIcon;
+  }
+  if (toolType === "sql_tool") {
+    return sqlToolIcon;
+  }
+  if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
+    return extractionToolIcon;
+  }
+  if (toolType === "assertion" || toolType.includes("assert")) {
+    return assertionToolIcon;
+  }
+  return apiToolIcon;
+}
+
+function getToolPreviewRows(tool: CaseToolRecord) {
+  const config = (tool.config ?? {}) as Record<string, unknown>;
+  if (tool.tool_type === "http_request") {
+    return [
+      String(config.url ?? ""),
+      String(config.body ?? ""),
+    ].filter(Boolean).slice(0, 2);
+  }
+  if (tool.tool_type === "sql_tool") {
+    return [
+      String(config.sql ?? ""),
+      Array.isArray(tool.output_fields) ? tool.output_fields.join(", ") : "",
+    ].filter(Boolean).slice(0, 2);
+  }
+  if (tool.tool_type === "parameter_extraction") {
+    return (Array.isArray(tool.extractions) ? tool.extractions : [])
+      .slice(0, 2)
+      .map((item) => `${item.variable || "变量"} <- ${item.path || "路径"}`);
+  }
+  if (tool.tool_type === "assertion") {
+    return (Array.isArray(tool.assertions) ? tool.assertions : [])
+      .slice(0, 2)
+      .map((item) => `${item.field || "字段"} ${formatAssertionOperator(item.operator)} ${item.expected || "空"}`);
+  }
+  return [String(tool.summary ?? "")].filter(Boolean);
+}
+
+function formatAssertionOperator(operator?: string) {
+  return ASSERTION_OPERATOR_OPTIONS.find((item) => item.value === operator)?.label ?? "=";
+}
+
+function createToolRow(): ToolDraftRow {
+  return {
+    rowKey: createKey("tool-row"),
+    field: "",
+    operator: "equal",
+    expected: "",
+    variable: "",
+    path: "",
+  };
+}
+
+function createToolHeaderRow(key = "", value = ""): ToolHeaderRow {
+  return {
+    rowKey: createKey("tool-header"),
+    key,
+    value,
+  };
+}
+
+function resetToolForm() {
+  toolForm.name = "";
+  toolForm.summary = "";
+  toolForm.method = "GET";
+  toolForm.url = "";
+  toolForm.timeout = 30;
+  toolForm.headersText = "{}";
+  toolForm.bodyText = "{}";
+  toolForm.database = "";
+  toolForm.sqlText = "";
+  toolForm.outputFieldsText = "";
+  httpToolTab.value = "body";
+  toolHeaderRows.value = [];
+  toolRows.value = [];
+}
+
+function getStepByKey(stepKey: string) {
+  return form.steps.find((item) => getStepKey(item) === stepKey) ?? null;
+}
+
+function getToolByContext(stepKey: string, tab: ToolTabKey, toolId: string) {
+  const step = getStepByKey(stepKey);
+  if (!step) {
+    return null;
+  }
+  return ensureToolMap(step, tab)[toolId] ?? null;
+}
+
+function inferToolDialogKind(toolType: string, tab: ToolTabKey): ToolDialogKind {
+  if (toolType === "http_request") {
+    return "http_request";
+  }
+  if (toolType === "sql_tool") {
+    return "sql_tool";
+  }
+  if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
+    return "parameter_extraction";
+  }
+  if (tab === "assertions" || toolType.includes("assert")) {
+    return "assertion";
+  }
+  return "generic";
+}
+
+function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
+  resetToolForm();
+  toolDialogKind.value = inferToolDialogKind(String(tool.tool_type ?? "tool"), tab);
+  const config = (tool.config ?? {}) as Record<string, unknown>;
+  toolForm.name = String(tool.name ?? "");
+  toolForm.summary = String(tool.summary ?? "");
+  if (toolDialogKind.value === "http_request") {
+    toolForm.method = String(config.method ?? "GET");
+    toolForm.url = String(config.url ?? "");
+    toolForm.timeout = Number(config.timeout ?? 30) || 30;
+    const rawHeaders =
+      typeof config.headers === "string"
+        ? (() => {
+            try {
+              return JSON.parse(String(config.headers));
+            } catch {
+              return {};
+            }
+          })()
+        : ((config.headers ?? {}) as Record<string, unknown>);
+    const headerEntries = Object.entries(rawHeaders ?? {});
+    toolHeaderRows.value = headerEntries.length
+      ? headerEntries.map(([key, value]) => ({
+          rowKey: createKey("header"),
+          key,
+          value: String(value ?? ""),
+        }))
+      : [createToolHeaderRow("Content-Type", "application/json")];
+    if (typeof config.body === "string") {
+      toolForm.bodyText = String(config.body).trim() || "{}";
+    } else {
+      toolForm.bodyText = JSON.stringify(config.body ?? {}, null, 2);
+    }
+    const rows = Array.isArray(config.extractions) ? config.extractions : [];
+    toolRows.value = rows.length
+      ? rows.map((item) => ({
+          rowKey: createKey("extract"),
+          field: "",
+          operator: "equal",
+          expected: "",
+          variable: String((item as Record<string, unknown>).variable ?? ""),
+          path: String((item as Record<string, unknown>).path ?? ""),
+        }))
+      : [createToolRow()];
+    return;
+  }
+  if (toolDialogKind.value === "sql_tool") {
+    toolForm.database = String(config.database ?? "");
+    toolForm.sqlText = String(config.sql ?? "");
+    toolForm.outputFieldsText = Array.isArray(tool.output_fields)
+      ? tool.output_fields.join(", ")
+      : String(config.output_fields ?? "");
+    return;
+  }
+  if (toolDialogKind.value === "parameter_extraction") {
+    const rows = Array.isArray(tool.extractions)
+      ? tool.extractions
+      : Array.isArray(config.extractions)
+        ? config.extractions
+        : [];
+    toolRows.value = rows.length
+      ? rows.map((item) => ({
+          rowKey: createKey("extract"),
+          field: "",
+          operator: "equal",
+          expected: "",
+          variable: String((item as Record<string, unknown>).variable ?? ""),
+          path: String((item as Record<string, unknown>).path ?? ""),
+        }))
+      : [createToolRow()];
+    return;
+  }
+  if (toolDialogKind.value === "assertion") {
+    const rows = Array.isArray(tool.assertions)
+      ? tool.assertions
+      : Array.isArray(config.assertions)
+        ? config.assertions
+        : [];
+    toolRows.value = rows.length
+      ? rows.map((item) => ({
+          rowKey: createKey("assert"),
+          field: String((item as Record<string, unknown>).field ?? ""),
+          operator: String((item as Record<string, unknown>).operator ?? "equal"),
+          expected: String((item as Record<string, unknown>).expected ?? ""),
+          variable: "",
+          path: "",
+        }))
+      : [createToolRow()];
+  }
+}
+
+function openNewToolDialog(step: CaseStep, tab: ToolTabKey, toolType: string) {
+  const defaults = createDefaultToolConfig(toolType, tab);
+  toolDialogStepKey.value = getStepKey(step);
+  toolDialogTab.value = tab;
+  toolDialogToolId.value = "";
+  toolDialogNewType.value = toolType;
+  toolDialogIsNew.value = true;
+  toolDialogCommitted.value = false;
+  fillToolDialogFromRecord(
+    {
+      id: "",
+      name: String(defaults.name ?? getToolLabel({ tool_type: toolType })),
+      summary: String(defaults.summary ?? ""),
+      enabled: true,
+      tool_type: String(defaults.tool_type ?? toolType),
+      tool_label: getToolLabel({ tool_type: String(defaults.tool_type ?? toolType) }),
+      config: ((defaults.config as Record<string, unknown>) ?? {}) as Record<string, unknown>,
+      ...(defaults as Record<string, unknown>),
+    },
+    tab,
+  );
+  toolDialogTitle.value = `新增${getToolLabel({ tool_type: String(defaults.tool_type ?? toolType) })}`;
+  toolDialogVisible.value = true;
+}
+
+function openToolDialog(step: CaseStep, tab: ToolTabKey, toolId: string, options?: { isNew?: boolean }) {
+  const tool = ensureToolMap(step, tab)[toolId];
+  if (!tool) {
+    return;
+  }
+  toolDialogStepKey.value = getStepKey(step);
+  toolDialogTab.value = tab;
+  toolDialogToolId.value = toolId;
+  toolDialogNewType.value = "";
+  toolDialogIsNew.value = Boolean(options?.isNew);
+  toolDialogCommitted.value = false;
+  toolDialogTitle.value = `${toolDialogIsNew.value ? "新增" : "编辑"}${getToolLabel(tool)}`;
+  fillToolDialogFromRecord(tool, tab);
+  toolDialogVisible.value = true;
+}
+
+function handleToolDialogClosed() {
+  toolDialogIsNew.value = false;
+  toolDialogCommitted.value = false;
+  toolDialogNewType.value = "";
+  toolDialogToolId.value = "";
+  toolDialogStepKey.value = "";
+  toolDialogTitle.value = "";
+  httpToolTab.value = "body";
+  toolHeaderRows.value = [];
+  toolRows.value = [];
+}
+
+function addToolRow() {
+  toolRows.value.push(createToolRow());
+}
+
+function addHeaderRow() {
+  toolHeaderRows.value.push(createToolHeaderRow());
+}
+
+function insertHeaderRow(index: number) {
+  toolHeaderRows.value.splice(index + 1, 0, createToolHeaderRow());
+}
+
+function removeHeaderRow(index: number) {
+  if (toolHeaderRows.value.length <= 1) {
+    toolHeaderRows.value = [createToolHeaderRow("Content-Type", "application/json")];
+    return;
+  }
+  toolHeaderRows.value.splice(index, 1);
+}
+
+function insertToolRow(index: number) {
+  toolRows.value.splice(index + 1, 0, createToolRow());
+}
+
+function removeToolRow(index: number) {
+  if (toolRows.value.length <= 1) {
+    toolRows.value = [createToolRow()];
+    return;
+  }
+  toolRows.value.splice(index, 1);
+}
+
+function updateToolPriorities(map: CaseToolMap) {
+  Object.values(map).forEach((tool, index) => {
+    tool.priority = index + 1;
+  });
+}
+
+function createDefaultToolConfig(toolType: string, tab: ToolTabKey) {
+  if (toolType === "http_request") {
+    return {
+      name: "HTTP请求",
+      summary: "",
+      config: {
+        method: "GET",
+        url: "",
+        timeout: 30,
+        headers: {},
+        body: {},
+        extractions: [{ variable: "", path: "" }],
+      },
+    };
+  }
+  if (toolType === "sql_tool") {
+    return {
+      name: "SQL工具",
+      summary: "",
+      output_fields: [],
+      config: {
+        database: "",
+        sql: "",
+      },
+    };
+  }
+  if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
+    return {
+      name: "参数提取",
+      summary: "",
+      tool_type: "parameter_extraction",
+      extractions: [{ variable: "", path: "" }],
+      config: {
+        extractions: [{ variable: "", path: "" }],
+      },
+    };
+  }
+  if (tab === "assertions") {
+    return {
+      name: "断言",
+      summary: "",
+      tool_type: "assertion",
+      assertions: [{ field: "", operator: "equal", expected: "" }],
+      config: {
+        assertions: [{ field: "", operator: "equal", expected: "" }],
+      },
+    };
+  }
+  return {
+    name: getToolLabel({ tool_type: toolType }),
+    summary: "",
+    config: {},
+  };
+}
+
+function saveToolDialog() {
+  const step = getStepByKey(toolDialogStepKey.value);
+  if (!step) {
+    toolDialogVisible.value = false;
+    return;
+  }
+  const map = ensureToolMap(step, toolDialogTab.value);
+  const existingTool = toolDialogToolId.value ? map[toolDialogToolId.value] : null;
+  const toolId = toolDialogToolId.value || createKey(toolDialogNewType.value || toolDialogKind.value);
+  const tool =
+    existingTool ??
+    ({
+      id: toolId,
+      name: "",
+      summary: "",
+      enabled: true,
+      priority: Object.keys(map).length + 1,
+      tool_type: toolDialogNewType.value || toolDialogKind.value,
+      tool_label: getToolLabel({ tool_type: toolDialogNewType.value || toolDialogKind.value }),
+      config: {},
+    } as CaseToolRecord);
+  toolDialogSaving.value = true;
+  try {
+    tool.name = toolForm.name.trim() || getToolLabel(tool);
+    tool.summary = toolForm.summary.trim();
+    if (toolDialogKind.value === "http_request") {
+      if (!toolForm.url.trim()) {
+        ElMessage.warning("请输入请求 URL");
+        return;
+      }
+      const headerEntries = toolHeaderRows.value
+        .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
+        .filter((row) => row.key || row.value);
+      if (headerEntries.some((row) => !row.key || !row.value)) {
+        ElMessage.warning("请求头名称和值不能为空");
+        return;
+      }
+      const headers = Object.fromEntries(headerEntries.map((row) => [row.key, row.value]));
+      let body: unknown = toolForm.bodyText;
+      try {
+        body = toolForm.bodyText.trim() ? JSON.parse(toolForm.bodyText) : {};
+      } catch {
+        body = toolForm.bodyText;
+      }
+      const extractionRows = toolRows.value
+        .map((row) => ({ variable: row.variable.trim(), path: row.path.trim() }))
+        .filter((row) => row.variable || row.path);
+      if (extractionRows.some((row) => !row.variable || !row.path)) {
+        ElMessage.warning("响应提取的变量名称和 JSONPath 不能为空");
+        return;
+      }
+      tool.config = {
+        method: toolForm.method,
+        url: toolForm.url.trim(),
+        timeout: Number(toolForm.timeout) || 30,
+        headers,
+        body,
+        extractions: extractionRows,
+      };
+      tool.summary = toolForm.summary.trim() || `${toolForm.method} ${toolForm.url.trim()}`.trim();
+      tool.tool_type = "http_request";
+    } else if (toolDialogKind.value === "sql_tool") {
+      if (!toolForm.sqlText.trim()) {
+        ElMessage.warning("请输入 SQL 语句");
+        return;
+      }
+      if (!/^select\b/i.test(toolForm.sqlText.trim())) {
+        ElMessage.warning("SQL 工具仅支持 SELECT 查询");
+        return;
+      }
+      const outputFields = toolForm.outputFieldsText
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      tool.output_fields = outputFields;
+      tool.config = {
+        database: toolForm.database.trim(),
+        sql: toolForm.sqlText,
+      };
+      tool.summary = toolForm.summary.trim() || (toolForm.database.trim() ? `数据库：${toolForm.database.trim()}` : "");
+      tool.tool_type = "sql_tool";
+    } else if (toolDialogKind.value === "parameter_extraction") {
+      const extractions = toolRows.value
+        .map((row) => ({ variable: row.variable.trim(), path: row.path.trim() }))
+        .filter((row) => row.variable || row.path);
+      if (!extractions.length) {
+        ElMessage.warning("请至少配置一条参数提取规则");
+        return;
+      }
+      if (extractions.some((row) => !row.variable || !row.path)) {
+        ElMessage.warning("参数提取的变量名称和 JSONPath 不能为空");
+        return;
+      }
+      tool.extractions = extractions;
+      tool.config = { extractions };
+      tool.tool_type = "parameter_extraction";
+      tool.summary = toolForm.summary.trim() || (extractions.length ? `提取 ${extractions.length} 个变量` : "");
+    } else if (toolDialogKind.value === "assertion") {
+      const assertions = toolRows.value
+        .map((row) => ({
+          field: row.field.trim(),
+          operator: row.operator,
+          expected: row.expected.trim(),
+        }))
+        .filter((row) => row.field || row.expected);
+      if (!assertions.length) {
+        ElMessage.warning("请至少配置一条断言规则");
+        return;
+      }
+      if (assertions.some((row) => !row.field)) {
+        ElMessage.warning("断言字段不能为空");
+        return;
+      }
+      tool.assertions = assertions;
+      tool.config = { assertions };
+      tool.tool_type = "assertion";
+      tool.summary = toolForm.summary.trim() || (assertions.length ? `断言 ${assertions.length} 条规则` : "");
+    } else {
+      tool.summary = toolForm.summary.trim();
+    }
+    if (!existingTool) {
+      tool.id = toolId;
+      map[toolId] = tool;
+      updateToolPriorities(map);
+      toolDialogToolId.value = toolId;
+    }
+    toolDialogCommitted.value = true;
+    markActiveModified();
+    toolDialogVisible.value = false;
+  } finally {
+    toolDialogSaving.value = false;
+  }
 }
 
 function getTemplateMethodClass(method: string) {
@@ -986,6 +1575,10 @@ async function saveCase(options?: { silent?: boolean }) {
     ElMessage.warning("目标同级目录下已存在同名测试用例");
     return null;
   }
+  if (form.enable_encryption && (!form.encrypt_url.trim() || !form.decrypt_url.trim())) {
+    ElMessage.warning("启用加解密功能必须配置加密URL和解密URL");
+    return null;
+  }
 
   saving.value = true;
   try {
@@ -1379,12 +1972,34 @@ function toggleStepEnabled(step: CaseStep) {
   markActiveModified();
 }
 
-function toggleStepEncryption(step: CaseStep) {
-  step.enable_encryption = !step.enable_encryption;
+function syncAllStepEncryptionStatus(enabled: boolean) {
+  form.steps.forEach((item) => {
+    item.enable_encryption = enabled;
+  });
+}
+
+function handleGlobalEncryptionChange(event: Event) {
+  const checked = (event.target as HTMLInputElement).checked;
+  form.enable_encryption = checked;
+  if (!checked) {
+    form.encrypt_url = "";
+    form.decrypt_url = "";
+  }
+  syncAllStepEncryptionStatus(checked);
   markActiveModified();
 }
 
-function focusTemplateFromStep(step: CaseStep) {
+function toggleStepEncryption(step: CaseStep) {
+  const nextState = !step.enable_encryption;
+  if (nextState && !form.enable_encryption) {
+    ElMessage.warning("启用失败，全局加解密配置未启用");
+    return;
+  }
+  step.enable_encryption = nextState;
+  markActiveModified();
+}
+
+async function focusTemplateFromStep(step: CaseStep) {
   if (!step.api_template_id) {
     return;
   }
@@ -1392,25 +2007,26 @@ function focusTemplateFromStep(step: CaseStep) {
   nextTick(() => {
     templateTreeRef.value?.setCurrentKey?.(selectedTemplateNodeId.value);
   });
+  await router.push({
+    name: "interface-auto-templates",
+    query: {
+      openTemplateId: String(step.api_template_id),
+    },
+  });
 }
 
+
 function addToolToStep(step: CaseStep, tab: ToolTabKey, toolType: string) {
-  const toolOption = TOOL_OPTIONS[tab].find((item) => item.type === toolType);
-  const map = ensureToolMap(step, tab);
-  const toolId = createKey(toolType);
-  map[toolId] = {
-    id: toolId,
-    name: toolOption?.label ?? "新工具",
-    tool_type: toolType,
-    summary: "",
-    enabled: true,
-    config: {},
-  };
-  markActiveModified();
+  openNewToolDialog(step, tab, toolType);
 }
 
 function handleToolCommand(step: CaseStep, command: string | number | object) {
-  addToolToStep(step, getStepTab(step), String(command));
+  const tab = getStepTab(step);
+  if (tab === "assertions") {
+    addToolToStep(step, tab, "assertion");
+    return;
+  }
+  addToolToStep(step, tab, String(command));
 }
 
 function copyTool(step: CaseStep, tab: ToolTabKey, toolId: string) {
@@ -1424,14 +2040,72 @@ function copyTool(step: CaseStep, tab: ToolTabKey, toolId: string) {
     ...deepClone(source),
     id: cloneId,
     name: `${source.name ?? "工具"} 副本`,
+    priority: Object.keys(map).length + 1,
   };
+  updateToolPriorities(map);
   markActiveModified();
 }
 
 function removeTool(step: CaseStep, tab: ToolTabKey, toolId: string) {
   const map = ensureToolMap(step, tab);
   delete map[toolId];
+  updateToolPriorities(map);
   markActiveModified();
+}
+
+function resetToolDragState() {
+  draggedToolStepKey.value = "";
+  draggedToolTabKey.value = "";
+  draggedToolId.value = "";
+  dragOverToolId.value = "";
+}
+
+function onToolDragStart(step: CaseStep, tab: ToolTabKey, toolId: string) {
+  draggedToolStepKey.value = getStepKey(step);
+  draggedToolTabKey.value = tab;
+  draggedToolId.value = toolId;
+  dragOverToolId.value = toolId;
+}
+
+function onToolDragOver(step: CaseStep, tab: ToolTabKey, toolId: string) {
+  if (draggedToolStepKey.value !== getStepKey(step) || draggedToolTabKey.value !== tab) {
+    return;
+  }
+  dragOverToolId.value = toolId;
+}
+
+function onToolDrop(step: CaseStep, tab: ToolTabKey, targetToolId: string) {
+  if (
+    !draggedToolId.value ||
+    draggedToolId.value === targetToolId ||
+    draggedToolStepKey.value !== getStepKey(step) ||
+    draggedToolTabKey.value !== tab
+  ) {
+    resetToolDragState();
+    return;
+  }
+  const entries = getToolEntries(step, tab);
+  const orderedToolIds = entries.map((entry) => entry.toolId);
+  const sourceIndex = orderedToolIds.indexOf(draggedToolId.value);
+  const targetIndex = orderedToolIds.indexOf(targetToolId);
+  if (sourceIndex === -1 || targetIndex === -1) {
+    resetToolDragState();
+    return;
+  }
+  const [movedToolId] = orderedToolIds.splice(sourceIndex, 1);
+  orderedToolIds.splice(targetIndex, 0, movedToolId);
+  const map = ensureToolMap(step, tab);
+  orderedToolIds.forEach((toolId, index) => {
+    if (map[toolId]) {
+      map[toolId].priority = index;
+    }
+  });
+  markActiveModified();
+  resetToolDragState();
+}
+
+function onToolDragEnd() {
+  resetToolDragState();
 }
 
 async function openVariableDialog() {
@@ -1679,17 +2353,21 @@ onBeforeUnmount(() => {
 
             <div class="header-row actions-row">
               <label class="encryption-check">
-                <input v-model="form.enable_encryption" type="checkbox" />
+                <input :checked="form.enable_encryption" type="checkbox" @change="handleGlobalEncryptionChange" />
                 <span>启用加解密</span>
               </label>
-              <button class="action-button solid" @click="openVariableDialog">变量</button>
-              <button class="action-icon play" :disabled="running" @click="runCase">
-                <el-icon><VideoPlay /></el-icon>
+              <button class="action-button solid compact" @click="openVariableDialog">变量</button>
+              <button class="action-icon legacy-icon" :disabled="running" @click="runCase">
+                <img
+                  class="toolbar-action-image"
+                  :src="running ? stopingToolIcon : runningToolIcon"
+                  :alt="running ? '执行中' : '调试用例'"
+                />
               </button>
-              <button class="action-icon" @click="logDialogVisible = true">
-                <el-icon><Document /></el-icon>
+              <button class="action-icon legacy-icon" @click="logDialogVisible = true">
+                <img class="toolbar-action-image" :src="logToolIcon" alt="查看日志" />
               </button>
-              <button class="action-button solid" :disabled="saving" @click="triggerSaveCase">保存</button>
+              <button class="action-button solid compact" :disabled="saving" @click="triggerSaveCase">保存</button>
             </div>
 
             <div v-if="form.enable_encryption" class="header-row encryption-row">
@@ -1726,15 +2404,21 @@ onBeforeUnmount(() => {
                   <span class="step-title">step{{ step.step_order }}</span>
                   <div class="step-header-actions">
                     <button class="step-icon" title="步骤加解密" @click.stop="toggleStepEncryption(step)">
-                      <el-icon v-if="step.enable_encryption"><Lock /></el-icon>
-                      <el-icon v-else><Unlock /></el-icon>
+                      <img
+                        class="step-icon-image"
+                        :src="step.enable_encryption ? lockToolIcon : unlockToolIcon"
+                        :alt="step.enable_encryption ? '已启用加解密' : '未启用加解密'"
+                      />
                     </button>
                     <button class="step-icon" title="复制步骤" @click.stop="duplicateStep(step)">
                       <el-icon><CopyDocument /></el-icon>
                     </button>
                     <button class="step-icon" title="启停步骤" @click.stop="toggleStepEnabled(step)">
-                      <el-icon v-if="step.enabled"><CircleCheck /></el-icon>
-                      <el-icon v-else><CircleClose /></el-icon>
+                      <img
+                        class="step-icon-image"
+                        :src="step.enabled ? stopToolIcon : startToolIcon"
+                        :alt="step.enabled ? '停用步骤' : '启用步骤'"
+                      />
                     </button>
                     <button class="step-icon danger" title="删除步骤" @click.stop="deleteStep(step)">
                       <el-icon><Delete /></el-icon>
@@ -1753,8 +2437,12 @@ onBeforeUnmount(() => {
                   >
                     {{ getStepLabel(step) }}
                   </button>
-                  <el-dropdown trigger="click" @command="handleToolCommand(step, $event)">
-                    <button class="step-add-tool" title="添加工具">
+                  <el-dropdown
+                    v-if="usesAddToolDropdown(getStepTab(step))"
+                    trigger="click"
+                    @command="handleToolCommand(step, $event)"
+                  >
+                    <button class="step-add-tool" :title="getAddToolButtonTitle(getStepTab(step))">
                       <el-icon><Plus /></el-icon>
                     </button>
                     <template #dropdown>
@@ -1769,6 +2457,14 @@ onBeforeUnmount(() => {
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
+                  <button
+                    v-else
+                    class="step-add-tool"
+                    :title="getAddToolButtonTitle(getStepTab(step))"
+                    @click.stop="handleAddToolButton(step)"
+                  >
+                    <el-icon><Plus /></el-icon>
+                  </button>
                 </div>
 
                 <div class="step-tabs">
@@ -1782,27 +2478,42 @@ onBeforeUnmount(() => {
                     {{ TOOL_TAB_LABELS[tab] }}
                   </button>
                 </div>
-
                 <div class="tool-panel">
                   <template v-if="getToolEntries(step, getStepTab(step)).length">
                     <div
                       v-for="entry in getToolEntries(step, getStepTab(step))"
                       :key="entry.toolId"
                       class="tool-item"
+                      :class="{
+                        disabled: entry.tool.enabled === false,
+                        dragging: draggedToolId === entry.toolId,
+                        dragover:
+                          draggedToolId !== entry.toolId &&
+                          draggedToolStepKey === getStepKey(step) &&
+                          draggedToolTabKey === getStepTab(step) &&
+                          dragOverToolId === entry.toolId,
+                      }"
+                      draggable="true"
+                      @dragstart="onToolDragStart(step, getStepTab(step), entry.toolId)"
+                      @dragover.prevent="onToolDragOver(step, getStepTab(step), entry.toolId)"
+                      @drop.prevent="onToolDrop(step, getStepTab(step), entry.toolId)"
+                      @dragend="onToolDragEnd"
                     >
-                      <div class="tool-item-head">
-                        <span class="tool-chip">{{ entry.tool.tool_type }}</span>
-                        <div class="tool-actions">
-                          <button class="tool-action" title="复制工具" @click.stop="copyTool(step, getStepTab(step), entry.toolId)">
-                            复制
-                          </button>
-                          <button class="tool-action danger" title="删除工具" @click.stop="removeTool(step, getStepTab(step), entry.toolId)">
-                            删除
-                          </button>
-                        </div>
+                      <img class="tool-type-icon" :src="getToolTypeIcon(entry.tool)" :alt="getToolLabel(entry.tool)" />
+                      <span class="tool-name-text" :title="getToolDisplayName(entry.tool)">
+                        {{ getToolDisplayName(entry.tool) }}
+                      </span>
+                      <div class="tool-actions">
+                        <button class="tool-action" title="编辑工具" @click.stop="openToolDialog(step, getStepTab(step), entry.toolId)">
+                          <el-icon><Edit /></el-icon>
+                        </button>
+                        <button class="tool-action" title="复制工具" @click.stop="copyTool(step, getStepTab(step), entry.toolId)">
+                          <el-icon><CopyDocument /></el-icon>
+                        </button>
+                        <button class="tool-action danger" title="删除工具" @click.stop="removeTool(step, getStepTab(step), entry.toolId)">
+                          <el-icon><Delete /></el-icon>
+                        </button>
                       </div>
-                      <input v-model="entry.tool.name" class="tool-input" placeholder="工具名称" />
-                      <input v-model="entry.tool.summary" class="tool-input" placeholder="工具说明" />
                     </div>
                   </template>
                   <div v-else class="tool-empty">{{ getStepPlaceholder(getStepTab(step)) }}</div>
@@ -1857,6 +2568,129 @@ onBeforeUnmount(() => {
       <button @click="closeOtherTabs">关闭其他</button>
       <button @click="closeAllTabs">关闭全部</button>
     </div>
+
+    <el-dialog
+      v-model="toolDialogVisible"
+      :title="toolDialogTitle"
+      width="820px"
+      class="step-tool-dialog"
+      @closed="handleToolDialogClosed"
+    >
+      <div class="step-tool-dialog-body">
+        <div class="tool-dialog-row">
+          <label>名称:</label>
+          <input v-model="toolForm.name" class="tool-input dialog-input" placeholder="请输入工具名称" />
+        </div>
+
+        <template v-if="toolDialogKind === 'http_request'">
+          <div class="tool-dialog-grid">
+            <div class="tool-dialog-row compact">
+              <label>请求方式:</label>
+              <el-select v-model="toolForm.method" class="tool-dialog-select">
+                <el-option
+                  v-for="method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']"
+                  :key="method"
+                  :label="method"
+                  :value="method"
+                />
+              </el-select>
+            </div>
+            <div class="tool-dialog-row compact">
+              <label>超时时间:</label>
+              <el-input-number v-model="toolForm.timeout" :min="1" :max="300" />
+            </div>
+          </div>
+          <div class="tool-dialog-row">
+            <label>请求URL:</label>
+            <input v-model="toolForm.url" class="tool-input dialog-input" placeholder="请输入完整请求地址" />
+          </div>
+          <el-tabs v-model="httpToolTab" class="tool-inner-tabs">
+            <el-tab-pane label="请求头" name="headers">
+              <div class="tool-dialog-section embedded">
+                <div v-for="(row, index) in toolHeaderRows" :key="row.rowKey" class="tool-config-row">
+                  <input v-model="row.key" class="tool-input config-input" placeholder="Header名称" />
+                  <input v-model="row.value" class="tool-input config-input wide" placeholder="Header值" />
+                  <button class="tool-action text-action" title="新增" @click="insertHeaderRow(index)">+</button>
+                  <button class="tool-action danger text-action" title="删除" @click="removeHeaderRow(index)">-</button>
+                </div>
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="请求体" name="body">
+              <el-input v-model="toolForm.bodyText" type="textarea" :rows="9" resize="none" />
+            </el-tab-pane>
+          </el-tabs>
+          <div class="tool-dialog-section">
+            <div class="tool-dialog-section-title">响应提取</div>
+            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row">
+              <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
+              <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
+              <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
+              <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="toolDialogKind === 'sql_tool'">
+          <div class="tool-dialog-row">
+            <label>库名:</label>
+            <input v-model="toolForm.database" class="tool-input dialog-input" placeholder="请输入数据库名称" />
+          </div>
+          <div class="tool-dialog-row textarea">
+            <label>SQL语句:</label>
+            <el-input v-model="toolForm.sqlText" type="textarea" :rows="8" resize="none" />
+          </div>
+          <div class="tool-dialog-row">
+            <label>输出字段:</label>
+            <input v-model="toolForm.outputFieldsText" class="tool-input dialog-input" placeholder="多个字段用英文逗号分隔" />
+          </div>
+        </template>
+
+        <template v-else-if="toolDialogKind === 'parameter_extraction'">
+          <div class="tool-dialog-section">
+            <div class="tool-dialog-section-title">参数提取</div>
+            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row">
+              <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
+              <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
+              <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
+              <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="toolDialogKind === 'assertion'">
+          <div class="tool-dialog-section">
+            <div class="tool-dialog-section-title">断言配置</div>
+            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row assertion-row">
+              <input v-model="row.field" class="tool-input config-input wide" placeholder="支持变量或 jsonpath" />
+              <el-select v-model="row.operator" class="tool-dialog-operator">
+                <el-option
+                  v-for="option in ASSERTION_OPERATOR_OPTIONS"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <input v-model="row.expected" class="tool-input config-input" placeholder="预期值" />
+              <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
+              <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="tool-dialog-row textarea">
+            <label>工具说明:</label>
+            <el-input v-model="toolForm.summary" type="textarea" :rows="6" resize="none" />
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <button class="action-button ghost" @click="toolDialogVisible = false">取消</button>
+          <button class="action-button solid" :disabled="toolDialogSaving" @click="saveToolDialog">确认</button>
+        </span>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="variableDialogVisible" title="变量管理" width="900px">
       <div class="variable-toolbar">
@@ -2230,6 +3064,9 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 0 10px;
   box-sizing: border-box;
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-form-font-size);
+  line-height: var(--qm-form-line-height);
   color: #1f2937;
   outline: none;
 }
@@ -2259,6 +3096,12 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.action-button.compact {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .action-button.solid {
   border-color: #61b741;
   background: #61b741;
@@ -2275,8 +3118,16 @@ onBeforeUnmount(() => {
   color: #36597e;
 }
 
-.action-icon.play {
-  color: #2f7df6;
+.action-icon.legacy-icon {
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+}
+
+.toolbar-action-image {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .steps-board {
@@ -2396,12 +3247,18 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border: none;
   background: transparent;
   color: #5d6b7d;
   font-size: 11px;
+}
+
+.step-icon-image {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
 }
 
 .step-icon.danger,
@@ -2417,7 +3274,8 @@ onBeforeUnmount(() => {
   margin-top: 8px;
   border-radius: 16px;
   padding: 0 8px;
-  background: #fff5e6;
+  border: 1px solid #e2eaf4;
+  background: #f8fbff;
 }
 
 .request-badge {
@@ -2494,14 +3352,15 @@ onBeforeUnmount(() => {
 .tool-panel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  flex: 1 1 auto;
-  min-height: 156px;
+  gap: 2px;
+  flex: 0 0 auto;
+  height: 186px;
   margin-top: 6px;
   border: 1px solid #dbe3ed;
   border-radius: 6px;
-  padding: 6px;
-  overflow: auto;
+  padding: 6px 4px 6px 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .tool-empty {
@@ -2515,22 +3374,41 @@ onBeforeUnmount(() => {
 }
 
 .tool-item {
-  border: 1px solid #e6ebf2;
-  border-radius: 8px;
-  padding: 6px;
-  background: #fafcff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  border: none;
+  border-radius: 0;
+  padding: 0 2px;
+  background: transparent;
+  cursor: grab;
+  transition: background-color 0.16s ease, opacity 0.16s ease;
 }
 
-.tool-chip {
+.tool-item:hover {
+  background: rgb(47 125 246 / 4%);
+}
+
+.tool-item.disabled {
+  opacity: 0.55;
+}
+
+.tool-item.dragging {
+  opacity: 0.45;
+}
+
+.tool-item.dragover {
+  border-radius: 4px;
+  background: #edf4ff;
+}
+
+.tool-type-icon {
   display: inline-flex;
-  align-items: center;
-  height: 20px;
-  border-radius: 999px;
-  padding: 0 8px;
-  background: #eef4ff;
-  color: #3669c9;
-  font-size: 11px;
-  font-weight: 700;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .tool-actions,
@@ -2541,11 +3419,42 @@ onBeforeUnmount(() => {
 }
 
 .tool-action {
-  height: 22px;
-  border-radius: 4px;
-  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 2px;
+  padding: 0;
+  background: transparent;
   color: #475569;
   font-size: 11px;
+  cursor: pointer;
+}
+
+.tool-action:hover {
+  background: rgb(37 99 235 / 9%);
+}
+
+.tool-action.danger:hover {
+  background: rgb(226 85 85 / 10%);
+}
+
+.tool-action .el-icon {
+  font-size: 12px;
+}
+
+.tool-name-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #304255;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tool-input {
@@ -2556,6 +3465,9 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   padding: 0 10px;
   box-sizing: border-box;
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-form-font-size);
+  line-height: var(--qm-form-line-height);
   color: #1f2937;
   outline: none;
 }
@@ -2635,5 +3547,152 @@ onBeforeUnmount(() => {
   font-size: 13px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.step-tool-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tool-dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.tool-dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tool-dialog-row.textarea {
+  align-items: flex-start;
+}
+
+.tool-dialog-row label {
+  width: 74px;
+  flex: 0 0 74px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.dialog-input {
+  margin-top: 0;
+  height: 34px;
+}
+
+.editor-shell :deep(.el-input__wrapper),
+.editor-shell :deep(.el-select__wrapper),
+.editor-shell :deep(.el-textarea__inner),
+.editor-shell :deep(.el-input-number .el-input__inner),
+.step-tool-dialog :deep(.el-input__wrapper),
+.step-tool-dialog :deep(.el-select__wrapper),
+.step-tool-dialog :deep(.el-textarea__inner),
+.step-tool-dialog :deep(.el-input-number .el-input__inner) {
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-form-font-size);
+  line-height: var(--qm-form-line-height);
+}
+
+.tool-dialog-row :deep(.el-textarea),
+.tool-dialog-row :deep(.el-select),
+.tool-dialog-row :deep(.el-input-number) {
+  flex: 1 1 auto;
+}
+
+.tool-dialog-select {
+  min-width: 120px;
+}
+
+.tool-dialog-operator {
+  min-width: 88px;
+}
+
+.tool-dialog-section {
+  border: 1px solid #dbe3ed;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.tool-dialog-section.embedded {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.tool-inner-tabs {
+  margin-top: -2px;
+}
+
+.tool-inner-tabs :deep(.el-tabs__header) {
+  margin: 0 0 10px;
+}
+
+.tool-inner-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: #dbe3ed;
+}
+
+.tool-inner-tabs :deep(.el-tabs__item) {
+  height: 34px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.tool-inner-tabs :deep(.el-tabs__item.is-active) {
+  color: #2f7df6;
+  font-weight: 600;
+}
+
+.tool-dialog-section-title {
+  margin-bottom: 10px;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tool-config-row {
+  display: grid;
+  grid-template-columns: 180px minmax(220px, 1fr) 30px 30px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  border: 1px solid #e5ebf3;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.tool-config-row.assertion-row {
+  grid-template-columns: minmax(220px, 1fr) 88px minmax(140px, 1fr) 30px 30px;
+}
+
+.tool-action.text-action {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid #d7e1ec;
+  border-radius: 6px;
+  padding: 0;
+  background: #fff;
+  color: #475569;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.config-input {
+  margin-top: 0;
+}
+
+.config-input.wide {
+  min-width: 0;
+}
+
+.dialog-footer {
+  display: inline-flex;
+  gap: 8px;
 }
 </style>

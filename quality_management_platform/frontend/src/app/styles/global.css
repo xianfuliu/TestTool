@@ -20,6 +20,10 @@
   --qm-density-column-gap: clamp(12px, 1.25vw, 20px);
   --qm-density-control-gap: clamp(6px, 0.8vh, 10px);
   --qm-density-panel-padding: clamp(8px, 1vh, 12px);
+  --qm-form-font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  --qm-form-font-size: 13px;
+  --qm-form-line-height: 1.5;
+  --qm-form-control-height-sm: 28px;
   --el-color-primary: #1677ff;
   --el-border-radius-base: 8px;
   --el-border-color-light: #f0f0f0;
@@ -72,6 +76,28 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+input,
+textarea,
+select {
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-form-font-size);
+  line-height: var(--qm-form-line-height);
+}
+
+.el-input__wrapper,
+.el-input__inner,
+.el-textarea__inner,
+.el-select__wrapper,
+.el-select__selected-item,
+.el-select__placeholder,
+.el-input-number .el-input__inner,
+.el-input-number__decrease,
+.el-input-number__increase {
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-form-font-size);
+  line-height: var(--qm-form-line-height);
 }
 
 a {
