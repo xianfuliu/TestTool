@@ -83,9 +83,7 @@ def _normalise_product_global_request_config(config: dict[str, Any]) -> dict[str
 
 
 def generate_request_id() -> str:
-    return datetime.now().strftime("%Y%m%d%H%M%S") + "".join(
-        random.choices(string.digits, k=4)
-    )
+    return datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 def default_product_config() -> dict[str, Any]:

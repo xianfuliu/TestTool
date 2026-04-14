@@ -656,7 +656,7 @@ onMounted(() => {
           />
         </div>
 
-        <div class="section-block">
+        <div class="section-block request-block">
           <div class="section-label">请求体</div>
           <el-input
             v-model="requestEditor.bodyText"
@@ -942,10 +942,16 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
+}
+
+.request-block {
+  flex: 1 1 50%;
+  min-height: 180px;
 }
 
 .response-block {
-  flex: 1 1 auto;
+  flex: 1 1 50%;
   min-height: 0;
 }
 
@@ -985,11 +991,21 @@ onMounted(() => {
 
 .legacy-textarea {
   flex: 1 1 auto;
+  min-height: 0;
+}
+
+.request-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.request-editor :deep(.el-textarea),
+.request-editor :deep(.el-textarea__inner) {
+  height: 100%;
 }
 
 .request-editor :deep(.el-textarea__inner) {
-  min-height: 164px !important;
-  max-height: 164px;
+  min-height: 180px !important;
 }
 
 .response-editor {

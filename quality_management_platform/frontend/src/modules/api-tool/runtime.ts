@@ -15,8 +15,7 @@ export function buildRequestId() {
   const hh = `${now.getHours()}`.padStart(2, "0");
   const mi = `${now.getMinutes()}`.padStart(2, "0");
   const ss = `${now.getSeconds()}`.padStart(2, "0");
-  const tail = `${Math.floor(Math.random() * 9000) + 1000}`;
-  return `${yyyy}${mm}${dd}${hh}${mi}${ss}${tail}`;
+  return `${yyyy}${mm}${dd}${hh}${mi}${ss}`;
 }
 
 function replacePlaceholders(template: string, values: Record<string, string>, requestId: string) {

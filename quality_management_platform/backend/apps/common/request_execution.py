@@ -698,6 +698,12 @@ def _request_payload_for_encryption(request: PreparedRequest) -> Any:
     return request.params
 
 
+def _encode_request_payload(payload: Any) -> Any:
+    if isinstance(payload, str):
+        return payload.encode("utf-8")
+    return payload
+
+
 def _perform_http_request(
     request: PreparedRequest,
     context: RequestExecutionContext,
@@ -713,7 +719,9 @@ def _perform_http_request(
     if encryption.enabled and encryption.encrypt_url:
         encrypt_response = requests.post(
             encryption.encrypt_url,
-            data=json_dumps(_request_payload_for_encryption(request)),
+            data=_encode_request_payload(
+                json_dumps(_request_payload_for_encryption(request))
+            ),
             headers=request.headers,
             timeout=request.timeout,
         )
@@ -734,12 +742,12 @@ def _perform_http_request(
         response = requests.get(request.url, **request_kwargs)
     else:
         if encrypted_payload is not None:
-            request_kwargs["data"] = encrypted_payload
+            request_kwargs["data"] = _encode_request_payload(encrypted_payload)
         else:
             if isinstance(request.body, (dict, list)):
                 request_kwargs["json"] = request.body
             elif request.body not in (None, ""):
-                request_kwargs["data"] = request.body
+                request_kwargs["data"] = _encode_request_payload(request.body)
         response = requests.request(method, request.url, **request_kwargs)
 
     raw_body = response.text
@@ -747,7 +755,7 @@ def _perform_http_request(
     if encryption.enabled and encryption.decrypt_url and response.status_code == 200:
         decrypt_response = requests.post(
             encryption.decrypt_url,
-            data=response.text,
+            data=_encode_request_payload(response.text),
             headers=request.headers,
             timeout=request.timeout,
         )
