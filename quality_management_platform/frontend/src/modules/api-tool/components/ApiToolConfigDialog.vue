@@ -979,17 +979,26 @@ function submit() {
   </el-dialog>
 
   <el-dialog v-model="scheduleDialogVisible" title="定时任务" width="560px">
-    <el-form label-position="top">
-      <el-form-item label="任务名称">
-        <el-input v-model="scheduleForm.name" />
-      </el-form-item>
-      <el-form-item label="任务 ID">
-        <el-input v-model="scheduleForm.id" />
-      </el-form-item>
-      <el-form-item label="任务组">
-        <el-input v-model="scheduleForm.jobGroup" />
-      </el-form-item>
-    </el-form>
+    <div class="dialog-inline-form">
+      <div class="dialog-inline-row">
+        <div class="dialog-inline-label">任务名称</div>
+        <div class="dialog-inline-content">
+          <el-input v-model="scheduleForm.name" />
+        </div>
+      </div>
+      <div class="dialog-inline-row">
+        <div class="dialog-inline-label">任务 ID</div>
+        <div class="dialog-inline-content">
+          <el-input v-model="scheduleForm.id" />
+        </div>
+      </div>
+      <div class="dialog-inline-row">
+        <div class="dialog-inline-label">任务组</div>
+        <div class="dialog-inline-content">
+          <el-input v-model="scheduleForm.jobGroup" />
+        </div>
+      </div>
+    </div>
     <template #footer>
       <el-space>
         <el-button @click="scheduleDialogVisible = false">取消</el-button>
@@ -1513,6 +1522,30 @@ function submit() {
   line-height: 1;
 }
 
+.dialog-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialog-inline-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.dialog-inline-label {
+  color: var(--qm-title);
+  font-size: 14px;
+  line-height: 32px;
+  white-space: nowrap;
+}
+
+.dialog-inline-content {
+  min-width: 0;
+}
+
 .inline-config-list {
   display: flex;
   flex-direction: column;
@@ -1596,7 +1629,7 @@ function submit() {
 .layout-drag-item {
   display: grid;
   align-items: center;
-  grid-template-columns: 18px 46px 110px minmax(140px, 1fr) minmax(140px, 1fr) 82px 120px;
+  grid-template-columns: 46px 110px minmax(140px, 1fr) minmax(140px, 1fr) 82px 120px;
   gap: 10px;
 }
 
@@ -1615,7 +1648,7 @@ function submit() {
 }
 
 .layout-drag-header-placeholder {
-  display: block;
+  display: none;
 }
 
 .layout-drag-header-order {
@@ -1645,10 +1678,7 @@ function submit() {
 }
 
 .layout-drag-handle {
-  color: #909399;
-  font-size: 16px;
-  line-height: 1;
-  letter-spacing: -1px;
+  display: none;
 }
 
 .layout-drag-order {
@@ -1711,8 +1741,14 @@ function submit() {
     gap: 6px;
   }
 
+  .dialog-inline-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
   .interface-inline-label,
-  .interface-section-label {
+  .interface-section-label,
+  .dialog-inline-label {
     line-height: 1.5;
   }
 
@@ -1721,7 +1757,7 @@ function submit() {
   }
 
   .layout-drag-item {
-    grid-template-columns: 18px 36px 1fr;
+    grid-template-columns: 36px 1fr;
     align-items: start;
   }
 
@@ -1729,7 +1765,7 @@ function submit() {
   .name-cell,
   .key-cell,
   .hidden-cell {
-    grid-column: 3;
+    grid-column: 2;
   }
 
   .hidden-cell {
