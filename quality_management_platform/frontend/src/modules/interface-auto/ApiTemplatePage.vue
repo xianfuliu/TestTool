@@ -792,17 +792,17 @@ function beautifyBody() {
   }
 }
 
-function handleShortcut(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-    event.preventDefault();
-    if (openedTabs.value.length) {
-      void saveTemplate();
-    }
-  }
-}
-
 function handleGlobalPointer() {
   hideContextMenu();
+}
+
+function handleSaveShortcut() {
+  if (route.name !== "interface-auto-templates") {
+    return;
+  }
+  if (openedTabs.value.length) {
+    void saveTemplate();
+  }
 }
 
 function debugTemplate() {
@@ -853,9 +853,9 @@ watch(paramRows, markActiveModified, { deep: true });
 watch(bodyText, markActiveModified);
 
 onMounted(async () => {
-  window.addEventListener("keydown", handleShortcut);
   window.addEventListener("click", handleGlobalPointer);
   window.addEventListener("contextmenu", handleGlobalPointer);
+  window.addEventListener("interface-auto:save-templates", handleSaveShortcut as EventListener);
   await context.ensureLoaded();
   if (!context.selectedProject.value && context.projects.value.length) {
     context.setProject(context.projects.value[0].id);
@@ -865,9 +865,9 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleShortcut);
   window.removeEventListener("click", handleGlobalPointer);
   window.removeEventListener("contextmenu", handleGlobalPointer);
+  window.removeEventListener("interface-auto:save-templates", handleSaveShortcut as EventListener);
 });
 </script>
 

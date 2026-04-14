@@ -1433,7 +1433,6 @@ def execute_request(
         if "body" in request_override:
             outgoing_request["body"] = request_override.get("body")
 
-    encryption = preview["encryption"]
     request_result = execute_request_definition(
         RequestDefinition(
             protocol=str(outgoing_request.get("protocol") or interface_config.get("protocol") or "http"),

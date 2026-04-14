@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { KeepAlive, computed, reactive, ref } from "vue";
+import { KeepAlive, computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import type { Component } from "vue";
 import { useRoute } from "vue-router";
 import {
@@ -254,6 +254,37 @@ const activeModule = computed(() => {
     flatMenuItems.value.find((item) => route.path.startsWith(item.path)) ??
     flatMenuItems.value[0]
   );
+});
+
+function handleWorkspaceShortcut(event: KeyboardEvent) {
+  if (!(event.ctrlKey || event.metaKey)) {
+    return;
+  }
+  const key = event.key.toLowerCase();
+  if (key === "s") {
+    if (route.name === "interface-auto-cases") {
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent("interface-auto:save-cases"));
+      return;
+    }
+    if (route.name === "interface-auto-templates") {
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent("interface-auto:save-templates"));
+    }
+    return;
+  }
+  if (key === "w" && route.name === "interface-auto-cases") {
+    event.preventDefault();
+    window.dispatchEvent(new CustomEvent("interface-auto:close-case-tab"));
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleWorkspaceShortcut);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleWorkspaceShortcut);
 });
 
 function toggleMenu() {

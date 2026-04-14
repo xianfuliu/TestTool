@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
+  ArrowRight,
   CopyDocument,
   Delete,
   Edit,
@@ -81,9 +82,13 @@ type VariableRow = {
   rowKey: string;
   name: string;
   value: string;
+  id?: number;
+  project_id?: number;
+  variable_type?: string;
+  description?: string;
 };
 
-type GlobalConfigTab = "encryption" | "variables" | "login_headers" | "outputs";
+type GlobalConfigTab = "encryption" | "variables" | "login_headers";
 
 const TOOL_TAB_LABELS: Record<ToolTabKey, string> = {
   pre_processing: "前置",
@@ -127,6 +132,7 @@ const ASSERTION_OPERATOR_OPTIONS = [
 ];
 
 const context = useBusinessProjectContext();
+const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
@@ -141,7 +147,7 @@ const apiFolders = ref<ApiFolder[]>([]);
 const templates = ref<ApiTemplate[]>([]);
 const environments = ref<EnvironmentRecord[]>([]);
 const variableRows = ref<VariableRow[]>([]);
-const globalConfigExpanded = ref(true);
+const globalConfigExpandedMap = reactive<Record<string, boolean>>({});
 const activeGlobalConfigTab = ref<GlobalConfigTab>("encryption");
 const openedTabs = ref<TestCaseRecord[]>([]);
 const modifiedTabs = reactive<Record<string, boolean>>({});
@@ -164,7 +170,6 @@ const activeTabKey = ref("");
 const activeStepKey = ref("");
 const selectedCaseNodeId = ref("");
 const selectedTemplateNodeId = ref("");
-const variableDialogVisible = ref(false);
 const logDialogVisible = ref(false);
 const logLines = ref<string[]>([]);
 const toolDialogVisible = ref(false);
@@ -213,6 +218,15 @@ const cascaderProps = {
 
 const currentProjectId = computed(() => context.selectedProject.value?.id ?? null);
 const currentProjectName = computed(() => context.selectedProject.value?.name ?? "");
+const globalConfigExpanded = computed({
+  get: () => (activeTabKey.value ? Boolean(globalConfigExpandedMap[activeTabKey.value]) : false),
+  set: (value: boolean) => {
+    if (!activeTabKey.value) {
+      return;
+    }
+    globalConfigExpandedMap[activeTabKey.value] = value;
+  },
+});
 
 const projectOptions = computed<CascaderOption[]>(() =>
   context.groups.value.map((group) => ({
@@ -1392,9 +1406,19 @@ function syncProjectPath() {
   projectPath.value = groupId && projectId ? [groupId, projectId] : [];
 }
 
+function ensureGlobalConfigState(tabKey: string) {
+  if (!(tabKey in globalConfigExpandedMap)) {
+    globalConfigExpandedMap[tabKey] = false;
+  }
+}
+
 function resetForm(caseItem?: TestCaseRecord) {
   resetting = true;
   Object.assign(form, normalizeCase(caseItem));
+  if (activeTabKey.value) {
+    ensureGlobalConfigState(activeTabKey.value);
+  }
+  variableRows.value = mapToVariableRows(form.global_vars);
   form.steps.forEach((step) => getStepTab(step));
   activeStepKey.value = form.steps[0] ? getStepKey(form.steps[0]) : "";
   nextTick(() => {
@@ -1483,6 +1507,7 @@ async function openCase(caseId: number) {
     openedTabs.value[index] = { ...mergedDetail, tabKey };
   }
   activeTabKey.value = tabKey;
+  ensureGlobalConfigState(tabKey);
   selectedCaseNodeId.value = `case-${caseId}`;
   resetForm({ ...mergedDetail, tabKey });
   nextTick(() => {
@@ -1503,6 +1528,7 @@ function openDraftCase(folderId: number | null) {
   const draft = createDraftCase(currentProjectId.value, folderId);
   openedTabs.value.push(draft);
   activeTabKey.value = getTabKey(draft);
+  ensureGlobalConfigState(activeTabKey.value);
   resetForm(draft);
 }
 
@@ -1512,6 +1538,7 @@ function focusTab(tabKey: string) {
     return;
   }
   activeTabKey.value = tabKey;
+  ensureGlobalConfigState(tabKey);
   if (next.id && !modifiedTabs[tabKey]) {
     void openCase(next.id);
     return;
@@ -1529,6 +1556,7 @@ async function closeTabsWithConfirm(tabKeys: string[]) {
   const removeTabWithoutConfirm = (tabKey: string) => {
     const remaining = openedTabs.value.filter((item) => getTabKey(item) !== tabKey);
     delete modifiedTabs[tabKey];
+    delete globalConfigExpandedMap[tabKey];
     openedTabs.value = remaining;
     tabContextMenu.visible = false;
     if (!remaining.length) {
@@ -1881,13 +1909,18 @@ function handleGlobalPointer() {
   hideContextMenus();
 }
 
-function handleShortcut(event: KeyboardEvent) {
-  if (event.ctrlKey && event.key.toLowerCase() === "s") {
-    event.preventDefault();
-    void saveCase();
+function handleSaveShortcut() {
+  if (route.name !== "interface-auto-cases") {
+    return;
   }
-  if (event.ctrlKey && event.key.toLowerCase() === "w" && activeTabKey.value) {
-    event.preventDefault();
+  void saveCase();
+}
+
+function handleCloseShortcut() {
+  if (route.name !== "interface-auto-cases") {
+    return;
+  }
+  if (activeTabKey.value) {
     void closeTabsWithConfirm([activeTabKey.value]);
   }
 }
@@ -2287,53 +2320,82 @@ function onToolDragEnd() {
   resetToolDragState();
 }
 
-async function openVariableDialog() {
-  if (!currentProjectId.value) {
-    ElMessage.warning("请先选择项目");
-    return;
-  }
-  variableRows.value = mapToVariableRows(form.global_vars);
-  variableDialogVisible.value = true;
-}
-
 function addVariableRow() {
   variableRows.value.unshift(createVariableRow());
 }
 
+async function loadVariableRows() {
+  variableRows.value = mapToVariableRows(form.global_vars);
+}
+
 async function saveVariableRow(row: VariableRow) {
   if (!row.name.trim()) {
-    ElMessage.warning("变量名称不能为空");
+    ElMessage.warning("Variable name is required");
     return;
   }
-  if (row.id) {
-    await put(`/api/interface-auto/variables/${row.id}/`, {
-      project_id: row.project_id,
-      name: row.name.trim(),
-      value: row.value,
-      variable_type: row.variable_type,
-      description: row.description,
-    });
-  } else {
-    await post("/api/interface-auto/variables/", {
-      project_id: row.project_id,
-      name: row.name.trim(),
-      value: row.value,
-      variable_type: row.variable_type,
-      description: row.description,
-    });
-  }
-  ElMessage.success("变量已保存");
-  await loadVariableRows();
+  form.global_vars = variableRowsToMap(variableRows.value);
+  ElMessage.success("Case variables updated");
 }
 
 async function deleteVariableRow(row: VariableRow) {
-  if (row.id) {
-    await del(`/api/interface-auto/variables/${row.id}/`);
-    ElMessage.success("变量已删除");
-    await loadVariableRows();
-    return;
-  }
   variableRows.value = variableRows.value.filter((item) => item.rowKey !== row.rowKey);
+  if (!variableRows.value.length) {
+    variableRows.value = [createVariableRow()];
+  }
+  form.global_vars = variableRowsToMap(variableRows.value);
+}
+
+function removeVariableRow(index: number) {
+  variableRows.value.splice(index, 1);
+  if (!variableRows.value.length) {
+    variableRows.value = [createVariableRow()];
+  }
+  form.global_vars = variableRowsToMap(variableRows.value);
+}
+
+function toggleGlobalConfigPanel() {
+  globalConfigExpanded.value = !globalConfigExpanded.value;
+}
+
+function addLoginHeaderRow() {
+  form.global_request_config.login_request.headers_rows.push(createHeaderRow());
+}
+
+function removeLoginHeaderRow(index: number) {
+  form.global_request_config.login_request.headers_rows.splice(index, 1);
+  if (!form.global_request_config.login_request.headers_rows.length) {
+    form.global_request_config.login_request.headers_rows.push(createHeaderRow());
+  }
+}
+
+function addLoginExtractionRow() {
+  form.global_request_config.login_request.extractions.push(createExtractionRow());
+}
+
+function removeLoginExtractionRow(index: number) {
+  form.global_request_config.login_request.extractions.splice(index, 1);
+  if (!form.global_request_config.login_request.extractions.length) {
+    form.global_request_config.login_request.extractions.push(createExtractionRow());
+  }
+}
+
+function addGlobalHeaderConfigRow() {
+  form.global_request_config.header_config.headers_rows.push(createHeaderRow());
+}
+
+function removeGlobalHeaderConfigRow(index: number) {
+  form.global_request_config.header_config.headers_rows.splice(index, 1);
+  if (!form.global_request_config.header_config.headers_rows.length) {
+    form.global_request_config.header_config.headers_rows.push(createHeaderRow());
+  }
+}
+
+function addOutputVariableRowToCase() {
+  form.output_variables.push(createOutputVariableRow());
+}
+
+function removeOutputVariableRowFromCase(index: number) {
+  form.output_variables.splice(index, 1);
 }
 
 watch(currentProjectId, () => {
@@ -2355,9 +2417,10 @@ watch(
 );
 
 onMounted(async () => {
-  window.addEventListener("keydown", handleShortcut);
   window.addEventListener("click", handleGlobalPointer);
   window.addEventListener("contextmenu", handleGlobalPointer);
+  window.addEventListener("interface-auto:save-cases", handleSaveShortcut as EventListener);
+  window.addEventListener("interface-auto:close-case-tab", handleCloseShortcut as EventListener);
   await context.ensureLoaded();
   if (!context.selectedProject.value && context.projects.value.length) {
     context.setProject(context.projects.value[0].id);
@@ -2367,14 +2430,15 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleShortcut);
   window.removeEventListener("click", handleGlobalPointer);
   window.removeEventListener("contextmenu", handleGlobalPointer);
+  window.removeEventListener("interface-auto:save-cases", handleSaveShortcut as EventListener);
+  window.removeEventListener("interface-auto:close-case-tab", handleCloseShortcut as EventListener);
 });
 </script>
 
 <template>
-  <div class="interface-auto-desktop case-desktop" v-loading="loading" @click="hideContextMenus">
+  <div ref="pageRootRef" class="interface-auto-desktop case-desktop" v-loading="loading" @click="hideContextMenus">
     <div class="case-workbench">
       <section class="pane pane-left" @contextmenu.prevent="showCaseContextMenu($event, null, true)">
         <div class="project-toolbar">
@@ -2431,7 +2495,7 @@ onBeforeUnmount(() => {
           <template #default="{ data }">
             <span class="tree-node" :class="data.type" @contextmenu.stop.prevent="showCaseContextMenu($event, data)">
               <el-icon v-if="data.type === 'folder'" class="tree-folder-icon"><Folder /></el-icon>
-              <span v-else class="case-badge">TC</span>
+              <span v-else class="case-badge">CASE</span>
               <span class="tree-label">{{ data.label }}</span>
             </span>
           </template>
@@ -2522,34 +2586,180 @@ onBeforeUnmount(() => {
                 </el-select>
               </div>
             </div>
-
             <div class="header-row actions-row">
-              <label class="encryption-check">
-                <input :checked="form.enable_encryption" type="checkbox" @change="handleGlobalEncryptionChange" />
-                <span>启用加解密</span>
-              </label>
-              <button class="action-button solid compact" @click="openVariableDialog">变量</button>
               <button class="action-icon legacy-icon" :disabled="running" @click="runCase">
                 <img
                   class="toolbar-action-image"
                   :src="running ? stopingToolIcon : runningToolIcon"
-                  :alt="running ? '执行中' : '调试用例'"
+                  :alt="running ? 'Running' : 'Run Case'"
                 />
               </button>
               <button class="action-icon legacy-icon" @click="logDialogVisible = true">
-                <img class="toolbar-action-image" :src="logToolIcon" alt="查看日志" />
+                <img class="toolbar-action-image" :src="logToolIcon" alt="View Logs" />
               </button>
-              <button class="action-button solid compact" :disabled="saving" @click="triggerSaveCase">保存</button>
+              <button class="action-button solid compact" :disabled="saving" @click="triggerSaveCase">Save</button>
             </div>
 
-            <div v-if="form.enable_encryption" class="header-row encryption-row">
-              <div class="header-field header-field-name">
-                <span class="header-label">加密URL:</span>
-                <input v-model="form.encrypt_url" class="text-field" placeholder="请输入加密接口地址" />
-              </div>
-              <div class="header-field header-field-desc">
-                <span class="header-label">解密URL:</span>
-                <input v-model="form.decrypt_url" class="text-field" placeholder="请输入解密接口地址" />
+            <div class="global-config-shell">
+              <button class="global-config-toggle" type="button" @click="toggleGlobalConfigPanel">
+                <span>Global Config</span>
+                <span class="global-config-toggle-icon" :class="{ expanded: globalConfigExpanded }">
+                  <el-icon><ArrowRight /></el-icon>
+                </span>
+              </button>
+
+              <div v-if="globalConfigExpanded" class="global-config-panel">
+                <div class="global-config-tabs" role="tablist" aria-label="Global configuration tabs">
+                  <button
+                    class="global-config-tab"
+                    :class="{ active: activeGlobalConfigTab === 'encryption' }"
+                    type="button"
+                    @click="activeGlobalConfigTab = 'encryption'"
+                  >
+                    Encryption
+                  </button>
+                  <button
+                    class="global-config-tab"
+                    :class="{ active: activeGlobalConfigTab === 'variables' }"
+                    type="button"
+                    @click="activeGlobalConfigTab = 'variables'"
+                  >
+                    Global Variables
+                  </button>
+                  <button
+                    class="global-config-tab"
+                    :class="{ active: activeGlobalConfigTab === 'login_headers' }"
+                    type="button"
+                    @click="activeGlobalConfigTab = 'login_headers'"
+                  >
+                    Global Headers
+                  </button>
+                </div>
+
+                <div class="global-config-content">
+                  <div v-if="activeGlobalConfigTab === 'encryption'" class="global-config-tab-panel">
+                    <label class="encryption-check">
+                      <input :checked="form.enable_encryption" type="checkbox" @change="handleGlobalEncryptionChange" />
+                      <span>Enable Encryption</span>
+                    </label>
+                    <div v-if="form.enable_encryption" class="global-config-inline-grid two-columns">
+                      <div class="global-config-inline-field">
+                        <span class="global-config-inline-label">Encrypt URL</span>
+                        <input v-model="form.encrypt_url" class="text-field" placeholder="Enter encrypt endpoint" />
+                      </div>
+                      <div class="global-config-inline-field">
+                        <span class="global-config-inline-label">Decrypt URL</span>
+                        <input v-model="form.decrypt_url" class="text-field" placeholder="Enter decrypt endpoint" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-else-if="activeGlobalConfigTab === 'variables'" class="global-config-tab-panel">
+                    <div class="global-config-kv-table">
+                      <div
+                        v-for="(row, index) in variableRows"
+                        :key="row.rowKey"
+                        class="global-config-kv-row"
+                      >
+                        <input v-model="row.name" class="tool-input config-input" placeholder="variable_name" @input="form.global_vars = variableRowsToMap(variableRows)" />
+                        <input v-model="row.value" class="tool-input config-input" placeholder="variable_value" @input="form.global_vars = variableRowsToMap(variableRows)" />
+                        <div class="global-config-row-actions">
+                          <button class="tool-action text-action" type="button" @click="addVariableRow">+</button>
+                          <button class="tool-action danger text-action" type="button" @click="removeVariableRow(index)">-</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-else class="global-config-tab-panel global-config-stack">
+                    <div class="global-config-section-card">
+                      <div class="global-config-toolbar align-left">
+                        <label class="encryption-check compact-check">
+                          <input v-model="form.global_request_config.login_request.enabled" type="checkbox" />
+                          <span class="global-config-section-title">Login Request</span>
+                        </label>
+                      </div>
+                      <div v-if="form.global_request_config.login_request.enabled" class="global-config-stack">
+                        <div class="global-config-inline-grid method-url-grid">
+                          <div class="global-config-inline-field compact-inline-field">
+                            <span class="global-config-inline-label">Method</span>
+                            <el-select v-model="form.global_request_config.login_request.method" class="env-select" size="small">
+                              <el-option v-for="method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method" :label="method" :value="method" />
+                            </el-select>
+                          </div>
+                          <div class="global-config-inline-field">
+                            <span class="global-config-inline-label">URL</span>
+                            <input v-model="form.global_request_config.login_request.url" class="text-field" placeholder="Enter login endpoint URL" />
+                          </div>
+                        </div>
+
+                        <div class="global-config-section-card inner-card">
+                          <div class="global-config-toolbar">
+                            <span class="global-config-section-title">Request Headers</span>
+                          </div>
+                          <div
+                            v-for="(row, index) in form.global_request_config.login_request.headers_rows"
+                            :key="row.rowKey || `login-header-${index}`"
+                            class="global-config-kv-row"
+                          >
+                            <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
+                            <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
+                            <div class="global-config-row-actions">
+                              <button class="tool-action text-action" type="button" @click="addLoginHeaderRow">+</button>
+                              <button class="tool-action danger text-action" type="button" @click="removeLoginHeaderRow(index)">-</button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="global-config-inline-field body-inline-field">
+                          <span class="global-config-inline-label body-label">Request Body</span>
+                          <el-input v-model="form.global_request_config.login_request.body_text" type="textarea" :rows="4" resize="none" />
+                        </div>
+
+                        <div class="global-config-section-card inner-card">
+                          <div class="global-config-toolbar">
+                            <span class="global-config-section-title">Parameter Extraction</span>
+                          </div>
+                          <div
+                            v-for="(row, index) in form.global_request_config.login_request.extractions"
+                            :key="row.rowKey || `login-extract-${index}`"
+                            class="global-config-kv-row"
+                          >
+                            <input v-model="row.variable" class="tool-input config-input" placeholder="token" />
+                            <input v-model="row.path" class="tool-input config-input" placeholder="headers.Authorization or body.data.token" />
+                            <div class="global-config-row-actions">
+                              <button class="tool-action text-action" type="button" @click="addLoginExtractionRow">+</button>
+                              <button class="tool-action danger text-action" type="button" @click="removeLoginExtractionRow(index)">-</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="global-config-section-card">
+                      <div class="global-config-toolbar align-left">
+                        <label class="encryption-check compact-check">
+                          <input v-model="form.global_request_config.header_config.enabled" type="checkbox" />
+                          <span class="global-config-section-title">Request Header Config</span>
+                        </label>
+                      </div>
+                      <div v-if="form.global_request_config.header_config.enabled" class="global-config-stack">
+                        <div
+                          v-for="(row, index) in form.global_request_config.header_config.headers_rows"
+                          :key="row.rowKey || `global-header-${index}`"
+                          class="global-config-kv-row"
+                        >
+                          <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
+                          <input v-model="row.value" class="tool-input config-input" placeholder="Bearer ${token}" />
+                          <div class="global-config-row-actions">
+                            <button class="tool-action text-action" type="button" @click="addGlobalHeaderConfigRow">+</button>
+                            <button class="tool-action danger text-action" type="button" @click="removeGlobalHeaderConfigRow(index)">-</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2864,31 +3074,6 @@ onBeforeUnmount(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="variableDialogVisible" title="变量管理" width="900px">
-      <div class="variable-toolbar">
-        <button class="action-button solid" @click="addVariableRow">新增变量</button>
-      </div>
-      <div class="variable-table">
-        <div class="variable-head">
-          <span>名称</span>
-          <span>值</span>
-          <span>类型</span>
-          <span>描述</span>
-          <span>操作</span>
-        </div>
-        <div v-for="row in variableRows" :key="row.rowKey" class="variable-row">
-          <input v-model="row.name" class="tool-input" placeholder="变量名称" />
-          <input v-model="row.value" class="tool-input" placeholder="变量值" />
-          <input v-model="row.variable_type" class="tool-input" placeholder="string" />
-          <input v-model="row.description" class="tool-input" placeholder="变量描述" />
-          <div class="variable-actions">
-            <button class="tool-action" @click="saveVariableRow(row)">保存</button>
-            <button class="tool-action danger" @click="deleteVariableRow(row)">删除</button>
-          </div>
-        </div>
-      </div>
-    </el-dialog>
-
     <el-dialog v-model="logDialogVisible" title="执行日志" width="760px">
       <div class="log-panel">
         <pre>{{ logLines.join("\n") || "暂无执行日志" }}</pre>
@@ -3062,13 +3247,17 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
+  min-width: 42px;
   height: 18px;
   border-radius: 4px;
-  background: #e4eefc;
-  color: #244a86;
+  padding: 0 6px;
+  background: #ecf5ff;
+  color: #2f7df6;
   font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  box-sizing: border-box;
 }
 
 .method-badge {
@@ -3260,6 +3449,230 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.global-config-shell {
+  margin-top: 10px;
+  background: #fff;
+}
+
+.global-config-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  padding: 8px 0;
+  background: transparent;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.global-config-toggle-icon {
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.global-config-toggle-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.global-config-panel {
+  padding: 4px 0 8px;
+}
+
+.global-config-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.global-config-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 0 2px;
+}
+
+.global-config-tab {
+  position: relative;
+  height: 38px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: #6b7380;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.global-config-tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1677ff 0%, #4aa2ff 100%);
+  opacity: 0;
+  transform: scaleX(0.45);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.global-config-tab.active {
+  color: #135bd8;
+  font-weight: 600;
+}
+
+.global-config-tab.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.global-config-content {
+  border-radius: 14px;
+  background: transparent;
+  padding: 8px 0 0;
+}
+
+.global-config-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.global-config-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.global-config-hint {
+  color: #5b6b7d;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.global-config-kv-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.global-config-kv-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 96px;
+  gap: 6px;
+  align-items: center;
+}
+
+.global-config-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.global-config-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.global-config-grid.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.global-config-inline-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.global-config-inline-grid.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.method-url-grid {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.global-config-grid.three-columns {
+  grid-template-columns: 160px 180px minmax(0, 1fr);
+}
+
+.global-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.global-config-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.global-config-inline-field .text-field,
+.global-config-inline-field .el-select,
+.global-config-inline-field :deep(.el-textarea) {
+  flex: 1 1 auto;
+}
+
+.compact-inline-field :deep(.el-select) {
+  width: 100%;
+}
+
+.body-inline-field {
+  align-items: flex-start;
+}
+
+.body-label {
+  padding-top: 6px;
+}
+
+.body-inline-field :deep(.el-textarea) {
+  flex: 1 1 auto;
+}
+
+.global-config-inline-label {
+  flex: 0 0 auto;
+  min-width: 88px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.global-config-label,
+.global-config-section-title {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.global-config-section-card {
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
+  background: transparent;
+}
+
+.global-config-section-card.inner-card {
+  padding: 2px 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.compact-check {
+  gap: 8px;
+}
+
+.align-left {
+  justify-content: flex-start;
+}
+
 .action-button {
   height: 28px;
   border-radius: 4px;
@@ -3278,6 +3691,12 @@ onBeforeUnmount(() => {
   border-color: #61b741;
   background: #61b741;
   color: #fff;
+}
+
+.action-button.ghost {
+  border: 1px solid #d7e1ec;
+  background: #fff;
+  color: #334155;
 }
 
 .action-icon {
