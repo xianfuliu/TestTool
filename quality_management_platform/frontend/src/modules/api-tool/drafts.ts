@@ -199,7 +199,7 @@ export function createInterfaceDraft(): InterfaceDraft {
     conditionalCases: [createConditionalCaseRow()],
     responseMappingRows: [],
     fieldTypeRows: [],
-    enableEncryption: true,
+    enableEncryption: false,
   };
 }
 

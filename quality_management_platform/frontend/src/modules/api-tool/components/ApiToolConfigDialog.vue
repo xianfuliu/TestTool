@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { Minus, Plus } from "@element-plus/icons-vue";
 
 import {
   buildConfigFromDrafts,
@@ -55,7 +56,7 @@ const visible = computed({
   set: (value: boolean) => emit("update:modelValue", value),
 });
 
-const activeTab = ref<"basic" | "schedule" | "layout" | "interface" | "sql">("basic");
+const activeTab = ref<"basic" | "global" | "schedule" | "layout" | "interface" | "sql">("basic");
 
 const productForm = reactive({
   name: "",
@@ -247,6 +248,70 @@ function removeGlobalHeaderRow(index: number) {
   globalHeaderRows.value.splice(index, 1);
 }
 
+function appendGlobalLoginHeaderRow() {
+  globalLoginHeadersRows.value.push(createKeyValueRow());
+}
+
+function removeGlobalLoginHeaderRow(index: number) {
+  if (globalLoginHeadersRows.value.length <= 1) {
+    globalLoginHeadersRows.value = [createKeyValueRow("Content-Type", "application/json")];
+    return;
+  }
+  globalLoginHeadersRows.value.splice(index, 1);
+}
+
+function appendGlobalLoginExtractionRow() {
+  globalLoginExtractionRows.value.push(createExtractionRow());
+}
+
+function removeGlobalLoginExtractionRow(index: number) {
+  if (globalLoginExtractionRows.value.length <= 1) {
+    globalLoginExtractionRows.value = [createExtractionRow()];
+    return;
+  }
+  globalLoginExtractionRows.value.splice(index, 1);
+}
+
+function appendGlobalHeaderRow() {
+  globalHeaderRows.value.push(createKeyValueRow());
+}
+
+function appendInterfaceHeaderRow() {
+  interfaceForm.value.headersRows.push(createKeyValueRow());
+}
+
+function removeInterfaceHeaderRow(index: number) {
+  if (interfaceForm.value.headersRows.length <= 1) {
+    interfaceForm.value.headersRows = [createKeyValueRow("", "")];
+    return;
+  }
+  interfaceForm.value.headersRows.splice(index, 1);
+}
+
+function appendInterfaceResponseMappingRow() {
+  interfaceForm.value.responseMappingRows.push(createKeyValueRow());
+}
+
+function removeInterfaceResponseMappingRow(index: number) {
+  if (interfaceForm.value.responseMappingRows.length <= 1) {
+    interfaceForm.value.responseMappingRows = [createKeyValueRow("", "")];
+    return;
+  }
+  interfaceForm.value.responseMappingRows.splice(index, 1);
+}
+
+function appendInterfaceFieldTypeRow() {
+  interfaceForm.value.fieldTypeRows.push(createKeyValueRow());
+}
+
+function removeInterfaceFieldTypeRow(index: number) {
+  if (interfaceForm.value.fieldTypeRows.length <= 1) {
+    interfaceForm.value.fieldTypeRows = [createKeyValueRow("", "")];
+    return;
+  }
+  interfaceForm.value.fieldTypeRows.splice(index, 1);
+}
+
 function syncGlobalRequestConfig(config: ApiToolConfig) {
   const globalConfig = config.global_request_config;
   globalLoginEnabled.value = globalConfig?.login_request?.enabled ?? false;
@@ -352,6 +417,7 @@ function openLayoutEditor(index = -1) {
 function saveLayoutEditor() {
   try {
     const nextItem = cloneValue(layoutForm.value);
+    const previousItem = layoutEditIndex.value >= 0 ? cloneValue(layoutItemsDraft.value[layoutEditIndex.value]) : null;
     if (nextItem.type === "interface" || nextItem.type === "sql") {
       if (!nextItem.name?.trim()) {
         throw new Error("按钮名称不能为空");
@@ -371,6 +437,43 @@ function saveLayoutEditor() {
     } else {
       layoutItemsDraft.value.push(nextItem);
     }
+
+    if (nextItem.type === "interface") {
+      const targetName = nextItem.name?.trim() ?? "";
+      const existingInterface = interfacesDraft.value.find((item) => item.name.trim() === targetName);
+      if (!existingInterface) {
+        const newInterface = createInterfaceDraft();
+        newInterface.name = targetName;
+        interfacesDraft.value.push(newInterface);
+      }
+    }
+
+    if (nextItem.type === "sql") {
+      const targetName = nextItem.name?.trim() ?? "";
+      const existingSql = sqlsDraft.value.find((item) => item.name.trim() === targetName);
+      if (!existingSql) {
+        const newSql = createSqlDraft();
+        newSql.name = targetName;
+        sqlsDraft.value.push(newSql);
+      }
+    }
+
+    if (previousItem?.type === "interface") {
+      const previousName = previousItem.name?.trim() ?? "";
+      const targetInterface = interfacesDraft.value.find((item) => item.name.trim() === previousName);
+      if (targetInterface) {
+        targetInterface.name = nextItem.type === "interface" ? (nextItem.name?.trim() ?? "") : previousName;
+      }
+    }
+
+    if (previousItem?.type === "sql") {
+      const previousName = previousItem.name?.trim() ?? "";
+      const targetSql = sqlsDraft.value.find((item) => item.name.trim() === previousName);
+      if (targetSql) {
+        targetSql.name = nextItem.type === "sql" ? (nextItem.name?.trim() ?? "") : previousName;
+      }
+    }
+
     normaliseLayoutPriorities();
     layoutDialogVisible.value = false;
   } catch (error) {
@@ -380,7 +483,20 @@ function saveLayoutEditor() {
 
 async function removeLayout(index: number) {
   await ElMessageBox.confirm("确认删除这个布局项吗？", "提示", { type: "warning" });
+  const removedItem = layoutItemsDraft.value[index];
   layoutItemsDraft.value.splice(index, 1);
+  if (removedItem?.type === "interface" && removedItem.name?.trim()) {
+    const interfaceIndex = interfacesDraft.value.findIndex((item) => item.name.trim() === removedItem.name?.trim());
+    if (interfaceIndex >= 0) {
+      interfacesDraft.value.splice(interfaceIndex, 1);
+    }
+  }
+  if (removedItem?.type === "sql" && removedItem.name?.trim()) {
+    const sqlIndex = sqlsDraft.value.findIndex((item) => item.name.trim() === removedItem.name?.trim());
+    if (sqlIndex >= 0) {
+      sqlsDraft.value.splice(sqlIndex, 1);
+    }
+  }
   normaliseLayoutPriorities();
 }
 
@@ -619,112 +735,132 @@ function submit() {
           <el-form-item class="basic-config-check">
             <el-checkbox v-model="productForm.is_default">设为默认产品</el-checkbox>
           </el-form-item>
-          <el-form-item class="basic-config-check">
+        </el-form>
+      </el-tab-pane>
+
+      <el-tab-pane label="全局配置" name="global">
+        <el-form class="basic-config-form global-config-form" label-width="110px">
+          <el-form-item label="加解密：" class="basic-config-item basic-config-toggle-item">
             <el-checkbox v-model="productForm.enable_encryption">启用加解密</el-checkbox>
           </el-form-item>
           <template v-if="productForm.enable_encryption">
-            <el-form-item label="加密接口 URL" class="basic-config-item basic-config-item-wide">
-              <el-input v-model="productForm.encrypt_url" />
-            </el-form-item>
-            <el-form-item label="解密接口 URL" class="basic-config-item basic-config-item-wide">
-              <el-input v-model="productForm.decrypt_url" />
-            </el-form-item>
-          </template>
-          <div class="basic-config-block">
-            <div class="section-toolbar">
-              <span>登录态请求头（全局请求头）</span>
+            <div class="global-config-panel">
+              <div class="global-panel-row">
+                <div class="global-panel-label">加密接口 URL</div>
+                <div class="global-panel-content">
+                  <el-input v-model="productForm.encrypt_url" />
+                </div>
+              </div>
+              <div class="global-panel-row">
+                <div class="global-panel-label">解密接口 URL</div>
+                <div class="global-panel-content">
+                  <el-input v-model="productForm.decrypt_url" />
+                </div>
+              </div>
             </div>
-            <el-form-item class="basic-config-check">
-              <el-checkbox v-model="globalLoginEnabled">启用登录接口配置</el-checkbox>
-            </el-form-item>
-            <template v-if="globalLoginEnabled">
-              <div class="config-grid compact">
-                <el-form-item label="请求方式">
-                  <el-select v-model="globalLoginMethod">
-                    <el-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="登录 URL">
-                  <el-input v-model="globalLoginUrl" placeholder="请输入登录接口地址" />
-                </el-form-item>
+          </template>
+
+          <el-form-item label="登录态获取：" class="basic-config-item basic-config-toggle-item">
+            <el-checkbox v-model="globalLoginEnabled">启用登录接口配置</el-checkbox>
+          </el-form-item>
+          <template v-if="globalLoginEnabled">
+            <div class="global-config-panel">
+              <div class="global-panel-grid">
+                <div class="global-panel-row">
+                  <div class="global-panel-label">请求方式</div>
+                  <div class="global-panel-content">
+                    <el-select v-model="globalLoginMethod">
+                      <el-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
+                    </el-select>
+                  </div>
+                </div>
+                <div class="global-panel-row">
+                  <div class="global-panel-label">登录 URL</div>
+                  <div class="global-panel-content">
+                    <el-input v-model="globalLoginUrl" placeholder="请输入登录接口地址" />
+                  </div>
+                </div>
               </div>
-              <div class="sub-toolbar">
-                <span>登录接口请求头</span>
-                <el-button link type="primary" @click="globalLoginHeadersRows.push(createKeyValueRow())">新增请求头</el-button>
+
+              <div class="global-panel-row global-panel-row-top">
+                <div class="global-panel-label">请求头</div>
+                <div class="global-panel-content">
+                  <div class="inline-config-list">
+                    <div v-for="(row, index) in globalLoginHeadersRows" :key="row.localId" class="inline-config-row">
+                      <el-input v-model="row.key" placeholder="例如 Content-Type" />
+                      <el-input v-model="row.value" placeholder="例如 application/json" />
+                      <div class="inline-config-actions">
+                        <el-button text circle @click="appendGlobalLoginHeaderRow">
+                          <el-icon><Plus /></el-icon>
+                        </el-button>
+                        <el-button text circle @click="removeGlobalLoginHeaderRow(index)">
+                          <el-icon><Minus /></el-icon>
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <el-table :data="globalLoginHeadersRows" border>
-                <el-table-column label="Header">
-                  <template #default="{ row }">
-                    <el-input v-model="row.key" placeholder="例如 Content-Type" />
-                  </template>
-                </el-table-column>
-                <el-table-column label="Value">
-                  <template #default="{ row }">
-                    <el-input v-model="row.value" placeholder="例如 application/json" />
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="120">
-                  <template #default="{ $index }">
-                    <el-button link type="danger" @click="globalLoginHeadersRows.splice($index, 1)">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-              <el-form-item label="请求体" class="stack-space">
-                <el-input v-model="globalLoginBodyText" type="textarea" :rows="6" />
-              </el-form-item>
-              <div class="sub-toolbar">
-                <span>参数提取</span>
-                <el-button link type="primary" @click="globalLoginExtractionRows.push(createExtractionRow())">新增提取</el-button>
+
+              <div class="global-panel-row global-panel-row-top">
+                <div class="global-panel-label">请求体</div>
+                <div class="global-panel-content">
+                  <el-input v-model="globalLoginBodyText" type="textarea" :rows="6" />
+                </div>
               </div>
-              <el-table :data="globalLoginExtractionRows" border>
-                <el-table-column label="变量字段">
-                  <template #default="{ row }">
-                    <el-input v-model="row.variable" placeholder="例如 token" />
-                  </template>
-                </el-table-column>
-                <el-table-column label="提取路径">
-                  <template #default="{ row }">
-                    <el-input v-model="row.path" placeholder="支持 headers.Authorization 或 body.data.token" />
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="120">
-                  <template #default="{ $index }">
-                    <el-button link type="danger" @click="globalLoginExtractionRows.splice($index, 1)">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </template>
-            <el-form-item class="basic-config-check">
-              <el-checkbox v-model="globalHeaderEnabled">启用请求头配置</el-checkbox>
-            </el-form-item>
-          </div>
-          <div v-if="globalHeaderEnabled" class="sub-toolbar basic-config-toolbar">
-            <span>全局请求头</span>
-            <el-button link type="primary" @click="globalHeaderRows.push(createKeyValueRow())">新增请求头</el-button>
-          </div>
-          <el-table v-if="globalHeaderEnabled" :data="globalHeaderRows" border>
-            <el-table-column label="Header">
-              <template #default="{ row }">
-                <el-input v-model="row.key" placeholder="例如 Authorization" />
-              </template>
-            </el-table-column>
-            <el-table-column label="Value">
-              <template #default="{ row }">
-                <el-input v-model="row.value" placeholder="支持 ${token} 变量" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="120">
-              <template #default="{ $index }">
-                <el-button
-                  link
-                  type="danger"
-                  @click="removeGlobalHeaderRow($index)"
-                >
-                  删除
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+
+              <div class="global-panel-row global-panel-row-top">
+                <div class="global-panel-label">参数提取</div>
+                <div class="global-panel-content">
+                  <div class="inline-config-list">
+                    <div
+                      v-for="(row, index) in globalLoginExtractionRows"
+                      :key="row.localId"
+                      class="inline-config-row"
+                    >
+                      <el-input v-model="row.variable" placeholder="例如 token" />
+                      <el-input v-model="row.path" placeholder="支持 headers.Authorization 或 body.data.token" />
+                      <div class="inline-config-actions">
+                        <el-button text circle @click="appendGlobalLoginExtractionRow">
+                          <el-icon><Plus /></el-icon>
+                        </el-button>
+                        <el-button text circle @click="removeGlobalLoginExtractionRow(index)">
+                          <el-icon><Minus /></el-icon>
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <el-form-item label="全局请求头：" class="basic-config-item basic-config-toggle-item">
+            <el-checkbox v-model="globalHeaderEnabled">启用请求头配置</el-checkbox>
+          </el-form-item>
+          <template v-if="globalHeaderEnabled">
+            <div class="global-config-panel">
+              <div class="global-panel-row global-panel-row-top">
+                <div class="global-panel-label">请求头</div>
+                <div class="global-panel-content">
+                  <div class="inline-config-list">
+                    <div v-for="(row, index) in globalHeaderRows" :key="row.localId" class="inline-config-row">
+                      <el-input v-model="row.key" placeholder="例如 Authorization" />
+                      <el-input v-model="row.value" placeholder="支持 ${token} 变量" />
+                      <div class="inline-config-actions">
+                        <el-button text circle @click="appendGlobalHeaderRow">
+                          <el-icon><Plus /></el-icon>
+                        </el-button>
+                        <el-button text circle @click="removeGlobalHeaderRow(index)">
+                          <el-icon><Minus /></el-icon>
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
         </el-form>
       </el-tab-pane>
 
@@ -793,7 +929,6 @@ function submit() {
       <el-tab-pane label="接口" name="interface">
         <div class="section-toolbar">
           <span>每个接口单独维护，不再用整块 JSON 覆盖</span>
-          <el-button type="primary" @click="openInterfaceEditor()">新增接口</el-button>
         </div>
         <el-table :data="orderedInterfacesDraft" border height="420">
           <el-table-column prop="name" label="接口名称" min-width="180" />
@@ -818,7 +953,6 @@ function submit() {
       <el-tab-pane label="SQL" name="sql">
         <div class="section-toolbar">
           <span>数据库连接和输出字段都按表单维护</span>
-          <el-button type="primary" @click="openSqlEditor()">新增 SQL</el-button>
         </div>
         <el-table :data="orderedSqlsDraft" border height="420">
           <el-table-column prop="name" label="SQL 名称" min-width="180" />
@@ -984,57 +1118,75 @@ function submit() {
   </el-dialog>
 
   <el-dialog v-model="interfaceDialogVisible" title="接口配置" width="920px" top="5vh">
-    <el-form label-position="top">
-      <div class="config-grid compact">
-        <el-form-item label="接口名称">
-          <el-input v-model="interfaceForm.name" />
-        </el-form-item>
-        <el-form-item label="请求方法">
-          <el-select v-model="interfaceForm.method">
-            <el-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
+    <div class="interface-config-form">
+      <div class="interface-top-grid">
+        <div class="interface-inline-field">
+          <div class="interface-inline-label">接口名称</div>
+          <div class="interface-inline-content">
+            <el-input v-model="interfaceForm.name" placeholder="我是接口名称" />
+          </div>
+        </div>
+        <div class="interface-inline-field">
+          <div class="interface-inline-label">请求方法</div>
+          <div class="interface-inline-content">
+            <el-select v-model="interfaceForm.method">
+              <el-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
+            </el-select>
+          </div>
+        </div>
       </div>
-      <el-form-item label="URL">
-        <el-input v-model="interfaceForm.url" />
-      </el-form-item>
-      <el-form-item>
-        <el-checkbox v-model="interfaceForm.enableEncryption">单接口启用加密</el-checkbox>
-      </el-form-item>
 
-      <div class="sub-toolbar">
-        <span>请求头</span>
-        <el-button link type="primary" @click="interfaceForm.headersRows.push(createKeyValueRow())">新增请求头</el-button>
+      <div class="interface-inline-field interface-inline-field-wide">
+        <div class="interface-inline-label">URL</div>
+        <div class="interface-inline-content">
+          <el-input v-model="interfaceForm.url" />
+        </div>
       </div>
-      <el-table :data="interfaceForm.headersRows" border>
-        <el-table-column label="Header">
-          <template #default="{ row }">
-            <el-input v-model="row.key" />
-          </template>
-        </el-table-column>
-        <el-table-column label="Value">
-          <template #default="{ row }">
-            <el-input v-model="row.value" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80">
-          <template #default="{ $index }">
-            <el-button link type="danger" @click="interfaceForm.headersRows.splice($index, 1)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
 
-      <el-form-item label="请求体模式" class="stack-space">
-        <el-radio-group v-model="interfaceForm.requestType">
-          <el-radio-button label="normal">固定请求体</el-radio-button>
-          <el-radio-button label="conditional">条件请求体</el-radio-button>
-        </el-radio-group>
-      </el-form-item>
+      <div class="interface-inline-field interface-toggle-field">
+        <div class="interface-inline-label"></div>
+        <div class="interface-inline-content">
+          <el-checkbox v-model="interfaceForm.enableEncryption">单接口启用加密</el-checkbox>
+        </div>
+      </div>
+
+      <div class="interface-section-row">
+        <div class="interface-section-label">请求头</div>
+        <div class="interface-section-content">
+          <div class="inline-config-list">
+            <div v-for="(row, index) in interfaceForm.headersRows" :key="row.localId" class="inline-config-row">
+              <el-input v-model="row.key" placeholder="Header" />
+              <el-input v-model="row.value" placeholder="Value" />
+              <div class="inline-config-actions">
+                <el-button text circle @click="appendInterfaceHeaderRow">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+                <el-button text circle @click="removeInterfaceHeaderRow(index)">
+                  <el-icon><Minus /></el-icon>
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="interface-section-row">
+        <div class="interface-section-label">请求体模式</div>
+        <div class="interface-section-content">
+          <el-radio-group v-model="interfaceForm.requestType">
+            <el-radio-button label="normal">固定请求体</el-radio-button>
+            <el-radio-button label="conditional">条件请求体</el-radio-button>
+          </el-radio-group>
+        </div>
+      </div>
 
       <template v-if="interfaceForm.requestType === 'normal'">
-        <el-form-item label="请求体模板">
-          <el-input v-model="interfaceForm.bodyTemplateText" type="textarea" :rows="8" />
-        </el-form-item>
+        <div class="interface-section-row interface-section-row-top">
+          <div class="interface-section-label">请求体模板</div>
+          <div class="interface-section-content">
+            <el-input v-model="interfaceForm.bodyTemplateText" type="textarea" :rows="8" />
+          </div>
+        </div>
       </template>
 
       <template v-else>
@@ -1064,54 +1216,80 @@ function submit() {
         </div>
       </template>
 
-      <div class="sub-toolbar">
-        <span>响应字段映射</span>
-        <el-button link type="primary" @click="interfaceForm.responseMappingRows.push(createKeyValueRow())">
-          新增映射
-        </el-button>
+      <div class="interface-section-row">
+        <div class="interface-section-label">响应参数提取</div>
+        <div class="interface-section-content">
+          <div class="inline-config-list">
+            <div v-if="!interfaceForm.responseMappingRows.length" class="inline-config-row">
+              <el-input value="" placeholder="变量 key" />
+              <el-input value="" placeholder="响应路径" />
+              <div class="inline-config-actions">
+                <el-button text circle @click="appendInterfaceResponseMappingRow">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+                <el-button text circle disabled>
+                  <el-icon><Minus /></el-icon>
+                </el-button>
+              </div>
+            </div>
+            <div
+              v-for="(row, index) in interfaceForm.responseMappingRows"
+              v-else
+              :key="row.localId"
+              class="inline-config-row"
+            >
+              <el-input v-model="row.key" placeholder="变量 key" />
+              <el-input v-model="row.value" placeholder="响应路径" />
+              <div class="inline-config-actions">
+                <el-button text circle @click="appendInterfaceResponseMappingRow">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+                <el-button text circle @click="removeInterfaceResponseMappingRow(index)">
+                  <el-icon><Minus /></el-icon>
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <el-table :data="interfaceForm.responseMappingRows" border>
-        <el-table-column label="变量 key">
-          <template #default="{ row }">
-            <el-input v-model="row.key" />
-          </template>
-        </el-table-column>
-        <el-table-column label="响应路径">
-          <template #default="{ row }">
-            <el-input v-model="row.value" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80">
-          <template #default="{ $index }">
-            <el-button link type="danger" @click="interfaceForm.responseMappingRows.splice($index, 1)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
 
-      <div class="sub-toolbar">
-        <span>字段类型</span>
-        <el-button link type="primary" @click="interfaceForm.fieldTypeRows.push(createKeyValueRow())">
-          新增类型
-        </el-button>
+      <div class="interface-section-row">
+        <div class="interface-section-label">请求字段类型</div>
+        <div class="interface-section-content">
+          <div class="inline-config-list">
+            <div v-if="!interfaceForm.fieldTypeRows.length" class="inline-config-row">
+              <el-input value="" placeholder="变量 key" />
+              <el-input value="" placeholder="string / int / float" />
+              <div class="inline-config-actions">
+                <el-button text circle @click="appendInterfaceFieldTypeRow">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+                <el-button text circle disabled>
+                  <el-icon><Minus /></el-icon>
+                </el-button>
+              </div>
+            </div>
+            <div
+              v-for="(row, index) in interfaceForm.fieldTypeRows"
+              v-else
+              :key="row.localId"
+              class="inline-config-row"
+            >
+              <el-input v-model="row.key" placeholder="变量 key" />
+              <el-input v-model="row.value" placeholder="string / int / float" />
+              <div class="inline-config-actions">
+                <el-button text circle @click="appendInterfaceFieldTypeRow">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+                <el-button text circle @click="removeInterfaceFieldTypeRow(index)">
+                  <el-icon><Minus /></el-icon>
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <el-table :data="interfaceForm.fieldTypeRows" border>
-        <el-table-column label="变量 key">
-          <template #default="{ row }">
-            <el-input v-model="row.key" />
-          </template>
-        </el-table-column>
-        <el-table-column label="类型">
-          <template #default="{ row }">
-            <el-input v-model="row.value" placeholder="string / int / float" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80">
-          <template #default="{ $index }">
-            <el-button link type="danger" @click="interfaceForm.fieldTypeRows.splice($index, 1)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-form>
+    </div>
     <template #footer>
       <el-space>
         <el-button @click="interfaceDialogVisible = false">取消</el-button>
@@ -1201,8 +1379,16 @@ function submit() {
   max-width: 760px;
 }
 
+.global-config-form {
+  max-width: 980px;
+}
+
 .basic-config-item,
 .basic-config-check {
+  margin-bottom: 12px;
+}
+
+.basic-config-block {
   margin-bottom: 12px;
 }
 
@@ -1228,6 +1414,139 @@ function submit() {
 
 .basic-config-check :deep(.el-form-item__content) {
   margin-left: 110px;
+}
+
+.basic-config-toggle-item {
+  margin-bottom: 10px;
+}
+
+.global-config-panel {
+  margin: 0 0 18px 110px;
+  padding: 14px 16px;
+  border: 1px solid #e5eaf3;
+  border-radius: 10px;
+  background: #f8fbff;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: calc(100% - 110px);
+  max-width: 860px;
+  box-sizing: border-box;
+}
+
+.global-panel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px 20px;
+}
+
+.global-panel-row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.global-panel-row + .global-panel-row {
+  margin-top: 2px;
+}
+
+.global-panel-row-top {
+  align-items: start;
+}
+
+.global-panel-label {
+  color: var(--qm-title);
+  font-size: 14px;
+  line-height: 32px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.global-panel-content {
+  min-width: 0;
+}
+
+.interface-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.interface-top-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 24px;
+}
+
+.interface-inline-field,
+.interface-section-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.interface-inline-field-wide {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.interface-section-row-top {
+  align-items: start;
+}
+
+.interface-inline-label,
+.interface-section-label {
+  color: var(--qm-title);
+  font-size: 14px;
+  line-height: 32px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.interface-inline-content,
+.interface-section-content {
+  min-width: 0;
+}
+
+.interface-toggle-field .interface-inline-label {
+  line-height: 1;
+}
+
+.inline-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.inline-config-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(320px, 1.2fr) 72px;
+  gap: 12px;
+  align-items: center;
+}
+
+.inline-config-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+.inline-config-actions :deep(.el-button) {
+  width: 28px;
+  height: 28px;
+  color: #5b6472;
+  border: 1px solid #d7deea;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.inline-config-actions :deep(.el-button:hover) {
+  color: var(--el-color-primary);
+  border-color: #b9cbff;
+  background: #f3f7ff;
 }
 
 .section-toolbar,
@@ -1356,6 +1675,45 @@ function submit() {
   .config-grid,
   .config-grid.compact {
     grid-template-columns: 1fr;
+  }
+
+  .global-config-panel {
+    margin-left: 0;
+    padding: 12px;
+  }
+
+  .global-panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .interface-top-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .global-panel-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .global-panel-label {
+    text-align: left;
+    line-height: 1.5;
+  }
+
+  .inline-config-row {
+    grid-template-columns: 1fr;
+  }
+
+  .interface-inline-field,
+  .interface-section-row,
+  .interface-inline-field-wide {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .interface-inline-label,
+  .interface-section-label {
+    line-height: 1.5;
   }
 
   .layout-drag-header {
