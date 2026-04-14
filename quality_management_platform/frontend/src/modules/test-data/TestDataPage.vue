@@ -88,7 +88,7 @@ const userSections = computed<ResultSection[]>(() => {
   const data = userWorkspace.value?.id_card.data;
   return [
     {
-      title: "核心结果",
+      title: "生成结果",
       rows: [
         { key: "name", label: "姓名", value: data?.name ?? "", canBackfill: true, canRefresh: true },
         {
@@ -115,7 +115,7 @@ const enterpriseSections = computed<ResultSection[]>(() => {
   const data = enterpriseWorkspace.value?.business_license.data;
   return [
     {
-      title: "核心结果",
+      title: "生成结果",
       rows: [
         {
           key: "company_name",
@@ -544,7 +544,7 @@ onMounted(() => {
           <TestDataUserConfigPanel v-model="userForm" :options="meta?.options ?? null" />
 
           <TestDataResultPanel
-            title="核心结果"
+            title="生成结果"
             :sections="userSections"
             :loading="userLoading"
             generate-label="生成"
@@ -561,7 +561,7 @@ onMounted(() => {
           <section class="work-panel preview-panel">
             <div class="panel-head">
               <div class="panel-title-group">
-                <h2>身份证预览</h2>
+                <h2>图片预览</h2>
               </div>
               <div class="panel-head-actions">
                 <el-button size="small" plain :disabled="!userWorkspace" @click="userDetailVisible = true">
@@ -613,7 +613,7 @@ onMounted(() => {
           <TestDataEnterpriseConfigPanel v-model="enterpriseForm" :options="meta?.options ?? null" />
 
           <TestDataResultPanel
-            title="核心结果"
+            title="生成结果"
             :sections="enterpriseSections"
             :loading="enterpriseLoading"
             generate-label="生成"
@@ -630,7 +630,7 @@ onMounted(() => {
           <section class="work-panel preview-panel">
             <div class="panel-head">
               <div class="panel-title-group">
-                <h2>营业执照预览</h2>
+                <h2>图片预览</h2>
               </div>
               <div class="panel-head-actions">
                 <el-button size="small" plain :disabled="!enterpriseWorkspace" @click="enterpriseDetailVisible = true">

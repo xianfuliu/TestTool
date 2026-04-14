@@ -4,9 +4,13 @@ import json
 from datetime import datetime
 
 from apps.common.http import api_view, get_int
-from test_platform.db import execute, fetch_all, fetch_one
+from test_platform.db import connect, execute, fetch_all, fetch_one
 
+from .execution_service import execute_case_run
 from . import template_service
+
+
+_CASE_SCHEMA_READY = False
 
 
 def _json_text(value):
@@ -28,11 +32,42 @@ def _json_value(value, default):
         return default
 
 
+def _column_exists(cursor, table_name: str, column_name: str) -> bool:
+    cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
+    return cursor.fetchone() is not None
+
+
+def _ensure_case_schema_extensions():
+    global _CASE_SCHEMA_READY
+    if _CASE_SCHEMA_READY:
+        return
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            if not _column_exists(cursor, "test_cases", "global_request_config_text"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_cases
+                    ADD COLUMN global_request_config_text LONGTEXT NULL AFTER global_vars
+                    """
+                )
+            if not _column_exists(cursor, "test_cases", "output_variables_text"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_cases
+                    ADD COLUMN output_variables_text LONGTEXT NULL AFTER global_request_config_text
+                    """
+                )
+        connection.commit()
+    _CASE_SCHEMA_READY = True
+
+
 def _hydrate_case_row(case_row):
     if not case_row:
         return {}
     hydrated = dict(case_row)
     hydrated["global_vars"] = _json_value(hydrated.get("global_vars"), {})
+    hydrated["global_request_config"] = _json_value(hydrated.get("global_request_config_text"), {})
+    hydrated["output_variables"] = _json_value(hydrated.get("output_variables_text"), [])
     return hydrated
 
 
@@ -67,6 +102,7 @@ def _list_case_steps(case_id: int):
 
 
 def _get_case_detail(case_id: int):
+    _ensure_case_schema_extensions()
     case_row = _hydrate_case_row(fetch_one("SELECT * FROM test_cases WHERE id = %s", (case_id,)))
     if not case_row:
         return {}
@@ -75,6 +111,7 @@ def _get_case_detail(case_id: int):
 
 
 def _list_cases(where_sql: str = "", params=()):
+    _ensure_case_schema_extensions()
     query = """
         SELECT *
         FROM test_cases
@@ -318,6 +355,7 @@ def case_folder_detail(request, folder_id: int, payload=None):
 
 @api_view
 def cases(request, payload=None):
+    _ensure_case_schema_extensions()
     if request.method == "GET":
         case_id = get_int((payload or {}).get("case_id"))
         folder_id = get_int((payload or {}).get("folder_id"))
@@ -332,8 +370,8 @@ def cases(request, payload=None):
     item = payload or {}
     case_id = execute(
         """
-        INSERT INTO test_cases (project_id, folder_id, name, description, environment_id, global_vars, enable_encryption, encrypt_url, decrypt_url, sort_order, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO test_cases (project_id, folder_id, name, description, environment_id, global_vars, global_request_config_text, output_variables_text, enable_encryption, encrypt_url, decrypt_url, sort_order, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             item.get("project_id"),
@@ -342,6 +380,8 @@ def cases(request, payload=None):
             item.get("description", ""),
             item.get("environment_id"),
             _json_text(item.get("global_vars")),
+            _json_text(item.get("global_request_config")),
+            _empty_list_json(item.get("output_variables")),
             item.get("enable_encryption", False),
             item.get("encrypt_url", ""),
             item.get("decrypt_url", ""),
@@ -355,6 +395,7 @@ def cases(request, payload=None):
 
 @api_view
 def case_detail(request, case_id: int, payload=None):
+    _ensure_case_schema_extensions()
     if request.method == "GET":
         return _get_case_detail(case_id)
     if request.method == "PUT":
@@ -362,7 +403,7 @@ def case_detail(request, case_id: int, payload=None):
         updated = execute(
             """
             UPDATE test_cases
-            SET name = %s, description = %s, folder_id = %s, environment_id = %s, global_vars = %s, enable_encryption = %s, encrypt_url = %s, decrypt_url = %s, sort_order = %s
+            SET name = %s, description = %s, folder_id = %s, environment_id = %s, global_vars = %s, global_request_config_text = %s, output_variables_text = %s, enable_encryption = %s, encrypt_url = %s, decrypt_url = %s, sort_order = %s
             WHERE id = %s
             """,
             (
@@ -371,6 +412,8 @@ def case_detail(request, case_id: int, payload=None):
                 item.get("folder_id"),
                 item.get("environment_id"),
                 _json_text(item.get("global_vars")),
+                _json_text(item.get("global_request_config")),
+                _empty_list_json(item.get("output_variables")),
                 item.get("enable_encryption", False),
                 item.get("encrypt_url", ""),
                 item.get("decrypt_url", ""),
@@ -386,23 +429,45 @@ def case_detail(request, case_id: int, payload=None):
 
 @api_view
 def execute_case(_request, case_id: int, payload=None):
+    _ensure_case_schema_extensions()
     case = _hydrate_case_row(fetch_one("SELECT * FROM test_cases WHERE id = %s", (case_id,)))
-    steps = _list_case_steps(case_id)
-    return {
-        "case_id": case_id,
-        "case_name": case["name"] if case else "未知用例",
-        "status": "success",
-        "message": "质量管理平台新版执行引擎待迁移，当前返回结构化占位结果",
-        "steps": [
+    if not case:
+        raise ValueError("测试用例不存在")
+
+    execution_case = dict(case)
+    execution_case["steps"] = _list_case_steps(case_id)
+    if payload:
+        execution_case.update(
             {
-                "step_id": step["id"],
-                "step_order": step["step_order"],
-                "step_name": step["name"],
-                "status": "pending",
+                "project_id": payload.get("project_id", execution_case.get("project_id")),
+                "folder_id": payload.get("folder_id", execution_case.get("folder_id")),
+                "name": payload.get("name", execution_case.get("name")),
+                "description": payload.get("description", execution_case.get("description", "")),
+                "environment_id": payload.get("environment_id", execution_case.get("environment_id")),
+                "enable_encryption": payload.get("enable_encryption", execution_case.get("enable_encryption", False)),
+                "encrypt_url": payload.get("encrypt_url", execution_case.get("encrypt_url", "")),
+                "decrypt_url": payload.get("decrypt_url", execution_case.get("decrypt_url", "")),
+                "sort_order": payload.get("sort_order", execution_case.get("sort_order", 0)),
             }
-            for step in steps
-        ],
-    }
+        )
+        execution_case["global_vars"] = _json_value(
+            payload.get("global_vars"),
+            execution_case.get("global_vars", {}),
+        )
+        execution_case["global_request_config"] = _json_value(
+            payload.get("global_request_config"),
+            execution_case.get("global_request_config", {}),
+        )
+        execution_case["output_variables"] = _json_value(
+            payload.get("output_variables"),
+            execution_case.get("output_variables", []),
+        )
+        if "steps" in payload:
+            execution_case["steps"] = [
+                _hydrate_step_row(step)
+                for step in (payload.get("steps") or [])
+            ]
+    return execute_case_run(execution_case)
 
 
 @api_view

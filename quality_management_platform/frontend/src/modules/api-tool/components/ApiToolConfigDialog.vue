@@ -6,18 +6,26 @@ import {
   buildConfigFromDrafts,
   configToDrafts,
   createConditionalCaseRow,
+  createExtractionRow,
   createInterfaceDraft,
   createKeyValueRow,
   createLayoutDraft,
   createOutputFieldRow,
   createSqlDraft,
   type DraftConditionalCaseRow,
+  type DraftExtractionRow,
   type DraftKeyValueRow,
   type InterfaceDraft,
   type LayoutDraftItem,
   type SqlDraft,
 } from "../drafts";
-import type { ApiToolConfig, ApiToolProduct, ApiToolScheduleTask, LayoutOption } from "../types";
+import type {
+  ApiToolConfig,
+  ApiToolGlobalRequestConfig,
+  ApiToolProduct,
+  ApiToolScheduleTask,
+  LayoutOption,
+} from "../types";
 
 type SavePayload = {
   product: {
@@ -64,6 +72,14 @@ const scheduleTasksDraft = ref<ApiToolScheduleTask[]>([]);
 const layoutItemsDraft = ref<LayoutDraftItem[]>([]);
 const interfacesDraft = ref<InterfaceDraft[]>([]);
 const sqlsDraft = ref<SqlDraft[]>([]);
+const globalLoginEnabled = ref(false);
+const globalLoginMethod = ref("POST");
+const globalLoginUrl = ref("");
+const globalLoginBodyText = ref("{\n  \n}");
+const globalLoginHeadersRows = ref<DraftKeyValueRow[]>([createKeyValueRow("Content-Type", "application/json")]);
+const globalLoginExtractionRows = ref<DraftExtractionRow[]>([createExtractionRow()]);
+const globalHeaderEnabled = ref(false);
+const globalHeaderRows = ref<DraftKeyValueRow[]>([createKeyValueRow()]);
 
 const scheduleDialogVisible = ref(false);
 const scheduleEditIndex = ref(-1);
@@ -184,6 +200,69 @@ function mappingRowsToRecord(rows: DraftKeyValueRow[]) {
   return result;
 }
 
+function extractionRowsFromConfig(rows: Array<{ variable: string; path: string }> | undefined) {
+  const entries = rows ?? [];
+  if (!entries.length) {
+    return [createExtractionRow()];
+  }
+  return entries.map((row) => createExtractionRow(row.variable ?? "", row.path ?? ""));
+}
+
+function extractionRowsToConfig(rows: DraftExtractionRow[]) {
+  return rows
+    .map((row) => ({
+      variable: row.variable.trim(),
+      path: row.path.trim(),
+    }))
+    .filter((row) => row.variable && row.path);
+}
+
+function parseBodyText(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return "{\n  \n}";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+function parseRequestBody(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return {};
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
+function removeGlobalHeaderRow(index: number) {
+  if (globalHeaderRows.value.length <= 1) {
+    globalHeaderRows.value = [createKeyValueRow()];
+    return;
+  }
+  globalHeaderRows.value.splice(index, 1);
+}
+
+function syncGlobalRequestConfig(config: ApiToolConfig) {
+  const globalConfig = config.global_request_config;
+  globalLoginEnabled.value = globalConfig?.login_request?.enabled ?? false;
+  globalLoginMethod.value = globalConfig?.login_request?.method ?? "POST";
+  globalLoginUrl.value = globalConfig?.login_request?.url ?? "";
+  globalLoginBodyText.value = parseBodyText(globalConfig?.login_request?.body);
+  globalLoginHeadersRows.value = mappingRecordToRows(
+    (globalConfig?.login_request?.headers ?? { "Content-Type": "application/json" }) as Record<string, string>,
+  );
+  globalLoginExtractionRows.value = extractionRowsFromConfig(globalConfig?.login_request?.extractions);
+  globalHeaderEnabled.value = globalConfig?.header_config?.enabled ?? false;
+  globalHeaderRows.value = mappingRecordToRows(
+    (globalConfig?.header_config?.headers ?? config.global_headers ?? {}) as Record<string, string>,
+  );
+}
+
 function syncFromProps() {
   if (!props.product || !props.config) {
     return;
@@ -196,6 +275,7 @@ function syncFromProps() {
   productForm.enable_encryption = props.config.enable_encryption;
   productForm.encrypt_url = props.config.encrypt_url;
   productForm.decrypt_url = props.config.decrypt_url;
+  syncGlobalRequestConfig(props.config);
 
   const drafts = configToDrafts(props.config);
   scheduleTasksDraft.value = drafts.scheduleTasks;
@@ -472,10 +552,31 @@ function submit() {
     ensureUnique(sqlsDraft.value.map((item) => item.name), "SQL");
     validateLayoutTargets();
 
+    if (globalLoginEnabled.value && !globalLoginUrl.value.trim()) {
+      throw new Error("请填写登录接口 URL");
+    }
+
+    const globalRequestConfig: ApiToolGlobalRequestConfig = {
+      login_request: {
+        enabled: globalLoginEnabled.value,
+        protocol: "http",
+        method: globalLoginMethod.value,
+        url: globalLoginUrl.value.trim(),
+        headers: mappingRowsToRecord(globalLoginHeadersRows.value),
+        body: parseRequestBody(globalLoginBodyText.value),
+        extractions: extractionRowsToConfig(globalLoginExtractionRows.value),
+      },
+      header_config: {
+        enabled: globalHeaderEnabled.value,
+        headers: mappingRowsToRecord(globalHeaderRows.value),
+      },
+    };
+
     const config = buildConfigFromDrafts({
       enableEncryption: productForm.enable_encryption,
       encryptUrl: productForm.encrypt_url,
       decryptUrl: productForm.decrypt_url,
+      globalRequestConfig,
       scheduleTasks: scheduleTasksDraft.value,
       layoutItems: layoutItemsDraft.value,
       interfaces: interfacesDraft.value,
@@ -529,6 +630,101 @@ function submit() {
               <el-input v-model="productForm.decrypt_url" />
             </el-form-item>
           </template>
+          <div class="basic-config-block">
+            <div class="section-toolbar">
+              <span>登录态请求头（全局请求头）</span>
+            </div>
+            <el-form-item class="basic-config-check">
+              <el-checkbox v-model="globalLoginEnabled">启用登录接口配置</el-checkbox>
+            </el-form-item>
+            <template v-if="globalLoginEnabled">
+              <div class="config-grid compact">
+                <el-form-item label="请求方式">
+                  <el-select v-model="globalLoginMethod">
+                    <el-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="登录 URL">
+                  <el-input v-model="globalLoginUrl" placeholder="请输入登录接口地址" />
+                </el-form-item>
+              </div>
+              <div class="sub-toolbar">
+                <span>登录接口请求头</span>
+                <el-button link type="primary" @click="globalLoginHeadersRows.push(createKeyValueRow())">新增请求头</el-button>
+              </div>
+              <el-table :data="globalLoginHeadersRows" border>
+                <el-table-column label="Header">
+                  <template #default="{ row }">
+                    <el-input v-model="row.key" placeholder="例如 Content-Type" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="Value">
+                  <template #default="{ row }">
+                    <el-input v-model="row.value" placeholder="例如 application/json" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="120">
+                  <template #default="{ $index }">
+                    <el-button link type="danger" @click="globalLoginHeadersRows.splice($index, 1)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-form-item label="请求体" class="stack-space">
+                <el-input v-model="globalLoginBodyText" type="textarea" :rows="6" />
+              </el-form-item>
+              <div class="sub-toolbar">
+                <span>参数提取</span>
+                <el-button link type="primary" @click="globalLoginExtractionRows.push(createExtractionRow())">新增提取</el-button>
+              </div>
+              <el-table :data="globalLoginExtractionRows" border>
+                <el-table-column label="变量字段">
+                  <template #default="{ row }">
+                    <el-input v-model="row.variable" placeholder="例如 token" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="提取路径">
+                  <template #default="{ row }">
+                    <el-input v-model="row.path" placeholder="支持 headers.Authorization 或 body.data.token" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="120">
+                  <template #default="{ $index }">
+                    <el-button link type="danger" @click="globalLoginExtractionRows.splice($index, 1)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </template>
+            <el-form-item class="basic-config-check">
+              <el-checkbox v-model="globalHeaderEnabled">启用请求头配置</el-checkbox>
+            </el-form-item>
+          </div>
+          <div v-if="globalHeaderEnabled" class="sub-toolbar basic-config-toolbar">
+            <span>全局请求头</span>
+            <el-button link type="primary" @click="globalHeaderRows.push(createKeyValueRow())">新增请求头</el-button>
+          </div>
+          <el-table v-if="globalHeaderEnabled" :data="globalHeaderRows" border>
+            <el-table-column label="Header">
+              <template #default="{ row }">
+                <el-input v-model="row.key" placeholder="例如 Authorization" />
+              </template>
+            </el-table-column>
+            <el-table-column label="Value">
+              <template #default="{ row }">
+                <el-input v-model="row.value" placeholder="支持 ${token} 变量" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120">
+              <template #default="{ $index }">
+                <el-button
+                  link
+                  type="danger"
+                  @click="removeGlobalHeaderRow($index)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </el-form>
       </el-tab-pane>
 

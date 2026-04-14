@@ -30,13 +30,14 @@ import unlockToolIcon from "@/assets/interface-auto/tool-icons/unlock.png";
 import type {
   ApiFolder,
   ApiTemplate,
+  CaseGlobalRequestConfig,
+  CaseOutputVariable,
   CaseFolder,
   CaseStep,
   CaseToolMap,
   CaseToolRecord,
   CascaderOption,
   EnvironmentRecord,
-  GlobalVariableRecord,
   JsonMap,
   TestCaseRecord,
   TreeNode,
@@ -78,13 +79,11 @@ type TemplateWorkspacePayload = {
 
 type VariableRow = {
   rowKey: string;
-  id?: number;
-  project_id: number;
   name: string;
   value: string;
-  variable_type: string;
-  description: string;
 };
+
+type GlobalConfigTab = "encryption" | "variables" | "login_headers" | "outputs";
 
 const TOOL_TAB_LABELS: Record<ToolTabKey, string> = {
   pre_processing: "前置",
@@ -142,6 +141,8 @@ const apiFolders = ref<ApiFolder[]>([]);
 const templates = ref<ApiTemplate[]>([]);
 const environments = ref<EnvironmentRecord[]>([]);
 const variableRows = ref<VariableRow[]>([]);
+const globalConfigExpanded = ref(true);
+const activeGlobalConfigTab = ref<GlobalConfigTab>("encryption");
 const openedTabs = ref<TestCaseRecord[]>([]);
 const modifiedTabs = reactive<Record<string, boolean>>({});
 const stepTabMap = reactive<Record<string, ToolTabKey>>({});
@@ -342,6 +343,48 @@ function createKey(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
+function createHeaderRow(key = "", value = "") {
+  return {
+    rowKey: createKey("header"),
+    key,
+    value,
+  };
+}
+
+function createExtractionRow(variable = "", path = "") {
+  return {
+    rowKey: createKey("extract"),
+    variable,
+    path,
+  };
+}
+
+function createOutputVariableRow(name = "", source = ""): CaseOutputVariable {
+  return {
+    rowKey: createKey("output"),
+    name,
+    source,
+  };
+}
+
+function createDefaultGlobalRequestConfig(): CaseGlobalRequestConfig {
+  return {
+    login_request: {
+      enabled: false,
+      protocol: "http",
+      method: "POST",
+      url: "",
+      headers_rows: [createHeaderRow("Content-Type", "application/json")],
+      body_text: "{\n  \n}",
+      extractions: [createExtractionRow()],
+    },
+    header_config: {
+      enabled: false,
+      headers_rows: [createHeaderRow()],
+    },
+  };
+}
+
 function createDraftCase(projectId: number, folderId: number | null): TestCaseRecord {
   return {
     tabKey: createKey("draft"),
@@ -351,6 +394,8 @@ function createDraftCase(projectId: number, folderId: number | null): TestCaseRe
     description: "",
     environment_id: null,
     global_vars: {},
+    global_request_config: createDefaultGlobalRequestConfig(),
+    output_variables: [],
     enable_encryption: false,
     encrypt_url: "",
     decrypt_url: "",
@@ -392,6 +437,154 @@ function parseBody(value: unknown) {
   } catch {
     return value;
   }
+}
+
+function stringifyBody(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return "{\n  \n}";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+function mapToVariableRows(value: JsonMap | string | null | undefined): VariableRow[] {
+  const entries = Object.entries(parseMap(value));
+  if (!entries.length) {
+    return [createVariableRow()];
+  }
+  return entries.map(([name, rawValue]) => createVariableRow(name, String(rawValue ?? "")));
+}
+
+function variableRowsToMap(rows: VariableRow[]): JsonMap {
+  const result: JsonMap = {};
+  rows.forEach((row) => {
+    const name = row.name.trim();
+    if (name) {
+      result[name] = row.value;
+    }
+  });
+  return result;
+}
+
+function mapToHeaderRows(value: unknown, fallback?: Array<{ key: string; value: string }>) {
+  const source = parseMap(value);
+  const entries = Object.entries(source);
+  if (!entries.length) {
+    if (fallback?.length) {
+      return fallback.map((row) => createHeaderRow(row.key, row.value));
+    }
+    return [createHeaderRow()];
+  }
+  return entries.map(([key, rawValue]) => createHeaderRow(key, String(rawValue ?? "")));
+}
+
+function headerRowsToMap(rows: Array<{ key: string; value: string }>): JsonMap {
+  const result: JsonMap = {};
+  rows.forEach((row) => {
+    const key = row.key.trim();
+    if (key) {
+      result[key] = row.value;
+    }
+  });
+  return result;
+}
+
+function normalizeExtractionRows(value: unknown) {
+  if (!Array.isArray(value) || !value.length) {
+    return [createExtractionRow()];
+  }
+  return value.map((item) =>
+    createExtractionRow(
+      String((item as Record<string, unknown>).variable ?? ""),
+      String((item as Record<string, unknown>).path ?? ""),
+    ),
+  );
+}
+
+function extractionRowsToPayload(rows: Array<{ variable: string; path: string }>) {
+  return rows
+    .map((row) => ({
+      variable: row.variable.trim(),
+      path: row.path.trim(),
+    }))
+    .filter((row) => row.variable && row.path);
+}
+
+function normalizeOutputVariables(value: unknown): CaseOutputVariable[] {
+  if (!Array.isArray(value) || !value.length) {
+    return [];
+  }
+  return value.map((item) =>
+    createOutputVariableRow(
+      String((item as Record<string, unknown>).name ?? ""),
+      String((item as Record<string, unknown>).source ?? ""),
+    ),
+  );
+}
+
+function outputVariablesToPayload(rows: CaseOutputVariable[]) {
+  return rows
+    .map((row) => ({
+      name: String(row.name ?? "").trim(),
+      source: String(row.source ?? "").trim(),
+    }))
+    .filter((row) => row.name && row.source);
+}
+
+function normalizeGlobalRequestConfig(value: unknown): CaseGlobalRequestConfig {
+  const fallback = createDefaultGlobalRequestConfig();
+  const raw = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const loginRequest =
+    raw.login_request && typeof raw.login_request === "object"
+      ? (raw.login_request as Record<string, unknown>)
+      : {};
+  const headerConfig =
+    raw.header_config && typeof raw.header_config === "object"
+      ? (raw.header_config as Record<string, unknown>)
+      : {};
+  return {
+    login_request: {
+      enabled: Boolean(loginRequest.enabled),
+      protocol: String(loginRequest.protocol ?? "http"),
+      method: String(loginRequest.method ?? "POST"),
+      url: String(loginRequest.url ?? ""),
+      headers_rows: mapToHeaderRows(loginRequest.headers, [{ key: "Content-Type", value: "application/json" }]),
+      body_text: stringifyBody(loginRequest.body),
+      extractions: normalizeExtractionRows(loginRequest.extractions),
+    },
+    header_config: {
+      enabled: Boolean(headerConfig.enabled),
+      headers_rows: mapToHeaderRows(headerConfig.headers),
+    },
+  };
+}
+
+function serializeGlobalRequestConfig(config: CaseGlobalRequestConfig) {
+  return {
+    login_request: {
+      enabled: config.login_request.enabled,
+      protocol: config.login_request.protocol || "http",
+      method: config.login_request.method || "POST",
+      url: config.login_request.url.trim(),
+      headers: headerRowsToMap(config.login_request.headers_rows),
+      body: parseBody(config.login_request.body_text),
+      extractions: extractionRowsToPayload(config.login_request.extractions),
+    },
+    header_config: {
+      enabled: config.header_config.enabled,
+      headers: headerRowsToMap(config.header_config.headers_rows),
+    },
+  };
+}
+
+function createVariableRow(name = "", value = ""): VariableRow {
+  return {
+    rowKey: createKey("variable"),
+    name,
+    value,
+  };
 }
 
 function normalizeTemplate(item: ApiTemplate): ApiTemplate {
@@ -495,6 +688,8 @@ function normalizeCase(item?: Partial<TestCaseRecord>): TestCaseRecord {
     description: item?.description ?? "",
     environment_id: item?.environment_id ?? null,
     global_vars: parseMap(item?.global_vars),
+    global_request_config: normalizeGlobalRequestConfig(item?.global_request_config),
+    output_variables: normalizeOutputVariables(item?.output_variables),
     enable_encryption: Boolean(item?.enable_encryption),
     encrypt_url: item?.encrypt_url ?? "",
     decrypt_url: item?.decrypt_url ?? "",
@@ -1229,25 +1424,6 @@ function markActiveModified() {
   modifiedTabs[activeTabKey.value] = true;
 }
 
-async function loadVariableRows() {
-  if (!currentProjectId.value) {
-    variableRows.value = [];
-    return;
-  }
-  const rows = await get<GlobalVariableRecord[]>("/api/interface-auto/variables/", {
-    project_id: currentProjectId.value,
-  });
-  variableRows.value = rows.map((item) => ({
-    rowKey: createKey("variable"),
-    id: item.id,
-    project_id: item.project_id,
-    name: item.name,
-    value: item.value,
-    variable_type: item.variable_type ?? "string",
-    description: item.description ?? "",
-  }));
-}
-
 async function loadWorkspace() {
   if (!currentProjectId.value) {
     folders.value = [];
@@ -1282,7 +1458,6 @@ async function loadWorkspace() {
       headers: parseMap(item.headers),
       variables: parseMap(item.variables),
     }));
-    await loadVariableRows();
   } finally {
     loading.value = false;
   }
@@ -1532,6 +1707,8 @@ function buildCasePayload(caseItem: TestCaseRecord) {
     description: caseItem.description ?? "",
     environment_id: caseItem.environment_id,
     global_vars: parseMap(caseItem.global_vars),
+    global_request_config: serializeGlobalRequestConfig(caseItem.global_request_config),
+    output_variables: outputVariablesToPayload(caseItem.output_variables),
     enable_encryption: Boolean(caseItem.enable_encryption),
     encrypt_url: caseItem.encrypt_url ?? "",
     decrypt_url: caseItem.decrypt_url ?? "",
@@ -1634,12 +1811,14 @@ async function runCase() {
     const result = await post<{
       case_name: string;
       message: string;
-      steps: Array<{ step_order: number; step_name: string; status: string }>;
+      steps: Array<{ step_order: number; step_name: string; status: string; message?: string }>;
     }>(`/api/interface-auto/cases/${caseId}/execute/`, buildCasePayload(normalizeCase(form)));
     logLines.value = [
       `用例：${result.case_name}`,
       result.message,
-      ...result.steps.map((step) => `step${step.step_order} ${step.step_name} - ${step.status}`),
+      ...result.steps.map((step) =>
+        `step${step.step_order} ${step.step_name} - ${step.status}${step.message ? ` - ${step.message}` : ""}`,
+      ),
     ];
     logDialogVisible.value = true;
   } finally {
@@ -2113,19 +2292,12 @@ async function openVariableDialog() {
     ElMessage.warning("请先选择项目");
     return;
   }
-  await loadVariableRows();
+  variableRows.value = mapToVariableRows(form.global_vars);
   variableDialogVisible.value = true;
 }
 
 function addVariableRow() {
-  variableRows.value.unshift({
-    rowKey: createKey("variable"),
-    project_id: currentProjectId.value ?? 0,
-    name: "",
-    value: "",
-    variable_type: "string",
-    description: "",
-  });
+  variableRows.value.unshift(createVariableRow());
 }
 
 async function saveVariableRow(row: VariableRow) {

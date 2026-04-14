@@ -38,6 +38,40 @@ export type KeyValueRow = {
   value: string;
 };
 
+export type GlobalRequestHeaderRow = {
+  rowKey?: string;
+  key: string;
+  value: string;
+};
+
+export type GlobalRequestExtractionRow = {
+  rowKey?: string;
+  variable: string;
+  path: string;
+};
+
+export type CaseGlobalRequestConfig = {
+  login_request: {
+    enabled: boolean;
+    protocol: string;
+    method: string;
+    url: string;
+    headers_rows: GlobalRequestHeaderRow[];
+    body_text: string;
+    extractions: GlobalRequestExtractionRow[];
+  };
+  header_config: {
+    enabled: boolean;
+    headers_rows: GlobalRequestHeaderRow[];
+  };
+};
+
+export type CaseOutputVariable = {
+  rowKey?: string;
+  name: string;
+  source: string;
+};
+
 export type TreeNode = {
   id: string;
   rawId: number | null;
@@ -133,6 +167,8 @@ export type TestCaseRecord = {
   description: string;
   environment_id: number | null;
   global_vars: JsonMap | string | null;
+  global_request_config: CaseGlobalRequestConfig;
+  output_variables: CaseOutputVariable[];
   enable_encryption: boolean;
   encrypt_url: string;
   decrypt_url: string;

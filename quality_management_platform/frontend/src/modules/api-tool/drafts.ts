@@ -1,5 +1,6 @@
 import type {
   ApiToolConfig,
+  ApiToolGlobalRequestConfig,
   ApiToolInterfaceConfig,
   ApiToolLayoutItem,
   ApiToolScheduleTask,
@@ -44,6 +45,12 @@ export type DraftConditionalCaseRow = {
   localId: string;
   caseValue: string;
   bodyTemplateText: string;
+};
+
+export type DraftExtractionRow = {
+  localId: string;
+  variable: string;
+  path: string;
 };
 
 export type DraftOutputFieldRow = {
@@ -144,6 +151,14 @@ export function createConditionalCaseRow(
   };
 }
 
+export function createExtractionRow(variable = "", path = ""): DraftExtractionRow {
+  return {
+    localId: nextId("extract"),
+    variable,
+    path,
+  };
+}
+
 export function createOutputFieldRow(field = "", description = ""): DraftOutputFieldRow {
   return {
     localId: nextId("output"),
@@ -179,7 +194,7 @@ export function createInterfaceDraft(): InterfaceDraft {
     method: "POST",
     headersRows: [createKeyValueRow("Content-Type", "application/json")],
     requestType: "normal",
-    bodyTemplateText: "{\n  \"requestId\": \"{request_id}\"\n}",
+    bodyTemplateText: "{\n  \"requestId\": \"${request_id}\"\n}",
     conditionalField: "",
     conditionalCases: [createConditionalCaseRow()],
     responseMappingRows: [],
@@ -406,6 +421,7 @@ export function buildConfigFromDrafts(args: {
   enableEncryption: boolean;
   encryptUrl: string;
   decryptUrl: string;
+  globalRequestConfig: ApiToolGlobalRequestConfig;
   scheduleTasks: ApiToolScheduleTask[];
   layoutItems: LayoutDraftItem[];
   interfaces: InterfaceDraft[];
@@ -444,6 +460,11 @@ export function buildConfigFromDrafts(args: {
     enable_encryption: args.enableEncryption,
     encrypt_url: args.encryptUrl.trim(),
     decrypt_url: args.decryptUrl.trim(),
+    global_request_config: args.globalRequestConfig,
+    global_headers:
+      args.globalRequestConfig.header_config.enabled
+        ? args.globalRequestConfig.header_config.headers
+        : {},
     schedule_tasks: args.scheduleTasks.map((task) => ({
       id: String(task.id ?? "").trim(),
       jobGroup: String(task.jobGroup ?? "").trim(),

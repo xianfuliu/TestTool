@@ -70,10 +70,41 @@ export type ApiToolScheduleTask = {
   row_id: number;
 };
 
+export type ApiToolGlobalExtraction = {
+  variable: string;
+  path: string;
+};
+
+export type ApiToolGlobalLoginRequestConfig = {
+  enabled: boolean;
+  protocol?: string;
+  method: string;
+  url: string;
+  headers: Record<string, unknown>;
+  params?: Record<string, unknown>;
+  body: unknown;
+  timeout?: number;
+  retry_enabled?: boolean;
+  retry_count?: number;
+  extractions: ApiToolGlobalExtraction[];
+};
+
+export type ApiToolGlobalHeaderConfig = {
+  enabled: boolean;
+  headers: Record<string, unknown>;
+};
+
+export type ApiToolGlobalRequestConfig = {
+  login_request: ApiToolGlobalLoginRequestConfig;
+  header_config: ApiToolGlobalHeaderConfig;
+};
+
 export type ApiToolConfig = {
   enable_encryption: boolean;
   encrypt_url: string;
   decrypt_url: string;
+  global_request_config: ApiToolGlobalRequestConfig;
+  global_headers?: Record<string, unknown>;
   schedule_tasks: ApiToolScheduleTask[];
   layout: ApiToolLayoutItem[];
   interfaces: Record<string, ApiToolInterfaceConfig>;
@@ -96,6 +127,7 @@ export type ApiToolPreviewResult = {
   request_id: string;
   resolved_variables: Record<string, unknown>;
   request: {
+    protocol?: string;
     url: string;
     method: string;
     headers: Record<string, unknown>;
@@ -111,6 +143,7 @@ export type ApiToolPreviewResult = {
 export type ApiToolExecuteResult = {
   request_id: string;
   request: {
+    protocol?: string;
     url: string;
     method: string;
     headers: Record<string, unknown>;

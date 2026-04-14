@@ -14,6 +14,21 @@ import pymysql
 import requests
 from pymysql.cursors import DictCursor
 
+from apps.common.request_execution import (
+    EncryptionConfig,
+    RequestDefinition,
+    RequestExecutionContext,
+    default_global_request_config,
+    execute_request_definition,
+    extract_template_dependencies,
+    extract_response_value,
+    normalize_global_request_config,
+    prepare_request_definition,
+    render_sql_template,
+    replace_template_data,
+    replace_template_text,
+    resolve_global_request_runtime,
+)
 from test_platform.db import connect, ensure_database, fetch_all, fetch_one
 from test_platform.schema import SCHEMA_SQL
 
@@ -60,6 +75,13 @@ def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _normalise_product_global_request_config(config: dict[str, Any]) -> dict[str, Any]:
+    return normalize_global_request_config(
+        config.get("global_request_config"),
+        legacy_headers=_as_dict(config.get("global_headers")),
+    )
+
+
 def generate_request_id() -> str:
     return datetime.now().strftime("%Y%m%d%H%M%S") + "".join(
         random.choices(string.digits, k=4)
@@ -71,6 +93,8 @@ def default_product_config() -> dict[str, Any]:
         "enable_encryption": False,
         "encrypt_url": "",
         "decrypt_url": "",
+        "global_request_config": default_global_request_config(),
+        "global_headers": {},
         "schedule_tasks": [],
         "layout": [
             {
@@ -105,7 +129,7 @@ def default_product_config() -> dict[str, Any]:
                 "url": "",
                 "method": "POST",
                 "headers": {"Content-Type": "application/json"},
-                "body_template": {"requestId": "{request_id}"},
+                "body_template": {"requestId": "${request_id}"},
                 "response_mapping": {},
                 "field_types": {},
                 "enable_encryption": True,
@@ -131,8 +155,31 @@ def _ensure_schema_ready() -> None:
         with connection.cursor() as cursor:
             for sql in SCHEMA_SQL:
                 cursor.execute(sql)
+            _ensure_api_tool_schema_extensions(cursor)
         connection.commit()
     _SCHEMA_READY = True
+
+
+def _column_exists(cursor, table_name: str, column_name: str) -> bool:
+    cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
+    return cursor.fetchone() is not None
+
+
+def _ensure_api_tool_schema_extensions(cursor) -> None:
+    if not _column_exists(cursor, "api_tool_products", "global_headers_text"):
+        cursor.execute(
+            """
+            ALTER TABLE api_tool_products
+            ADD COLUMN global_headers_text LONGTEXT NULL AFTER decrypt_url
+            """
+        )
+    if not _column_exists(cursor, "api_tool_products", "global_request_config_text"):
+        cursor.execute(
+            """
+            ALTER TABLE api_tool_products
+            ADD COLUMN global_request_config_text LONGTEXT NULL AFTER global_headers_text
+            """
+        )
 
 
 def _resolve_legacy_relative_path(index_path: Path, relative_path: str) -> Path:
@@ -398,11 +445,12 @@ def _replace_all_products(products: list[dict[str, Any]]) -> dict[str, Any]:
             cursor.execute("DELETE FROM api_tool_products")
 
             for product in products:
+                global_request_config = _normalise_product_global_request_config(product["config"])
                 cursor.execute(
                     """
                     INSERT INTO api_tool_products
-                    (name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, is_locked, is_default, sort_order)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, global_headers_text, global_request_config_text, is_locked, is_default, sort_order)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         product["name"],
@@ -410,6 +458,8 @@ def _replace_all_products(products: list[dict[str, Any]]) -> dict[str, Any]:
                         bool(product["config"].get("enable_encryption", False)),
                         product["config"].get("encrypt_url", ""),
                         product["config"].get("decrypt_url", ""),
+                        _json_dumps(_as_dict(global_request_config.get("header_config", {}).get("headers"))),
+                        _json_dumps(global_request_config),
                         bool(product.get("is_locked", False)),
                         bool(product.get("is_default", False)),
                         product.get("sort_order", 0),
@@ -468,7 +518,7 @@ def list_products() -> dict[str, Any]:
     bootstrap_from_legacy_json(force=False)
     rows = fetch_all(
         """
-        SELECT id, name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, is_locked, is_default, sort_order, created_at, updated_at
+        SELECT id, name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, global_headers_text, global_request_config_text, is_locked, is_default, sort_order, created_at, updated_at
         FROM api_tool_products
         ORDER BY is_default DESC, sort_order ASC, id ASC
         """
@@ -484,7 +534,7 @@ def list_products() -> dict[str, Any]:
 def _get_product_row(product_id: int) -> dict[str, Any]:
     row = fetch_one(
         """
-        SELECT id, name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, is_locked, is_default, sort_order, created_at, updated_at
+        SELECT id, name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, global_headers_text, global_request_config_text, is_locked, is_default, sort_order, created_at, updated_at
         FROM api_tool_products
         WHERE id = %s
         """,
@@ -713,10 +763,17 @@ def _build_product_config(product_id: int, product_row: dict[str, Any]) -> dict[
             "output_fields": sql_outputs_by_config.get(row["id"], []),
         }
 
+    global_request_config = normalize_global_request_config(
+        product_row.get("global_request_config_text"),
+        legacy_headers=_json_loads(product_row.get("global_headers_text"), {}),
+    )
+
     return {
         "enable_encryption": bool(product_row.get("enable_encryption")),
         "encrypt_url": product_row.get("encrypt_url") or "",
         "decrypt_url": product_row.get("decrypt_url") or "",
+        "global_request_config": global_request_config,
+        "global_headers": _as_dict(global_request_config.get("header_config", {}).get("headers")),
         "schedule_tasks": [
             {
                 "id": row["legacy_task_id"],
@@ -815,6 +872,7 @@ def create_product(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("产品名称不能为空")
 
     config = _as_dict((payload or {}).get("config")) or default_product_config()
+    global_request_config = _normalise_product_global_request_config(config)
 
     current = fetch_one("SELECT COUNT(*) AS count FROM api_tool_products")
     is_first = not current or current["count"] == 0
@@ -832,8 +890,8 @@ def create_product(payload: dict[str, Any]) -> dict[str, Any]:
                 cursor.execute(
                     """
                     INSERT INTO api_tool_products
-                    (name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, is_locked, is_default, sort_order)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (name, legacy_config_path, enable_encryption, encrypt_url, decrypt_url, global_headers_text, global_request_config_text, is_locked, is_default, sort_order)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         name,
@@ -841,6 +899,8 @@ def create_product(payload: dict[str, Any]) -> dict[str, Any]:
                         bool(config.get("enable_encryption", False)),
                         str(config.get("encrypt_url", "")),
                         str(config.get("decrypt_url", "")),
+                        _json_dumps(_as_dict(global_request_config.get("header_config", {}).get("headers"))),
+                        _json_dumps(global_request_config),
                         bool((payload or {}).get("locked", False)),
                         is_default,
                         sort_order,
@@ -860,6 +920,7 @@ def update_product(product_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     existing = _get_product_row(product_id)
     product_payload = _as_dict((payload or {}).get("product")) or (payload or {})
     config = _as_dict((payload or {}).get("config")) or default_product_config()
+    global_request_config = _normalise_product_global_request_config(config)
     name = str(product_payload.get("name") or existing["name"]).strip()
     if not name:
         raise ValueError("产品名称不能为空")
@@ -887,6 +948,8 @@ def update_product(product_id: int, payload: dict[str, Any]) -> dict[str, Any]:
                         enable_encryption = %s,
                         encrypt_url = %s,
                         decrypt_url = %s,
+                        global_headers_text = %s,
+                        global_request_config_text = %s,
                         is_locked = %s,
                         is_default = %s,
                         sort_order = %s,
@@ -899,6 +962,8 @@ def update_product(product_id: int, payload: dict[str, Any]) -> dict[str, Any]:
                         bool(config.get("enable_encryption", False)),
                         str(config.get("encrypt_url", "")),
                         str(config.get("decrypt_url", "")),
+                        _json_dumps(_as_dict(global_request_config.get("header_config", {}).get("headers"))),
+                        _json_dumps(global_request_config),
                         locked,
                         is_default,
                         sort_order,
@@ -981,23 +1046,18 @@ def _apply_special_tokens(text: str) -> str:
 
 
 def _replace_placeholders(text: str, variables: dict[str, Any]) -> str:
-    processed = _array_index_replacer(text, variables)
-    processed = _apply_special_tokens(processed)
-
-    def replace(match: re.Match[str]) -> str:
-        var_name = match.group(1)
-        value = variables.get(var_name)
-        if value in (None, ""):
-            if var_name.endswith(("_index", "_idx", "index", "idx")):
-                return "0"
-            return ""
-        return str(value)
-
-    return re.sub(r"\{(\w+)\}", replace, processed)
+    return replace_template_text(
+        text,
+        variables,
+        allow_legacy_placeholders=True,
+    )
 
 
 def _extract_formula_dependencies(formula: str) -> list[str]:
-    return list(dict.fromkeys(re.findall(r"\{(\w+)\}", formula or "")))
+    return extract_template_dependencies(
+        formula or "",
+        allow_legacy_placeholders=True,
+    )
 
 
 def _evaluate_numeric_expression(expression: str) -> str:
@@ -1085,12 +1145,11 @@ def _resolve_runtime_values(
                 if any(variables.get(dep, "") in (None, "") for dep in dependencies):
                     result = ""
                 else:
-                    expression = formula
-                    for dependency in dependencies:
-                        expression = expression.replace(
-                            "{" + dependency + "}",
-                            str(variables.get(dependency, "")),
-                        )
+                    expression = replace_template_text(
+                        formula,
+                        variables,
+                        allow_legacy_placeholders=True,
+                    )
                     try:
                         if item.get("formula_type") == "date":
                             result = _evaluate_date_expression(expression)
@@ -1112,13 +1171,11 @@ def _resolve_runtime_values(
 
 
 def _resolve_template_value(template: Any, variables: dict[str, Any]) -> Any:
-    if isinstance(template, dict):
-        return {key: _resolve_template_value(value, variables) for key, value in template.items()}
-    if isinstance(template, list):
-        return [_resolve_template_value(item, variables) for item in template]
-    if isinstance(template, str):
-        return _replace_placeholders(template, variables)
-    return template
+    return replace_template_data(
+        template,
+        variables,
+        allow_legacy_placeholders=True,
+    )
 
 
 def _convert_value_type(value: Any, field_type: str) -> Any:
@@ -1153,6 +1210,46 @@ def _convert_field_types(data: Any, field_types: dict[str, str]) -> Any:
     return data
 
 
+def _resolve_interface_body_template(
+    interface_config: dict[str, Any],
+    variables: dict[str, Any],
+) -> Any:
+    if "conditional_body" in interface_config:
+        conditional_body = _as_dict(interface_config.get("conditional_body"))
+        condition_field = str(conditional_body.get("field", ""))
+        condition_value = str(variables.get(condition_field, ""))
+        cases = _as_dict(conditional_body.get("cases"))
+        body_template = cases.get(condition_value)
+        if body_template is None and cases:
+            body_template = next(iter(cases.values()))
+    else:
+        body_template = interface_config.get("body_template", {})
+    return _convert_field_types(
+        _resolve_template_value(body_template, variables),
+        _as_dict(interface_config.get("field_types")),
+    )
+
+
+def _resolve_preview_global_headers(
+    config: dict[str, Any],
+    variables: dict[str, Any],
+) -> dict[str, Any]:
+    global_request_config = normalize_global_request_config(
+        config.get("global_request_config"),
+        legacy_headers=_as_dict(config.get("global_headers")),
+    )
+    header_config = _as_dict(global_request_config.get("header_config"))
+    if not header_config.get("enabled"):
+        return {}
+    return _as_dict(
+        replace_template_data(
+            _as_dict(header_config.get("headers")),
+            variables,
+            allow_legacy_placeholders=True,
+        )
+    )
+
+
 def _build_request_preview(
     config: dict[str, Any],
     interface_name: str,
@@ -1165,23 +1262,22 @@ def _build_request_preview(
     resolved_request_id = request_id or str((variables or {}).get("request_id") or generate_request_id())
     resolved_variables = _resolve_runtime_values(config, variables or {}, resolved_request_id)
     interface_config = _as_dict(config.get("interfaces", {}).get(interface_name))
-    headers = _resolve_template_value(_as_dict(interface_config.get("headers")), resolved_variables)
-
-    if "conditional_body" in interface_config:
-        conditional_body = _as_dict(interface_config.get("conditional_body"))
-        condition_field = str(conditional_body.get("field", ""))
-        condition_value = str(resolved_variables.get(condition_field, ""))
-        cases = _as_dict(conditional_body.get("cases"))
-        body_template = cases.get(condition_value)
-        if body_template is None and cases:
-            body_template = next(iter(cases.values()))
-    else:
-        body_template = interface_config.get("body_template", {})
-
-    request_body = _resolve_template_value(body_template, resolved_variables)
-    request_body = _convert_field_types(
-        request_body,
-        _as_dict(interface_config.get("field_types")),
+    request_body = _resolve_interface_body_template(interface_config, resolved_variables)
+    prepared_request = prepare_request_definition(
+        RequestDefinition(
+            protocol=str(interface_config.get("protocol") or "http"),
+            url=str(interface_config.get("url", "")),
+            method=str(interface_config.get("method", "POST")).upper(),
+            headers=_as_dict(interface_config.get("headers")),
+            body=request_body,
+            timeout=int(interface_config.get("timeout", 30) or 30),
+        ),
+        RequestExecutionContext(
+            request_id=resolved_request_id,
+            variables=resolved_variables,
+            global_headers=_resolve_preview_global_headers(config, resolved_variables),
+            allow_legacy_placeholders=True,
+        ),
     )
 
     return {
@@ -1189,10 +1285,11 @@ def _build_request_preview(
         "request_id": resolved_request_id,
         "resolved_variables": resolved_variables,
         "request": {
-            "url": _replace_placeholders(str(interface_config.get("url", "")), resolved_variables),
-            "method": str(interface_config.get("method", "POST")).upper(),
-            "headers": headers,
-            "body": request_body,
+            "protocol": prepared_request.protocol,
+            "url": prepared_request.url,
+            "method": prepared_request.method,
+            "headers": prepared_request.headers,
+            "body": prepared_request.body,
         },
         "encryption": {
             "enabled": bool(config.get("enable_encryption", False))
@@ -1278,9 +1375,53 @@ def execute_request(
 ) -> dict[str, Any]:
     detail = get_product_detail(product_id)
     config = detail["config"]
-    preview = _build_request_preview(config, interface_name, variables, request_id)
+    if interface_name not in _as_dict(config.get("interfaces")):
+        raise ValueError(f"接口不存在: {interface_name}")
+
+    resolved_request_id = request_id or str((variables or {}).get("request_id") or generate_request_id())
+    resolved_variables = _resolve_runtime_values(config, variables or {}, resolved_request_id)
     interface_config = _as_dict(config.get("interfaces", {}).get(interface_name))
-    outgoing_request = preview["request"].copy()
+    encryption = {
+        "enabled": bool(config.get("enable_encryption", False))
+        and bool(interface_config.get("enable_encryption", True)),
+        "encrypt_url": str(config.get("encrypt_url", "")),
+        "decrypt_url": str(config.get("decrypt_url", "")),
+    }
+    global_runtime = resolve_global_request_runtime(
+        config.get("global_request_config"),
+        request_id=resolved_request_id,
+        variables=resolved_variables,
+        encryption=EncryptionConfig(
+            enabled=bool(encryption["enabled"]),
+            encrypt_url=str(encryption.get("encrypt_url") or ""),
+            decrypt_url=str(encryption.get("decrypt_url") or ""),
+        ),
+        allow_legacy_placeholders=True,
+    )
+    runtime_variables = global_runtime["variables"]
+    prepared_request = prepare_request_definition(
+        RequestDefinition(
+            protocol=str(interface_config.get("protocol") or "http"),
+            url=str(interface_config.get("url", "")),
+            method=str(interface_config.get("method", "POST")).upper(),
+            headers=_as_dict(interface_config.get("headers")),
+            body=_resolve_interface_body_template(interface_config, runtime_variables),
+            timeout=int(interface_config.get("timeout", 30) or 30),
+        ),
+        RequestExecutionContext(
+            request_id=resolved_request_id,
+            variables=runtime_variables,
+            global_headers=_as_dict(global_runtime.get("headers")),
+            allow_legacy_placeholders=True,
+        ),
+    )
+    outgoing_request = {
+        "protocol": prepared_request.protocol,
+        "url": prepared_request.url,
+        "method": prepared_request.method,
+        "headers": prepared_request.headers,
+        "body": prepared_request.body,
+    }
 
     if request_override:
         if "url" in request_override:
@@ -1292,104 +1433,50 @@ def execute_request(
         if "body" in request_override:
             outgoing_request["body"] = request_override.get("body")
 
-    url = str(outgoing_request.get("url") or "").strip()
-    if not url:
-        raise ValueError("请求 URL 不能为空")
-
-    method = str(outgoing_request.get("method") or "POST").upper()
-    headers = _as_dict(outgoing_request.get("headers"))
-    request_body = outgoing_request.get("body")
-    timeout = int(interface_config.get("timeout", 30) or 30)
-
     encryption = preview["encryption"]
-    encrypt_url = encryption["encrypt_url"] if encryption["enabled"] else ""
-    decrypt_url = encryption["decrypt_url"] if encryption["enabled"] else ""
-
-    encrypted_payload: Any = None
-    if encrypt_url:
-        encrypt_response = requests.post(
-            encrypt_url,
-            data=json.dumps(request_body, ensure_ascii=False),
-            headers=headers,
-            timeout=timeout,
-        )
-        if encrypt_response.status_code != 200:
-            raise ValueError(f"加密接口调用失败: {encrypt_response.status_code}")
-        encrypted_payload = encrypt_response.text
-
-    if method == "GET":
-        response = requests.get(
-            url,
-            params=encrypted_payload or request_body,
-            headers=headers,
-            timeout=timeout,
-        )
-    else:
-        response = requests.request(
-            method,
-            url,
-            data=encrypted_payload if encrypted_payload else None,
-            json=None if encrypted_payload else request_body,
-            headers=headers,
-            timeout=timeout,
-        )
-
-    raw_body = response.text
-    decrypted_body: Any = raw_body
-    if decrypt_url and response.status_code == 200:
-        decrypt_response = requests.post(
-            decrypt_url,
-            data=response.text,
-            headers=headers,
-            timeout=timeout,
-        )
-        if decrypt_response.status_code != 200:
-            raise ValueError(f"解密接口调用失败: {decrypt_response.status_code}")
-        try:
-            decrypt_json = decrypt_response.json()
-            decrypted_body = (
-                decrypt_json.get("decrypted_data")
-                or decrypt_json.get("data")
-                or decrypt_json
-            )
-        except Exception:
-            decrypted_body = decrypt_response.text
-
-    try:
-        parsed_body = response.json()
-    except Exception:
-        parsed_body = raw_body
-
-    mapping_source = decrypted_body
-    if isinstance(mapping_source, str):
-        try:
-            mapping_source = json.loads(mapping_source)
-        except json.JSONDecodeError:
-            mapping_source = parsed_body if isinstance(parsed_body, (dict, list)) else {}
-    if not isinstance(mapping_source, (dict, list)):
-        mapping_source = {}
+    request_result = execute_request_definition(
+        RequestDefinition(
+            protocol=str(outgoing_request.get("protocol") or interface_config.get("protocol") or "http"),
+            url=str(outgoing_request.get("url") or ""),
+            method=str(outgoing_request.get("method") or interface_config.get("method") or "POST").upper(),
+            headers=_as_dict(outgoing_request.get("headers")),
+            body=outgoing_request.get("body"),
+            timeout=int(interface_config.get("timeout", 30) or 30),
+        ),
+        RequestExecutionContext(
+            request_id=resolved_request_id,
+            variables=runtime_variables,
+            global_headers=_as_dict(global_runtime.get("headers")),
+            encryption=EncryptionConfig(
+                enabled=bool(encryption["enabled"]),
+                encrypt_url=str(encryption.get("encrypt_url") or ""),
+                decrypt_url=str(encryption.get("decrypt_url") or ""),
+            ),
+            allow_legacy_placeholders=True,
+        ),
+    )
 
     mapped_values: dict[str, Any] = {}
     for field_key, response_path in _as_dict(interface_config.get("response_mapping")).items():
-        resolved_path = _replace_placeholders(str(response_path), preview["resolved_variables"])
-        value = _extract_mapping_value(mapping_source, resolved_path)
+        resolved_path = _replace_placeholders(str(response_path), runtime_variables)
+        value = extract_response_value(request_result, resolved_path)
         if value is not None:
             mapped_values[str(field_key)] = value
 
     resolved_variables = _resolve_runtime_values(
         config,
-        {**(variables or {}), **mapped_values},
-        preview["request_id"],
+        {**runtime_variables, **mapped_values},
+        resolved_request_id,
     )
 
     return {
-        "request_id": preview["request_id"],
-        "request": outgoing_request,
-        "status_code": response.status_code,
-        "headers": dict(response.headers),
-        "body": parsed_body,
-        "raw_body": raw_body,
-        "decrypted_body": decrypted_body,
+        "request_id": resolved_request_id,
+        "request": request_result.request,
+        "status_code": request_result.status_code,
+        "headers": request_result.headers,
+        "body": request_result.body,
+        "raw_body": request_result.raw_body,
+        "decrypted_body": request_result.decrypted_body,
         "mapped_values": mapped_values,
         "resolved_variables": resolved_variables,
     }
@@ -1409,7 +1496,11 @@ def execute_sql(
 
     resolved_request_id = request_id or str((variables or {}).get("request_id") or generate_request_id())
     resolved_variables = _resolve_runtime_values(config, variables or {}, resolved_request_id)
-    resolved_sql = _replace_placeholders(str(sql_config.get("sql", "")), resolved_variables)
+    resolved_sql = render_sql_template(
+        str(sql_config.get("sql", "")),
+        resolved_variables,
+        allow_legacy_placeholders=True,
+    )
     if not re.match(r"^\s*SELECT\b", resolved_sql, re.IGNORECASE):
         raise ValueError("仅支持 SELECT 查询语句")
 

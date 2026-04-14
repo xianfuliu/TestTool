@@ -901,45 +901,8 @@ onBeforeUnmount(() => {
         <button class="icon-button" title="刷新" @click.stop="refreshWorkspace">
           <el-icon><RefreshRight /></el-icon>
         </button>
-        <button class="icon-button" title="新建接口模板" @click.stop="createTemplate">+</button>
-      </div>
-
-      <div v-if="false" class="project-toolbar">
-        <span>项目：</span>
-        <el-cascader
-          v-model="projectPath"
-          :options="projectOptions"
-          :props="cascaderProps"
-          size="small"
-          class="project-cascader"
-          placeholder="选择业务 / 项目"
-          :show-all-levels="true"
-          @change="handleProjectPathChange"
-        />
-        <el-button size="small" class="icon-tool" title="新增一级目录" @click.stop="createFolder(null)">
-          <el-icon><FolderAdd /></el-icon>
-        </el-button>
-        <el-button
-          size="small"
-          class="icon-tool delete-tool"
-          :class="{ active: selectedNodeType === 'folder' && Boolean(currentFolder) }"
-          :disabled="selectedNodeType !== 'folder' || !currentFolder"
-          title="删除目录"
-          @click.stop="deleteTopFolder"
-        >
-          <el-icon><Delete /></el-icon>
-        </el-button>
-        <button class="icon-button" title="刷新" @click.stop="refreshWorkspace">
-          <el-icon><RefreshRight /></el-icon>
-        </button>
         <button class="icon-button" title="新增接口" @click.stop="createTemplate">+</button>
       </div>
-
-      <el-input v-model="searchText" size="small" placeholder="输入接口名和描述..." clearable>
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
 
       <div class="search-line">
         <el-icon><Search /></el-icon>

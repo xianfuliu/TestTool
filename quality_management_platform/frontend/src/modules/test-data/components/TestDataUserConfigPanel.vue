@@ -12,7 +12,7 @@ const form = defineModel<TestDataConfig>({ required: true });
   <section class="work-panel">
     <div class="panel-head">
       <div class="panel-title-group">
-        <h2>用户参数</h2>
+        <h2>参数配置</h2>
       </div>
     </div>
 

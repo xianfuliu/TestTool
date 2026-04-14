@@ -20,7 +20,8 @@ export function buildRequestId() {
 }
 
 function replacePlaceholders(template: string, values: Record<string, string>, requestId: string) {
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => {
+  return template.replace(/\$\{(\w+)\}|\{(\w+)\}/g, (_, dollarKey: string, legacyKey: string) => {
+    const key = dollarKey || legacyKey;
     if (key === "request_id") {
       return requestId;
     }
@@ -104,7 +105,9 @@ export function deriveRuntimeValues(
 
       if (item.type === "formula" && item.key) {
         const formula = item.formula ?? "";
-        const dependencies = [...formula.matchAll(/\{(\w+)\}/g)].map((match) => match[1]);
+        const dependencies = [...formula.matchAll(/\$\{(\w+)\}|\{(\w+)\}/g)].map(
+          (match) => match[1] || match[2],
+        );
         const hasMissingDependency = dependencies.some((dependency) => !values[dependency]);
         let nextValue = "";
         if (!hasMissingDependency) {
