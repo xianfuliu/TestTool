@@ -1368,16 +1368,20 @@ function submit() {
         <div class="interface-section-content">
           <div class="request-mode-panel">
             <template v-if="interfaceForm.requestType === 'normal'">
-              <div class="request-body-panel">
-                <div class="request-body-panel-label">请求体模板</div>
-                <el-input v-model="interfaceForm.bodyTemplateText" type="textarea" :rows="6" />
+              <div class="request-body-inline-panel">
+                <div class="request-body-inline-label">固定请求体</div>
+                <div class="request-body-inline-content">
+                  <el-input v-model="interfaceForm.bodyTemplateText" type="textarea" :rows="6" />
+                </div>
               </div>
             </template>
 
             <template v-else>
-              <div class="request-body-panel">
-                <div class="request-body-panel-label">默认请求体</div>
-                <el-input v-model="interfaceForm.defaultBodyTemplateText" type="textarea" :rows="6" />
+              <div class="request-body-inline-panel">
+                <div class="request-body-inline-label">默认请求体</div>
+                <div class="request-body-inline-content">
+                  <el-input v-model="interfaceForm.defaultBodyTemplateText" type="textarea" :rows="6" />
+                </div>
               </div>
 
               <div class="request-body-group">
@@ -1387,76 +1391,79 @@ function submit() {
                   class="case-card-wrap"
                 >
                   <div class="case-card">
-                <div class="case-card-header">
-                  <div class="case-card-title">条件请求体 {{ index + 1 }}</div>
-                </div>
-                <div
-                  v-for="(condition, conditionIndex) in item.conditions"
-                  :key="condition.localId"
-                  class="conditional-field-row"
-                >
-                  <el-select
-                    v-model="condition.field"
-                    class="conditional-field-select"
-                    placeholder="条件字段"
-                    clearable
-                    filterable
-                    @change="onConditionalFieldChange(condition)"
-                  >
-                    <el-option
-                      v-for="option in availableConditionalFields"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
-                  </el-select>
-                  <el-select
-                    v-model="condition.values"
-                    class="conditional-field-value"
-                    placeholder="条件值"
-                    multiple
-                    collapse-tags
-                    collapse-tags-tooltip
-                    clearable
-                  >
-                    <el-option
-                      v-for="option in getConditionalFieldOptions(condition.field)"
-                      :key="`${condition.localId}-${option.value}`"
-                      :label="option.text"
-                      :value="option.value"
-                    />
-                  </el-select>
-                  <div class="inline-config-actions">
-                    <el-button text circle @click="appendConditionalField(item)">
-                      <el-icon><Plus /></el-icon>
-                    </el-button>
-                    <el-button text circle @click="removeConditionalField(item, conditionIndex)">
-                      <el-icon><Minus /></el-icon>
-                    </el-button>
-                  </div>
-                </div>
-                    <div class="request-body-panel case-body-panel">
-                      <div class="request-body-panel-label">请求体</div>
-                      <el-input v-model="item.bodyTemplateText" type="textarea" :rows="6" />
+                    <div class="case-card-header">
+                      <div class="case-card-title">条件请求体 {{ index + 1 }}</div>
+                      <div class="case-card-actions">
+                        <el-button
+                          class="request-body-icon-button is-add"
+                          text
+                          circle
+                          @click="appendConditionalRequestBody"
+                        >
+                          <el-icon><Plus /></el-icon>
+                        </el-button>
+                        <el-button
+                          class="request-body-icon-button is-remove"
+                          text
+                          circle
+                          @click="removeConditionalRequestBody(index)"
+                        >
+                          <el-icon><Minus /></el-icon>
+                        </el-button>
+                      </div>
                     </div>
-                  </div>
-                  <div class="case-card-actions">
-                    <el-button
-                      class="request-body-icon-button is-add"
-                      text
-                      circle
-                      @click="appendConditionalRequestBody"
+                    <div
+                      v-for="(condition, conditionIndex) in item.conditions"
+                      :key="condition.localId"
+                      class="conditional-field-row"
                     >
-                      <el-icon><Plus /></el-icon>
-                    </el-button>
-                    <el-button
-                      class="request-body-icon-button is-remove"
-                      text
-                      circle
-                      @click="removeConditionalRequestBody(index)"
-                    >
-                      <el-icon><Minus /></el-icon>
-                    </el-button>
+                      <div class="conditional-field-label">条件字段</div>
+                      <el-select
+                        v-model="condition.field"
+                        class="conditional-field-select"
+                        placeholder="条件字段"
+                        clearable
+                        filterable
+                        @change="onConditionalFieldChange(condition)"
+                      >
+                        <el-option
+                          v-for="option in availableConditionalFields"
+                          :key="option.value"
+                          :label="option.label"
+                          :value="option.value"
+                        />
+                      </el-select>
+                      <el-select
+                        v-model="condition.values"
+                        class="conditional-field-value"
+                        placeholder="条件值"
+                        multiple
+                        collapse-tags
+                        collapse-tags-tooltip
+                        clearable
+                      >
+                        <el-option
+                          v-for="option in getConditionalFieldOptions(condition.field)"
+                          :key="`${condition.localId}-${option.value}`"
+                          :label="option.text"
+                          :value="option.value"
+                        />
+                      </el-select>
+                      <div class="inline-config-actions">
+                        <el-button text circle @click="appendConditionalField(item)">
+                          <el-icon><Plus /></el-icon>
+                        </el-button>
+                        <el-button text circle @click="removeConditionalField(item, conditionIndex)">
+                          <el-icon><Minus /></el-icon>
+                        </el-button>
+                      </div>
+                    </div>
+                    <div class="request-body-inline-panel case-body-inline-panel">
+                      <div class="request-body-inline-label">请求体</div>
+                      <div class="request-body-inline-content">
+                      <el-input v-model="item.bodyTemplateText" type="textarea" :rows="6" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1758,7 +1765,7 @@ function submit() {
 .interface-config-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .interface-top-grid {
@@ -2000,8 +2007,8 @@ function submit() {
 
 .case-card {
   margin-left: 0;
-  margin-bottom: 12px;
-  padding: 12px 14px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
   border: 1px solid #dfe7f5;
   border-radius: 10px;
   background: #f7fbff;
@@ -2016,7 +2023,7 @@ function submit() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .case-card-title {
@@ -2027,21 +2034,31 @@ function submit() {
 
 .conditional-field-row {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr) 72px;
-  gap: 12px;
+  grid-template-columns: 88px 260px 300px 72px;
+  gap: 10px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  width: max-content;
+  max-width: 100%;
+}
+
+.conditional-field-label {
+  color: var(--qm-title);
+  font-size: 14px;
+  line-height: 32px;
+  white-space: nowrap;
 }
 
 .conditional-field-select,
 .conditional-field-value {
   width: 100%;
+  max-width: 100%;
 }
 
 .request-mode-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .request-body-panel {
@@ -2050,6 +2067,28 @@ function submit() {
   border: 1px solid #e5eaf3;
   border-radius: 10px;
   background: #fafcff;
+}
+
+.request-body-inline-panel {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid #e5eaf3;
+  border-radius: 10px;
+  background: #fafcff;
+}
+
+.request-body-inline-label {
+  color: var(--qm-title);
+  font-size: 14px;
+  line-height: 32px;
+  white-space: nowrap;
+}
+
+.request-body-inline-content {
+  min-width: 0;
 }
 
 .request-body-panel-label {
@@ -2068,17 +2107,22 @@ function submit() {
   background: #ffffff;
 }
 
+.case-body-inline-panel {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
 .request-body-group {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .case-card-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
+  display: block;
 }
 
 .case-card-actions {
@@ -2086,8 +2130,8 @@ function submit() {
   flex-direction: row;
   gap: 10px;
   align-items: center;
-  justify-content: center;
-  align-self: center;
+  justify-content: flex-end;
+  align-self: flex-start;
 }
 
 .request-body-icon-button {
@@ -2245,11 +2289,25 @@ function submit() {
     grid-template-columns: 1fr;
   }
 
+  .conditional-field-label {
+    line-height: 1.5;
+  }
+
   .request-body-panel,
+  .request-body-inline-panel,
   .request-body-toolbar,
   .case-card,
   .case-card-wrap {
     margin-left: 0;
+  }
+
+  .request-body-inline-panel {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .request-body-inline-label {
+    line-height: 1.5;
   }
 
   .layout-option-row {

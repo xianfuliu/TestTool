@@ -2602,7 +2602,7 @@ onBeforeUnmount(() => {
 
             <div class="global-config-shell">
               <button class="global-config-toggle" type="button" @click="toggleGlobalConfigPanel">
-                <span>Global Config</span>
+                <span>全局配置</span>
                 <span class="global-config-toggle-icon" :class="{ expanded: globalConfigExpanded }">
                   <el-icon><ArrowRight /></el-icon>
                 </span>
@@ -2616,7 +2616,7 @@ onBeforeUnmount(() => {
                     type="button"
                     @click="activeGlobalConfigTab = 'encryption'"
                   >
-                    Encryption
+                    加解密
                   </button>
                   <button
                     class="global-config-tab"
@@ -2624,7 +2624,7 @@ onBeforeUnmount(() => {
                     type="button"
                     @click="activeGlobalConfigTab = 'variables'"
                   >
-                    Global Variables
+                    全局变量
                   </button>
                   <button
                     class="global-config-tab"
@@ -2632,7 +2632,7 @@ onBeforeUnmount(() => {
                     type="button"
                     @click="activeGlobalConfigTab = 'login_headers'"
                   >
-                    Global Headers
+                    全局请求头
                   </button>
                 </div>
 
@@ -2640,16 +2640,16 @@ onBeforeUnmount(() => {
                   <div v-if="activeGlobalConfigTab === 'encryption'" class="global-config-tab-panel">
                     <label class="encryption-check">
                       <input :checked="form.enable_encryption" type="checkbox" @change="handleGlobalEncryptionChange" />
-                      <span>Enable Encryption</span>
+                      <span>启用加解密</span>
                     </label>
                     <div v-if="form.enable_encryption" class="global-config-inline-grid two-columns">
                       <div class="global-config-inline-field">
-                        <span class="global-config-inline-label">Encrypt URL</span>
-                        <input v-model="form.encrypt_url" class="text-field" placeholder="Enter encrypt endpoint" />
+                        <span class="global-config-inline-label">加密URL</span>
+                        <input v-model="form.encrypt_url" class="text-field" placeholder="请输入加密URL" />
                       </div>
                       <div class="global-config-inline-field">
-                        <span class="global-config-inline-label">Decrypt URL</span>
-                        <input v-model="form.decrypt_url" class="text-field" placeholder="Enter decrypt endpoint" />
+                        <span class="global-config-inline-label">解密URL</span>
+                        <input v-model="form.decrypt_url" class="text-field" placeholder="请输入解密URL" />
                       </div>
                     </div>
                   </div>
@@ -2661,8 +2661,8 @@ onBeforeUnmount(() => {
                         :key="row.rowKey"
                         class="global-config-kv-row"
                       >
-                        <input v-model="row.name" class="tool-input config-input" placeholder="variable_name" @input="form.global_vars = variableRowsToMap(variableRows)" />
-                        <input v-model="row.value" class="tool-input config-input" placeholder="variable_value" @input="form.global_vars = variableRowsToMap(variableRows)" />
+                        <input v-model="row.name" class="tool-input config-input" placeholder="变量名" @input="form.global_vars = variableRowsToMap(variableRows)" />
+                        <input v-model="row.value" class="tool-input config-input" placeholder="变量值" @input="form.global_vars = variableRowsToMap(variableRows)" />
                         <div class="global-config-row-actions">
                           <button class="tool-action text-action" type="button" @click="addVariableRow">+</button>
                           <button class="tool-action danger text-action" type="button" @click="removeVariableRow(index)">-</button>
@@ -2676,27 +2676,27 @@ onBeforeUnmount(() => {
                       <div class="global-config-toolbar align-left">
                         <label class="encryption-check compact-check">
                           <input v-model="form.global_request_config.login_request.enabled" type="checkbox" />
-                          <span class="global-config-section-title">Login Request</span>
+                          <span class="global-config-section-title">登录态获取</span>
                         </label>
                       </div>
                       <div v-if="form.global_request_config.login_request.enabled" class="global-config-section-panel">
                         <div class="global-config-stack">
                           <div class="global-config-inline-grid method-url-grid">
                             <div class="global-config-inline-field compact-inline-field">
-                              <span class="global-config-inline-label">Method</span>
+                              <span class="global-config-inline-label">请求方式</span>
                               <el-select v-model="form.global_request_config.login_request.method" class="env-select" size="small">
                                 <el-option v-for="method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method" :label="method" :value="method" />
                               </el-select>
                             </div>
                             <div class="global-config-inline-field">
                               <span class="global-config-inline-label">URL</span>
-                              <input v-model="form.global_request_config.login_request.url" class="text-field" placeholder="Enter login endpoint URL" />
+                              <input v-model="form.global_request_config.login_request.url" class="text-field" placeholder="请输入登录URL" />
                             </div>
                           </div>
 
                           <div class="global-config-section-card inner-card">
                             <div class="global-config-toolbar">
-                              <span class="global-config-section-title">Request Headers</span>
+                              <span class="global-config-section-title">请求头</span>
                             </div>
                             <div
                               v-for="(row, index) in form.global_request_config.login_request.headers_rows"
@@ -2713,13 +2713,13 @@ onBeforeUnmount(() => {
                           </div>
 
                           <div class="global-config-inline-field body-inline-field">
-                            <span class="global-config-inline-label body-label">Request Body</span>
+                            <span class="global-config-inline-label body-label">请求体</span>
                             <el-input v-model="form.global_request_config.login_request.body_text" type="textarea" :rows="4" resize="none" />
                           </div>
 
                           <div class="global-config-section-card inner-card">
                             <div class="global-config-toolbar">
-                              <span class="global-config-section-title">Parameter Extraction</span>
+                              <span class="global-config-section-title">参数提取</span>
                             </div>
                             <div
                               v-for="(row, index) in form.global_request_config.login_request.extractions"
@@ -2742,7 +2742,7 @@ onBeforeUnmount(() => {
                       <div class="global-config-toolbar align-left">
                         <label class="encryption-check compact-check">
                           <input v-model="form.global_request_config.header_config.enabled" type="checkbox" />
-                          <span class="global-config-section-title">Request Header Config</span>
+                          <span class="global-config-section-title">全局请求头</span>
                         </label>
                       </div>
                       <div v-if="form.global_request_config.header_config.enabled" class="global-config-section-panel">
@@ -2753,7 +2753,7 @@ onBeforeUnmount(() => {
                             class="global-config-kv-row"
                           >
                             <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
-                            <input v-model="row.value" class="tool-input config-input" placeholder="Bearer ${token}" />
+                            <input v-model="row.value" class="tool-input config-input" placeholder="可引用变量 例：${token}" />
                             <div class="global-config-row-actions">
                               <button class="tool-action text-action" type="button" @click="addGlobalHeaderConfigRow">+</button>
                               <button class="tool-action danger text-action" type="button" @click="removeGlobalHeaderConfigRow(index)">-</button>
