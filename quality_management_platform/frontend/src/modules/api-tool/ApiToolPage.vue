@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import axios from "axios";
 
 import { fetchGeneratedRuntimeVariables } from "@/shared/api/generatedDataToolkit";
 
@@ -87,6 +88,38 @@ function formatText(value: unknown) {
     return value;
   }
   return JSON.stringify(value, null, 2);
+}
+
+function buildExecuteErrorResult(message: string): ApiToolExecuteResult {
+  return {
+    request_id: requestId.value,
+    request: {
+      url: requestEditor.url,
+      method: requestEditor.method,
+      headers: parseObjectText(requestEditor.headersText, "请求头"),
+      body: parseAnyText(requestEditor.bodyText),
+    },
+    status_code: 0,
+    headers: {},
+    body: { message },
+    raw_body: { message },
+    decrypted_body: { message },
+    mapped_values: {},
+    resolved_variables: buildVariablePayload(),
+  };
+}
+
+function extractErrorMessage(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    const responseMessage = error.response?.data?.message;
+    if (typeof responseMessage === "string" && responseMessage.trim()) {
+      return responseMessage;
+    }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "请求失败";
 }
 
 function parseObjectText(text: string, label: string) {
@@ -376,7 +409,11 @@ async function sendCurrentRequest() {
     activeSqlName.value = "";
     ElMessage.success("请求发送完成");
   } catch (error) {
-    ElMessage.error((error as Error).message);
+    const message = extractErrorMessage(error);
+    requestResult.value = buildExecuteErrorResult(message);
+    sqlResult.value = null;
+    activeSqlName.value = "";
+    ElMessage.error(message);
   } finally {
     sending.value = false;
   }

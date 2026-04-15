@@ -39,8 +39,16 @@ export type ApiToolInterfaceConfig = {
   headers: Record<string, unknown>;
   body_template?: unknown;
   conditional_body?: {
-    field: string;
-    cases: Record<string, unknown>;
+    field?: string;
+    cases?: Record<string, unknown>;
+    default_body?: unknown;
+    request_bodies?: Array<{
+      conditions: Array<{
+        field: string;
+        values: string[];
+      }>;
+      body_template: unknown;
+    }>;
   };
   response_mapping: Record<string, string>;
   field_types: Record<string, string>;

@@ -26,7 +26,7 @@ function parseJsonText(text: string, label: string) {
   }
   try {
     return JSON.parse(trimmed) as unknown;
-  } catch (error) {
+  } catch {
     throw new Error(`${label} 不是合法的 JSON`);
   }
 }
@@ -41,9 +41,15 @@ export type DraftKeyValueRow = {
   value: string;
 };
 
+export type DraftConditionalFieldRow = {
+  localId: string;
+  field: string;
+  values: string[];
+};
+
 export type DraftConditionalCaseRow = {
   localId: string;
-  caseValue: string;
+  conditions: DraftConditionalFieldRow[];
   bodyTemplateText: string;
 };
 
@@ -71,7 +77,7 @@ export type InterfaceDraft = {
   headersRows: DraftKeyValueRow[];
   requestType: "normal" | "conditional";
   bodyTemplateText: string;
-  conditionalField: string;
+  defaultBodyTemplateText: string;
   conditionalCases: DraftConditionalCaseRow[];
   responseMappingRows: DraftKeyValueRow[];
   fieldTypeRows: DraftKeyValueRow[];
@@ -140,13 +146,21 @@ export function createKeyValueRow(key = "", value = ""): DraftKeyValueRow {
   };
 }
 
-export function createConditionalCaseRow(
-  caseValue = "",
-  bodyTemplateText = "{\n  \n}",
-): DraftConditionalCaseRow {
+export function createConditionalFieldRow(
+  field = "",
+  values: string[] = [],
+): DraftConditionalFieldRow {
+  return {
+    localId: nextId("condition"),
+    field,
+    values: [...values],
+  };
+}
+
+export function createConditionalCaseRow(bodyTemplateText = "{\n  \n}"): DraftConditionalCaseRow {
   return {
     localId: nextId("case"),
-    caseValue,
+    conditions: [createConditionalFieldRow()],
     bodyTemplateText,
   };
 }
@@ -195,7 +209,7 @@ export function createInterfaceDraft(): InterfaceDraft {
     headersRows: [createKeyValueRow("Content-Type", "application/json")],
     requestType: "normal",
     bodyTemplateText: "{\n  \"requestId\": \"${request_id}\"\n}",
-    conditionalField: "",
+    defaultBodyTemplateText: "{\n  \"requestId\": \"${request_id}\"\n}",
     conditionalCases: [createConditionalCaseRow()],
     responseMappingRows: [],
     fieldTypeRows: [],
@@ -252,6 +266,8 @@ function layoutToDraft(item: ApiToolLayoutItem): LayoutDraftItem {
 
 function interfaceToDraft(name: string, config: ApiToolInterfaceConfig): InterfaceDraft {
   const conditionalBody = config.conditional_body;
+  const requestBodies = conditionalBody?.request_bodies;
+
   return {
     localId: nextId("interface"),
     name,
@@ -260,12 +276,29 @@ function interfaceToDraft(name: string, config: ApiToolInterfaceConfig): Interfa
     headersRows: recordToRows(config.headers ?? {}),
     requestType: conditionalBody ? "conditional" : "normal",
     bodyTemplateText: stringifyJson(config.body_template ?? {}),
-    conditionalField: conditionalBody?.field ?? "",
-    conditionalCases: conditionalBody
-      ? Object.entries(conditionalBody.cases ?? {}).map(([caseValue, body]) =>
-          createConditionalCaseRow(caseValue, stringifyJson(body)),
-        )
-      : [createConditionalCaseRow()],
+    defaultBodyTemplateText: stringifyJson(
+      conditionalBody?.default_body ?? config.body_template ?? {},
+    ),
+    conditionalCases: requestBodies?.length
+      ? requestBodies.map((item) => ({
+          localId: nextId("case"),
+          conditions: (item.conditions ?? []).map((condition) =>
+            createConditionalFieldRow(condition.field ?? "", condition.values ?? []),
+          ),
+          bodyTemplateText: stringifyJson(item.body_template ?? {}),
+        }))
+      : conditionalBody
+        ? Object.entries(conditionalBody.cases ?? {}).map(([caseValue, body]) => ({
+            localId: nextId("case"),
+            conditions: [
+              createConditionalFieldRow(
+                conditionalBody.field ?? "",
+                caseValue ? [caseValue] : [],
+              ),
+            ],
+            bodyTemplateText: stringifyJson(body),
+          }))
+        : [createConditionalCaseRow()],
     responseMappingRows: recordToRows(config.response_mapping ?? {}),
     fieldTypeRows: recordToRows(config.field_types ?? {}),
     enableEncryption: config.enable_encryption !== false,
@@ -378,17 +411,19 @@ function interfaceDraftToConfig(draft: InterfaceDraft): ApiToolInterfaceConfig {
   };
 
   if (draft.requestType === "conditional") {
-    const cases: Record<string, unknown> = {};
-    draft.conditionalCases.forEach((row) => {
-      const caseValue = row.caseValue.trim();
-      if (!caseValue) {
-        return;
-      }
-      cases[caseValue] = parseJsonText(row.bodyTemplateText, `接口 ${draft.name} 条件请求体`);
-    });
     base.conditional_body = {
-      field: draft.conditionalField.trim(),
-      cases,
+      default_body: parseJsonText(draft.defaultBodyTemplateText, `接口 ${draft.name} 默认请求体`),
+      request_bodies: draft.conditionalCases
+        .map((row) => ({
+          conditions: row.conditions
+            .map((condition) => ({
+              field: condition.field.trim(),
+              values: condition.values.map((value) => value.trim()).filter(Boolean),
+            }))
+            .filter((condition) => condition.field && condition.values.length),
+          body_template: parseJsonText(row.bodyTemplateText, `接口 ${draft.name} 条件请求体`),
+        }))
+        .filter((row) => row.conditions.length),
     };
     return base;
   }

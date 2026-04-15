@@ -75,6 +75,86 @@ def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _normalise_condition_values(values: Any) -> list[str]:
+    return [str(item).strip() for item in _as_list(values) if str(item).strip()]
+
+
+def _normalise_request_body_conditions(conditions: Any) -> list[dict[str, Any]]:
+    normalised: list[dict[str, Any]] = []
+    for condition in _as_list(conditions):
+        condition = _as_dict(condition)
+        field = str(condition.get("field", "")).strip()
+        values = _normalise_condition_values(condition.get("values"))
+        if field and values:
+            normalised.append({"field": field, "values": values})
+    return normalised
+
+
+def _normalise_conditional_body_payload(conditional_body: Any) -> dict[str, Any]:
+    payload = _as_dict(conditional_body)
+    request_bodies: list[dict[str, Any]] = []
+
+    for item in _as_list(payload.get("request_bodies")):
+        item = _as_dict(item)
+        conditions = _normalise_request_body_conditions(item.get("conditions"))
+        if not conditions:
+            continue
+        request_bodies.append(
+            {
+                "conditions": conditions,
+                "body_template": item.get("body_template", {}),
+            }
+        )
+
+    if request_bodies:
+        return {
+            "default_body": payload.get("default_body", {}),
+            "request_bodies": request_bodies,
+        }
+
+    field = str(payload.get("field", "")).strip()
+    cases = _as_dict(payload.get("cases"))
+    if field and cases:
+        return {
+            "default_body": payload.get("default_body", {}),
+            "request_bodies": [
+                {
+                    "conditions": [{"field": field, "values": [str(case_value).strip()]}],
+                    "body_template": body_template,
+                }
+                for case_value, body_template in cases.items()
+                if str(case_value).strip()
+            ],
+        }
+
+    return {}
+
+
+def _parse_condition_case_value(case_value: Any) -> list[dict[str, Any]] | None:
+    text = str(case_value or "").strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return _normalise_request_body_conditions(parsed)
+
+
+def _match_request_body_conditions(
+    conditions: list[dict[str, Any]],
+    variables: dict[str, Any],
+) -> bool:
+    for condition in conditions:
+        field = str(condition.get("field", "")).strip()
+        values = {str(item).strip() for item in _as_list(condition.get("values")) if str(item).strip()}
+        if not field or not values:
+            return False
+        if str(variables.get(field, "")).strip() not in values:
+            return False
+    return True
+
+
 def _normalise_product_global_request_config(config: dict[str, Any]) -> dict[str, Any]:
     return normalize_global_request_config(
         config.get("global_request_config"),
@@ -311,7 +391,7 @@ def _insert_product_children(cursor, product_id: int, config: dict[str, Any]) ->
         start=1,
     ):
         interface_config = _as_dict(interface_config)
-        conditional_body = _as_dict(interface_config.get("conditional_body"))
+        conditional_body = _normalise_conditional_body_payload(interface_config.get("conditional_body"))
         request_type = "conditional" if conditional_body else "normal"
         cursor.execute(
             """
@@ -328,8 +408,13 @@ def _insert_product_children(cursor, product_id: int, config: dict[str, Any]) ->
                 request_type,
                 _json_dumps(interface_config.get("body_template", {}))
                 if request_type == "normal"
-                else "",
-                str(conditional_body.get("field", "")),
+                else _json_dumps(conditional_body.get("default_body", {})),
+                str(
+                    _as_list(_as_dict(_as_list(conditional_body.get("request_bodies"))[0]).get("conditions"))[0].get("field", "")
+                    if _as_list(conditional_body.get("request_bodies"))
+                    and _as_list(_as_dict(_as_list(conditional_body.get("request_bodies"))[0]).get("conditions"))
+                    else ""
+                ),
                 bool(interface_config.get("enable_encryption", True)),
                 int(interface_config.get("timeout", 30) or 30),
                 sort_order,
@@ -364,10 +449,11 @@ def _insert_product_children(cursor, product_id: int, config: dict[str, Any]) ->
             )
 
         if request_type == "conditional":
-            for case_order, (case_value, case_body) in enumerate(
-                _as_dict(conditional_body.get("cases")).items(),
+            for case_order, item in enumerate(
+                _as_list(conditional_body.get("request_bodies")),
                 start=1,
             ):
+                item = _as_dict(item)
                 cursor.execute(
                     """
                     INSERT INTO api_tool_interface_condition_cases
@@ -376,8 +462,8 @@ def _insert_product_children(cursor, product_id: int, config: dict[str, Any]) ->
                     """,
                     (
                         interface_id,
-                        str(case_value),
-                        _json_dumps(case_body),
+                        _json_dumps(_as_list(item.get("conditions"))),
+                        _json_dumps(item.get("body_template", {})),
                         case_order,
                     ),
                 )
@@ -696,11 +782,19 @@ def _build_product_config(product_id: int, product_row: dict[str, Any]) -> dict[
             item["formula_type"] = row.get("formula_type") or "numeric"
         layout.append(item)
 
-    cases_by_interface: dict[int, dict[str, Any]] = {}
+    request_bodies_by_interface: dict[int, list[dict[str, Any]]] = {}
+    legacy_cases_by_interface: dict[int, dict[str, Any]] = {}
     for row in case_rows:
-        cases_by_interface.setdefault(row["interface_id"], {})[row["case_value"]] = _json_loads(
-            row["body_template_text"],
-            {},
+        conditions = _parse_condition_case_value(row["case_value"])
+        body_template = _json_loads(row["body_template_text"], {})
+        if conditions is None:
+            legacy_cases_by_interface.setdefault(row["interface_id"], {})[row["case_value"]] = body_template
+            continue
+        request_bodies_by_interface.setdefault(row["interface_id"], []).append(
+            {
+                "conditions": conditions,
+                "body_template": body_template,
+            }
         )
 
     response_mappings_by_interface: dict[int, dict[str, str]] = {}
@@ -726,10 +820,18 @@ def _build_product_config(product_id: int, product_row: dict[str, Any]) -> dict[
             "enable_encryption": bool(row.get("enable_encryption", True)),
         }
         if row.get("request_type") == "conditional":
-            interface_config["conditional_body"] = {
-                "field": row.get("condition_field") or "",
-                "cases": cases_by_interface.get(row["id"], {}),
-            }
+            request_bodies = request_bodies_by_interface.get(row["id"], [])
+            if request_bodies:
+                interface_config["conditional_body"] = {
+                    "default_body": _json_loads(row.get("body_template_text"), {}),
+                    "request_bodies": request_bodies,
+                }
+            else:
+                interface_config["conditional_body"] = {
+                    "field": row.get("condition_field") or "",
+                    "cases": legacy_cases_by_interface.get(row["id"], {}),
+                    "default_body": _json_loads(row.get("body_template_text"), {}),
+                }
         else:
             interface_config["body_template"] = _json_loads(
                 row.get("body_template_text"),
@@ -1213,13 +1315,14 @@ def _resolve_interface_body_template(
     variables: dict[str, Any],
 ) -> Any:
     if "conditional_body" in interface_config:
-        conditional_body = _as_dict(interface_config.get("conditional_body"))
-        condition_field = str(conditional_body.get("field", ""))
-        condition_value = str(variables.get(condition_field, ""))
-        cases = _as_dict(conditional_body.get("cases"))
-        body_template = cases.get(condition_value)
-        if body_template is None and cases:
-            body_template = next(iter(cases.values()))
+        conditional_body = _normalise_conditional_body_payload(interface_config.get("conditional_body"))
+        body_template = conditional_body.get("default_body", {})
+        for item in _as_list(conditional_body.get("request_bodies")):
+            item = _as_dict(item)
+            conditions = _normalise_request_body_conditions(item.get("conditions"))
+            if conditions and _match_request_body_conditions(conditions, variables):
+                body_template = item.get("body_template", {})
+                break
     else:
         body_template = interface_config.get("body_template", {})
     return _convert_field_types(

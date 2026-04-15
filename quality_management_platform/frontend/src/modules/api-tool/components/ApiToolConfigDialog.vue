@@ -7,6 +7,7 @@ import {
   buildConfigFromDrafts,
   configToDrafts,
   createConditionalCaseRow,
+  createConditionalFieldRow,
   createExtractionRow,
   createInterfaceDraft,
   createKeyValueRow,
@@ -14,6 +15,7 @@ import {
   createOutputFieldRow,
   createSqlDraft,
   type DraftConditionalCaseRow,
+  type DraftConditionalFieldRow,
   type DraftExtractionRow,
   type DraftKeyValueRow,
   type InterfaceDraft,
@@ -107,6 +109,11 @@ const sqlEditIndex = ref(-1);
 const sqlForm = ref<SqlDraft>(createSqlDraft());
 
 const methodOptions = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+const dataTypeOptions = [
+  { label: "字符串", value: "string" },
+  { label: "整数", value: "int" },
+  { label: "浮点数", value: "float" },
+];
 const formulaTypeOptions = [
   { label: "数值公式", value: "numeric" },
   { label: "日期差值", value: "date" },
@@ -161,6 +168,53 @@ const orderedSqlsDraft = computed(() => {
     return leftRank - rightRank;
   });
 });
+
+const availableConditionalFields = computed(() =>
+  layoutItemsDraft.value
+    .filter((item) => item.type === "combo" && item.key?.trim())
+    .map((item) => ({
+      label: item.label?.trim() ? `${item.label.trim()} (${item.key?.trim() || ""})` : item.key?.trim() || "",
+      value: item.key?.trim() || "",
+      options: item.options ?? [],
+    })),
+);
+
+const availableConditionTargetFields = computed(() =>
+  layoutItemsDraft.value
+    .filter((item) => item.type === "field" && item.key?.trim())
+    .map((item) => ({
+      label: item.label?.trim() ? `${item.label.trim()} (${item.key?.trim() || ""})` : item.key?.trim() || "",
+      value: item.key?.trim() || "",
+    })),
+);
+
+function getConditionalFieldOptions(fieldKey: string) {
+  return (
+    availableConditionalFields.value.find((item) => item.value === fieldKey)?.options ?? []
+  );
+}
+
+function syncLayoutMappingsFromConditionField() {
+  const options = getConditionalFieldOptions(layoutForm.value.condition_field ?? "");
+  if (!options.length) {
+    layoutMappingsForm.value = [createKeyValueRow()];
+    return;
+  }
+
+  const existingMappings = mappingRowsToRecord(layoutMappingsForm.value);
+  layoutMappingsForm.value = options.map((option) =>
+    createKeyValueRow(option.value, existingMappings[option.value] ?? ""),
+  );
+}
+
+function getConditionMappingDisplayText(conditionValue: string) {
+  const options = getConditionalFieldOptions(layoutForm.value.condition_field ?? "");
+  const matched = options.find((option) => option.value === conditionValue);
+  if (!matched) {
+    return conditionValue;
+  }
+  return matched.text?.trim() || matched.value;
+}
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -312,6 +366,34 @@ function removeInterfaceFieldTypeRow(index: number) {
   interfaceForm.value.fieldTypeRows.splice(index, 1);
 }
 
+function appendConditionalRequestBody() {
+  interfaceForm.value.conditionalCases.push(createConditionalCaseRow());
+}
+
+function removeConditionalRequestBody(index: number) {
+  if (interfaceForm.value.conditionalCases.length <= 1) {
+    interfaceForm.value.conditionalCases = [createConditionalCaseRow()];
+    return;
+  }
+  interfaceForm.value.conditionalCases.splice(index, 1);
+}
+
+function appendConditionalField(caseRow: DraftConditionalCaseRow) {
+  caseRow.conditions.push(createConditionalFieldRow());
+}
+
+function removeConditionalField(caseRow: DraftConditionalCaseRow, index: number) {
+  if (caseRow.conditions.length <= 1) {
+    caseRow.conditions = [createConditionalFieldRow()];
+    return;
+  }
+  caseRow.conditions.splice(index, 1);
+}
+
+function onConditionalFieldChange(condition: DraftConditionalFieldRow) {
+  condition.values = [];
+}
+
 function syncGlobalRequestConfig(config: ApiToolConfig) {
   const globalConfig = config.global_request_config;
   globalLoginEnabled.value = globalConfig?.login_request?.enabled ?? false;
@@ -404,15 +486,52 @@ function openLayoutEditor(index = -1) {
   if (index >= 0) {
     const current = cloneValue(layoutItemsDraft.value[index]);
     layoutForm.value = current;
-    layoutOptionsForm.value = cloneValue(current.options ?? []);
+    layoutOptionsForm.value = cloneValue(current.options?.length ? current.options : [{ text: "", value: "" }]);
     layoutMappingsForm.value = mappingRecordToRows(current.mappings);
   } else {
     layoutForm.value = createLayoutDraft();
-    layoutOptionsForm.value = [];
+    layoutOptionsForm.value = [{ text: "", value: "" }];
     layoutMappingsForm.value = [createKeyValueRow()];
+  }
+  if (layoutForm.value.type === "condition" && layoutForm.value.condition_field) {
+    syncLayoutMappingsFromConditionField();
   }
   layoutDialogVisible.value = true;
 }
+
+function appendLayoutOptionRow() {
+  layoutOptionsForm.value.push({ text: "", value: "" });
+}
+
+function removeLayoutOptionRow(index: number) {
+  if (layoutOptionsForm.value.length <= 1) {
+    layoutOptionsForm.value = [{ text: "", value: "" }];
+    return;
+  }
+  layoutOptionsForm.value.splice(index, 1);
+}
+
+function appendLayoutMappingRow() {
+  layoutMappingsForm.value.push(createKeyValueRow());
+}
+
+function removeLayoutMappingRow(index: number) {
+  if (layoutMappingsForm.value.length <= 1) {
+    layoutMappingsForm.value = [createKeyValueRow()];
+    return;
+  }
+  layoutMappingsForm.value.splice(index, 1);
+}
+
+watch(
+  () => layoutForm.value.condition_field,
+  (nextValue, previousValue) => {
+    if (!layoutDialogVisible.value || layoutForm.value.type !== "condition" || nextValue === previousValue) {
+      return;
+    }
+    syncLayoutMappingsFromConditionField();
+  },
+);
 
 function saveLayoutEditor() {
   try {
@@ -556,6 +675,16 @@ function saveInterfaceEditor() {
     }
     if (!interfaceForm.value.url.trim()) {
       throw new Error("接口 URL 不能为空");
+    }
+    if (interfaceForm.value.requestType === "conditional") {
+      for (const [caseIndex, caseRow] of interfaceForm.value.conditionalCases.entries()) {
+        const validConditions = caseRow.conditions.filter(
+          (condition) => condition.field.trim() && condition.values.length,
+        );
+        if (!validConditions.length) {
+          throw new Error(`条件请求体${caseIndex + 1} 至少需要一个完整条件`);
+        }
+      }
     }
     const nextItem = cloneValue(interfaceForm.value);
     if (interfaceEditIndex.value >= 0) {
@@ -1008,116 +1137,158 @@ function submit() {
   </el-dialog>
 
   <el-dialog v-model="layoutDialogVisible" title="布局项" width="760px">
-    <el-form label-position="top">
-      <el-form-item label="类型">
-        <el-select v-model="layoutForm.type">
-          <el-option label="输入框" value="field" />
-          <el-option label="下拉框" value="combo" />
-          <el-option label="接口按钮" value="interface" />
-          <el-option label="SQL按钮" value="sql" />
-          <el-option label="条件字段" value="condition" />
-          <el-option label="公式字段" value="formula" />
-        </el-select>
-      </el-form-item>
+    <div class="dialog-inline-form">
+      <div class="dialog-inline-row">
+        <div class="dialog-inline-label">类型</div>
+        <div class="dialog-inline-content">
+          <el-select v-model="layoutForm.type">
+            <el-option label="输入框" value="field" />
+            <el-option label="下拉框" value="combo" />
+            <el-option label="接口按钮" value="interface" />
+            <el-option label="SQL按钮" value="sql" />
+            <el-option label="条件字段" value="condition" />
+            <el-option label="公式字段" value="formula" />
+          </el-select>
+        </div>
+      </div>
 
       <template v-if="layoutForm.type === 'interface' || layoutForm.type === 'sql'">
-        <el-form-item label="按钮名称">
-          <el-input v-model="layoutForm.name" />
-        </el-form-item>
+        <div class="dialog-inline-row">
+          <div class="dialog-inline-label">按钮名称</div>
+          <div class="dialog-inline-content">
+            <el-input v-model="layoutForm.name" />
+          </div>
+        </div>
       </template>
 
       <template v-else>
-        <div class="config-grid compact">
-          <el-form-item label="变量 key">
-            <el-input v-model="layoutForm.key" />
-          </el-form-item>
-          <el-form-item label="显示名称">
-            <el-input v-model="layoutForm.label" />
-          </el-form-item>
+        <div class="config-grid compact layout-inline-grid">
+          <div class="dialog-inline-row">
+            <div class="dialog-inline-label">显示名称</div>
+            <div class="dialog-inline-content">
+              <el-input v-model="layoutForm.label" />
+            </div>
+          </div>
+          <div class="dialog-inline-row">
+            <div class="dialog-inline-label">变量字段</div>
+            <div class="dialog-inline-content">
+              <el-input v-model="layoutForm.key" />
+            </div>
+          </div>
+
         </div>
-        <el-form-item>
-          <el-checkbox v-model="layoutForm.show_in_ui">显示在左侧运行区</el-checkbox>
-        </el-form-item>
+        <div class="dialog-inline-row">
+          <div class="dialog-inline-label">显示配置</div>
+          <div class="dialog-inline-content">
+            <el-checkbox v-model="layoutForm.show_in_ui">显示在左侧运行区</el-checkbox>
+          </div>
+        </div>
       </template>
 
       <template v-if="layoutForm.type === 'field' || layoutForm.type === 'combo'">
-        <div class="config-grid compact">
-          <el-form-item label="默认值">
-            <el-input v-model="layoutForm.default" />
-          </el-form-item>
-          <el-form-item label="数据类型">
-            <el-input v-model="layoutForm.data_type" placeholder="string / int / float" />
-          </el-form-item>
+        <div class="config-grid compact layout-inline-grid">
+          <div class="dialog-inline-row">
+            <div class="dialog-inline-label">默认值</div>
+            <div class="dialog-inline-content">
+              <el-input v-model="layoutForm.default" />
+            </div>
+          </div>
+          <div class="dialog-inline-row">
+            <div class="dialog-inline-label">数据类型</div>
+            <div class="dialog-inline-content">
+              <el-select v-model="layoutForm.data_type" placeholder="请选择数据类型">
+                <el-option
+                  v-for="item in dataTypeOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </div>
+          </div>
         </div>
       </template>
 
       <template v-if="layoutForm.type === 'combo'">
         <div class="sub-toolbar">
           <span>下拉选项</span>
-          <el-button link type="primary" @click="layoutOptionsForm.push({ text: '', value: '' })">新增选项</el-button>
         </div>
-        <el-table :data="layoutOptionsForm" border>
-          <el-table-column label="文本">
-            <template #default="{ row }">
-              <el-input v-model="row.text" />
-            </template>
-          </el-table-column>
-          <el-table-column label="值">
-            <template #default="{ row }">
-              <el-input v-model="row.value" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80">
-            <template #default="{ $index }">
-              <el-button link type="danger" @click="layoutOptionsForm.splice($index, 1)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="inline-config-list">
+          <div v-for="(row, index) in layoutOptionsForm" :key="`option-${index}`" class="layout-option-row">
+            <div class="layout-option-text">显示文本</div>
+            <el-input v-model="row.text" placeholder="文本" />
+            <div class="layout-option-text">选项值</div>
+            <el-input v-model="row.value" placeholder="值" />
+            <div class="inline-config-actions">
+              <el-button text circle @click="appendLayoutOptionRow">
+                <el-icon><Plus /></el-icon>
+              </el-button>
+              <el-button text circle @click="removeLayoutOptionRow(index)">
+                <el-icon><Minus /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </div>
       </template>
 
       <template v-if="layoutForm.type === 'condition'">
-        <el-form-item label="条件字段 key">
-          <el-input v-model="layoutForm.condition_field" />
-        </el-form-item>
-        <div class="sub-toolbar">
-          <span>条件映射</span>
-          <el-button link type="primary" @click="layoutMappingsForm.push(createKeyValueRow())">新增映射</el-button>
+        <div class="dialog-inline-row">
+          <div class="dialog-inline-label">条件字段</div>
+          <div class="dialog-inline-content">
+            <el-select v-model="layoutForm.condition_field" placeholder="请选择条件字段" clearable filterable>
+              <el-option
+                v-for="option in availableConditionalFields"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </div>
         </div>
-        <el-table :data="layoutMappingsForm" border>
-          <el-table-column label="条件值">
-            <template #default="{ row }">
-              <el-input v-model="row.key" />
-            </template>
-          </el-table-column>
-          <el-table-column label="映射字段 key">
-            <template #default="{ row }">
-              <el-input v-model="row.value" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80">
-            <template #default="{ $index }">
-              <el-button link type="danger" @click="layoutMappingsForm.splice($index, 1)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div v-if="layoutForm.condition_field" class="nested-config-panel">
+          <div class="sub-toolbar nested-config-toolbar">
+            <span>条件映射</span>
+          </div>
+          <div class="inline-config-list">
+            <div v-for="row in layoutMappingsForm" :key="row.localId" class="layout-option-row layout-mapping-row">
+              <div class="layout-option-text">条件值</div>
+              <div class="condition-value-text">{{ getConditionMappingDisplayText(row.key) || "--" }}</div>
+              <div class="layout-option-text">映射字段</div>
+              <el-select v-model="row.value" placeholder="请选择映射字段" clearable filterable>
+                <el-option
+                  v-for="option in availableConditionTargetFields"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+          </div>
+        </div>
       </template>
 
       <template v-if="layoutForm.type === 'formula'">
-        <el-form-item label="公式">
-          <el-input v-model="layoutForm.formula" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="公式类型">
-          <el-select v-model="layoutForm.formula_type">
-            <el-option
-              v-for="item in formulaTypeOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-        </el-form-item>
+        <div class="dialog-inline-row dialog-inline-row-top">
+          <div class="dialog-inline-label">公式</div>
+          <div class="dialog-inline-content">
+            <el-input v-model="layoutForm.formula" type="textarea" :rows="3" />
+          </div>
+        </div>
+        <div class="dialog-inline-row">
+          <div class="dialog-inline-label">公式类型</div>
+          <div class="dialog-inline-content">
+            <el-select v-model="layoutForm.formula_type">
+              <el-option
+                v-for="item in formulaTypeOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </div>
+        </div>
       </template>
-    </el-form>
+    </div>
     <template #footer>
       <el-space>
         <el-button @click="layoutDialogVisible = false">取消</el-button>
@@ -1128,13 +1299,14 @@ function submit() {
 
   <el-dialog v-model="interfaceDialogVisible" title="接口配置" width="920px" top="5vh">
     <div class="interface-config-form">
-      <div class="interface-top-grid">
-        <div class="interface-inline-field">
-          <div class="interface-inline-label">接口名称</div>
-          <div class="interface-inline-content">
-            <el-input v-model="interfaceForm.name" placeholder="我是接口名称" />
-          </div>
+      <div class="interface-inline-field interface-inline-field-wide">
+        <div class="interface-inline-label">接口名称</div>
+        <div class="interface-inline-content">
+          <el-input v-model="interfaceForm.name" placeholder="我是接口名称" />
         </div>
+      </div>
+
+      <div class="interface-top-grid">
         <div class="interface-inline-field">
           <div class="interface-inline-label">请求方法</div>
           <div class="interface-inline-content">
@@ -1143,17 +1315,16 @@ function submit() {
             </el-select>
           </div>
         </div>
-      </div>
-
-      <div class="interface-inline-field interface-inline-field-wide">
-        <div class="interface-inline-label">URL</div>
-        <div class="interface-inline-content">
-          <el-input v-model="interfaceForm.url" />
+        <div class="interface-inline-field">
+          <div class="interface-inline-label">URL</div>
+          <div class="interface-inline-content">
+            <el-input v-model="interfaceForm.url" />
+          </div>
         </div>
       </div>
 
       <div class="interface-inline-field interface-toggle-field">
-        <div class="interface-inline-label"></div>
+        <div class="interface-inline-label">加解密配置</div>
         <div class="interface-inline-content">
           <el-checkbox v-model="interfaceForm.enableEncryption">单接口启用加密</el-checkbox>
         </div>
@@ -1189,41 +1360,107 @@ function submit() {
         </div>
       </div>
 
-      <template v-if="interfaceForm.requestType === 'normal'">
-        <div class="interface-section-row interface-section-row-top">
-          <div class="interface-section-label">请求体模板</div>
-          <div class="interface-section-content">
-            <el-input v-model="interfaceForm.bodyTemplateText" type="textarea" :rows="8" />
-          </div>
-        </div>
-      </template>
+      <div class="interface-section-row interface-section-row-top">
+        <div class="interface-section-label"></div>
+        <div class="interface-section-content">
+          <div class="request-mode-panel">
+            <template v-if="interfaceForm.requestType === 'normal'">
+              <div class="request-body-panel">
+                <div class="request-body-panel-label">请求体模板</div>
+                <el-input v-model="interfaceForm.bodyTemplateText" type="textarea" :rows="6" />
+              </div>
+            </template>
 
-      <template v-else>
-        <el-form-item label="条件字段">
-          <el-input v-model="interfaceForm.conditionalField" />
-        </el-form-item>
-        <div class="sub-toolbar">
-          <span>条件请求体</span>
-          <el-button
-            link
-            type="primary"
-            @click="interfaceForm.conditionalCases.push(createConditionalCaseRow())"
-          >
-            新增条件
-          </el-button>
-        </div>
-        <div
-          v-for="(item, index) in interfaceForm.conditionalCases"
-          :key="item.localId"
-          class="case-card"
-        >
-          <div class="case-toolbar">
-            <el-input v-model="item.caseValue" placeholder="条件值" />
-            <el-button link type="danger" @click="interfaceForm.conditionalCases.splice(index, 1)">删除</el-button>
+            <template v-else>
+              <div class="request-body-panel">
+                <div class="request-body-panel-label">默认请求体</div>
+                <el-input v-model="interfaceForm.defaultBodyTemplateText" type="textarea" :rows="6" />
+              </div>
+
+              <div class="request-body-group">
+                <div
+                  v-for="(item, index) in interfaceForm.conditionalCases"
+                  :key="item.localId"
+                  class="case-card-wrap"
+                >
+                  <div class="case-card">
+                <div class="case-card-header">
+                  <div class="case-card-title">条件请求体 {{ index + 1 }}</div>
+                </div>
+                <div
+                  v-for="(condition, conditionIndex) in item.conditions"
+                  :key="condition.localId"
+                  class="conditional-field-row"
+                >
+                  <el-select
+                    v-model="condition.field"
+                    class="conditional-field-select"
+                    placeholder="条件字段"
+                    clearable
+                    filterable
+                    @change="onConditionalFieldChange(condition)"
+                  >
+                    <el-option
+                      v-for="option in availableConditionalFields"
+                      :key="option.value"
+                      :label="option.label"
+                      :value="option.value"
+                    />
+                  </el-select>
+                  <el-select
+                    v-model="condition.values"
+                    class="conditional-field-value"
+                    placeholder="条件值"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    clearable
+                  >
+                    <el-option
+                      v-for="option in getConditionalFieldOptions(condition.field)"
+                      :key="`${condition.localId}-${option.value}`"
+                      :label="option.text"
+                      :value="option.value"
+                    />
+                  </el-select>
+                  <div class="inline-config-actions">
+                    <el-button text circle @click="appendConditionalField(item)">
+                      <el-icon><Plus /></el-icon>
+                    </el-button>
+                    <el-button text circle @click="removeConditionalField(item, conditionIndex)">
+                      <el-icon><Minus /></el-icon>
+                    </el-button>
+                  </div>
+                </div>
+                    <div class="request-body-panel case-body-panel">
+                      <div class="request-body-panel-label">请求体</div>
+                      <el-input v-model="item.bodyTemplateText" type="textarea" :rows="6" />
+                    </div>
+                  </div>
+                  <div class="case-card-actions">
+                    <el-button
+                      class="request-body-icon-button is-add"
+                      text
+                      circle
+                      @click="appendConditionalRequestBody"
+                    >
+                      <el-icon><Plus /></el-icon>
+                    </el-button>
+                    <el-button
+                      class="request-body-icon-button is-remove"
+                      text
+                      circle
+                      @click="removeConditionalRequestBody(index)"
+                    >
+                      <el-icon><Minus /></el-icon>
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
-          <el-input v-model="item.bodyTemplateText" type="textarea" :rows="5" />
         </div>
-      </template>
+      </div>
 
       <div class="interface-section-row">
         <div class="interface-section-label">响应参数提取</div>
@@ -1484,7 +1721,7 @@ function submit() {
 
 .interface-top-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   gap: 18px 24px;
 }
 
@@ -1546,6 +1783,49 @@ function submit() {
   min-width: 0;
 }
 
+.layout-inline-grid {
+  gap: 12px 20px;
+}
+
+.layout-option-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 64px minmax(0, 1fr) 72px;
+  gap: 12px;
+  align-items: center;
+}
+
+.layout-option-text {
+  color: var(--qm-text-secondary);
+  font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.layout-mapping-row {
+  grid-template-columns: 64px minmax(0, 1fr) 64px minmax(0, 1fr);
+}
+
+.condition-value-text {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: var(--qm-title);
+  padding: 0 4px;
+}
+
+.nested-config-panel {
+  margin-left: 100px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e5eaf3;
+  border-radius: 10px;
+  background: #fafcff;
+}
+
+.nested-config-toolbar {
+  margin-top: 0;
+}
+
 .inline-config-list {
   display: flex;
   flex-direction: column;
@@ -1605,15 +1885,115 @@ function submit() {
 }
 
 .case-card {
+  margin-left: 0;
   margin-bottom: 12px;
-  padding: 12px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
-  background: #fafafa;
+  padding: 12px 14px;
+  border: 1px solid #dfe7f5;
+  border-radius: 10px;
+  background: #f7fbff;
 }
 
 .case-toolbar {
   margin-bottom: 8px;
+}
+
+.case-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.case-card-title {
+  color: var(--qm-title);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.conditional-field-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr) 72px;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.conditional-field-select,
+.conditional-field-value {
+  width: 100%;
+}
+
+.request-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.request-body-panel {
+  margin-left: 0;
+  padding: 12px 14px;
+  border: 1px solid #e5eaf3;
+  border-radius: 10px;
+  background: #fafcff;
+}
+
+.request-body-panel-label {
+  margin-bottom: 8px;
+  color: var(--qm-title);
+  font-size: 14px;
+}
+
+.request-body-toolbar {
+  margin: 2px 0 0;
+}
+
+.case-body-panel {
+  margin-left: 0;
+  margin-top: 4px;
+  background: #ffffff;
+}
+
+.request-body-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.case-card-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.case-card-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+
+.request-body-icon-button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d7deea;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.request-body-icon-button.is-add {
+  color: var(--el-color-primary);
+  border-color: #b9cbff;
+  background: #f3f7ff;
+}
+
+.request-body-icon-button.is-remove {
+  color: var(--el-color-danger);
+  border-color: #f4c7c3;
+  background: #fff6f5;
 }
 
 .layout-drag-panel {
@@ -1732,6 +2112,30 @@ function submit() {
 
   .inline-config-row {
     grid-template-columns: 1fr;
+  }
+
+  .conditional-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .request-body-panel,
+  .request-body-toolbar,
+  .case-card,
+  .case-card-wrap {
+    margin-left: 0;
+  }
+
+  .layout-option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .layout-option-text {
+    text-align: left;
+  }
+
+  .nested-config-panel {
+    margin-left: 0;
+    padding: 12px;
   }
 
   .interface-inline-field,
