@@ -164,6 +164,13 @@ const menuGroups: MenuGroup[] = [
           },
           {
             type: "item",
+            path: "/interface-auto/test-suites",
+            label: "测试集",
+            subtitle: "组装用例集合并预留调度监控",
+            icon: Files,
+          },
+          {
+            type: "item",
             path: "/interface-auto/reports",
             label: "测试报告",
             subtitle: "查看执行结果与报告",

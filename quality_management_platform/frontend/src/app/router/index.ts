@@ -8,6 +8,7 @@ const DataQueryPage = () => import("@/modules/data-query/DataQueryPage.vue");
 const ApiCasePage = () => import("@/modules/interface-auto/ApiCasePage.vue");
 const ApiGlobalToolPage = () => import("@/modules/interface-auto/ApiGlobalToolPage.vue");
 const ApiReportPage = () => import("@/modules/interface-auto/ApiReportPage.vue");
+const ApiTestSuitePage = () => import("@/modules/interface-auto/ApiTestSuitePage.vue");
 const ApiTemplatePage = () => import("@/modules/interface-auto/ApiTemplatePage.vue");
 const ApiVariablePage = () => import("@/modules/interface-auto/ApiVariablePage.vue");
 const BusinessManagementPage = () => import("@/modules/requirements/BusinessManagementPage.vue");
@@ -78,6 +79,19 @@ const routes: RouteRecordRaw[] = [
           useBusinessContext: true,
           contextTitle: "接口自动化项目上下文",
           contextSubtitle: "接口自动化用例管理已切换为读取全局业务组/项目主数据，后续真实页面直接复用该上下文。",
+        },
+      },
+      {
+        path: "interface-auto/test-suites",
+        name: "interface-auto-test-suites",
+        component: ApiTestSuitePage,
+        meta: {
+          title: "测试集",
+          subtitle: "将用例组装为测试集合，并预留后续定时调度与自动化监控能力。",
+          note: "当前页面先作为占位入口，后续可继续接入测试集编排、关联用例、定时任务调度和自动化监控能力。",
+          useBusinessContext: true,
+          contextTitle: "接口自动化测试集上下文",
+          contextSubtitle: "测试集页面已接入全局业务组 / 项目上下文，后续测试集分组、调度和监控配置可直接复用。",
         },
       },
       {
