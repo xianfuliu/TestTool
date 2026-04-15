@@ -726,6 +726,18 @@ function openSqlEditorById(localId: string) {
   }
 }
 
+function appendSqlOutputFieldRow() {
+  sqlForm.value.outputFields.push(createOutputFieldRow());
+}
+
+function removeSqlOutputFieldRow(index: number) {
+  if (sqlForm.value.outputFields.length <= 1) {
+    sqlForm.value.outputFields = [createOutputFieldRow()];
+    return;
+  }
+  sqlForm.value.outputFields.splice(index, 1);
+}
+
 function saveSqlEditor() {
   try {
     if (!sqlForm.value.name.trim()) {
@@ -743,18 +755,6 @@ function saveSqlEditor() {
     sqlDialogVisible.value = false;
   } catch (error) {
     ElMessage.error((error as Error).message);
-  }
-}
-
-async function removeSql(index: number) {
-  await ElMessageBox.confirm("确认删除这个 SQL 配置吗？", "提示", { type: "warning" });
-  sqlsDraft.value.splice(index, 1);
-}
-
-async function removeSqlById(localId: string) {
-  const index = sqlsDraft.value.findIndex((item) => item.localId === localId);
-  if (index >= 0) {
-    await removeSql(index);
   }
 }
 
@@ -1075,7 +1075,6 @@ function submit() {
             <template #default="{ row }">
               <el-space>
                 <el-button link type="primary" @click="openInterfaceEditorById(row.localId)">编辑</el-button>
-                <el-button link type="danger" @click="removeInterfaceById(row.localId)">删除</el-button>
               </el-space>
             </template>
           </el-table-column>
@@ -1094,7 +1093,6 @@ function submit() {
             <template #default="{ row }">
               <el-space>
                 <el-button link type="primary" @click="openSqlEditorById(row.localId)">编辑</el-button>
-                <el-button link type="danger" @click="removeSqlById(row.localId)">删除</el-button>
               </el-space>
             </template>
           </el-table-column>
@@ -1554,54 +1552,93 @@ function submit() {
   </el-dialog>
 
   <el-dialog v-model="sqlDialogVisible" title="SQL 配置" width="920px" top="5vh">
-    <el-form label-position="top">
-      <el-form-item label="SQL 名称">
-        <el-input v-model="sqlForm.name" />
-      </el-form-item>
-      <div class="config-grid compact">
-        <el-form-item label="主机">
-          <el-input v-model="sqlForm.database.host" />
-        </el-form-item>
-        <el-form-item label="端口">
-          <el-input-number v-model="sqlForm.database.port" :min="1" />
-        </el-form-item>
-        <el-form-item label="数据库">
-          <el-input v-model="sqlForm.database.database" />
-        </el-form-item>
-        <el-form-item label="字符集">
-          <el-input v-model="sqlForm.database.charset" />
-        </el-form-item>
+    <div class="sql-config-form">
+      <div class="sql-inline-row sql-inline-row-top">
+        <div class="sql-inline-label">SQL 名称</div>
+        <div class="sql-inline-content">
+          <el-input v-model="sqlForm.name" />
+        </div>
       </div>
-      <div class="config-grid compact">
-        <el-form-item label="用户名">
-          <el-input v-model="sqlForm.database.user" />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input v-model="sqlForm.database.password" show-password />
-        </el-form-item>
+
+      <div class="sql-inline-grid">
+        <div class="sql-inline-row">
+          <div class="sql-inline-label">主机</div>
+          <div class="sql-inline-content">
+            <el-input v-model="sqlForm.database.host" />
+          </div>
+        </div>
+        <div class="sql-inline-row">
+          <div class="sql-inline-label">端口</div>
+          <div class="sql-inline-content">
+            <el-input-number v-model="sqlForm.database.port" :min="1" class="sql-port-input" />
+          </div>
+        </div>
+        <div class="sql-inline-row">
+          <div class="sql-inline-label">数据库</div>
+          <div class="sql-inline-content">
+            <el-input v-model="sqlForm.database.database" />
+          </div>
+        </div>
+        <div class="sql-inline-row">
+          <div class="sql-inline-label">字符集</div>
+          <div class="sql-inline-content">
+            <el-input v-model="sqlForm.database.charset" />
+          </div>
+        </div>
+        <div class="sql-inline-row">
+          <div class="sql-inline-label">用户名</div>
+          <div class="sql-inline-content">
+            <el-input v-model="sqlForm.database.user" />
+          </div>
+        </div>
+        <div class="sql-inline-row">
+          <div class="sql-inline-label">密码</div>
+          <div class="sql-inline-content">
+            <el-input v-model="sqlForm.database.password" show-password />
+          </div>
+        </div>
       </div>
-      <div class="sub-toolbar">
-        <span>输出字段</span>
-        <el-button link type="primary" @click="sqlForm.outputFields.push(createOutputFieldRow())">新增字段</el-button>
+
+      <div class="sql-inline-row sql-inline-row-top">
+        <div class="sql-inline-label">SQL 语句</div>
+        <div class="sql-inline-content">
+          <el-input
+            v-model="sqlForm.sql"
+            type="textarea"
+            :rows="6"
+            placeholder="请输入 SELECT 查询语句，可通过 ${变量名} 引用布局变量"
+          />
+        </div>
       </div>
-      <el-table :data="sqlForm.outputFields" border>
-        <el-table-column label="字段名">
-          <template #default="{ row }">
-            <el-input v-model="row.field" />
-          </template>
-        </el-table-column>
-        <el-table-column label="说明">
-          <template #default="{ row }">
-            <el-input v-model="row.description" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80">
-          <template #default="{ $index }">
-            <el-button link type="danger" @click="sqlForm.outputFields.splice($index, 1)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-form>
+
+      <div class="sql-inline-row sql-inline-row-top">
+        <div class="sql-inline-label">输出字段</div>
+        <div class="sql-inline-content">
+          <div class="interface-config-panel sql-output-panel">
+            <div class="inline-config-list sql-output-list">
+              <div
+                v-for="(row, index) in sqlForm.outputFields"
+                :key="row.localId"
+                class="sql-output-row"
+              >
+                <div class="sql-output-text">字段名</div>
+                <el-input v-model="row.field" placeholder="请输入字段名" />
+                <div class="sql-output-text">说明</div>
+                <el-input v-model="row.description" placeholder="请输入字段说明" />
+                <div class="inline-config-actions">
+                  <el-button text circle @click="appendSqlOutputFieldRow">
+                    <el-icon><Plus /></el-icon>
+                  </el-button>
+                  <el-button text circle @click="removeSqlOutputFieldRow(index)">
+                    <el-icon><Minus /></el-icon>
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <template #footer>
       <el-space>
         <el-button @click="sqlDialogVisible = false">取消</el-button>
@@ -1882,11 +1919,57 @@ function submit() {
   gap: 10px;
 }
 
+.sql-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sql-inline-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 20px;
+}
+
+.sql-inline-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.sql-inline-row-top {
+  align-items: start;
+}
+
+.sql-inline-label {
+  color: var(--qm-title);
+  font-size: 14px;
+  line-height: 32px;
+  white-space: nowrap;
+}
+
+.sql-inline-content {
+  min-width: 0;
+}
+
+.sql-output-panel {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
 .sql-output-row {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr) 48px minmax(0, 1fr) 72px;
   gap: 12px;
   align-items: center;
+}
+
+.sql-output-text {
+  color: var(--qm-text-secondary);
+  font-size: 13px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .sql-port-input {
@@ -2145,6 +2228,19 @@ function submit() {
     grid-template-columns: 1fr;
   }
 
+  .sql-inline-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sql-inline-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .sql-inline-label {
+    line-height: 1.5;
+  }
+
   .conditional-field-row {
     grid-template-columns: 1fr;
   }
@@ -2161,6 +2257,14 @@ function submit() {
   }
 
   .layout-option-text {
+    text-align: left;
+  }
+
+  .sql-output-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sql-output-text {
     text-align: left;
   }
 
