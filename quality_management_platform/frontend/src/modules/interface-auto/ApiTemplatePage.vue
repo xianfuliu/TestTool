@@ -944,14 +944,14 @@ onBeforeUnmount(() => {
       @click.stop
     >
       <template v-if="contextMenu.node?.type === 'folder'">
-        <button @click="createChildFolder">新增子目录</button>
-        <button @click="createTemplateInContextFolder">新增接口模板</button>
-        <button @click="renameFolder">重命名目录</button>
-        <button class="danger" @click="deleteContextNode">删除目录</button>
+        <button @click="createChildFolder(); hideContextMenu()">新增子目录</button>
+        <button @click="createTemplateInContextFolder(); hideContextMenu()">新增接口模板</button>
+        <button @click="renameFolder(); hideContextMenu()">重命名目录</button>
+        <button class="danger" @click="deleteContextNode(); hideContextMenu()">删除目录</button>
       </template>
       <template v-else>
-        <button @click="copyTemplate(contextMenu.node?.template)">复制</button>
-        <button class="danger" @click="deleteContextNode">删除</button>
+        <button @click="copyTemplate(contextMenu.node?.template); hideContextMenu()">复制</button>
+        <button class="danger" @click="deleteContextNode(); hideContextMenu()">删除</button>
       </template>
     </div>
 
@@ -961,9 +961,9 @@ onBeforeUnmount(() => {
       :style="{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }"
       @click.stop
     >
-      <button @click="closeCurrentTab">关闭当前</button>
-      <button @click="closeOtherTabs">关闭其他</button>
-      <button @click="closeAllTabs">关闭全部</button>
+      <button @click="closeCurrentTab(); hideContextMenu()">关闭当前</button>
+      <button @click="closeOtherTabs(); hideContextMenu()">关闭其他</button>
+      <button @click="closeAllTabs(); hideContextMenu()">关闭全部</button>
     </div>
 
     <main class="editor-shell" v-loading="loading">

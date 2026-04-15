@@ -2928,19 +2928,19 @@ onBeforeUnmount(() => {
       @click.stop
     >
       <template v-if="caseContextMenu.blank">
-        <button @click="createFolder(null)">新增一级目录</button>
-        <button @click="createCaseViaContext(null, true)">新建测试用例</button>
-        <button @click="refreshWorkspace">刷新</button>
+        <button @click="createFolder(null); hideContextMenus()">新增一级目录</button>
+        <button @click="createCaseViaContext(null, true); hideContextMenus()">新建测试用例</button>
+        <button @click="refreshWorkspace(); hideContextMenus()">刷新</button>
       </template>
       <template v-else-if="caseContextMenu.node?.type === 'folder'">
-        <button @click="createFolder(caseContextMenu.node.folderId)">新增子目录</button>
-        <button @click="createCaseViaContext(caseContextMenu.node)">新建测试用例</button>
-        <button @click="renameFolder(caseContextMenu.node)">重命名目录</button>
-        <button class="danger" @click="deleteFolder(caseContextMenu.node)">删除目录</button>
+        <button @click="createFolder(caseContextMenu.node.folderId); hideContextMenus()">新增子目录</button>
+        <button @click="createCaseViaContext(caseContextMenu.node); hideContextMenus()">新建测试用例</button>
+        <button @click="renameFolder(caseContextMenu.node); hideContextMenus()">重命名目录</button>
+        <button class="danger" @click="deleteFolder(caseContextMenu.node); hideContextMenus()">删除目录</button>
       </template>
       <template v-else>
-        <button @click="duplicateCase(caseContextMenu.node?.caseItem)">复制用例</button>
-        <button class="danger" @click="deleteCase(caseContextMenu.node?.caseItem)">删除用例</button>
+        <button @click="duplicateCase(caseContextMenu.node?.caseItem); hideContextMenus()">复制用例</button>
+        <button class="danger" @click="deleteCase(caseContextMenu.node?.caseItem); hideContextMenus()">删除用例</button>
       </template>
     </div>
 
@@ -2950,9 +2950,9 @@ onBeforeUnmount(() => {
       :style="{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }"
       @click.stop
     >
-      <button @click="closeCurrentTab">关闭当前</button>
-      <button @click="closeOtherTabs">关闭其他</button>
-      <button @click="closeAllTabs">关闭全部</button>
+      <button @click="closeCurrentTab(); hideContextMenus()">关闭当前</button>
+      <button @click="closeOtherTabs(); hideContextMenus()">关闭其他</button>
+      <button @click="closeAllTabs(); hideContextMenus()">关闭全部</button>
     </div>
 
     <el-dialog
