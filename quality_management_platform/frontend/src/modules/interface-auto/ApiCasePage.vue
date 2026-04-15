@@ -2679,57 +2679,59 @@ onBeforeUnmount(() => {
                           <span class="global-config-section-title">Login Request</span>
                         </label>
                       </div>
-                      <div v-if="form.global_request_config.login_request.enabled" class="global-config-stack">
-                        <div class="global-config-inline-grid method-url-grid">
-                          <div class="global-config-inline-field compact-inline-field">
-                            <span class="global-config-inline-label">Method</span>
-                            <el-select v-model="form.global_request_config.login_request.method" class="env-select" size="small">
-                              <el-option v-for="method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method" :label="method" :value="method" />
-                            </el-select>
-                          </div>
-                          <div class="global-config-inline-field">
-                            <span class="global-config-inline-label">URL</span>
-                            <input v-model="form.global_request_config.login_request.url" class="text-field" placeholder="Enter login endpoint URL" />
-                          </div>
-                        </div>
-
-                        <div class="global-config-section-card inner-card">
-                          <div class="global-config-toolbar">
-                            <span class="global-config-section-title">Request Headers</span>
-                          </div>
-                          <div
-                            v-for="(row, index) in form.global_request_config.login_request.headers_rows"
-                            :key="row.rowKey || `login-header-${index}`"
-                            class="global-config-kv-row"
-                          >
-                            <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
-                            <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
-                            <div class="global-config-row-actions">
-                              <button class="tool-action text-action" type="button" @click="addLoginHeaderRow">+</button>
-                              <button class="tool-action danger text-action" type="button" @click="removeLoginHeaderRow(index)">-</button>
+                      <div v-if="form.global_request_config.login_request.enabled" class="global-config-section-panel">
+                        <div class="global-config-stack">
+                          <div class="global-config-inline-grid method-url-grid">
+                            <div class="global-config-inline-field compact-inline-field">
+                              <span class="global-config-inline-label">Method</span>
+                              <el-select v-model="form.global_request_config.login_request.method" class="env-select" size="small">
+                                <el-option v-for="method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method" :label="method" :value="method" />
+                              </el-select>
+                            </div>
+                            <div class="global-config-inline-field">
+                              <span class="global-config-inline-label">URL</span>
+                              <input v-model="form.global_request_config.login_request.url" class="text-field" placeholder="Enter login endpoint URL" />
                             </div>
                           </div>
-                        </div>
 
-                        <div class="global-config-inline-field body-inline-field">
-                          <span class="global-config-inline-label body-label">Request Body</span>
-                          <el-input v-model="form.global_request_config.login_request.body_text" type="textarea" :rows="4" resize="none" />
-                        </div>
-
-                        <div class="global-config-section-card inner-card">
-                          <div class="global-config-toolbar">
-                            <span class="global-config-section-title">Parameter Extraction</span>
+                          <div class="global-config-section-card inner-card">
+                            <div class="global-config-toolbar">
+                              <span class="global-config-section-title">Request Headers</span>
+                            </div>
+                            <div
+                              v-for="(row, index) in form.global_request_config.login_request.headers_rows"
+                              :key="row.rowKey || `login-header-${index}`"
+                              class="global-config-kv-row"
+                            >
+                              <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
+                              <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
+                              <div class="global-config-row-actions">
+                                <button class="tool-action text-action" type="button" @click="addLoginHeaderRow">+</button>
+                                <button class="tool-action danger text-action" type="button" @click="removeLoginHeaderRow(index)">-</button>
+                              </div>
+                            </div>
                           </div>
-                          <div
-                            v-for="(row, index) in form.global_request_config.login_request.extractions"
-                            :key="row.rowKey || `login-extract-${index}`"
-                            class="global-config-kv-row"
-                          >
-                            <input v-model="row.variable" class="tool-input config-input" placeholder="token" />
-                            <input v-model="row.path" class="tool-input config-input" placeholder="headers.Authorization or body.data.token" />
-                            <div class="global-config-row-actions">
-                              <button class="tool-action text-action" type="button" @click="addLoginExtractionRow">+</button>
-                              <button class="tool-action danger text-action" type="button" @click="removeLoginExtractionRow(index)">-</button>
+
+                          <div class="global-config-inline-field body-inline-field">
+                            <span class="global-config-inline-label body-label">Request Body</span>
+                            <el-input v-model="form.global_request_config.login_request.body_text" type="textarea" :rows="4" resize="none" />
+                          </div>
+
+                          <div class="global-config-section-card inner-card">
+                            <div class="global-config-toolbar">
+                              <span class="global-config-section-title">Parameter Extraction</span>
+                            </div>
+                            <div
+                              v-for="(row, index) in form.global_request_config.login_request.extractions"
+                              :key="row.rowKey || `login-extract-${index}`"
+                              class="global-config-kv-row"
+                            >
+                              <input v-model="row.variable" class="tool-input config-input" placeholder="token" />
+                              <input v-model="row.path" class="tool-input config-input" placeholder="headers.Authorization or body.data.token" />
+                              <div class="global-config-row-actions">
+                                <button class="tool-action text-action" type="button" @click="addLoginExtractionRow">+</button>
+                                <button class="tool-action danger text-action" type="button" @click="removeLoginExtractionRow(index)">-</button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -2743,17 +2745,19 @@ onBeforeUnmount(() => {
                           <span class="global-config-section-title">Request Header Config</span>
                         </label>
                       </div>
-                      <div v-if="form.global_request_config.header_config.enabled" class="global-config-stack">
-                        <div
-                          v-for="(row, index) in form.global_request_config.header_config.headers_rows"
-                          :key="row.rowKey || `global-header-${index}`"
-                          class="global-config-kv-row"
-                        >
-                          <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
-                          <input v-model="row.value" class="tool-input config-input" placeholder="Bearer ${token}" />
-                          <div class="global-config-row-actions">
-                            <button class="tool-action text-action" type="button" @click="addGlobalHeaderConfigRow">+</button>
-                            <button class="tool-action danger text-action" type="button" @click="removeGlobalHeaderConfigRow(index)">-</button>
+                      <div v-if="form.global_request_config.header_config.enabled" class="global-config-section-panel">
+                        <div class="global-config-stack">
+                          <div
+                            v-for="(row, index) in form.global_request_config.header_config.headers_rows"
+                            :key="row.rowKey || `global-header-${index}`"
+                            class="global-config-kv-row"
+                          >
+                            <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
+                            <input v-model="row.value" class="tool-input config-input" placeholder="Bearer ${token}" />
+                            <div class="global-config-row-actions">
+                              <button class="tool-action text-action" type="button" @click="addGlobalHeaderConfigRow">+</button>
+                              <button class="tool-action danger text-action" type="button" @click="removeGlobalHeaderConfigRow(index)">-</button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -3658,6 +3662,14 @@ onBeforeUnmount(() => {
   border-radius: 0;
   padding: 4px 0;
   background: transparent;
+}
+
+.global-config-section-panel {
+  margin: 6px 0 2px 26px;
+  padding: 12px 14px;
+  border: 1px solid #e5edf7;
+  border-radius: 10px;
+  background: #f8fbff;
 }
 
 .global-config-section-card.inner-card {

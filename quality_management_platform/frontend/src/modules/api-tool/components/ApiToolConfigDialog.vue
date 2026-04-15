@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Minus, Plus } from "@element-plus/icons-vue";
@@ -713,6 +713,9 @@ async function removeInterfaceById(localId: string) {
 function openSqlEditor(index = -1) {
   sqlEditIndex.value = index;
   sqlForm.value = index >= 0 ? cloneValue(sqlsDraft.value[index]) : createSqlDraft();
+  if (!sqlForm.value.outputFields.length) {
+    sqlForm.value.outputFields = [createOutputFieldRow()];
+  }
   sqlDialogVisible.value = true;
 }
 
@@ -1333,6 +1336,7 @@ function submit() {
       <div class="interface-section-row">
         <div class="interface-section-label">请求头</div>
         <div class="interface-section-content">
+          <div class="interface-config-panel">
           <div class="inline-config-list">
             <div v-for="(row, index) in interfaceForm.headersRows" :key="row.localId" class="inline-config-row">
               <el-input v-model="row.key" placeholder="Header" />
@@ -1346,6 +1350,7 @@ function submit() {
                 </el-button>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -1496,12 +1501,14 @@ function submit() {
               </div>
             </div>
           </div>
+          </div>
         </div>
       </div>
 
       <div class="interface-section-row">
         <div class="interface-section-label">请求字段类型</div>
         <div class="interface-section-content">
+          <div class="interface-config-panel">
           <div class="inline-config-list">
             <div v-if="!interfaceForm.fieldTypeRows.length" class="inline-config-row">
               <el-input value="" placeholder="变量 key" />
@@ -1571,10 +1578,6 @@ function submit() {
           <el-input v-model="sqlForm.database.password" show-password />
         </el-form-item>
       </div>
-      <el-form-item label="SQL">
-        <el-input v-model="sqlForm.sql" type="textarea" :rows="8" />
-      </el-form-item>
-
       <div class="sub-toolbar">
         <span>输出字段</span>
         <el-button link type="primary" @click="sqlForm.outputFields.push(createOutputFieldRow())">新增字段</el-button>
@@ -1730,7 +1733,7 @@ function submit() {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
   gap: 12px;
-  align-items: center;
+  align-items: start;
 }
 
 .interface-inline-field-wide {
@@ -1753,6 +1756,13 @@ function submit() {
 .interface-inline-content,
 .interface-section-content {
   min-width: 0;
+}
+
+.interface-config-panel {
+  padding: 12px 14px;
+  border: 1px solid #e5eaf3;
+  border-radius: 10px;
+  background: #fafcff;
 }
 
 .interface-toggle-field .interface-inline-label {
@@ -1826,6 +1836,10 @@ function submit() {
   margin-top: 0;
 }
 
+.dialog-inline-row-top {
+  align-items: start;
+}
+
 .inline-config-list {
   display: flex;
   flex-direction: column;
@@ -1860,6 +1874,21 @@ function submit() {
   color: var(--el-color-primary);
   border-color: #b9cbff;
   background: #f3f7ff;
+}
+
+.sql-output-list {
+  gap: 10px;
+}
+
+.sql-output-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 48px minmax(0, 1fr) 72px;
+  gap: 12px;
+  align-items: center;
+}
+
+.sql-port-input {
+  width: 100%;
 }
 
 .section-toolbar,
