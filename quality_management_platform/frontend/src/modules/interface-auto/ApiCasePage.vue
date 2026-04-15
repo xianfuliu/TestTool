@@ -2655,11 +2655,11 @@ onBeforeUnmount(() => {
                   </div>
 
                   <div v-else-if="activeGlobalConfigTab === 'variables'" class="global-config-tab-panel">
-                    <div class="global-config-kv-table">
+                    <div class="global-config-kv-table variable-kv-table">
                       <div
                         v-for="(row, index) in variableRows"
                         :key="row.rowKey"
-                        class="global-config-kv-row"
+                        class="global-config-kv-row variable-kv-row"
                       >
                         <input v-model="row.name" class="tool-input config-input" placeholder="变量名" @input="form.global_vars = variableRowsToMap(variableRows)" />
                         <input v-model="row.value" class="tool-input config-input" placeholder="变量值" @input="form.global_vars = variableRowsToMap(variableRows)" />
@@ -2694,20 +2694,20 @@ onBeforeUnmount(() => {
                             </div>
                           </div>
 
-                          <div class="global-config-section-card inner-card">
-                            <div class="global-config-toolbar">
-                              <span class="global-config-section-title">请求头</span>
-                            </div>
-                            <div
-                              v-for="(row, index) in form.global_request_config.login_request.headers_rows"
-                              :key="row.rowKey || `login-header-${index}`"
-                              class="global-config-kv-row"
-                            >
-                              <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
-                              <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
-                              <div class="global-config-row-actions">
-                                <button class="tool-action text-action" type="button" @click="addLoginHeaderRow">+</button>
-                                <button class="tool-action danger text-action" type="button" @click="removeLoginHeaderRow(index)">-</button>
+                          <div class="global-config-inline-field body-inline-field config-list-inline-field">
+                            <span class="global-config-inline-label body-label">请求头</span>
+                            <div class="global-config-list-content">
+                              <div
+                                v-for="(row, index) in form.global_request_config.login_request.headers_rows"
+                                :key="row.rowKey || `login-header-${index}`"
+                                class="global-config-kv-row"
+                              >
+                                <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
+                                <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
+                                <div class="global-config-row-actions">
+                                  <button class="tool-action text-action" type="button" @click="addLoginHeaderRow">+</button>
+                                  <button class="tool-action danger text-action" type="button" @click="removeLoginHeaderRow(index)">-</button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2717,20 +2717,20 @@ onBeforeUnmount(() => {
                             <el-input v-model="form.global_request_config.login_request.body_text" type="textarea" :rows="4" resize="none" />
                           </div>
 
-                          <div class="global-config-section-card inner-card">
-                            <div class="global-config-toolbar">
-                              <span class="global-config-section-title">参数提取</span>
-                            </div>
-                            <div
-                              v-for="(row, index) in form.global_request_config.login_request.extractions"
-                              :key="row.rowKey || `login-extract-${index}`"
-                              class="global-config-kv-row"
-                            >
-                              <input v-model="row.variable" class="tool-input config-input" placeholder="token" />
-                              <input v-model="row.path" class="tool-input config-input" placeholder="headers.Authorization or body.data.token" />
-                              <div class="global-config-row-actions">
-                                <button class="tool-action text-action" type="button" @click="addLoginExtractionRow">+</button>
-                                <button class="tool-action danger text-action" type="button" @click="removeLoginExtractionRow(index)">-</button>
+                          <div class="global-config-inline-field body-inline-field config-list-inline-field">
+                            <span class="global-config-inline-label body-label">参数提取</span>
+                            <div class="global-config-list-content">
+                              <div
+                                v-for="(row, index) in form.global_request_config.login_request.extractions"
+                                :key="row.rowKey || `login-extract-${index}`"
+                                class="global-config-kv-row"
+                              >
+                                <input v-model="row.variable" class="tool-input config-input" placeholder="token" />
+                                <input v-model="row.path" class="tool-input config-input" placeholder="headers.Authorization or body.data.token" />
+                                <div class="global-config-row-actions">
+                                  <button class="tool-action text-action" type="button" @click="addLoginExtractionRow">+</button>
+                                  <button class="tool-action danger text-action" type="button" @click="removeLoginExtractionRow(index)">-</button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2992,8 +2992,8 @@ onBeforeUnmount(() => {
           </div>
           <el-tabs v-model="httpToolTab" class="tool-inner-tabs">
             <el-tab-pane label="请求头" name="headers">
-              <div class="tool-dialog-section embedded">
-                <div v-for="(row, index) in toolHeaderRows" :key="row.rowKey" class="tool-config-row">
+              <div class="tool-dialog-section embedded flat-row-section">
+                <div v-for="(row, index) in toolHeaderRows" :key="row.rowKey" class="tool-config-row flat-row">
                   <input v-model="row.key" class="tool-input config-input" placeholder="Header名称" />
                   <input v-model="row.value" class="tool-input config-input wide" placeholder="Header值" />
                   <button class="tool-action text-action" title="新增" @click="insertHeaderRow(index)">+</button>
@@ -3005,13 +3005,15 @@ onBeforeUnmount(() => {
               <el-input v-model="toolForm.bodyText" type="textarea" :rows="9" resize="none" />
             </el-tab-pane>
           </el-tabs>
-          <div class="tool-dialog-section">
-            <div class="tool-dialog-section-title">响应提取</div>
-            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row">
-              <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
-              <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
-              <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
-              <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+          <div class="tool-dialog-labeled-section">
+            <div class="tool-dialog-section-title side-title">响应提取</div>
+            <div class="tool-dialog-section flat-row-section">
+              <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row flat-row">
+                <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
+                <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
+                <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
+                <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+              </div>
             </div>
           </div>
         </template>
@@ -3575,10 +3577,22 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
+.global-config-list-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .global-config-row-actions {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.variable-kv-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 96px;
 }
 
 .global-config-grid {
@@ -3640,6 +3654,10 @@ onBeforeUnmount(() => {
 
 .body-inline-field :deep(.el-textarea) {
   flex: 1 1 auto;
+}
+
+.config-list-inline-field {
+  align-items: flex-start;
 }
 
 .global-config-inline-label {
@@ -4227,6 +4245,13 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
+.tool-dialog-section.embedded.flat-row-section {
+  padding: 12px;
+  border: 1px solid #dbe3ed;
+  border-radius: 10px;
+  background: #f7fbff;
+}
+
 .tool-inner-tabs {
   margin-top: -2px;
 }
@@ -4250,11 +4275,23 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.tool-dialog-labeled-section {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
 .tool-dialog-section-title {
   margin-bottom: 10px;
   color: #1e293b;
   font-size: 13px;
   font-weight: 700;
+}
+
+.tool-dialog-section-title.side-title {
+  margin-bottom: 0;
+  line-height: 38px;
 }
 
 .tool-config-row {
@@ -4267,6 +4304,18 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   padding: 8px;
   background: #fff;
+}
+
+.tool-config-row.flat-row {
+  margin-top: 0;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.tool-config-row.flat-row + .tool-config-row.flat-row {
+  margin-top: 10px;
 }
 
 .tool-config-row.assertion-row {
