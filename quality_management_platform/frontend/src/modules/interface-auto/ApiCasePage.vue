@@ -4276,10 +4276,9 @@ onBeforeUnmount(() => {
 }
 
 .tool-dialog-labeled-section {
-  display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
+  display: flex;
   gap: 12px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .tool-dialog-section-title {
@@ -4290,8 +4289,15 @@ onBeforeUnmount(() => {
 }
 
 .tool-dialog-section-title.side-title {
+  flex: 0 0 74px;
   margin-bottom: 0;
-  line-height: 38px;
+  line-height: 32px;
+  padding-top: 10px;
+}
+
+.tool-dialog-labeled-section > .tool-dialog-section {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .tool-config-row {
