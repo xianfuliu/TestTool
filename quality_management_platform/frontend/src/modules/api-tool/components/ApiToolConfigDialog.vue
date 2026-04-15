@@ -1470,37 +1470,38 @@ function submit() {
       <div class="interface-section-row">
         <div class="interface-section-label">响应参数提取</div>
         <div class="interface-section-content">
-          <div class="inline-config-list">
-            <div v-if="!interfaceForm.responseMappingRows.length" class="inline-config-row">
-              <el-input value="" placeholder="变量 key" />
-              <el-input value="" placeholder="响应路径" />
-              <div class="inline-config-actions">
-                <el-button text circle @click="appendInterfaceResponseMappingRow">
-                  <el-icon><Plus /></el-icon>
-                </el-button>
-                <el-button text circle disabled>
-                  <el-icon><Minus /></el-icon>
-                </el-button>
+          <div class="interface-config-panel">
+            <div class="inline-config-list">
+              <div v-if="!interfaceForm.responseMappingRows.length" class="inline-config-row">
+                <el-input value="" placeholder="变量 key" />
+                <el-input value="" placeholder="响应路径" />
+                <div class="inline-config-actions">
+                  <el-button text circle @click="appendInterfaceResponseMappingRow">
+                    <el-icon><Plus /></el-icon>
+                  </el-button>
+                  <el-button text circle disabled>
+                    <el-icon><Minus /></el-icon>
+                  </el-button>
+                </div>
+              </div>
+              <div
+                v-for="(row, index) in interfaceForm.responseMappingRows"
+                v-else
+                :key="row.localId"
+                class="inline-config-row"
+              >
+                <el-input v-model="row.key" placeholder="变量 key" />
+                <el-input v-model="row.value" placeholder="响应路径" />
+                <div class="inline-config-actions">
+                  <el-button text circle @click="appendInterfaceResponseMappingRow">
+                    <el-icon><Plus /></el-icon>
+                  </el-button>
+                  <el-button text circle @click="removeInterfaceResponseMappingRow(index)">
+                    <el-icon><Minus /></el-icon>
+                  </el-button>
+                </div>
               </div>
             </div>
-            <div
-              v-for="(row, index) in interfaceForm.responseMappingRows"
-              v-else
-              :key="row.localId"
-              class="inline-config-row"
-            >
-              <el-input v-model="row.key" placeholder="变量 key" />
-              <el-input v-model="row.value" placeholder="响应路径" />
-              <div class="inline-config-actions">
-                <el-button text circle @click="appendInterfaceResponseMappingRow">
-                  <el-icon><Plus /></el-icon>
-                </el-button>
-                <el-button text circle @click="removeInterfaceResponseMappingRow(index)">
-                  <el-icon><Minus /></el-icon>
-                </el-button>
-              </div>
-            </div>
-          </div>
           </div>
         </div>
       </div>
@@ -1509,34 +1510,35 @@ function submit() {
         <div class="interface-section-label">请求字段类型</div>
         <div class="interface-section-content">
           <div class="interface-config-panel">
-          <div class="inline-config-list">
-            <div v-if="!interfaceForm.fieldTypeRows.length" class="inline-config-row">
-              <el-input value="" placeholder="变量 key" />
-              <el-input value="" placeholder="string / int / float" />
-              <div class="inline-config-actions">
-                <el-button text circle @click="appendInterfaceFieldTypeRow">
-                  <el-icon><Plus /></el-icon>
-                </el-button>
-                <el-button text circle disabled>
-                  <el-icon><Minus /></el-icon>
-                </el-button>
+            <div class="inline-config-list">
+              <div v-if="!interfaceForm.fieldTypeRows.length" class="inline-config-row">
+                <el-input value="" placeholder="变量 key" />
+                <el-input value="" placeholder="string / int / float" />
+                <div class="inline-config-actions">
+                  <el-button text circle @click="appendInterfaceFieldTypeRow">
+                    <el-icon><Plus /></el-icon>
+                  </el-button>
+                  <el-button text circle disabled>
+                    <el-icon><Minus /></el-icon>
+                  </el-button>
+                </div>
               </div>
-            </div>
-            <div
-              v-for="(row, index) in interfaceForm.fieldTypeRows"
-              v-else
-              :key="row.localId"
-              class="inline-config-row"
-            >
-              <el-input v-model="row.key" placeholder="变量 key" />
-              <el-input v-model="row.value" placeholder="string / int / float" />
-              <div class="inline-config-actions">
-                <el-button text circle @click="appendInterfaceFieldTypeRow">
-                  <el-icon><Plus /></el-icon>
-                </el-button>
-                <el-button text circle @click="removeInterfaceFieldTypeRow(index)">
-                  <el-icon><Minus /></el-icon>
-                </el-button>
+              <div
+                v-for="(row, index) in interfaceForm.fieldTypeRows"
+                v-else
+                :key="row.localId"
+                class="inline-config-row"
+              >
+                <el-input v-model="row.key" placeholder="变量 key" />
+                <el-input v-model="row.value" placeholder="string / int / float" />
+                <div class="inline-config-actions">
+                  <el-button text circle @click="appendInterfaceFieldTypeRow">
+                    <el-icon><Plus /></el-icon>
+                  </el-button>
+                  <el-button text circle @click="removeInterfaceFieldTypeRow(index)">
+                    <el-icon><Minus /></el-icon>
+                  </el-button>
+                </div>
               </div>
             </div>
           </div>
