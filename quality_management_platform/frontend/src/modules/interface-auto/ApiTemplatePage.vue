@@ -6,6 +6,7 @@ import { Delete, Folder, FolderAdd, MagicStick, RefreshRight, Search } from "@el
 
 import { del, get, post, put } from "@/shared/api/client";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
+import JsonTreeViewer from "@/shared/components/JsonTreeViewer.vue";
 import type { ApiFolder, ApiTemplate, CascaderOption, JsonMap, KeyValueRow, TemplateDebugConfig, TreeNode, WorkspacePayload } from "./types";
 
 const context = useBusinessProjectContext();
@@ -40,6 +41,7 @@ const templates = ref<ApiTemplate[]>([]);
 const headerRows = ref<KeyValueRow[]>([]);
 const paramRows = ref<KeyValueRow[]>([]);
 const bodyText = ref("{}");
+const bodyViewMode = ref<"tree" | "text">("tree");
 const responseText = ref("调试响应将显示在这里...");
 
 const form = reactive<ApiTemplate>(emptyTemplate(0, null));
@@ -76,6 +78,22 @@ const currentProjectTemplates = computed(() =>
       })
     : templates.value,
 );
+
+const parsedBodyValue = computed(() => {
+  try {
+    return JSON.parse(bodyText.value || "{}");
+  } catch {
+    return null;
+  }
+});
+
+const parsedResponseValue = computed(() => {
+  try {
+    return JSON.parse(responseText.value || "{}");
+  } catch {
+    return null;
+  }
+});
 
 function getFolderDepth(folderId: number | null | undefined): number {
   if (folderId === null || folderId === undefined) {
@@ -1381,10 +1399,19 @@ onBeforeUnmount(() => {
           </el-tab-pane>
 
           <el-tab-pane label="请求体" name="body">
-            <div class="body-editor-wrap">
-              <el-button class="beautify-icon" size="small" text title="格式化JSON" @click="beautifyBody">
+            <div class="body-view-toolbar">
+              <el-radio-group v-model="bodyViewMode" size="small">
+                <el-radio-button label="tree">结构化</el-radio-button>
+                <el-radio-button label="text">原JSON</el-radio-button>
+              </el-radio-group>
+              <el-button class="beautify-icon static" size="small" text title="美化JSON" @click="beautifyBody">
                 <el-icon><MagicStick /></el-icon>
               </el-button>
+            </div>
+            <div v-if="bodyViewMode === 'tree' && parsedBodyValue !== null" class="json-view-panel">
+              <JsonTreeViewer :value="parsedBodyValue" />
+            </div>
+            <div v-else class="body-editor-wrap">
               <el-input
                 v-model="bodyText"
                 class="code-editor"
@@ -1415,7 +1442,10 @@ onBeforeUnmount(() => {
 
         <section class="response-panel">
           <div class="response-title">响应</div>
-          <pre>{{ responseText }}</pre>
+          <div v-if="parsedResponseValue !== null" class="json-view-panel response-json-panel">
+            <JsonTreeViewer :value="parsedResponseValue" />
+          </div>
+          <pre v-else>{{ responseText }}</pre>
         </section>
 
         <div class="bottom-actions">
@@ -1715,7 +1745,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 10px;
   height: calc(100% - 52px);
-  padding: 10px 12px 48px;
+  padding: 10px 12px 10px;
   overflow: hidden;
 }
 
@@ -1771,7 +1801,7 @@ onBeforeUnmount(() => {
 }
 
 .request-tabs {
-  flex: 0 0 340px;
+  flex: 0 0 404px;
   margin-left: 12px;
   min-height: 0;
   border: 1px solid #dbe3ec;
@@ -1800,7 +1830,7 @@ onBeforeUnmount(() => {
 }
 
 .request-tabs :deep(.el-tabs__content) {
-  height: 308px;
+  height: 372px;
   padding: 8px 10px;
   overflow: auto;
 }
@@ -1835,10 +1865,17 @@ onBeforeUnmount(() => {
 }
 
 .code-editor :deep(textarea) {
-  height: 290px;
+  height: 320px;
   font-family: Consolas, "Courier New", monospace;
   font-size: 12px;
   line-height: 1.7;
+}
+
+.body-view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 
 .body-editor-wrap {
@@ -1850,12 +1887,29 @@ onBeforeUnmount(() => {
   margin-top: -2px;
 }
 
+.json-view-panel {
+  height: 320px;
+  overflow: auto;
+  border: 1px solid #d7e2ee;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
 .beautify-icon {
   position: absolute;
   top: 6px;
   right: 8px;
   z-index: 2;
   color: #1677ff;
+}
+
+.beautify-icon.static {
+  position: static;
+}
+
+.body-editor-wrap .beautify-icon {
+  display: none;
 }
 
 .body-editor-wrap :deep(.el-textarea__inner) {
@@ -1876,7 +1930,7 @@ onBeforeUnmount(() => {
 
 .response-panel {
   flex: 1;
-  min-height: 180px;
+  min-height: 0;
   margin-left: 12px;
   overflow: hidden;
   border: 0;
@@ -1904,6 +1958,10 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.response-json-panel {
+  height: calc(100% - 32px);
 }
 
 .bottom-actions {
