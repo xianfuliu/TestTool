@@ -401,6 +401,7 @@ function createDefaultGlobalRequestConfig(): CaseGlobalRequestConfig {
 
 function createDraftCase(projectId: number, folderId: number | null): TestCaseRecord {
   return {
+    id: undefined,
     tabKey: createKey("draft"),
     project_id: projectId,
     folder_id: folderId,
@@ -1386,6 +1387,20 @@ function getTopLevelFolderId(folderId: number | null | undefined): number | null
   return current.id;
 }
 
+function getCaseFolderDepth(folderId: number | null | undefined): number {
+  let depth = 0;
+  let current = getFolderById(folderId);
+  while (current) {
+    depth += 1;
+    current = current.parent_id !== null ? getFolderById(current.parent_id) : null;
+  }
+  return depth;
+}
+
+function canCreateCaseChildFolder(folderId: number | null | undefined): boolean {
+  return getCaseFolderDepth(folderId) < 3;
+}
+
 function getCaseCreateFolderIdFromNode(node: CaseNavNode | null, blank = false) {
   if (blank || !node) {
     return null;
@@ -1414,7 +1429,12 @@ function ensureGlobalConfigState(tabKey: string) {
 
 function resetForm(caseItem?: TestCaseRecord) {
   resetting = true;
-  Object.assign(form, normalizeCase(caseItem));
+  const next = normalizeCase(caseItem);
+  Object.assign(form, {
+    id: next.id ?? undefined,
+    tabKey: next.tabKey,
+    ...next,
+  });
   if (activeTabKey.value) {
     ensureGlobalConfigState(activeTabKey.value);
   }
@@ -1489,14 +1509,16 @@ async function loadWorkspace() {
 
 async function openCase(caseId: number) {
   const detail = normalizeCase(await get<Partial<TestCaseRecord>>(`/api/interface-auto/cases/${caseId}/`));
-  const tabKey = getTabKey(detail);
+  const draftIndex = openedTabs.value.findIndex((item) => item.id === detail.id);
+  const currentTab = draftIndex === -1 ? null : openedTabs.value[draftIndex];
+  const tabKey = currentTab?.tabKey ?? getTabKey(detail);
   const index = openedTabs.value.findIndex((item) => item.id === detail.id || getTabKey(item) === tabKey);
-  const currentTab = index === -1 ? null : openedTabs.value[index];
+  const existingTab = index === -1 ? currentTab : openedTabs.value[index];
   const mergedDetail =
-    currentTab && modifiedTabs[getTabKey(currentTab)]
+    existingTab && modifiedTabs[getTabKey(existingTab)]
       ? normalizeCase({
           ...detail,
-          ...deepClone(currentTab),
+          ...deepClone(existingTab),
           id: detail.id,
           tabKey,
         })
@@ -1799,17 +1821,32 @@ async function saveCase(options?: { silent?: boolean }) {
       );
       caseId = result.case?.id ?? form.id;
     } else {
+      const previousTabIndex = openedTabs.value.findIndex((item) => getTabKey(item) === previousTabKey);
       const result = await post<{ case_id: number }>("/api/interface-auto/cases/", payload);
       caseId = result.case_id;
-      openedTabs.value = openedTabs.value.filter((item) => getTabKey(item) !== previousTabKey);
+      if (previousTabIndex !== -1) {
+        openedTabs.value[previousTabIndex] = normalizeCase({
+          ...deepClone(form),
+          id: caseId,
+          tabKey: previousTabKey,
+        });
+      } else {
+        openedTabs.value = openedTabs.value.filter((item) => getTabKey(item) !== previousTabKey);
+      }
       delete modifiedTabs[previousTabKey];
+      delete globalConfigExpandedMap[previousTabKey];
     }
     if (!caseId) {
       return null;
     }
+    const savedTabKey = previousTabKey || `case-${caseId}`;
+    activeTabKey.value = savedTabKey;
+    form.id = caseId;
+    form.tabKey = savedTabKey;
     await loadWorkspace();
     await openCase(caseId);
-    modifiedTabs[getTabKey(form)] = false;
+    delete modifiedTabs[previousTabKey];
+    modifiedTabs[savedTabKey] = false;
     if (!options?.silent) {
       ElMessage.success("测试用例已保存");
     }
@@ -2933,7 +2970,12 @@ onBeforeUnmount(() => {
         <button @click="refreshWorkspace(); hideContextMenus()">刷新</button>
       </template>
       <template v-else-if="caseContextMenu.node?.type === 'folder'">
-        <button @click="createFolder(caseContextMenu.node.folderId); hideContextMenus()">新增子目录</button>
+        <button
+          v-if="canCreateCaseChildFolder(caseContextMenu.node.folderId)"
+          @click="createFolder(caseContextMenu.node.folderId); hideContextMenus()"
+        >
+          新增子目录
+        </button>
         <button @click="createCaseViaContext(caseContextMenu.node); hideContextMenus()">新建测试用例</button>
         <button @click="renameFolder(caseContextMenu.node); hideContextMenus()">重命名目录</button>
         <button class="danger" @click="deleteFolder(caseContextMenu.node); hideContextMenus()">删除目录</button>
@@ -3282,8 +3324,8 @@ onBeforeUnmount(() => {
 
 .method-badge.get,
 .request-badge.get {
-  background: #ecf5ff;
-  color: #2f7df6;
+  background: #e8faf6;
+  color: #0f8a6c;
 }
 
 .method-badge.post,

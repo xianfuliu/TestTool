@@ -76,6 +76,23 @@ const currentProjectTemplates = computed(() =>
     : templates.value,
 );
 
+function getFolderDepth(folderId: number | null | undefined): number {
+  if (folderId === null || folderId === undefined) {
+    return 0;
+  }
+  let depth = 0;
+  let current = folders.value.find((item) => item.id === folderId) ?? null;
+  while (current) {
+    depth += 1;
+    current = current.parent_id ? folders.value.find((item) => item.id === current?.parent_id) ?? null : null;
+  }
+  return depth;
+}
+
+function canCreateChildFolder(folderId: number | null | undefined): boolean {
+  return getFolderDepth(folderId) < 3;
+}
+
 const treeData = computed<TreeNode[]>(() => {
   const childrenMap = new Map<number | null, ApiFolder[]>();
   folders.value.forEach((folder) => {
@@ -383,6 +400,11 @@ async function createFolder(parentId: number | null = null) {
 
 async function createChildFolder() {
   if (!contextMenu.node || contextMenu.node.type !== "folder") {
+    return;
+  }
+  if (!canCreateChildFolder(contextMenu.node.folderId)) {
+    ElMessage.warning("目录最多支持 3 层");
+    hideContextMenu();
     return;
   }
   await createFolder(contextMenu.node.folderId);
@@ -978,7 +1000,7 @@ onBeforeUnmount(() => {
       @click.stop
     >
       <template v-if="contextMenu.node?.type === 'folder'">
-        <button @click="createChildFolder(); hideContextMenu()">新增子目录</button>
+        <button v-if="canCreateChildFolder(contextMenu.node.folderId)" @click="createChildFolder(); hideContextMenu()">新增子目录</button>
         <button @click="createTemplateInContextFolder(); hideContextMenu()">新增接口模板</button>
         <button @click="renameFolder(); hideContextMenu()">重命名目录</button>
         <button class="danger" @click="deleteContextNode(); hideContextMenu()">删除目录</button>
@@ -1264,8 +1286,8 @@ onBeforeUnmount(() => {
 }
 
 .method-badge.get {
-  background: #ecf5ff;
-  color: #2f7df6;
+  background: #e8faf6;
+  color: #0f8a6c;
 }
 
 .method-badge.post {
