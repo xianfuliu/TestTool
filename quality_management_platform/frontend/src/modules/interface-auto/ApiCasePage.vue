@@ -3090,7 +3090,7 @@ onBeforeUnmount(() => {
         <template v-else-if="toolDialogKind === 'assertion'">
           <div class="tool-dialog-section">
             <div class="tool-dialog-section-title">断言配置</div>
-            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row assertion-row">
+            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row assertion-row flat-row">
               <input v-model="row.field" class="tool-input config-input wide" placeholder="支持变量或 jsonpath" />
               <el-select v-model="row.operator" class="tool-dialog-operator">
                 <el-option
