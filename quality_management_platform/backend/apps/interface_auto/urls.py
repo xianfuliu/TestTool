@@ -13,6 +13,7 @@ urlpatterns = [
     path("api-folders/", views.api_folders),
     path("api-folders/<int:folder_id>/", views.api_folder_detail),
     path("api-template-workspace/", views.api_template_workspace),
+    path("api-templates/debug/", views.api_template_debug),
     path("api-templates/", views.api_templates),
     path("api-templates/<int:template_id>/", views.api_template_detail),
     path("case-folders/", views.case_folders),

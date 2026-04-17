@@ -3,12 +3,24 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from apps.common.request_execution import (
+    EncryptionConfig,
+    RequestDefinition,
+    RequestExecutionContext,
+    execute_request_definition,
+    merge_header_maps,
+)
 from test_platform.db import connect, ensure_database, execute, fetch_all, fetch_one
 from test_platform.schema import SCHEMA_SQL
 
 
 METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH"}
 _SCHEMA_READY = False
+
+
+def _column_exists(cursor, table_name: str, column_name: str) -> bool:
+    cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
+    return cursor.fetchone() is not None
 
 
 def ensure_schema_ready() -> None:
@@ -20,6 +32,13 @@ def ensure_schema_ready() -> None:
         with connection.cursor() as cursor:
             for statement in SCHEMA_SQL:
                 cursor.execute(statement)
+            if not _column_exists(cursor, "api_templates", "debug_config_text"):
+                cursor.execute(
+                    """
+                    ALTER TABLE api_templates
+                    ADD COLUMN debug_config_text LONGTEXT NULL AFTER retry_count
+                    """
+                )
         connection.commit()
     _SCHEMA_READY = True
 
@@ -51,6 +70,7 @@ def normalize_template(row: dict[str, Any] | None) -> dict[str, Any] | None:
     item["retry_enabled"] = bool(item.get("retry_enabled"))
     item["timeout"] = int(item.get("timeout") or 30)
     item["retry_count"] = int(item.get("retry_count") or 3)
+    item["debug_config"] = parse_json_value(item.get("debug_config_text"), {})
     return item
 
 
@@ -160,6 +180,23 @@ def list_templates(project_id: Any = None, folder_id: Any = None) -> list[dict[s
     return [normalize_template(row) for row in rows if row]
 
 
+def _normalize_debug_config(value: Any) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else parse_json_value(value, {})
+    encryption = raw.get("encryption") if isinstance(raw, dict) else {}
+    header_config = raw.get("header_config") if isinstance(raw, dict) else {}
+    return {
+        "encryption": {
+            "enabled": bool((encryption or {}).get("enabled")),
+            "encrypt_url": str((encryption or {}).get("encrypt_url") or ""),
+            "decrypt_url": str((encryption or {}).get("decrypt_url") or ""),
+        },
+        "header_config": {
+            "enabled": bool((header_config or {}).get("enabled")),
+            "headers": (header_config or {}).get("headers") if isinstance((header_config or {}).get("headers"), dict) else {},
+        },
+    }
+
+
 def validate_template(payload: dict[str, Any], existing: dict[str, Any] | None = None) -> dict[str, Any]:
     project_id = require_project(payload.get("project_id") or (existing or {}).get("project_id"))
     folder_id = payload.get("folder_id", (existing or {}).get("folder_id")) or None
@@ -198,6 +235,7 @@ def validate_template(payload: dict[str, Any], existing: dict[str, Any] | None =
         "timeout": max(1, int(payload.get("timeout") or 30)),
         "retry_enabled": bool(payload.get("retry_enabled", False)),
         "retry_count": max(0, int(payload.get("retry_count") or 0)),
+        "debug_config": _normalize_debug_config(payload.get("debug_config", (existing or {}).get("debug_config"))),
     }
 
 
@@ -206,8 +244,8 @@ def create_template(payload: dict[str, Any]) -> dict[str, Any]:
     template_id = execute(
         """
         INSERT INTO api_templates
-        (project_id, folder_id, name, method, url_path, headers, params, body, description, sort_order, timeout, retry_enabled, retry_count)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        (project_id, folder_id, name, method, url_path, headers, params, body, description, sort_order, timeout, retry_enabled, retry_count, debug_config_text)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             item["project_id"],
@@ -223,6 +261,7 @@ def create_template(payload: dict[str, Any]) -> dict[str, Any]:
             item["timeout"],
             item["retry_enabled"],
             item["retry_count"],
+            json_text(item["debug_config"], {}),
         ),
     )
     return {"template_id": template_id, "template": get_template(template_id)}
@@ -243,7 +282,7 @@ def update_template(template_id: int, payload: dict[str, Any]) -> dict[str, Any]
         UPDATE api_templates
         SET project_id = %s, folder_id = %s, name = %s, method = %s, url_path = %s,
             headers = %s, params = %s, body = %s, description = %s, sort_order = %s,
-            timeout = %s, retry_enabled = %s, retry_count = %s
+            timeout = %s, retry_enabled = %s, retry_count = %s, debug_config_text = %s
         WHERE id = %s
         """,
         (
@@ -260,6 +299,7 @@ def update_template(template_id: int, payload: dict[str, Any]) -> dict[str, Any]
             item["timeout"],
             item["retry_enabled"],
             item["retry_count"],
+            json_text(item["debug_config"], {}),
             template_id,
         ),
     )
@@ -277,4 +317,68 @@ def template_workspace(project_id: Any) -> dict[str, Any]:
     return {
         "folders": list_folders(project),
         "templates": list_templates(project_id=project),
+    }
+
+
+def execute_template_debug(payload: dict[str, Any]) -> dict[str, Any]:
+    ensure_schema_ready()
+    method = str(payload.get("method") or "GET").upper()
+    if method not in METHODS:
+        raise ValueError("请求方法不支持")
+    url_path = str(payload.get("url_path") or "").strip()
+    if not url_path:
+        raise ValueError("URL路径不能为空")
+    timeout = max(1, int(payload.get("timeout") or 30))
+    retry_enabled = bool(payload.get("retry_enabled", False))
+    retry_count = max(0, int(payload.get("retry_count") or 0))
+    headers = payload.get("headers") or {}
+    params = payload.get("params") or {}
+    body = payload.get("body") if payload.get("body") not in (None, "") else {}
+    debug_config = _normalize_debug_config(payload.get("debug_config"))
+
+    encryption_config = debug_config["encryption"]
+    header_config = debug_config["header_config"]
+    encryption = EncryptionConfig(
+        enabled=bool(encryption_config.get("enabled")),
+        encrypt_url=str(encryption_config.get("encrypt_url") or ""),
+        decrypt_url=str(encryption_config.get("decrypt_url") or ""),
+    )
+    global_headers = merge_header_maps(header_config.get("headers")) if header_config.get("enabled") else {}
+
+    result = execute_request_definition(
+        RequestDefinition(
+            protocol=str(payload.get("protocol") or "http"),
+            url=url_path,
+            method=method,
+            headers=headers,
+            params=params,
+            body=body,
+            timeout=timeout,
+            retry_enabled=retry_enabled,
+            retry_count=retry_count,
+        ),
+        RequestExecutionContext(
+            request_id=str(payload.get("request_id") or ""),
+            variables={},
+            base_url="",
+            global_headers=global_headers,
+            encryption=encryption,
+            allow_legacy_placeholders=True,
+        ),
+    )
+    return {
+        "request": result.request,
+        "status_code": result.status_code,
+        "headers": result.headers,
+        "body": result.body,
+        "raw_body": result.raw_body,
+        "decrypted_body": result.decrypted_body,
+        "duration_ms": result.duration_ms,
+        "debug_config_applied": {
+            "encryption": encryption_config,
+            "header_config": {
+                "enabled": bool(header_config.get("enabled")),
+                "headers": global_headers,
+            },
+        },
     }

@@ -24,6 +24,7 @@ export type ApiTemplate = {
   timeout: number;
   retry_enabled: boolean;
   retry_count: number;
+  debug_config?: TemplateDebugConfig;
   sort_order: number;
 };
 
@@ -42,6 +43,18 @@ export type GlobalRequestHeaderRow = {
   rowKey?: string;
   key: string;
   value: string;
+};
+
+export type TemplateDebugConfig = {
+  encryption: {
+    enabled: boolean;
+    encrypt_url: string;
+    decrypt_url: string;
+  };
+  header_config: {
+    enabled: boolean;
+    headers_rows: GlobalRequestHeaderRow[];
+  };
 };
 
 export type GlobalRequestExtractionRow = {

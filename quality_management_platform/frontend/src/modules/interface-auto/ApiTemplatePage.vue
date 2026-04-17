@@ -2,11 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
-import { Delete, Folder, FolderAdd, MagicStick, RefreshRight, Search } from "@element-plus/icons-vue";
+import { ArrowRight, Delete, Folder, FolderAdd, MagicStick, RefreshRight, Search } from "@element-plus/icons-vue";
 
 import { del, get, post, put } from "@/shared/api/client";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
-import type { ApiFolder, ApiTemplate, CascaderOption, JsonMap, KeyValueRow, TreeNode, WorkspacePayload } from "./types";
+import type { ApiFolder, ApiTemplate, CascaderOption, JsonMap, KeyValueRow, TemplateDebugConfig, TreeNode, WorkspacePayload } from "./types";
 
 const context = useBusinessProjectContext();
 const route = useRoute();
@@ -19,6 +19,8 @@ const selectedFolderId = ref<number | null>(null);
 const selectedTemplateId = ref<number | null>(null);
 const selectedNodeType = ref<"folder" | "template" | null>(null);
 const activeEditorTab = ref("body");
+const configPanelExpanded = ref(false);
+const activeConfigTab = ref<"basic" | "debug">("basic");
 const activeTabKey = ref("");
 const contextMenu = reactive({
   visible: false,
@@ -38,6 +40,7 @@ const folders = ref<ApiFolder[]>([]);
 const templates = ref<ApiTemplate[]>([]);
 const headerRows = ref<KeyValueRow[]>([]);
 const paramRows = ref<KeyValueRow[]>([]);
+const debugHeaderRows = ref<KeyValueRow[]>([]);
 const bodyText = ref("{}");
 const responseText = ref("调试响应将显示在这里...");
 
@@ -150,6 +153,7 @@ function emptyTemplate(projectId: number, folderId: number | null): ApiTemplate 
     timeout: 30,
     retry_enabled: false,
     retry_count: 3,
+    debug_config: createDefaultDebugConfig(),
     sort_order: 0,
   };
 }
@@ -160,6 +164,35 @@ function rowId() {
 
 function mapToRows(value: JsonMap | undefined) {
   return Object.entries(value ?? {}).map(([key, rowValue]) => ({ id: rowId(), key, value: String(rowValue) }));
+}
+
+function createDefaultDebugConfig(): TemplateDebugConfig {
+  return {
+    encryption: {
+      enabled: false,
+      encrypt_url: "",
+      decrypt_url: "",
+    },
+    header_config: {
+      enabled: false,
+      headers_rows: [{ id: rowId(), key: "", value: "" }] as unknown as KeyValueRow[],
+    },
+  };
+}
+
+function normalizeDebugConfig(value: ApiTemplate["debug_config"] | undefined): TemplateDebugConfig {
+  const fallback = createDefaultDebugConfig();
+  return {
+    encryption: {
+      enabled: Boolean(value?.encryption?.enabled),
+      encrypt_url: value?.encryption?.encrypt_url ?? "",
+      decrypt_url: value?.encryption?.decrypt_url ?? "",
+    },
+    header_config: {
+      enabled: Boolean(value?.header_config?.enabled),
+      headers_rows: mapToRows(rowsToMap((value?.header_config?.headers_rows as unknown as KeyValueRow[]) ?? [])),
+    },
+  };
 }
 
 function rowsToMap(rows: KeyValueRow[]) {
@@ -192,14 +225,21 @@ function resetForm(template?: ApiTemplate) {
     timeout: next.timeout ?? 30,
     retry_enabled: Boolean(next.retry_enabled),
     retry_count: next.retry_count ?? 3,
+    debug_config: normalizeDebugConfig(next.debug_config),
   });
   headerRows.value = mapToRows(form.headers);
   paramRows.value = mapToRows(form.params);
+  debugHeaderRows.value = mapToRows(
+    rowsToMap((form.debug_config?.header_config?.headers_rows as unknown as KeyValueRow[]) ?? []),
+  );
   if (!headerRows.value.length) {
     addHeaderRow();
   }
   if (!paramRows.value.length) {
     addParamRow();
+  }
+  if (!debugHeaderRows.value.length) {
+    debugHeaderRows.value = [{ id: rowId(), key: "", value: "" }];
   }
   bodyText.value = stringifyBody(form.body);
   nextTick(() => {
@@ -431,6 +471,10 @@ function addParamRow() {
   paramRows.value.push({ id: rowId(), key: "", value: "" });
 }
 
+function addDebugHeaderRow() {
+  debugHeaderRows.value.push({ id: rowId(), key: "", value: "" });
+}
+
 function removeHeaderRow(rowId: string) {
   headerRows.value = headerRows.value.filter((item) => item.id !== rowId);
   if (!headerRows.value.length) {
@@ -443,6 +487,17 @@ function removeParamRow(rowId: string) {
   if (!paramRows.value.length) {
     addParamRow();
   }
+}
+
+function removeDebugHeaderRow(targetRowId: string) {
+  debugHeaderRows.value = debugHeaderRows.value.filter((item) => item.id !== targetRowId);
+  if (!debugHeaderRows.value.length) {
+    addDebugHeaderRow();
+  }
+}
+
+function toggleConfigPanel() {
+  configPanelExpanded.value = !configPanelExpanded.value;
 }
 
 function parseBody() {
@@ -467,6 +522,17 @@ function buildPayload() {
     timeout: form.timeout,
     retry_enabled: form.retry_enabled,
     retry_count: form.retry_count,
+    debug_config: {
+      encryption: {
+        enabled: Boolean(form.debug_config?.encryption?.enabled),
+        encrypt_url: form.debug_config?.encryption?.encrypt_url ?? "",
+        decrypt_url: form.debug_config?.encryption?.decrypt_url ?? "",
+      },
+      header_config: {
+        enabled: Boolean(form.debug_config?.header_config?.enabled),
+        headers: rowsToMap(debugHeaderRows.value),
+      },
+    },
     sort_order: form.sort_order,
   };
 }
@@ -487,6 +553,17 @@ function snapshotActiveTab() {
     headers: rowsToMap(headerRows.value),
     params: rowsToMap(paramRows.value),
     body: bodyText.value,
+    debug_config: {
+      encryption: {
+        enabled: Boolean(form.debug_config?.encryption?.enabled),
+        encrypt_url: form.debug_config?.encryption?.encrypt_url ?? "",
+        decrypt_url: form.debug_config?.encryption?.decrypt_url ?? "",
+      },
+      header_config: {
+        enabled: Boolean(form.debug_config?.header_config?.enabled),
+        headers_rows: debugHeaderRows.value.map((row) => ({ key: row.key, value: row.value })),
+      },
+    },
     tabKey: activeTabKey.value,
   } as ApiTemplate;
 }
@@ -862,6 +939,8 @@ function handleSaveShortcut() {
 }
 
 function debugTemplate() {
+  void runTemplateDebug();
+  return;
   responseText.value = JSON.stringify(
     {
       message: "调试引擎将在测试用例迁移阶段接入",
@@ -870,6 +949,16 @@ function debugTemplate() {
     null,
     2,
   );
+}
+
+async function runTemplateDebug() {
+  try {
+    const result = await post<Record<string, unknown>>("/api/interface-auto/api-templates/debug/", buildPayload());
+    responseText.value = JSON.stringify(result, null, 2);
+  } catch (error) {
+    responseText.value = JSON.stringify({ error: (error as Error).message, request: buildPayload() }, null, 2);
+    ElMessage.error((error as Error).message);
+  }
 }
 
 function syncProjectPath() {
@@ -1058,6 +1147,87 @@ onBeforeUnmount(() => {
           </el-select>
           <label class="url-label">URL:</label>
           <el-input v-model="form.url_path" size="small" class="url-input" placeholder="http:// 或 /api/path" />
+        </div>
+
+        <div class="global-config-shell">
+          <button class="global-config-toggle" type="button" @click="toggleConfigPanel">
+            <span>接口配置</span>
+            <span class="global-config-toggle-icon" :class="{ expanded: configPanelExpanded }">
+              <el-icon><ArrowRight /></el-icon>
+            </span>
+          </button>
+
+          <div v-if="configPanelExpanded" class="global-config-panel">
+            <div class="global-config-tabs" role="tablist" aria-label="Template config tabs">
+              <button class="global-config-tab" :class="{ active: activeConfigTab === 'basic' }" type="button" @click="activeConfigTab = 'basic'">基础配置</button>
+              <button class="global-config-tab" :class="{ active: activeConfigTab === 'debug' }" type="button" @click="activeConfigTab = 'debug'">调试配置</button>
+            </div>
+
+            <div class="global-config-content">
+              <div v-if="activeConfigTab === 'basic'" class="global-config-tab-panel">
+                <div class="config-grid">
+                  <div class="field-row inline">
+                    <label>超时(秒)</label>
+                    <el-input-number v-model="form.timeout" size="small" :min="1" :max="600" controls-position="right" />
+                  </div>
+                  <div class="field-row inline">
+                    <label>启用重试</label>
+                    <el-switch v-model="form.retry_enabled" />
+                  </div>
+                  <div class="field-row inline">
+                    <label>重试次数</label>
+                    <el-input-number v-model="form.retry_count" size="small" :min="0" :max="20" :disabled="!form.retry_enabled" controls-position="right" />
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="global-config-tab-panel global-config-stack">
+                <div class="global-config-hint">以下调试配置只对当前“调试”按钮生效，不影响测试用例运行。测试用例执行仍以全局配置和卡片配置为准。</div>
+
+                <div class="global-config-section-card">
+                  <div class="global-config-toolbar align-left">
+                    <label class="encryption-check compact-check">
+                      <input v-model="form.debug_config!.encryption.enabled" type="checkbox" />
+                      <span class="global-config-section-title">加解密配置</span>
+                    </label>
+                  </div>
+                  <div v-if="form.debug_config?.encryption.enabled" class="global-config-section-panel">
+                    <div class="global-config-inline-grid two-columns">
+                      <div class="global-config-inline-field">
+                        <span class="global-config-inline-label">加密URL</span>
+                        <input v-model="form.debug_config!.encryption.encrypt_url" class="text-field" placeholder="请输入加密URL" />
+                      </div>
+                      <div class="global-config-inline-field">
+                        <span class="global-config-inline-label">解密URL</span>
+                        <input v-model="form.debug_config!.encryption.decrypt_url" class="text-field" placeholder="请输入解密URL" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="global-config-section-card">
+                  <div class="global-config-toolbar align-left">
+                    <label class="encryption-check compact-check">
+                      <input v-model="form.debug_config!.header_config.enabled" type="checkbox" />
+                      <span class="global-config-section-title">请求头配置</span>
+                    </label>
+                  </div>
+                  <div v-if="form.debug_config?.header_config.enabled" class="global-config-section-panel">
+                    <div class="global-config-stack">
+                      <div v-for="row in debugHeaderRows" :key="row.id" class="global-config-kv-row">
+                        <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
+                        <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
+                        <div class="global-config-row-actions">
+                          <button class="tool-action text-action" type="button" @click="addDebugHeaderRow">+</button>
+                          <button class="tool-action danger text-action" type="button" @click="removeDebugHeaderRow(row.id)">-</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <el-tabs v-model="activeEditorTab" class="request-tabs">
@@ -1613,6 +1783,190 @@ onBeforeUnmount(() => {
   bottom: 10px;
   gap: 6px;
   justify-content: flex-end;
+}
+
+.global-config-shell {
+  margin-bottom: 12px;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.global-config-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 0;
+  padding: 10px 12px;
+  background: transparent;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.global-config-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+
+.global-config-toggle-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.global-config-panel {
+  border-top: 1px solid #e5eaf1;
+  padding: 12px;
+}
+
+.global-config-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.global-config-tab {
+  position: relative;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: #f5f7fb;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.global-config-tab.active {
+  background: #eaf2ff;
+  color: #2563eb;
+}
+
+.global-config-content,
+.global-config-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.global-config-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.global-config-hint {
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.global-config-section-card {
+  border: 1px solid #e5eaf1;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.global-config-toolbar.align-left {
+  justify-content: flex-start;
+}
+
+.global-config-toolbar {
+  display: flex;
+  align-items: center;
+}
+
+.encryption-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.compact-check {
+  font-weight: 600;
+}
+
+.global-config-section-panel {
+  margin-top: 12px;
+}
+
+.global-config-inline-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.global-config-inline-grid.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.global-config-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.global-config-inline-label,
+.global-config-section-title {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.global-config-kv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.global-config-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.tool-input.config-input,
+.global-config-inline-field .text-field {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid #d7e1ec;
+  border-radius: 8px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  color: #1f2937;
+  background: #fff;
+  outline: none;
+}
+
+.tool-input.config-input:focus,
+.global-config-inline-field .text-field:focus {
+  border-color: #7aa2f7;
+}
+
+.tool-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #d7e1ec;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.tool-action.danger {
+  color: #dc2626;
 }
 
 :deep(.el-button--small) {

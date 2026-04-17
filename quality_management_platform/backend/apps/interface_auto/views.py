@@ -311,6 +311,11 @@ def api_template_workspace(_request, payload=None):
 
 
 @api_view
+def api_template_debug(_request, payload=None):
+    return template_service.execute_template_debug(payload or {})
+
+
+@api_view
 def case_folders(request, payload=None):
     if request.method == "GET":
         project_id = get_int((payload or {}).get("project_id"))
