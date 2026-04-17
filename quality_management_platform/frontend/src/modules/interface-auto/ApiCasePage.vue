@@ -2701,8 +2701,8 @@ onBeforeUnmount(() => {
                         <input v-model="row.name" class="tool-input config-input" placeholder="变量名" @input="form.global_vars = variableRowsToMap(variableRows)" />
                         <input v-model="row.value" class="tool-input config-input" placeholder="变量值" @input="form.global_vars = variableRowsToMap(variableRows)" />
                         <div class="global-config-row-actions">
-                          <button class="tool-action text-action" type="button" @click="addVariableRow">+</button>
-                          <button class="tool-action danger text-action" type="button" @click="removeVariableRow(index)">-</button>
+                          <button class="row-icon add" type="button" @click="addVariableRow">+</button>
+                          <button class="row-icon remove" type="button" @click="removeVariableRow(index)">-</button>
                         </div>
                       </div>
                     </div>
@@ -2742,8 +2742,8 @@ onBeforeUnmount(() => {
                                 <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
                                 <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
                                 <div class="global-config-row-actions">
-                                  <button class="tool-action text-action" type="button" @click="addLoginHeaderRow">+</button>
-                                  <button class="tool-action danger text-action" type="button" @click="removeLoginHeaderRow(index)">-</button>
+                                  <button class="row-icon add" type="button" @click="addLoginHeaderRow">+</button>
+                                  <button class="row-icon remove" type="button" @click="removeLoginHeaderRow(index)">-</button>
                                 </div>
                               </div>
                             </div>
@@ -2765,8 +2765,8 @@ onBeforeUnmount(() => {
                                 <input v-model="row.variable" class="tool-input config-input" placeholder="token" />
                                 <input v-model="row.path" class="tool-input config-input" placeholder="headers.Authorization or body.data.token" />
                                 <div class="global-config-row-actions">
-                                  <button class="tool-action text-action" type="button" @click="addLoginExtractionRow">+</button>
-                                  <button class="tool-action danger text-action" type="button" @click="removeLoginExtractionRow(index)">-</button>
+                                  <button class="row-icon add" type="button" @click="addLoginExtractionRow">+</button>
+                                  <button class="row-icon remove" type="button" @click="removeLoginExtractionRow(index)">-</button>
                                 </div>
                               </div>
                             </div>
@@ -2792,8 +2792,8 @@ onBeforeUnmount(() => {
                             <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
                             <input v-model="row.value" class="tool-input config-input" placeholder="可引用变量 例：${token}" />
                             <div class="global-config-row-actions">
-                              <button class="tool-action text-action" type="button" @click="addGlobalHeaderConfigRow">+</button>
-                              <button class="tool-action danger text-action" type="button" @click="removeGlobalHeaderConfigRow(index)">-</button>
+                              <button class="row-icon add" type="button" @click="addGlobalHeaderConfigRow">+</button>
+                              <button class="row-icon remove" type="button" @click="removeGlobalHeaderConfigRow(index)">-</button>
                             </div>
                           </div>
                         </div>
@@ -3038,8 +3038,8 @@ onBeforeUnmount(() => {
                 <div v-for="(row, index) in toolHeaderRows" :key="row.rowKey" class="tool-config-row flat-row">
                   <input v-model="row.key" class="tool-input config-input" placeholder="Header名称" />
                   <input v-model="row.value" class="tool-input config-input wide" placeholder="Header值" />
-                  <button class="tool-action text-action" title="新增" @click="insertHeaderRow(index)">+</button>
-                  <button class="tool-action danger text-action" title="删除" @click="removeHeaderRow(index)">-</button>
+                  <button class="row-icon add" title="新增" @click="insertHeaderRow(index)">+</button>
+                  <button class="row-icon remove" title="删除" @click="removeHeaderRow(index)">-</button>
                 </div>
               </div>
             </el-tab-pane>
@@ -3053,8 +3053,8 @@ onBeforeUnmount(() => {
               <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row flat-row">
                 <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
                 <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
-                <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
-                <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+                <button class="row-icon add" title="新增" @click="insertToolRow(index)">+</button>
+                <button class="row-icon remove" title="删除" @click="removeToolRow(index)">-</button>
               </div>
             </div>
           </div>
@@ -3081,8 +3081,8 @@ onBeforeUnmount(() => {
             <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row">
               <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
               <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
-              <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
-              <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+              <button class="row-icon add" title="新增" @click="insertToolRow(index)">+</button>
+              <button class="row-icon remove" title="删除" @click="removeToolRow(index)">-</button>
             </div>
           </div>
         </template>
@@ -3101,8 +3101,8 @@ onBeforeUnmount(() => {
                 />
               </el-select>
               <input v-model="row.expected" class="tool-input config-input" placeholder="预期值" />
-              <button class="tool-action text-action" title="新增" @click="insertToolRow(index)">+</button>
-              <button class="tool-action danger text-action" title="删除" @click="removeToolRow(index)">-</button>
+              <button class="row-icon add" title="新增" @click="insertToolRow(index)">+</button>
+              <button class="row-icon remove" title="删除" @click="removeToolRow(index)">-</button>
             </div>
           </div>
         </template>
@@ -4368,6 +4368,22 @@ onBeforeUnmount(() => {
 
 .tool-config-row.assertion-row {
   grid-template-columns: minmax(220px, 1fr) 88px minmax(140px, 1fr) 30px 30px;
+}
+
+.row-icon {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.row-icon.add {
+  color: #2bb673;
+}
+
+.row-icon.remove {
+  color: #d93025;
 }
 
 .tool-action.text-action {

@@ -228,8 +228,45 @@ function stringifyBody(value: unknown) {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
 
+function formatDebugResponse(result: Record<string, unknown>) {
+  const decryptedBody = result.decrypted_body;
+  if (decryptedBody !== undefined && decryptedBody !== null && decryptedBody !== "") {
+    if (typeof decryptedBody === "string") {
+      return decryptedBody;
+    }
+    const message = extractResponseMessage(decryptedBody);
+    return message ?? JSON.stringify(decryptedBody, null, 2);
+  }
+
+  const responseBody = result.body;
+  if (responseBody !== undefined && responseBody !== null && responseBody !== "") {
+    if (typeof responseBody === "string") {
+      return responseBody;
+    }
+    const message = extractResponseMessage(responseBody);
+    return message ?? JSON.stringify(responseBody, null, 2);
+  }
+
+  return JSON.stringify(result, null, 2);
+}
+
+function extractResponseMessage(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const candidates = [record.message, record.errMsg, record.detail, record.error];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 function resetForm(template?: ApiTemplate) {
   resetting = true;
+  activeEditorTab.value = "body";
   const next = template ?? emptyTemplate(currentProjectId.value ?? 0, selectedFolderId.value);
   Object.assign(form, {
     id: next.id ?? undefined,
@@ -1011,9 +1048,9 @@ function debugTemplate() {
 async function runTemplateDebug() {
   try {
     const result = await post<Record<string, unknown>>("/api/interface-auto/api-templates/debug/", buildPayload());
-    responseText.value = JSON.stringify(result, null, 2);
+    responseText.value = formatDebugResponse(result);
   } catch (error) {
-    responseText.value = JSON.stringify({ error: (error as Error).message, request: buildPayload() }, null, 2);
+    responseText.value = (error as Error).message;
     ElMessage.error((error as Error).message);
   }
 }
@@ -1204,6 +1241,11 @@ onBeforeUnmount(() => {
           </el-select>
           <label class="url-label">URL:</label>
           <el-input v-model="form.url_path" size="small" class="url-input" placeholder="http:// 或 /api/path" />
+        </div>
+
+        <div class="bottom-actions inline-actions">
+          <el-button size="small" type="success" @click="debugTemplate">调试</el-button>
+          <el-button size="small" type="success" :loading="saving" @click="saveTemplate">保存</el-button>
         </div>
 
         <el-tabs v-model="activeEditorTab" class="request-tabs">
@@ -1716,7 +1758,8 @@ onBeforeUnmount(() => {
 }
 
 .request-tabs {
-  flex: 0 0 380px;
+  flex: 0 0 340px;
+  margin-left: 12px;
   min-height: 0;
   border: 1px solid #dbe3ec;
   border-radius: 6px;
@@ -1734,8 +1777,8 @@ onBeforeUnmount(() => {
 }
 
 .request-tabs :deep(.el-tabs__item) {
-  height: 36px;
-  padding: 0 24px;
+  height: 32px;
+  padding: 0 18px;
   font-size: 13px;
 }
 
@@ -1744,8 +1787,8 @@ onBeforeUnmount(() => {
 }
 
 .request-tabs :deep(.el-tabs__content) {
-  height: 342px;
-  padding: 10px;
+  height: 308px;
+  padding: 8px 10px;
   overflow: auto;
 }
 
@@ -1791,6 +1834,7 @@ onBeforeUnmount(() => {
   border: 1px solid #d7e2ee;
   border-radius: 6px;
   background: #fff;
+  margin-top: -2px;
 }
 
 .beautify-icon {
@@ -1820,6 +1864,7 @@ onBeforeUnmount(() => {
 .response-panel {
   flex: 1;
   min-height: 180px;
+  margin-left: 12px;
   overflow: hidden;
   border: 0;
   background: transparent;
@@ -1850,11 +1895,18 @@ onBeforeUnmount(() => {
 
 .bottom-actions {
   display: flex;
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
   gap: 6px;
-  justify-content: flex-end;
+  justify-content: flex-start;
+}
+
+.bottom-actions.inline-actions {
+  margin-left: 12px;
+  margin-top: -2px;
+  margin-bottom: 2px;
+}
+
+.response-panel + .bottom-actions {
+  display: none;
 }
 
 .global-config-shell {

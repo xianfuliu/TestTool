@@ -1300,7 +1300,7 @@ function submit() {
 
   <el-dialog v-model="interfaceDialogVisible" title="接口配置" width="920px" top="5vh">
     <div class="interface-config-form">
-      <div class="interface-inline-field interface-inline-field-wide">
+      <div class="interface-inline-field interface-inline-field-wide interface-name-row">
         <div class="interface-inline-label">接口名称</div>
         <div class="interface-inline-content">
           <el-input v-model="interfaceForm.name" placeholder="我是接口名称" />
@@ -1308,7 +1308,7 @@ function submit() {
       </div>
 
       <div class="interface-top-grid">
-        <div class="interface-inline-field">
+        <div class="interface-inline-field interface-method-row">
           <div class="interface-inline-label">请求方法</div>
           <div class="interface-inline-content">
             <el-select v-model="interfaceForm.method">
@@ -1316,7 +1316,7 @@ function submit() {
             </el-select>
           </div>
         </div>
-        <div class="interface-inline-field">
+        <div class="interface-inline-field interface-url-row">
           <div class="interface-inline-label">URL</div>
           <div class="interface-inline-content">
             <el-input v-model="interfaceForm.url" />
@@ -1518,7 +1518,14 @@ function submit() {
             <div class="inline-config-list">
               <div v-if="!interfaceForm.fieldTypeRows.length" class="inline-config-row">
                 <el-input value="" placeholder="变量 key" />
-                <el-input value="" placeholder="string / int / float" />
+                <el-select model-value="" placeholder="请选择数据类型">
+                  <el-option
+                    v-for="item in dataTypeOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
                 <div class="inline-config-actions">
                   <el-button text circle @click="appendInterfaceFieldTypeRow">
                     <el-icon><Plus /></el-icon>
@@ -1535,7 +1542,14 @@ function submit() {
                 class="inline-config-row"
               >
                 <el-input v-model="row.key" placeholder="变量 key" />
-                <el-input v-model="row.value" placeholder="string / int / float" />
+                <el-select v-model="row.value" placeholder="请选择数据类型">
+                  <el-option
+                    v-for="item in dataTypeOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
                 <div class="inline-config-actions">
                   <el-button text circle @click="appendInterfaceFieldTypeRow">
                     <el-icon><Plus /></el-icon>
@@ -1770,8 +1784,8 @@ function submit() {
 
 .interface-top-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: 18px 24px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 18px 16px;
 }
 
 .interface-inline-field,
@@ -1784,6 +1798,28 @@ function submit() {
 
 .interface-inline-field-wide {
   grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.interface-name-row .interface-inline-content {
+  max-width: 520px;
+}
+
+.interface-method-row {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.interface-url-row {
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.interface-method-row .interface-inline-content {
+  max-width: 160px;
+}
+
+.interface-method-row .interface-inline-content :deep(.el-select),
+.interface-url-row .interface-inline-content :deep(.el-input) {
+  width: 100%;
 }
 
 .interface-section-row-top {
@@ -1908,18 +1944,25 @@ function submit() {
 }
 
 .inline-config-actions :deep(.el-button) {
-  width: 28px;
-  height: 28px;
-  color: #5b6472;
-  border: 1px solid #d7deea;
-  border-radius: 50%;
-  background: #ffffff;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1;
+  color: #2bb673;
 }
 
 .inline-config-actions :deep(.el-button:hover) {
-  color: var(--el-color-primary);
-  border-color: #b9cbff;
-  background: #f3f7ff;
+  background: transparent;
+}
+
+.inline-config-actions :deep(.el-button + .el-button) {
+  color: #d93025;
+  margin-left: 0;
 }
 
 .sql-output-list {
@@ -2128,30 +2171,67 @@ function submit() {
 .case-card-actions {
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  gap: 4px;
   align-items: center;
   justify-content: flex-end;
   align-self: flex-start;
 }
 
 .request-body-icon-button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #d7deea;
-  border-radius: 50%;
-  background: #ffffff;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .request-body-icon-button.is-add {
-  color: var(--el-color-primary);
-  border-color: #b9cbff;
-  background: #f3f7ff;
+  color: #2bb673;
 }
 
 .request-body-icon-button.is-remove {
-  color: var(--el-color-danger);
-  border-color: #f4c7c3;
-  background: #fff6f5;
+  color: #d93025;
+}
+
+.request-body-icon-button :deep(.el-icon) {
+  font-size: 16px;
+}
+
+.request-body-icon-button :deep(.el-icon svg) {
+  display: block;
+}
+
+.section-toolbar :deep(.el-button),
+.sub-toolbar :deep(.el-button),
+.case-toolbar :deep(.el-button),
+:deep(.el-dialog__footer .el-button) {
+  min-width: 64px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.section-toolbar :deep(.el-button),
+.sub-toolbar :deep(.el-button),
+.case-toolbar :deep(.el-button) {
+  min-width: 56px;
+  height: 28px;
+  padding: 0 10px;
+}
+
+.section-toolbar :deep(.el-button.is-link),
+.sub-toolbar :deep(.el-button.is-link),
+.case-toolbar :deep(.el-button.is-link) {
+  min-width: 0;
+  height: auto;
+  padding: 0 2px;
+  border-radius: 0;
+  font-size: 12px;
 }
 
 .layout-drag-panel {
