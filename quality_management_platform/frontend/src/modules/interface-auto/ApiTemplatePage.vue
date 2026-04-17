@@ -119,6 +119,7 @@ function templateNode(template: ApiTemplate): TreeNode {
 
 function emptyTemplate(projectId: number, folderId: number | null): ApiTemplate {
   return {
+    id: undefined,
     tabKey: `new-${Date.now()}`,
     project_id: projectId,
     folder_id: folderId,
@@ -165,6 +166,8 @@ function resetForm(template?: ApiTemplate) {
   resetting = true;
   const next = template ?? emptyTemplate(currentProjectId.value ?? 0, selectedFolderId.value);
   Object.assign(form, {
+    id: next.id ?? undefined,
+    tabKey: next.tabKey,
     ...next,
     headers: next.headers ?? {},
     params: next.params ?? {},
@@ -406,12 +409,19 @@ function parseBody() {
 
 function buildPayload() {
   return {
-    ...form,
     project_id: currentProjectId.value,
     folder_id: selectedFolderId.value,
+    name: form.name,
+    method: form.method,
+    url_path: form.url_path,
     headers: rowsToMap(headerRows.value),
     params: rowsToMap(paramRows.value),
     body: parseBody(),
+    description: form.description,
+    timeout: form.timeout,
+    retry_enabled: form.retry_enabled,
+    retry_count: form.retry_count,
+    sort_order: form.sort_order,
   };
 }
 
