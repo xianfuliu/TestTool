@@ -8,7 +8,7 @@ from apps.common.request_execution import (
     RequestDefinition,
     RequestExecutionContext,
     execute_request_definition,
-    merge_header_maps,
+    resolve_global_request_runtime,
 )
 from test_platform.db import connect, ensure_database, execute, fetch_all, fetch_one
 from test_platform.schema import SCHEMA_SQL
@@ -183,16 +183,21 @@ def list_templates(project_id: Any = None, folder_id: Any = None) -> list[dict[s
 def _normalize_debug_config(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else parse_json_value(value, {})
     encryption = raw.get("encryption") if isinstance(raw, dict) else {}
-    header_config = raw.get("header_config") if isinstance(raw, dict) else {}
+    login_request = raw.get("login_request") if isinstance(raw, dict) else {}
     return {
         "encryption": {
             "enabled": bool((encryption or {}).get("enabled")),
             "encrypt_url": str((encryption or {}).get("encrypt_url") or ""),
             "decrypt_url": str((encryption or {}).get("decrypt_url") or ""),
         },
-        "header_config": {
-            "enabled": bool((header_config or {}).get("enabled")),
-            "headers": (header_config or {}).get("headers") if isinstance((header_config or {}).get("headers"), dict) else {},
+        "login_request": {
+            "enabled": bool((login_request or {}).get("enabled")),
+            "protocol": str((login_request or {}).get("protocol") or "http"),
+            "method": str((login_request or {}).get("method") or "POST").upper(),
+            "url": str((login_request or {}).get("url") or ""),
+            "headers": (login_request or {}).get("headers") if isinstance((login_request or {}).get("headers"), dict) else {},
+            "body": (login_request or {}).get("body") if (login_request or {}).get("body") not in (None, "") else {},
+            "extractions": (login_request or {}).get("extractions") if isinstance((login_request or {}).get("extractions"), list) else [],
         },
     }
 
@@ -337,13 +342,23 @@ def execute_template_debug(payload: dict[str, Any]) -> dict[str, Any]:
     debug_config = _normalize_debug_config(payload.get("debug_config"))
 
     encryption_config = debug_config["encryption"]
-    header_config = debug_config["header_config"]
+    login_request = debug_config["login_request"]
     encryption = EncryptionConfig(
         enabled=bool(encryption_config.get("enabled")),
         encrypt_url=str(encryption_config.get("encrypt_url") or ""),
         decrypt_url=str(encryption_config.get("decrypt_url") or ""),
     )
-    global_headers = merge_header_maps(header_config.get("headers")) if header_config.get("enabled") else {}
+    runtime = resolve_global_request_runtime(
+        {
+            "login_request": login_request,
+        },
+        request_id=str(payload.get("request_id") or ""),
+        variables={},
+        base_url="",
+        base_headers={},
+        encryption=encryption,
+        allow_legacy_placeholders=True,
+    )
 
     result = execute_request_definition(
         RequestDefinition(
@@ -359,9 +374,9 @@ def execute_template_debug(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         RequestExecutionContext(
             request_id=str(payload.get("request_id") or ""),
-            variables={},
+            variables=runtime.get("variables") or {},
             base_url="",
-            global_headers=global_headers,
+            global_headers={},
             encryption=encryption,
             allow_legacy_placeholders=True,
         ),
@@ -376,9 +391,7 @@ def execute_template_debug(payload: dict[str, Any]) -> dict[str, Any]:
         "duration_ms": result.duration_ms,
         "debug_config_applied": {
             "encryption": encryption_config,
-            "header_config": {
-                "enabled": bool(header_config.get("enabled")),
-                "headers": global_headers,
-            },
+            "login_request": runtime.get("login_result"),
+            "logs": runtime.get("logs") or [],
         },
     }

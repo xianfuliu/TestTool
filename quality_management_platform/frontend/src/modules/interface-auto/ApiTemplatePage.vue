@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowRight, Delete, Folder, FolderAdd, MagicStick, RefreshRight, Search } from "@element-plus/icons-vue";
+import { Delete, Folder, FolderAdd, MagicStick, RefreshRight, Search } from "@element-plus/icons-vue";
 
 import { del, get, post, put } from "@/shared/api/client";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
@@ -19,8 +19,6 @@ const selectedFolderId = ref<number | null>(null);
 const selectedTemplateId = ref<number | null>(null);
 const selectedNodeType = ref<"folder" | "template" | null>(null);
 const activeEditorTab = ref("body");
-const configPanelExpanded = ref(false);
-const activeConfigTab = ref<"basic" | "debug">("basic");
 const activeTabKey = ref("");
 const contextMenu = reactive({
   visible: false,
@@ -40,7 +38,6 @@ const folders = ref<ApiFolder[]>([]);
 const templates = ref<ApiTemplate[]>([]);
 const headerRows = ref<KeyValueRow[]>([]);
 const paramRows = ref<KeyValueRow[]>([]);
-const debugHeaderRows = ref<KeyValueRow[]>([]);
 const bodyText = ref("{}");
 const responseText = ref("调试响应将显示在这里...");
 
@@ -173,9 +170,14 @@ function createDefaultDebugConfig(): TemplateDebugConfig {
       encrypt_url: "",
       decrypt_url: "",
     },
-    header_config: {
+    login_request: {
       enabled: false,
-      headers_rows: [{ id: rowId(), key: "", value: "" }] as unknown as KeyValueRow[],
+      protocol: "http",
+      method: "POST",
+      url: "",
+      headers_rows: [{ rowKey: rowId(), key: "Content-Type", value: "application/json" }],
+      body_text: "{}",
+      extractions: [{ rowKey: rowId(), variable: "", path: "" }],
     },
   };
 }
@@ -188,9 +190,23 @@ function normalizeDebugConfig(value: ApiTemplate["debug_config"] | undefined): T
       encrypt_url: value?.encryption?.encrypt_url ?? "",
       decrypt_url: value?.encryption?.decrypt_url ?? "",
     },
-    header_config: {
-      enabled: Boolean(value?.header_config?.enabled),
-      headers_rows: mapToRows(rowsToMap((value?.header_config?.headers_rows as unknown as KeyValueRow[]) ?? [])),
+    login_request: {
+      enabled: Boolean(value?.login_request?.enabled),
+      protocol: value?.login_request?.protocol ?? fallback.login_request.protocol,
+      method: value?.login_request?.method ?? fallback.login_request.method,
+      url: value?.login_request?.url ?? "",
+      headers_rows: mapToRows(
+        rowsToMap((value?.login_request?.headers_rows as unknown as KeyValueRow[]) ?? []),
+      ) as unknown as TemplateDebugConfig["login_request"]["headers_rows"],
+      body_text: stringifyBody(value?.login_request?.body_text ?? "{}"),
+      extractions:
+        Array.isArray(value?.login_request?.extractions) && value.login_request.extractions.length
+          ? value.login_request.extractions.map((row) => ({
+              rowKey: row.rowKey || rowId(),
+              variable: row.variable ?? "",
+              path: row.path ?? "",
+            }))
+          : fallback.login_request.extractions,
     },
   };
 }
@@ -229,17 +245,19 @@ function resetForm(template?: ApiTemplate) {
   });
   headerRows.value = mapToRows(form.headers);
   paramRows.value = mapToRows(form.params);
-  debugHeaderRows.value = mapToRows(
-    rowsToMap((form.debug_config?.header_config?.headers_rows as unknown as KeyValueRow[]) ?? []),
-  );
   if (!headerRows.value.length) {
     addHeaderRow();
   }
   if (!paramRows.value.length) {
     addParamRow();
   }
-  if (!debugHeaderRows.value.length) {
-    debugHeaderRows.value = [{ id: rowId(), key: "", value: "" }];
+  if (!form.debug_config?.login_request.headers_rows.length) {
+    form.debug_config!.login_request.headers_rows = [
+      { rowKey: rowId(), key: "Content-Type", value: "application/json" },
+    ];
+  }
+  if (!form.debug_config?.login_request.extractions.length) {
+    form.debug_config!.login_request.extractions = [{ rowKey: rowId(), variable: "", path: "" }];
   }
   bodyText.value = stringifyBody(form.body);
   nextTick(() => {
@@ -471,8 +489,26 @@ function addParamRow() {
   paramRows.value.push({ id: rowId(), key: "", value: "" });
 }
 
-function addDebugHeaderRow() {
-  debugHeaderRows.value.push({ id: rowId(), key: "", value: "" });
+function addLoginHeaderRow() {
+  form.debug_config!.login_request.headers_rows.push({ rowKey: rowId(), key: "", value: "" });
+}
+
+function removeLoginHeaderRow(index: number) {
+  form.debug_config!.login_request.headers_rows.splice(index, 1);
+  if (!form.debug_config!.login_request.headers_rows.length) {
+    addLoginHeaderRow();
+  }
+}
+
+function addLoginExtractionRow() {
+  form.debug_config!.login_request.extractions.push({ rowKey: rowId(), variable: "", path: "" });
+}
+
+function removeLoginExtractionRow(index: number) {
+  form.debug_config!.login_request.extractions.splice(index, 1);
+  if (!form.debug_config!.login_request.extractions.length) {
+    addLoginExtractionRow();
+  }
 }
 
 function removeHeaderRow(rowId: string) {
@@ -487,17 +523,6 @@ function removeParamRow(rowId: string) {
   if (!paramRows.value.length) {
     addParamRow();
   }
-}
-
-function removeDebugHeaderRow(targetRowId: string) {
-  debugHeaderRows.value = debugHeaderRows.value.filter((item) => item.id !== targetRowId);
-  if (!debugHeaderRows.value.length) {
-    addDebugHeaderRow();
-  }
-}
-
-function toggleConfigPanel() {
-  configPanelExpanded.value = !configPanelExpanded.value;
 }
 
 function parseBody() {
@@ -528,9 +553,29 @@ function buildPayload() {
         encrypt_url: form.debug_config?.encryption?.encrypt_url ?? "",
         decrypt_url: form.debug_config?.encryption?.decrypt_url ?? "",
       },
-      header_config: {
-        enabled: Boolean(form.debug_config?.header_config?.enabled),
-        headers: rowsToMap(debugHeaderRows.value),
+      login_request: {
+        enabled: Boolean(form.debug_config?.login_request?.enabled),
+        protocol: form.debug_config?.login_request?.protocol ?? "http",
+        method: form.debug_config?.login_request?.method ?? "POST",
+        url: form.debug_config?.login_request?.url ?? "",
+        headers: rowsToMap((form.debug_config?.login_request?.headers_rows as unknown as KeyValueRow[]) ?? []),
+        body: (() => {
+          const text = (form.debug_config?.login_request?.body_text ?? "").trim();
+          if (!text) {
+            return {};
+          }
+          try {
+            return JSON.parse(text);
+          } catch {
+            return text;
+          }
+        })(),
+        extractions: (form.debug_config?.login_request?.extractions ?? [])
+          .map((row) => ({
+            variable: row.variable.trim(),
+            path: row.path.trim(),
+          }))
+          .filter((row) => row.variable || row.path),
       },
     },
     sort_order: form.sort_order,
@@ -559,9 +604,21 @@ function snapshotActiveTab() {
         encrypt_url: form.debug_config?.encryption?.encrypt_url ?? "",
         decrypt_url: form.debug_config?.encryption?.decrypt_url ?? "",
       },
-      header_config: {
-        enabled: Boolean(form.debug_config?.header_config?.enabled),
-        headers_rows: debugHeaderRows.value.map((row) => ({ key: row.key, value: row.value })),
+      login_request: {
+        enabled: Boolean(form.debug_config?.login_request?.enabled),
+        protocol: form.debug_config?.login_request?.protocol ?? "http",
+        method: form.debug_config?.login_request?.method ?? "POST",
+        url: form.debug_config?.login_request?.url ?? "",
+        headers_rows: (form.debug_config?.login_request?.headers_rows ?? []).map((row) => ({
+          key: row.key,
+          value: row.value,
+        })),
+        body_text: form.debug_config?.login_request?.body_text ?? "{}",
+        extractions: (form.debug_config?.login_request?.extractions ?? []).map((row) => ({
+          rowKey: row.rowKey,
+          variable: row.variable,
+          path: row.path,
+        })),
       },
     },
     tabKey: activeTabKey.value,
@@ -1149,95 +1206,110 @@ onBeforeUnmount(() => {
           <el-input v-model="form.url_path" size="small" class="url-input" placeholder="http:// 或 /api/path" />
         </div>
 
-        <div class="global-config-shell">
-          <button class="global-config-toggle" type="button" @click="toggleConfigPanel">
-            <span>接口配置</span>
-            <span class="global-config-toggle-icon" :class="{ expanded: configPanelExpanded }">
-              <el-icon><ArrowRight /></el-icon>
-            </span>
-          </button>
+        <el-tabs v-model="activeEditorTab" class="request-tabs">
+          <el-tab-pane label="调试" name="debug">
+            <div class="global-config-panel inline-panel">
+              <div class="global-config-content">
+                <div class="global-config-tab-panel global-config-stack">
+                  <div class="global-config-hint">调试按钮执行时，如果配置了登录态获取，会先登录提取变量，再替换请求头中的占位符后发起接口请求。</div>
 
-          <div v-if="configPanelExpanded" class="global-config-panel">
-            <div class="global-config-tabs" role="tablist" aria-label="Template config tabs">
-              <button class="global-config-tab" :class="{ active: activeConfigTab === 'basic' }" type="button" @click="activeConfigTab = 'basic'">基础配置</button>
-              <button class="global-config-tab" :class="{ active: activeConfigTab === 'debug' }" type="button" @click="activeConfigTab = 'debug'">调试配置</button>
-            </div>
-
-            <div class="global-config-content">
-              <div v-if="activeConfigTab === 'basic'" class="global-config-tab-panel">
-                <div class="config-grid">
-                  <div class="field-row inline">
-                    <label>超时(秒)</label>
-                    <el-input-number v-model="form.timeout" size="small" :min="1" :max="600" controls-position="right" />
-                  </div>
-                  <div class="field-row inline">
-                    <label>启用重试</label>
-                    <el-switch v-model="form.retry_enabled" />
-                  </div>
-                  <div class="field-row inline">
-                    <label>重试次数</label>
-                    <el-input-number v-model="form.retry_count" size="small" :min="0" :max="20" :disabled="!form.retry_enabled" controls-position="right" />
-                  </div>
-                </div>
-              </div>
-
-              <div v-else class="global-config-tab-panel global-config-stack">
-                <div class="global-config-hint">以下调试配置只对当前“调试”按钮生效，不影响测试用例运行。测试用例执行仍以全局配置和卡片配置为准。</div>
-
-                <div class="global-config-section-card">
-                  <div class="global-config-toolbar align-left">
-                    <label class="encryption-check compact-check">
-                      <input v-model="form.debug_config!.encryption.enabled" type="checkbox" />
-                      <span class="global-config-section-title">加解密配置</span>
-                    </label>
-                  </div>
-                  <div v-if="form.debug_config?.encryption.enabled" class="global-config-section-panel">
-                    <div class="global-config-inline-grid two-columns">
-                      <div class="global-config-inline-field">
-                        <span class="global-config-inline-label">加密URL</span>
-                        <input v-model="form.debug_config!.encryption.encrypt_url" class="text-field" placeholder="请输入加密URL" />
-                      </div>
-                      <div class="global-config-inline-field">
-                        <span class="global-config-inline-label">解密URL</span>
-                        <input v-model="form.debug_config!.encryption.decrypt_url" class="text-field" placeholder="请输入解密URL" />
+                  <div class="global-config-section-card">
+                    <div class="global-config-toolbar align-left">
+                      <label class="encryption-check compact-check">
+                        <input v-model="form.debug_config!.encryption.enabled" type="checkbox" />
+                        <span class="global-config-section-title">加解密配置</span>
+                      </label>
+                    </div>
+                    <div v-if="form.debug_config?.encryption.enabled" class="global-config-section-panel">
+                      <div class="global-config-form-row encryption-config-row">
+                        <span class="global-config-row-label">加密URL</span>
+                        <input v-model="form.debug_config!.encryption.encrypt_url" class="text-field global-config-row-control" placeholder="请输入加密URL" />
+                        <span class="global-config-row-label compact">解密URL</span>
+                        <input v-model="form.debug_config!.encryption.decrypt_url" class="text-field global-config-row-control" placeholder="请输入解密URL" />
                       </div>
                     </div>
                   </div>
-                </div>
+                  
+                  <div class="global-config-section-card">
+                    <div class="global-config-toolbar align-left">
+                      <label class="encryption-check compact-check">
+                        <input v-model="form.debug_config!.login_request.enabled" type="checkbox" />
+                        <span class="global-config-section-title">登录态获取</span>
+                      </label>
+                    </div>
+                    <div v-if="form.debug_config?.login_request.enabled" class="global-config-section-panel">
+                      <div class="global-config-stack">
+                        <div class="global-config-form-row">
+                          <span class="global-config-row-label">请求方式</span>
+                          <el-select v-model="form.debug_config!.login_request.method" class="env-select global-config-row-control global-config-method-control" size="small">
+                            <el-option v-for="method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']" :key="method" :label="method" :value="method" />
+                          </el-select>
+                          <span class="global-config-row-label compact">URL</span>
+                          <input v-model="form.debug_config!.login_request.url" class="text-field global-config-row-control" placeholder="请输入登录 URL" />
+                        </div>
 
-                <div class="global-config-section-card">
-                  <div class="global-config-toolbar align-left">
-                    <label class="encryption-check compact-check">
-                      <input v-model="form.debug_config!.header_config.enabled" type="checkbox" />
-                      <span class="global-config-section-title">请求头配置</span>
-                    </label>
-                  </div>
-                  <div v-if="form.debug_config?.header_config.enabled" class="global-config-section-panel">
-                    <div class="global-config-stack">
-                      <div v-for="row in debugHeaderRows" :key="row.id" class="global-config-kv-row">
-                        <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
-                        <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
-                        <div class="global-config-row-actions">
-                          <button class="tool-action text-action" type="button" @click="addDebugHeaderRow">+</button>
-                          <button class="tool-action danger text-action" type="button" @click="removeDebugHeaderRow(row.id)">-</button>
+                        <div class="global-config-form-row global-config-form-row-top">
+                          <span class="global-config-row-label">请求头</span>
+                          <div class="global-config-row-block">
+                            <div class="global-config-list-content">
+                              <div
+                                v-for="(row, index) in form.debug_config.login_request.headers_rows"
+                                :key="row.rowKey || `login-header-${index}`"
+                                class="global-config-kv-row"
+                              >
+                                <input v-model="row.key" class="tool-input config-input" placeholder="Header Name" />
+                                <input v-model="row.value" class="tool-input config-input" placeholder="Header Value" />
+                                <div class="global-config-row-actions">
+                                  <button class="row-icon add" type="button" @click="addLoginHeaderRow">+</button>
+                                  <button class="row-icon remove" type="button" @click="removeLoginHeaderRow(index)">-</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="global-config-form-row global-config-form-row-top">
+                          <span class="global-config-row-label">请求体</span>
+                          <div class="global-config-row-block">
+                            <el-input v-model="form.debug_config.login_request.body_text" type="textarea" :rows="4" resize="none" />
+                          </div>
+                        </div>
+
+                        <div class="global-config-form-row global-config-form-row-top">
+                          <span class="global-config-row-label">参数提取</span>
+                          <div class="global-config-row-block">
+                            <div class="global-config-list-content">
+                              <div
+                                v-for="(row, index) in form.debug_config.login_request.extractions"
+                                :key="row.rowKey || `login-extraction-${index}`"
+                                class="global-config-kv-row"
+                              >
+                                <input v-model="row.variable" class="tool-input config-input" placeholder="token" />
+                                <input v-model="row.path" class="tool-input config-input" placeholder="headers.Authorization or body.data.token" />
+                                <div class="global-config-row-actions">
+                                  <button class="row-icon add" type="button" @click="addLoginExtractionRow">+</button>
+                                  <button class="row-icon remove" type="button" @click="removeLoginExtractionRow(index)">-</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
+
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </el-tab-pane>
 
-        <el-tabs v-model="activeEditorTab" class="request-tabs">
           <el-tab-pane label="请求头" name="headers">
             <div class="kv-table">
               <div v-for="row in headerRows" :key="row.id" class="kv-row">
                 <el-input v-model="row.key" size="small" placeholder="Header名称" />
-                <el-input v-model="row.value" size="small" placeholder="Header值" />
+                <el-input v-model="row.value" size="small" placeholder="Header值，可使用 ${token}" />
                 <button class="row-icon add" @click="addHeaderRow">+</button>
-                <button class="row-icon remove" @click="removeHeaderRow(row.id)">−</button>
+                <button class="row-icon remove" @click="removeHeaderRow(row.id)">-</button>
               </div>
             </div>
           </el-tab-pane>
@@ -1820,31 +1892,7 @@ onBeforeUnmount(() => {
 }
 
 .global-config-panel {
-  border-top: 1px solid #e5eaf1;
   padding: 12px;
-}
-
-.global-config-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.global-config-tab {
-  position: relative;
-  border: 0;
-  border-radius: 8px;
-  padding: 7px 12px;
-  background: #f5f7fb;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.global-config-tab.active {
-  background: #eaf2ff;
-  color: #2563eb;
 }
 
 .global-config-content,
@@ -1901,6 +1949,45 @@ onBeforeUnmount(() => {
   margin-top: 12px;
 }
 
+.global-config-form-row {
+  display: grid;
+  grid-template-columns: 88px minmax(180px, 240px) 52px minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.encryption-config-row {
+  grid-template-columns: 88px minmax(0, 1fr) 88px minmax(0, 1fr);
+}
+
+.global-config-form-row-top {
+  align-items: start;
+}
+
+.global-config-row-label {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.global-config-row-label.compact {
+  text-align: right;
+}
+
+.global-config-row-control {
+  width: 100%;
+}
+
+.global-config-method-control {
+  min-width: 0;
+}
+
+.global-config-row-block {
+  grid-column: 2 / 5;
+  min-width: 0;
+}
+
 .global-config-inline-grid {
   display: grid;
   gap: 12px;
@@ -1923,11 +2010,32 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+@media (max-width: 960px) {
+  .global-config-form-row {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .global-config-row-label.compact {
+    text-align: left;
+  }
+
+  .global-config-row-block,
+  .global-config-form-row > .global-config-row-control:nth-child(4) {
+    grid-column: 2;
+  }
+}
+
 .global-config-kv-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+
+.global-config-list-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .global-config-row-actions {
@@ -1936,7 +2044,8 @@ onBeforeUnmount(() => {
 }
 
 .tool-input.config-input,
-.global-config-inline-field .text-field {
+.global-config-inline-field .text-field,
+.text-field.global-config-row-control {
   width: 100%;
   min-height: 32px;
   border: 1px solid #d7e1ec;
@@ -1949,7 +2058,8 @@ onBeforeUnmount(() => {
 }
 
 .tool-input.config-input:focus,
-.global-config-inline-field .text-field:focus {
+.global-config-inline-field .text-field:focus,
+.text-field.global-config-row-control:focus {
   border-color: #7aa2f7;
 }
 

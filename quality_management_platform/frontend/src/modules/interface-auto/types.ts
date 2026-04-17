@@ -51,9 +51,14 @@ export type TemplateDebugConfig = {
     encrypt_url: string;
     decrypt_url: string;
   };
-  header_config: {
+  login_request: {
     enabled: boolean;
+    protocol: string;
+    method: string;
+    url: string;
     headers_rows: GlobalRequestHeaderRow[];
+    body_text: string;
+    extractions: GlobalRequestExtractionRow[];
   };
 };
 
