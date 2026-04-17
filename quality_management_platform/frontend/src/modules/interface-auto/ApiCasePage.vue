@@ -2548,7 +2548,7 @@ onBeforeUnmount(() => {
 
         <div class="search-line">
           <el-icon><Search /></el-icon>
-          <input v-model="templateKeyword" class="search-input" placeholder="输入接口名称或描述..." />
+          <input v-model="templateKeyword" class="search-input" placeholder="搜索接口模板名称..." />
         </div>
 
         <el-tree
