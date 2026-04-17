@@ -20,6 +20,7 @@ const selectedTemplateId = ref<number | null>(null);
 const selectedNodeType = ref<"folder" | "template" | null>(null);
 const activeEditorTab = ref("body");
 const activeTabKey = ref("");
+const editorTabStates = reactive<Record<string, string>>({});
 const contextMenu = reactive({
   visible: false,
   x: 0,
@@ -231,11 +232,7 @@ function stringifyBody(value: unknown) {
 function formatDebugResponse(result: Record<string, unknown>) {
   const decryptedBody = result.decrypted_body;
   if (decryptedBody !== undefined && decryptedBody !== null && decryptedBody !== "") {
-    if (typeof decryptedBody === "string") {
-      return decryptedBody;
-    }
-    const message = extractResponseMessage(decryptedBody);
-    return message ?? JSON.stringify(decryptedBody, null, 2);
+    return typeof decryptedBody === "string" ? decryptedBody : JSON.stringify(decryptedBody, null, 2);
   }
 
   const responseBody = result.body;
@@ -264,9 +261,12 @@ function extractResponseMessage(value: unknown) {
   return null;
 }
 
+function restoreEditorTab(tabKey: string | null | undefined, fallback = "body") {
+  activeEditorTab.value = (tabKey && editorTabStates[tabKey]) || fallback;
+}
+
 function resetForm(template?: ApiTemplate) {
   resetting = true;
-  activeEditorTab.value = "body";
   const next = template ?? emptyTemplate(currentProjectId.value ?? 0, selectedFolderId.value);
   Object.assign(form, {
     id: next.id ?? undefined,
@@ -338,6 +338,7 @@ async function loadWorkspace() {
     folders.value = [];
     templates.value = [];
     openedTabs.value = [];
+    restoreEditorTab(null);
     resetForm(emptyTemplate(0, null));
     return;
   }
@@ -353,6 +354,7 @@ async function loadWorkspace() {
       const activeIndex = activeTabKey.value ? openedTabs.value.findIndex((item) => getTabKey(item) === activeTabKey.value) : -1;
       if (activeIndex !== -1) {
         openedTabs.value[activeIndex] = { ...latest, tabKey: activeTabKey.value };
+        restoreEditorTab(activeTabKey.value);
         resetForm(latest);
       } else {
         openTemplate(latest);
@@ -362,6 +364,7 @@ async function loadWorkspace() {
       if (!openedTabs.value.length) {
         selectedTemplateId.value = null;
         activeTabKey.value = "";
+        restoreEditorTab(null);
         resetForm(undefined);
       }
     }
@@ -390,6 +393,7 @@ function onTreeClick(node: TreeNode) {
     return;
   }
   selectedTemplateId.value = null;
+  restoreEditorTab(null);
   resetForm(emptyTemplate(currentProjectId.value ?? 0, node.folderId));
 }
 
@@ -415,6 +419,7 @@ function openTemplate(template: ApiTemplate) {
     openedTabs.value[existingIndex] = { ...template, tabKey: key };
   }
   activeTabKey.value = key;
+  restoreEditorTab(key);
   resetForm(template);
 }
 
@@ -945,6 +950,7 @@ async function confirmUnsavedTab(tabKey: string) {
 
 function removeTabWithoutConfirm(tabKey: string) {
   delete modifiedTabs[tabKey];
+  delete editorTabStates[tabKey];
   openedTabs.value = openedTabs.value.filter((item) => getTabKey(item) !== tabKey);
   if (activeTabKey.value === tabKey) {
     const next = openedTabs.value[0];
@@ -954,6 +960,7 @@ function removeTabWithoutConfirm(tabKey: string) {
       selectedTemplateId.value = null;
       selectedNodeType.value = null;
       activeTabKey.value = "";
+      restoreEditorTab(null);
       resetForm(undefined);
     }
   }
@@ -1090,6 +1097,12 @@ watch(form, markActiveModified, { deep: true });
 watch(headerRows, markActiveModified, { deep: true });
 watch(paramRows, markActiveModified, { deep: true });
 watch(bodyText, markActiveModified);
+watch(activeEditorTab, (value) => {
+  if (!activeTabKey.value) {
+    return;
+  }
+  editorTabStates[activeTabKey.value] = value;
+});
 
 onMounted(async () => {
   window.addEventListener("click", handleGlobalPointer);
@@ -1249,7 +1262,7 @@ onBeforeUnmount(() => {
         </div>
 
         <el-tabs v-model="activeEditorTab" class="request-tabs">
-          <el-tab-pane label="调试" name="debug">
+          <el-tab-pane label="调试配置" name="debug">
             <div class="global-config-panel inline-panel">
               <div class="global-config-content">
                 <div class="global-config-tab-panel global-config-stack">
@@ -1822,7 +1835,7 @@ onBeforeUnmount(() => {
 }
 
 .code-editor :deep(textarea) {
-  height: 310px;
+  height: 290px;
   font-family: Consolas, "Courier New", monospace;
   font-size: 12px;
   line-height: 1.7;
