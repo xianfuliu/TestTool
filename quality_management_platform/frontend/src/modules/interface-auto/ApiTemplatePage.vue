@@ -274,6 +274,9 @@ function onTreeClick(node: TreeNode) {
     openTemplateFromTree(node.template);
     return;
   }
+  if (activeTabKey.value && openedTabs.value.length) {
+    return;
+  }
   selectedTemplateId.value = null;
   resetForm(emptyTemplate(currentProjectId.value ?? 0, node.folderId));
 }
@@ -315,6 +318,27 @@ function syncOpenedTabs() {
     })
     .filter((item): item is ApiTemplate => Boolean(item))
     .map((item) => ({ ...item, tabKey: getTabKey(item) }));
+}
+
+function activateAdjacentTab(closedTabKey: string) {
+  const closingIndex = openedTabs.value.findIndex((item) => getTabKey(item) === closedTabKey);
+  const fallbackTab =
+    closingIndex === -1
+      ? null
+      : openedTabs.value[closingIndex + 1] ?? openedTabs.value[closingIndex - 1] ?? null;
+
+  openedTabs.value = openedTabs.value.filter((item) => getTabKey(item) !== closedTabKey);
+  delete modifiedTabs[closedTabKey];
+
+  if (fallbackTab) {
+    openTemplate(fallbackTab);
+    return;
+  }
+
+  selectedTemplateId.value = null;
+  selectedNodeType.value = null;
+  activeTabKey.value = "";
+  resetForm(undefined);
 }
 
 function closeOpenedTab(tabName: string) {
@@ -501,6 +525,7 @@ async function deleteTemplate() {
     createTemplate();
     return;
   }
+  const deletingTabKey = activeTabKey.value || getTabKey(form);
   await ElMessageBox.confirm(`确定删除接口模板「${form.name}」吗？`, "删除确认", {
     type: "warning",
     confirmButtonText: "删除",
@@ -508,8 +533,7 @@ async function deleteTemplate() {
   });
   await del(`/api/interface-auto/api-templates/${form.id}/`);
   ElMessage.success("模板已删除");
-  openedTabs.value = openedTabs.value.filter((item) => item.id !== form.id);
-  selectedTemplateId.value = null;
+  activateAdjacentTab(deletingTabKey);
   await loadWorkspace();
 }
 
