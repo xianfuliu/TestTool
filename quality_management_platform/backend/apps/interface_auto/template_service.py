@@ -184,19 +184,23 @@ def _normalize_debug_config(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else parse_json_value(value, {})
     encryption = raw.get("encryption") if isinstance(raw, dict) else {}
     login_request = raw.get("login_request") if isinstance(raw, dict) else {}
+    template_headers_rows = raw.get("template_headers_rows") if isinstance(raw, dict) else []
     return {
         "encryption": {
             "enabled": bool((encryption or {}).get("enabled")),
             "encrypt_url": str((encryption or {}).get("encrypt_url") or ""),
             "decrypt_url": str((encryption or {}).get("decrypt_url") or ""),
         },
+        "template_headers_rows": template_headers_rows if isinstance(template_headers_rows, list) else [],
         "login_request": {
             "enabled": bool((login_request or {}).get("enabled")),
             "protocol": str((login_request or {}).get("protocol") or "http"),
             "method": str((login_request or {}).get("method") or "POST").upper(),
             "url": str((login_request or {}).get("url") or ""),
             "headers": (login_request or {}).get("headers") if isinstance((login_request or {}).get("headers"), dict) else {},
+            "headers_rows": (login_request or {}).get("headers_rows") if isinstance((login_request or {}).get("headers_rows"), list) else [],
             "body": (login_request or {}).get("body") if (login_request or {}).get("body") not in (None, "") else {},
+            "body_text": (login_request or {}).get("body_text") if (login_request or {}).get("body_text") not in (None, "") else "",
             "extractions": (login_request or {}).get("extractions") if isinstance((login_request or {}).get("extractions"), list) else [],
         },
     }
@@ -226,6 +230,19 @@ def validate_template(payload: dict[str, Any], existing: dict[str, Any] | None =
     duplicate = fetch_one(duplicate_sql, duplicate_params)
     if duplicate and int(duplicate["id"]) != int(template_id or 0):
         raise ValueError("同一目录下已存在同名接口模板")
+    sort_order = int(payload.get("sort_order") or 0)
+    if existing is None and sort_order <= 0:
+        if folder_id is None:
+            max_sort = fetch_one(
+                "SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM api_templates WHERE project_id = %s AND folder_id IS NULL",
+                (project_id,),
+            )
+        else:
+            max_sort = fetch_one(
+                "SELECT COALESCE(MAX(sort_order), 0) AS max_sort FROM api_templates WHERE project_id = %s AND folder_id = %s",
+                (project_id, folder_id),
+            )
+        sort_order = int((max_sort or {}).get("max_sort") or 0) + 100
     return {
         "project_id": project_id,
         "folder_id": folder_id,
@@ -236,7 +253,7 @@ def validate_template(payload: dict[str, Any], existing: dict[str, Any] | None =
         "params": payload.get("params") or {},
         "body": payload.get("body") if payload.get("body") not in (None, "") else {},
         "description": payload.get("description", ""),
-        "sort_order": int(payload.get("sort_order") or 0),
+        "sort_order": sort_order,
         "timeout": max(1, int(payload.get("timeout") or 30)),
         "retry_enabled": bool(payload.get("retry_enabled", False)),
         "retry_count": max(0, int(payload.get("retry_count") or 0)),

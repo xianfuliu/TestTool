@@ -51,6 +51,7 @@ export type TemplateDebugConfig = {
     encrypt_url: string;
     decrypt_url: string;
   };
+  template_headers_rows?: GlobalRequestHeaderRow[];
   login_request: {
     enabled: boolean;
     protocol: string;

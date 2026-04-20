@@ -15,6 +15,7 @@ const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const searchText = ref("");
+const DEFAULT_RESPONSE_TEXT = "调试响应将显示在这里...";
 const projectPath = ref<number[]>([]);
 const selectedFolderId = ref<number | null>(null);
 const selectedTemplateId = ref<number | null>(null);
@@ -22,6 +23,7 @@ const selectedNodeType = ref<"folder" | "template" | null>(null);
 const activeEditorTab = ref("body");
 const activeTabKey = ref("");
 const editorTabStates = reactive<Record<string, string>>({});
+const responseTabStates = reactive<Record<string, string>>({});
 const contextMenu = reactive({
   visible: false,
   x: 0,
@@ -41,8 +43,8 @@ const templates = ref<ApiTemplate[]>([]);
 const headerRows = ref<KeyValueRow[]>([]);
 const paramRows = ref<KeyValueRow[]>([]);
 const bodyText = ref("{}");
-const bodyViewMode = ref<"tree" | "text">("tree");
-const responseText = ref("调试响应将显示在这里...");
+const bodyViewMode = ref<"tree" | "text">("text");
+const responseText = ref(DEFAULT_RESPONSE_TEXT);
 
 const form = reactive<ApiTemplate>(emptyTemplate(0, null));
 let resetting = false;
@@ -189,6 +191,7 @@ function createDefaultDebugConfig(): TemplateDebugConfig {
       encrypt_url: "",
       decrypt_url: "",
     },
+    template_headers_rows: [],
     login_request: {
       enabled: false,
       protocol: "http",
@@ -203,24 +206,38 @@ function createDefaultDebugConfig(): TemplateDebugConfig {
 
 function normalizeDebugConfig(value: ApiTemplate["debug_config"] | undefined): TemplateDebugConfig {
   const fallback = createDefaultDebugConfig();
+  const loginRequest = (value?.login_request ?? {}) as Record<string, unknown>;
+  const headerRows = Array.isArray(loginRequest.headers_rows)
+    ? (loginRequest.headers_rows as Array<KeyValueRow & { rowKey?: string }>)
+    : mapToRows((loginRequest.headers as JsonMap | undefined) ?? {});
+  const bodySource = loginRequest.body_text !== undefined ? loginRequest.body_text : loginRequest.body;
   return {
     encryption: {
       enabled: Boolean(value?.encryption?.enabled),
       encrypt_url: value?.encryption?.encrypt_url ?? "",
       decrypt_url: value?.encryption?.decrypt_url ?? "",
     },
+    template_headers_rows: Array.isArray(value?.template_headers_rows)
+      ? value.template_headers_rows.map((row) => ({
+          rowKey: row.rowKey || rowId(),
+          key: row.key ?? "",
+          value: row.value ?? "",
+        }))
+      : [],
     login_request: {
-      enabled: Boolean(value?.login_request?.enabled),
-      protocol: value?.login_request?.protocol ?? fallback.login_request.protocol,
-      method: value?.login_request?.method ?? fallback.login_request.method,
-      url: value?.login_request?.url ?? "",
-      headers_rows: mapToRows(
-        rowsToMap((value?.login_request?.headers_rows as unknown as KeyValueRow[]) ?? []),
-      ) as unknown as TemplateDebugConfig["login_request"]["headers_rows"],
-      body_text: stringifyBody(value?.login_request?.body_text ?? "{}"),
+      enabled: Boolean(loginRequest.enabled),
+      protocol: String(loginRequest.protocol ?? fallback.login_request.protocol),
+      method: String(loginRequest.method ?? fallback.login_request.method),
+      url: String(loginRequest.url ?? ""),
+      headers_rows: headerRows.map((row) => ({
+        rowKey: row.id || ("rowKey" in row ? row.rowKey : undefined) || rowId(),
+        key: row.key ?? "",
+        value: row.value ?? "",
+      })),
+      body_text: stringifyBody(bodySource ?? "{}"),
       extractions:
-        Array.isArray(value?.login_request?.extractions) && value.login_request.extractions.length
-          ? value.login_request.extractions.map((row) => ({
+        Array.isArray(loginRequest.extractions) && loginRequest.extractions.length
+          ? (loginRequest.extractions as TemplateDebugConfig["login_request"]["extractions"]).map((row) => ({
               rowKey: row.rowKey || rowId(),
               variable: row.variable ?? "",
               path: row.path ?? "",
@@ -283,6 +300,10 @@ function restoreEditorTab(tabKey: string | null | undefined, fallback = "body") 
   activeEditorTab.value = (tabKey && editorTabStates[tabKey]) || fallback;
 }
 
+function restoreResponse(tabKey: string | null | undefined) {
+  responseText.value = (tabKey && responseTabStates[tabKey]) || DEFAULT_RESPONSE_TEXT;
+}
+
 function resetForm(template?: ApiTemplate) {
   resetting = true;
   const next = template ?? emptyTemplate(currentProjectId.value ?? 0, selectedFolderId.value);
@@ -298,7 +319,13 @@ function resetForm(template?: ApiTemplate) {
     retry_count: next.retry_count ?? 3,
     debug_config: normalizeDebugConfig(next.debug_config),
   });
-  headerRows.value = mapToRows(form.headers);
+  headerRows.value = form.debug_config?.template_headers_rows?.length
+    ? form.debug_config.template_headers_rows.map((row) => ({
+        id: row.rowKey || rowId(),
+        key: row.key,
+        value: row.value,
+      }))
+    : mapToRows(form.headers);
   paramRows.value = mapToRows(form.params);
   if (!headerRows.value.length) {
     addHeaderRow();
@@ -315,6 +342,7 @@ function resetForm(template?: ApiTemplate) {
     form.debug_config!.login_request.extractions = [{ rowKey: rowId(), variable: "", path: "" }];
   }
   bodyText.value = stringifyBody(form.body);
+  bodyViewMode.value = "text";
   nextTick(() => {
     resetting = false;
   });
@@ -357,6 +385,7 @@ async function loadWorkspace() {
     templates.value = [];
     openedTabs.value = [];
     restoreEditorTab(null);
+    restoreResponse(null);
     resetForm(emptyTemplate(0, null));
     return;
   }
@@ -373,6 +402,7 @@ async function loadWorkspace() {
       if (activeIndex !== -1) {
         openedTabs.value[activeIndex] = { ...latest, tabKey: activeTabKey.value };
         restoreEditorTab(activeTabKey.value);
+        restoreResponse(activeTabKey.value);
         resetForm(latest);
       } else {
         openTemplate(latest);
@@ -383,6 +413,7 @@ async function loadWorkspace() {
         selectedTemplateId.value = null;
         activeTabKey.value = "";
         restoreEditorTab(null);
+        restoreResponse(null);
         resetForm(undefined);
       }
     }
@@ -438,6 +469,7 @@ function openTemplate(template: ApiTemplate) {
   }
   activeTabKey.value = key;
   restoreEditorTab(key);
+  restoreResponse(key);
   resetForm(template);
 }
 
@@ -473,6 +505,7 @@ function activateAdjacentTab(closedTabKey: string) {
   selectedTemplateId.value = null;
   selectedNodeType.value = null;
   activeTabKey.value = "";
+  restoreResponse(null);
   resetForm(undefined);
 }
 
@@ -535,6 +568,7 @@ function createTemplate() {
   const next = emptyTemplate(currentProjectId.value ?? 0, selectedFolderId.value);
   openedTabs.value.push(next);
   activeTabKey.value = getTabKey(next);
+  restoreResponse(activeTabKey.value);
   resetForm(next);
   nextTick(() => {
     document.querySelector<HTMLInputElement>(".template-name-input input")?.focus();
@@ -613,12 +647,22 @@ function buildPayload() {
         encrypt_url: form.debug_config?.encryption?.encrypt_url ?? "",
         decrypt_url: form.debug_config?.encryption?.decrypt_url ?? "",
       },
+      template_headers_rows: headerRows.value.map((row) => ({
+        rowKey: row.id,
+        key: row.key,
+        value: row.value,
+      })),
       login_request: {
         enabled: Boolean(form.debug_config?.login_request?.enabled),
         protocol: form.debug_config?.login_request?.protocol ?? "http",
         method: form.debug_config?.login_request?.method ?? "POST",
         url: form.debug_config?.login_request?.url ?? "",
         headers: rowsToMap((form.debug_config?.login_request?.headers_rows as unknown as KeyValueRow[]) ?? []),
+        headers_rows: (form.debug_config?.login_request?.headers_rows ?? []).map((row) => ({
+          rowKey: row.rowKey || rowId(),
+          key: row.key,
+          value: row.value,
+        })),
         body: (() => {
           const text = (form.debug_config?.login_request?.body_text ?? "").trim();
           if (!text) {
@@ -630,6 +674,7 @@ function buildPayload() {
             return text;
           }
         })(),
+        body_text: form.debug_config?.login_request?.body_text ?? "{}",
         extractions: (form.debug_config?.login_request?.extractions ?? [])
           .map((row) => ({
             variable: row.variable.trim(),
@@ -664,6 +709,11 @@ function snapshotActiveTab() {
         encrypt_url: form.debug_config?.encryption?.encrypt_url ?? "",
         decrypt_url: form.debug_config?.encryption?.decrypt_url ?? "",
       },
+      template_headers_rows: headerRows.value.map((row) => ({
+        rowKey: row.id,
+        key: row.key,
+        value: row.value,
+      })),
       login_request: {
         enabled: Boolean(form.debug_config?.login_request?.enabled),
         protocol: form.debug_config?.login_request?.protocol ?? "http",
@@ -804,6 +854,25 @@ async function renameFolder() {
   await loadWorkspace();
 }
 
+function getCopyTemplateName(source: ApiTemplate) {
+  const baseName = source.name.replace(/\s-\s副本(?:\s\d+)?$/, "");
+  const folderId = source.folder_id ?? null;
+  const existingNames = new Set(
+    templates.value
+      .filter((item) => (item.folder_id ?? null) === folderId)
+      .map((item) => item.name.trim()),
+  );
+  const firstName = `${baseName} - 副本`;
+  if (!existingNames.has(firstName)) {
+    return firstName;
+  }
+  let index = 2;
+  while (existingNames.has(`${baseName} - 副本 ${index}`)) {
+    index += 1;
+  }
+  return `${baseName} - 副本 ${index}`;
+}
+
 async function copyTemplate(template?: ApiTemplate) {
   const source = template ?? form;
   if (!currentProjectId.value || !source.id) {
@@ -812,8 +881,9 @@ async function copyTemplate(template?: ApiTemplate) {
   const payload = {
     ...source,
     id: undefined,
-    name: `${source.name} - 副本`,
+    name: getCopyTemplateName(source),
     project_id: currentProjectId.value,
+    sort_order: 0,
   };
   const result = await post<{ template: ApiTemplate }>("/api/interface-auto/api-templates/", payload);
   ElMessage.success("模板已复制");
@@ -969,6 +1039,7 @@ async function confirmUnsavedTab(tabKey: string) {
 function removeTabWithoutConfirm(tabKey: string) {
   delete modifiedTabs[tabKey];
   delete editorTabStates[tabKey];
+  delete responseTabStates[tabKey];
   openedTabs.value = openedTabs.value.filter((item) => getTabKey(item) !== tabKey);
   if (activeTabKey.value === tabKey) {
     const next = openedTabs.value[0];
@@ -979,6 +1050,7 @@ function removeTabWithoutConfirm(tabKey: string) {
       selectedNodeType.value = null;
       activeTabKey.value = "";
       restoreEditorTab(null);
+      restoreResponse(null);
       resetForm(undefined);
     }
   }
@@ -1074,8 +1146,14 @@ async function runTemplateDebug() {
   try {
     const result = await post<Record<string, unknown>>("/api/interface-auto/api-templates/debug/", buildPayload());
     responseText.value = formatDebugResponse(result);
+    if (activeTabKey.value) {
+      responseTabStates[activeTabKey.value] = responseText.value;
+    }
   } catch (error) {
     responseText.value = (error as Error).message;
+    if (activeTabKey.value) {
+      responseTabStates[activeTabKey.value] = responseText.value;
+    }
     ElMessage.error((error as Error).message);
   }
 }
