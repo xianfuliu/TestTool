@@ -15,6 +15,7 @@ import {
 } from "@element-plus/icons-vue";
 
 import { del, get, post, put } from "@/shared/api/client";
+import ExecutionLogViewer from "@/shared/components/ExecutionLogViewer.vue";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
 import apiToolIcon from "@/assets/interface-auto/tool-icons/api.png";
 import assertionToolIcon from "@/assets/interface-auto/tool-icons/assrt.png";
@@ -172,6 +173,7 @@ const selectedCaseNodeId = ref("");
 const selectedTemplateNodeId = ref("");
 const logDialogVisible = ref(false);
 const logLines = ref<string[]>([]);
+const executionLog = ref<Record<string, unknown> | null>(null);
 const toolDialogVisible = ref(false);
 const toolDialogSaving = ref(false);
 const toolDialogKind = ref<ToolDialogKind>("generic");
@@ -1877,7 +1879,9 @@ async function runCase() {
       case_name: string;
       message: string;
       steps: Array<{ step_order: number; step_name: string; status: string; message?: string }>;
+      execution_log?: Record<string, unknown>;
     }>(`/api/interface-auto/cases/${caseId}/execute/`, buildCasePayload(normalizeCase(form)));
+    executionLog.value = result.execution_log ?? null;
     logLines.value = [
       `用例：${result.case_name}`,
       result.message,
@@ -3122,10 +3126,8 @@ onBeforeUnmount(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="logDialogVisible" title="执行日志" width="760px">
-      <div class="log-panel">
-        <pre>{{ logLines.join("\n") || "暂无执行日志" }}</pre>
-      </div>
+    <el-dialog v-model="logDialogVisible" title="执行日志" width="980px" class="execution-log-dialog">
+      <ExecutionLogViewer :log="executionLog" :fallback-lines="logLines" />
     </el-dialog>
   </div>
 </template>
