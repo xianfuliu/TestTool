@@ -193,6 +193,7 @@ const toolForm = reactive({
   method: "GET",
   url: "",
   timeout: 30,
+  useGlobalEncryption: false,
   headersText: "{\n  \n}",
   bodyText: "{\n  \n}",
   database: "",
@@ -935,6 +936,7 @@ function resetToolForm() {
   toolForm.method = "GET";
   toolForm.url = "";
   toolForm.timeout = 30;
+  toolForm.useGlobalEncryption = false;
   toolForm.headersText = "{}";
   toolForm.bodyText = "{}";
   toolForm.database = "";
@@ -983,6 +985,7 @@ function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
     toolForm.method = String(config.method ?? "GET");
     toolForm.url = String(config.url ?? "");
     toolForm.timeout = Number(config.timeout ?? 30) || 30;
+    toolForm.useGlobalEncryption = Boolean(config.use_global_encryption ?? config.useGlobalEncryption ?? false);
     const rawHeaders =
       typeof config.headers === "string"
         ? (() => {
@@ -1155,6 +1158,34 @@ function updateToolPriorities(map: CaseToolMap) {
   });
 }
 
+function getGlobalEncryptionConfigIssue() {
+  if (!form.enable_encryption) {
+    return "请先启用用例全局加解密配置";
+  }
+  if (!form.encrypt_url.trim() || !form.decrypt_url.trim()) {
+    return "请先完整配置全局加密URL和解密URL";
+  }
+  return "";
+}
+
+function validateGlobalEncryptionForHttpTool() {
+  const issue = getGlobalEncryptionConfigIssue();
+  if (issue) {
+    ElMessage.warning(issue);
+    return false;
+  }
+  return true;
+}
+
+function handleToolGlobalEncryptionChange(value: string | number | boolean) {
+  if (!Boolean(value)) {
+    return;
+  }
+  if (!validateGlobalEncryptionForHttpTool()) {
+    toolForm.useGlobalEncryption = false;
+  }
+}
+
 function createDefaultToolConfig(toolType: string, tab: ToolTabKey) {
   if (toolType === "http_request") {
     return {
@@ -1164,6 +1195,7 @@ function createDefaultToolConfig(toolType: string, tab: ToolTabKey) {
         method: "GET",
         url: "",
         timeout: 30,
+        use_global_encryption: false,
         headers: {},
         body: {},
         extractions: [{ variable: "", path: "" }],
@@ -1240,6 +1272,9 @@ function saveToolDialog() {
         ElMessage.warning("请输入请求 URL");
         return;
       }
+      if (toolForm.useGlobalEncryption && !validateGlobalEncryptionForHttpTool()) {
+        return;
+      }
       const headerEntries = toolHeaderRows.value
         .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
         .filter((row) => row.key || row.value);
@@ -1265,6 +1300,7 @@ function saveToolDialog() {
         method: toolForm.method,
         url: toolForm.url.trim(),
         timeout: Number(toolForm.timeout) || 30,
+        use_global_encryption: toolForm.useGlobalEncryption,
         headers,
         body,
         extractions: extractionRows,
@@ -2235,8 +2271,9 @@ function handleGlobalEncryptionChange(event: Event) {
   const checked = (event.target as HTMLInputElement).checked;
   form.enable_encryption = checked;
   if (!checked) {
-    form.encrypt_url = "";
-    form.decrypt_url = "";
+    if (toolDialogVisible.value && toolDialogKind.value === "http_request") {
+      toolForm.useGlobalEncryption = false;
+    }
   }
   syncAllStepEncryptionStatus(checked);
   markActiveModified();
@@ -3009,13 +3046,13 @@ onBeforeUnmount(() => {
       @closed="handleToolDialogClosed"
     >
       <div class="step-tool-dialog-body">
-        <div class="tool-dialog-row">
+        <div class="tool-dialog-row name-row">
           <label>名称:</label>
           <input v-model="toolForm.name" class="tool-input dialog-input" placeholder="请输入工具名称" />
         </div>
 
         <template v-if="toolDialogKind === 'http_request'">
-          <div class="tool-dialog-grid">
+          <div class="tool-dialog-grid http-request-grid">
             <div class="tool-dialog-row compact">
               <label>请求方式:</label>
               <el-select v-model="toolForm.method" class="tool-dialog-select">
@@ -3027,18 +3064,24 @@ onBeforeUnmount(() => {
                 />
               </el-select>
             </div>
-            <div class="tool-dialog-row compact">
-              <label>超时时间:</label>
-              <el-input-number v-model="toolForm.timeout" :min="1" :max="300" />
+            <div class="tool-dialog-row">
+              <label>请求URL:</label>
+              <input v-model="toolForm.url" class="tool-input dialog-input" placeholder="请输入完整请求地址" />
             </div>
           </div>
-          <div class="tool-dialog-row">
-            <label>请求URL:</label>
-            <input v-model="toolForm.url" class="tool-input dialog-input" placeholder="请输入完整请求地址" />
+          <div class="tool-dialog-row timeout-row">
+            <label>超时时间:</label>
+            <el-input-number v-model="toolForm.timeout" :min="1" :max="300" />
+          </div>
+          <div class="tool-dialog-row tool-dialog-switch-row">
+            <label>加解密:</label>
+            <el-checkbox v-model="toolForm.useGlobalEncryption" @change="handleToolGlobalEncryptionChange">
+              使用全局加解密
+            </el-checkbox>
           </div>
           <el-tabs v-model="httpToolTab" class="tool-inner-tabs">
             <el-tab-pane label="请求头" name="headers">
-              <div class="tool-dialog-section embedded flat-row-section">
+              <div class="tool-dialog-section embedded flat-row-section http-config-panel">
                 <div v-for="(row, index) in toolHeaderRows" :key="row.rowKey" class="tool-config-row flat-row">
                   <input v-model="row.key" class="tool-input config-input" placeholder="Header名称" />
                   <input v-model="row.value" class="tool-input config-input wide" placeholder="Header值" />
@@ -3048,7 +3091,7 @@ onBeforeUnmount(() => {
               </div>
             </el-tab-pane>
             <el-tab-pane label="请求体" name="body">
-              <el-input v-model="toolForm.bodyText" type="textarea" :rows="9" resize="none" />
+              <el-input v-model="toolForm.bodyText" class="http-body-input" type="textarea" :rows="9" resize="none" />
             </el-tab-pane>
           </el-tabs>
           <div class="tool-dialog-labeled-section">
@@ -3082,7 +3125,7 @@ onBeforeUnmount(() => {
         <template v-else-if="toolDialogKind === 'parameter_extraction'">
           <div class="tool-dialog-section">
             <div class="tool-dialog-section-title">参数提取</div>
-            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row">
+            <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row parameter-row flat-row">
               <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
               <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
               <button class="row-icon add" title="新增" @click="insertToolRow(index)">+</button>
@@ -3808,7 +3851,7 @@ onBeforeUnmount(() => {
 
 .steps-scroller {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   min-width: 0;
   padding: 8px;
@@ -3865,13 +3908,19 @@ onBeforeUnmount(() => {
   transition: border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
 }
 
-@media (max-width: 1680px) {
+@media (max-width: 1580px) {
+  .steps-scroller {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1320px) {
   .steps-scroller {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 980px) {
   .steps-scroller {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -4227,6 +4276,10 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.tool-dialog-grid.http-request-grid {
+  grid-template-columns: minmax(210px, 240px) minmax(0, 1fr);
+}
+
 .tool-dialog-row {
   display: flex;
   align-items: center;
@@ -4242,6 +4295,28 @@ onBeforeUnmount(() => {
   flex: 0 0 74px;
   color: #334155;
   font-size: 13px;
+}
+
+.tool-dialog-switch-row :deep(.el-checkbox) {
+  height: 32px;
+}
+
+.name-row .dialog-input {
+  width: 260px;
+  flex: 0 0 260px;
+}
+
+.timeout-row {
+  width: fit-content;
+}
+
+.timeout-row :deep(.el-input-number) {
+  width: 160px;
+  flex: 0 0 auto;
+}
+
+.timeout-row :deep(.el-input-number .el-input) {
+  width: 160px;
 }
 
 .dialog-input {
@@ -4294,6 +4369,17 @@ onBeforeUnmount(() => {
   border: 1px solid #dbe3ed;
   border-radius: 10px;
   background: #f7fbff;
+}
+
+.http-config-panel {
+  height: 220px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.http-body-input :deep(.el-textarea__inner) {
+  height: 220px;
+  min-height: 220px;
 }
 
 .tool-inner-tabs {
@@ -4370,6 +4456,10 @@ onBeforeUnmount(() => {
 
 .tool-config-row.assertion-row {
   grid-template-columns: minmax(220px, 1fr) 88px minmax(140px, 1fr) 30px 30px;
+}
+
+.tool-config-row.parameter-row {
+  grid-template-columns: 180px minmax(220px, 1fr) 30px 30px;
 }
 
 .row-icon {

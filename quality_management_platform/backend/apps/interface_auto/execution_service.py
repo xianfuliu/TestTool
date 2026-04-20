@@ -142,6 +142,7 @@ def _make_log_line(
     message: Any,
     *,
     sub_scope: str = "",
+    subject: str = "",
     icon: str = "info",
     timestamp: Any = None,
 ) -> dict[str, Any]:
@@ -150,6 +151,7 @@ def _make_log_line(
         "level": str(level or "INFO").upper(),
         "scope": scope,
         "sub_scope": sub_scope,
+        "subject": subject,
         "icon": icon,
         "message": "" if message is None else str(message),
     }
@@ -157,13 +159,30 @@ def _make_log_line(
 
 def _infer_log_level(message: Any, default: str = "INFO") -> str:
     text = str(message or "").lower()
-    if any(keyword in text for keyword in ("error", "失败", "异常", "错误", "超时")):
+    if any(keyword in text for keyword in ("error", "失败", "异常", "错误", "超时", "未匹配")):
         return "ERROR"
-    if any(keyword in text for keyword in ("warn", "warning", "跳过", "未匹配")):
+    if any(keyword in text for keyword in ("warn", "warning", "跳过")):
         return "WARN"
     if "debug" in text:
         return "DEBUG"
     return default
+
+
+def _tool_type_label(tool: Any) -> str:
+    tool_type = str(_as_dict(tool).get("tool_type") or _as_dict(tool).get("type") or "").strip().lower()
+    if tool_type in {"http_request", "http"}:
+        return "HTTP"
+    if tool_type in {"sql_tool", "sql"}:
+        return "SQL"
+    if tool_type in {"parameter_extract", "parameter_extraction"}:
+        return "参数提取"
+    if tool_type == "python_script":
+        return "Python"
+    if tool_type == "data_prepare":
+        return "数据准备"
+    if tool_type == "global_tool":
+        return "全局工具"
+    return tool_type.upper() if tool_type else "工具"
 
 
 def _append_raw_log_lines(
@@ -173,6 +192,7 @@ def _append_raw_log_lines(
     timestamp: Any,
     scope: str,
     sub_scope: str = "",
+    subject: str = "",
     icon: str = "info",
 ) -> None:
     for item in _as_list(raw_logs):
@@ -182,6 +202,7 @@ def _append_raw_log_lines(
                 scope,
                 item,
                 sub_scope=sub_scope,
+                subject=subject,
                 icon=icon,
                 timestamp=timestamp,
             )
@@ -245,6 +266,7 @@ def _append_http_exchange_lines(
     timestamp: Any,
     scope: str,
     sub_scope: str = "",
+    subject: str = "",
 ) -> None:
     request_map = _as_dict(request_data)
     response_map = _as_dict(response_data)
@@ -257,6 +279,7 @@ def _append_http_exchange_lines(
                 scope,
                 f"请求: {method or '-'} {url or '-'}",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="request",
                 timestamp=timestamp,
             )
@@ -269,6 +292,7 @@ def _append_http_exchange_lines(
                 scope,
                 f"请求头: {_compact_log_value(request_headers)}",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="header",
                 timestamp=timestamp,
             )
@@ -280,6 +304,7 @@ def _append_http_exchange_lines(
                 scope,
                 f"请求参数: {_compact_log_value(request_map.get('params'))}",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="request",
                 timestamp=timestamp,
             )
@@ -291,6 +316,7 @@ def _append_http_exchange_lines(
                 scope,
                 f"请求体: {_compact_log_value(request_map.get('body'))}",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="request",
                 timestamp=timestamp,
             )
@@ -304,6 +330,7 @@ def _append_http_exchange_lines(
                 scope,
                 f"响应状态: {status_code}，耗时 {response_map.get('duration_ms') or 0}ms",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="response",
                 timestamp=timestamp,
             )
@@ -320,6 +347,7 @@ def _append_http_exchange_lines(
                 scope,
                 f"响应体: {_compact_log_value(response_body)}",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="response",
                 timestamp=timestamp,
             )
@@ -335,33 +363,56 @@ def _append_tool_detail_lines(
 ) -> None:
     tool_map = _as_dict(tool)
     tool_name = str(tool_map.get("name") or tool_map.get("tool_type") or "工具")
-    sub_scope = "" if scope == "断言" else tool_name
+    sub_scope = "" if scope == "断言" else _tool_type_label(tool_map)
+    subject = "" if scope == "断言" else tool_name
     level = "ERROR" if tool_map.get("status") == "failed" else "INFO"
+    raw_logs = _as_list(tool_map.get("logs"))
+    leading_logs = []
+    deferred_logs = []
+    for raw_log in raw_logs:
+        log_text = str(raw_log or "")
+        if any(keyword in log_text for keyword in ("响应提取", "参数提取")):
+            deferred_logs.append(raw_log)
+        else:
+            leading_logs.append(raw_log)
     lines.append(
         _make_log_line(
-            level,
+            "INFO",
             scope,
             f"执行断言: {tool_name}" if scope == "断言" else f"开始执行{scope}工具: {tool_name}",
             sub_scope=sub_scope,
+            subject=subject,
             icon="assert" if scope == "断言" else "tool",
             timestamp=timestamp,
         )
     )
     _append_raw_log_lines(
         lines,
-        tool_map.get("logs"),
+        leading_logs,
         timestamp=timestamp,
         scope=scope,
         sub_scope=sub_scope,
+        subject=subject,
         icon="assert" if scope == "断言" else "tool",
     )
-    _append_http_exchange_lines(
+    if scope != "断言":
+        _append_http_exchange_lines(
+            lines,
+            tool_map.get("request"),
+            tool_map.get("response"),
+            timestamp=timestamp,
+            scope=scope,
+            sub_scope=sub_scope,
+            subject=subject,
+        )
+    _append_raw_log_lines(
         lines,
-        tool_map.get("request"),
-        tool_map.get("response"),
+        deferred_logs,
         timestamp=timestamp,
         scope=scope,
         sub_scope=sub_scope,
+        subject=subject,
+        icon="assert" if scope == "断言" else "tool",
     )
     if tool_map.get("extractions") not in (None, "", {}, []):
         lines.append(
@@ -370,17 +421,19 @@ def _append_tool_detail_lines(
                 scope,
                 f"提取结果: {_compact_log_value(tool_map.get('extractions'))}",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="variable",
                 timestamp=timestamp,
             )
         )
-    if tool_map.get("assertions") not in (None, "", {}, []):
+    if scope != "断言" and tool_map.get("assertions") not in (None, "", {}, []):
         lines.append(
             _make_log_line(
-                level,
+                "INFO",
                 scope,
                 f"断言结果: {_compact_log_value(tool_map.get('assertions'))}",
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="assert",
                 timestamp=timestamp,
             )
@@ -391,13 +444,19 @@ def _append_tool_detail_lines(
         timestamp=timestamp,
         prefix=tool_name,
     )
-    if tool_map.get("error_message"):
+    error_message = str(tool_map.get("error_message") or "")
+    log_texts = [str(item or "") for item in raw_logs]
+    error_already_logged = any(error_message and error_message in log_text for log_text in log_texts)
+    if str(tool_map.get("failure_type") or "") == "extraction":
+        error_already_logged = error_already_logged or any("提取失败" in log_text for log_text in log_texts)
+    if error_message and not error_already_logged:
         lines.append(
             _make_log_line(
                 "ERROR",
                 scope,
-                tool_map.get("error_message"),
+                error_message,
                 sub_scope=sub_scope,
+                subject=subject,
                 icon="error",
                 timestamp=timestamp,
             )
@@ -595,15 +654,6 @@ def _build_compact_execution_log_lines(execution_log: dict[str, Any]) -> list[di
                 timestamp=ended_at or started_at,
             )
         )
-    lines.append(
-        _make_log_line(
-            "ERROR" if execution_log.get("status") == "failed" else "INFO",
-            "全局",
-            execution_log.get("message") or "执行完成",
-            icon="finish",
-            timestamp=ended_at or started_at,
-        )
-    )
     return _refine_log_line_times(lines)
 
 
@@ -1017,6 +1067,16 @@ def _execute_http_tool(
     encryption: EncryptionConfig,
     global_headers: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    use_global_encryption = bool(config.get("use_global_encryption") or config.get("useGlobalEncryption"))
+    request_encryption = (
+        encryption
+        if use_global_encryption
+        else EncryptionConfig(
+            enabled=False,
+            encrypt_url=encryption.encrypt_url,
+            decrypt_url=encryption.decrypt_url,
+        )
+    )
     result = execute_request_definition(
         RequestDefinition(
             protocol=str(config.get("protocol") or "http"),
@@ -1034,7 +1094,7 @@ def _execute_http_tool(
                 _as_dict(environment.get("headers")),
                 _as_dict(global_headers),
             ),
-            encryption=encryption,
+            encryption=request_encryption,
             allow_legacy_placeholders=True,
         ),
     )
@@ -1132,10 +1192,12 @@ def _execute_tool(
         )
         result["extracted"] = extracted
         result["extraction_details"] = extraction_details
-        if extracted:
-            logs.append(f"已提取变量: {', '.join(extracted.keys())}")
+        missing_extractions: list[dict[str, Any]] = []
         for detail in extraction_details:
-            status_text = "成功" if detail.get("matched") else "未匹配"
+            matched = bool(detail.get("matched"))
+            status_text = "成功" if matched else "失败"
+            if not matched:
+                missing_extractions.append(detail)
             logs.append(
                 f"响应提取{status_text}: {detail.get('variable') or '-'} <- {detail.get('resolved_path') or detail.get('path') or '-'}"
             )
@@ -1146,6 +1208,14 @@ def _execute_tool(
                 source_data=_extract_response_source(result),
                 logs=logs,
             )
+        if missing_extractions:
+            result["status"] = "failed"
+            missing_text = "，".join(
+                f"{detail.get('variable') or '-'} <- {detail.get('resolved_path') or detail.get('path') or '-'}"
+                for detail in missing_extractions
+            )
+            result["error_message"] = f"响应提取失败: {missing_text}"
+            result["failure_type"] = "extraction"
         return result, _extract_response_source(result), logs
 
     if tool_type == "sql_tool":
@@ -1159,27 +1229,29 @@ def _execute_tool(
     if tool_type in {"parameter_extract", "parameter_extraction"}:
         result = _execute_parameter_extraction_tool(tool, source_data, variables)
         extracted = _as_dict(result.get("extracted"))
+        missing_extractions: list[dict[str, Any]] = []
         for detail in _as_list(result.get("extraction_details")):
-            status_text = "成功" if _as_dict(detail).get("matched") else "未匹配"
+            detail_map = _as_dict(detail)
+            matched = bool(detail_map.get("matched"))
+            status_text = "成功" if matched else "失败"
+            if not matched:
+                missing_extractions.append(detail_map)
             logs.append(
-                f"参数提取{status_text}: {_as_dict(detail).get('variable') or '-'} <- {_as_dict(detail).get('resolved_path') or _as_dict(detail).get('path') or '-'}"
+                f"参数提取{status_text}: {detail_map.get('variable') or '-'} <- {detail_map.get('resolved_path') or detail_map.get('path') or '-'}"
             )
-        if extracted:
-            logs.append(f"参数提取完成: {', '.join(extracted.keys())}")
+        if missing_extractions:
+            result["status"] = "failed"
+            missing_text = "，".join(
+                f"{detail.get('variable') or '-'} <- {detail.get('resolved_path') or detail.get('path') or '-'}"
+                for detail in missing_extractions
+            )
+            result["error_message"] = f"参数提取失败: {missing_text}"
+            result["failure_type"] = "extraction"
         return result, source_data, logs
 
     if "assert" in tool_type:
         result = _execute_assertion_tool(tool, source_data, variables)
         assertion_results = _as_list(_as_dict(result.get("body")).get("results"))
-        for detail in assertion_results:
-            assertion = _as_dict(detail)
-            logs.append(
-                "断言字段: "
-                f"{assertion.get('field') or '-'} {assertion.get('operator') or '-'} "
-                f"期望 {_short_log_value(assertion.get('expected'))}，"
-                f"实际 {_short_log_value(assertion.get('actual'))}，"
-                f"结果 {'通过' if assertion.get('passed') else '失败'}"
-            )
         if result.get("status") == "failed":
             failed = next((item for item in assertion_results if not _as_dict(item).get("passed")), {})
             failed_detail = _as_dict(failed)
@@ -1190,7 +1262,15 @@ def _execute_tool(
                 source_data=source_data,
                 logs=logs,
             )
-        logs.append("断言通过")
+        if len(assertion_results) == 1:
+            passed_detail = _as_dict(assertion_results[0])
+            logs.append(
+                f"断言成功: {passed_detail.get('field')} {passed_detail.get('operator')} "
+                f"期望 {_short_log_value(passed_detail.get('expected'))}，"
+                f"实际 {_short_log_value(passed_detail.get('actual'))}"
+            )
+        else:
+            logs.append(f"断言成功: {len(assertion_results)} 条规则全部通过")
         return result, source_data, logs
 
     raise ValueError(f"暂不支持 {tool_type} 工具执行")
@@ -1214,6 +1294,7 @@ def _build_tool_log_detail(
         "tool_type": tool.get("tool_type") or tool.get("type"),
         "summary": tool.get("summary") or "",
         "status": status,
+        "failure_type": result.get("failure_type") or "",
         "logs": tool_logs,
         "request": _log_value(result.get("request")),
         "response": {
@@ -1587,8 +1668,11 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                         encryption,
                         resolve_current_global_headers()[1],
                     )
-                    tool_status = "success"
-                    tool_error = ""
+                    result_status = str(_as_dict(tool_result).get("status") or "success").lower()
+                    tool_status = "failed" if result_status == "failed" else "success"
+                    tool_error = str(_as_dict(tool_result).get("error_message") or "")
+                    if tool_status == "failed" and not tool_error:
+                        tool_error = "工具执行失败"
                     is_assertion_failure = False
                 except AssertionExecutionError as exc:
                     tool_result = exc.result
@@ -1601,6 +1685,21 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                     tool_result = exc.result
                     next_source_data = exc.source_data if exc.source_data is not None else source_data
                     tool_logs = exc.logs
+                    tool_status = "failed"
+                    tool_error = str(exc)
+                    is_assertion_failure = False
+                except Exception as exc:
+                    if section not in {"pre_processing", "post_processing"}:
+                        raise
+                    tool_result = {
+                        "status": "failed",
+                        "error_message": str(exc),
+                        "body": {},
+                        "raw_body": "",
+                        "decrypted_body": {},
+                    }
+                    next_source_data = source_data
+                    tool_logs = [f"工具执行失败: {exc}"]
                     tool_status = "failed"
                     tool_error = str(exc)
                     is_assertion_failure = False
@@ -1631,6 +1730,10 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                 if tool_status == "failed":
                     if section == "assertions" and is_assertion_failure:
                         assertion_errors.append(tool_error)
+                        return next_source_data
+                    if section in {"pre_processing", "post_processing"}:
+                        return next_source_data
+                    if str(_as_dict(tool_result).get("failure_type") or "") == "extraction":
                         return next_source_data
                     raise ValueError(tool_error)
                 return next_source_data

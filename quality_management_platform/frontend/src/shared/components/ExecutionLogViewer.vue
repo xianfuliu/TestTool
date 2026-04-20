@@ -8,8 +8,19 @@ type NormalizedLogLine = {
   level: string;
   scope: string;
   subScope: string;
+  subject: string;
   icon: string;
   message: string;
+};
+
+type ToolSummaryItem = {
+  key: string;
+  label: string;
+  total: number;
+  failed: number;
+  skipped: number;
+  state: string;
+  text: string;
 };
 
 type NormalizedLogGroup = {
@@ -19,6 +30,8 @@ type NormalizedLogGroup = {
   scope: string;
   icon: string;
   title: string;
+  toolSummary: string;
+  toolStats: ToolSummaryItem[];
   summary: string;
   status: string;
   lines: NormalizedLogLine[];
@@ -100,11 +113,13 @@ function toggleGroup(group: NormalizedLogGroup) {
 
 function formatCopyLine(line: NormalizedLogLine) {
   const subScope = line.subScope ? ` [${line.subScope}]` : "";
-  return `[${line.time}] [${line.level}] [${line.scope}]${subScope} ${line.message}`;
+  const subject = line.subject ? ` [${line.subject}]` : "";
+  return `[${line.time}] [${line.level}] [${line.scope}]${subScope}${subject} ${line.message}`;
 }
 
 function formatCopyGroup(group: NormalizedLogGroup) {
-  return `${group.title} ${group.lines.length} 条日志 ${statusText(group.status)}`;
+  const toolSummary = group.toolSummary ? ` ${group.toolSummary}` : "";
+  return `${group.title}${toolSummary} ${group.lines.length} 条日志 ${statusText(group.status)}`;
 }
 
 function handleCopy(event: ClipboardEvent) {
@@ -114,22 +129,43 @@ function handleCopy(event: ClipboardEvent) {
   }
   const range = selection.getRangeAt(0);
   const root = event.currentTarget as HTMLElement;
-  const selectedLines = Array.from(root.querySelectorAll<HTMLElement>("[data-copy-text]"))
+  const intersectedElements = Array.from(root.querySelectorAll<HTMLElement>("[data-copy-text]"))
     .filter((element) => {
       try {
         return range.intersectsNode(element);
       } catch {
         return false;
       }
-    })
-    .map((element) => element.dataset.copyText || "")
-    .filter(Boolean);
+    });
 
+  if (!intersectedElements.length) {
+    return;
+  }
+  const selectedElements = intersectedElements.filter((element) => isElementContentsSelected(range, element));
+  if (!selectedElements.length || selectedElements.length !== intersectedElements.length) {
+    return;
+  }
+  const selectedLines = selectedElements.map((element) => element.dataset.copyText || "").filter(Boolean);
   if (!selectedLines.length) {
     return;
   }
   event.preventDefault();
   event.clipboardData?.setData("text/plain", selectedLines.join("\n"));
+}
+
+function isElementContentsSelected(selectionRange: Range, element: HTMLElement) {
+  const elementRange = document.createRange();
+  elementRange.selectNodeContents(element);
+  try {
+    return (
+      selectionRange.compareBoundaryPoints(Range.START_TO_START, elementRange) <= 0 &&
+      selectionRange.compareBoundaryPoints(Range.END_TO_END, elementRange) >= 0
+    );
+  } catch {
+    return false;
+  } finally {
+    elementRange.detach();
+  }
 }
 
 function selectWholeLogLineOnTripleClick(event: MouseEvent) {
@@ -287,9 +323,22 @@ function normalizeLine(line: LogRecord): NormalizedLogLine {
     level,
     scope: text(line.scope ?? line.owner ?? line.category, "全局"),
     subScope: text(line.sub_scope ?? line.subScope ?? line.subcategory, ""),
+    subject: text(line.subject ?? line.tool_name ?? line.toolName, ""),
     icon: text(line.icon, level === "ERROR" ? "error" : level === "WARN" ? "warning" : "info"),
     message: text(line.message ?? line.description ?? line.content, ""),
   };
+}
+
+function isSuccessInfoLine(line: NormalizedLogLine) {
+  return (
+    line.level === "INFO" &&
+    /^(响应提取成功|参数提取成功|断言成功):/.test(line.message) &&
+    !/(error|失败|异常|错误|超时)/i.test(line.message)
+  );
+}
+
+function logLineClasses(line: NormalizedLogLine) {
+  return [`level-${line.level.toLowerCase()}`, { "tone-success": isSuccessInfoLine(line) }];
 }
 
 function pushLine(
@@ -306,10 +355,34 @@ function pushLine(
       level: options.level || inferLevel(message),
       scope: options.scope || "全局",
       sub_scope: options.subScope || "",
+      subject: options.subject || "",
       icon: options.icon || "info",
       message,
     }),
   );
+}
+
+function toolTypeLabel(tool: LogRecord) {
+  const toolType = text(tool.tool_type ?? tool.type).toLowerCase();
+  if (toolType === "http_request" || toolType === "http") {
+    return "HTTP";
+  }
+  if (toolType === "sql_tool" || toolType === "sql") {
+    return "SQL";
+  }
+  if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
+    return "参数提取";
+  }
+  if (toolType === "python_script") {
+    return "Python";
+  }
+  if (toolType === "data_prepare") {
+    return "数据准备";
+  }
+  if (toolType === "global_tool") {
+    return "全局工具";
+  }
+  return text(toolType, "工具").toUpperCase();
 }
 
 function pushRawLines(
@@ -318,6 +391,23 @@ function pushRawLines(
   options: Partial<Omit<NormalizedLogLine, "message">>,
 ) {
   asArray(lines).forEach((line) => pushLine(target, line, { ...options, level: inferLevel(line) }));
+}
+
+function splitToolRawLogs(lines: unknown) {
+  const leading: unknown[] = [];
+  const deferred: unknown[] = [];
+  asArray(lines).forEach((line) => {
+    const content = text(line);
+    if (content.includes("断言字段")) {
+      return;
+    }
+    if (content.includes("响应提取") || content.includes("参数提取")) {
+      deferred.push(line);
+      return;
+    }
+    leading.push(line);
+  });
+  return { leading, deferred };
 }
 
 function pushExchangeLines(
@@ -398,26 +488,37 @@ function pushToolLines(
 ) {
   const tool = asRecord(toolItem);
   const toolName = text(tool.name ?? tool.tool_type, "工具");
-  const subScope = scope === "断言" ? "" : toolName;
+  const subScope = scope === "断言" ? "" : toolTypeLabel(tool);
+  const subject = scope === "断言" ? "" : toolName;
   const level = tool.status === "failed" ? "ERROR" : "INFO";
+  const rawLogs = splitToolRawLogs(tool.logs);
   pushLine(target, scope === "断言" ? `执行断言: ${toolName}` : `开始执行${scope}工具: ${toolName}`, {
     time,
     scope,
     subScope,
-    level,
+    subject,
+    level: "INFO",
     icon: scope === "断言" ? "assert" : "tool",
   });
-  pushRawLines(target, tool.logs, { time, scope, subScope, icon: scope === "断言" ? "assert" : "tool" });
-  pushExchangeLines(target, tool.request, tool.response, { time, scope, subScope });
-  if (hasValue(tool.extractions)) {
-    pushLine(target, `提取结果: ${compactValue(tool.extractions)}`, { time, scope, subScope, level: "INFO", icon: "variable" });
+  pushRawLines(target, rawLogs.leading, { time, scope, subScope, subject, icon: scope === "断言" ? "assert" : "tool" });
+  if (scope !== "断言") {
+    pushExchangeLines(target, tool.request, tool.response, { time, scope, subScope, subject });
   }
-  if (hasValue(tool.assertions)) {
-    pushLine(target, `断言结果: ${compactValue(tool.assertions)}`, { time, scope, subScope, level, icon: "assert" });
+  pushRawLines(target, rawLogs.deferred, { time, scope, subScope, subject, icon: scope === "断言" ? "assert" : "tool" });
+  if (hasValue(tool.extractions)) {
+    pushLine(target, `提取结果: ${compactValue(tool.extractions)}`, { time, scope, subScope, subject, level: "INFO", icon: "variable" });
+  }
+  if (scope !== "断言" && hasValue(tool.assertions)) {
+    pushLine(target, `断言结果: ${compactValue(tool.assertions)}`, { time, scope, subScope, subject, level: "INFO", icon: "assert" });
   }
   pushVariableChanges(target, tool.variable_changes, { time, scope: "变量池", icon: "variable" });
-  if (hasValue(tool.error_message)) {
-    pushLine(target, tool.error_message, { time, scope, subScope, level: "ERROR", icon: "error" });
+  const errorMessage = text(tool.error_message);
+  const rawLogText = [...rawLogs.leading, ...rawLogs.deferred].map((line) => text(line));
+  const errorAlreadyLogged = rawLogText.some((line) => errorMessage && line.includes(errorMessage));
+  const extractionErrorAlreadyLogged =
+    text(tool.failure_type) === "extraction" && rawLogText.some((line) => line.includes("提取失败"));
+  if (hasValue(errorMessage) && !errorAlreadyLogged && !extractionErrorAlreadyLogged) {
+    pushLine(target, tool.error_message, { time, scope, subScope, subject, level: "ERROR", icon: "error" });
   }
 }
 
@@ -427,6 +528,8 @@ function createGroup(input: {
   scope: string;
   lines: NormalizedLogLine[];
   status?: string;
+  toolSummary?: string;
+  toolStats?: ToolSummaryItem[];
   summary?: string;
   level?: string;
   icon?: string;
@@ -440,10 +543,52 @@ function createGroup(input: {
     scope: input.scope,
     icon: input.icon || statusIcon(status),
     title: input.title,
+    toolSummary: input.toolSummary || "",
+    toolStats: input.toolStats || [],
     summary: input.summary || statusText(status),
     status,
     lines,
   };
+}
+
+function toolSectionSummary(key: string, label: string, tools: unknown[]): ToolSummaryItem | null {
+  const total = tools.length;
+  if (!total) {
+    return null;
+  }
+  const failed = tools.filter((item) => text(asRecord(item).status) === "failed").length;
+  const skipped = tools.filter((item) => text(asRecord(item).status) === "skipped").length;
+  const state = failed ? "failed" : skipped ? "skipped" : "success";
+  const parts = [`${label} ${total} 个`];
+  if (failed) {
+    parts.push(`失败 ${failed}`);
+  }
+  if (skipped) {
+    parts.push(`跳过 ${skipped}`);
+  }
+  if (!failed && !skipped) {
+    parts.push("全部成功");
+  }
+  return {
+    key,
+    label,
+    total,
+    failed,
+    skipped,
+    state,
+    text: parts.join("，"),
+  };
+}
+
+function buildToolStats(step: LogRecord) {
+  return [
+    toolSectionSummary("pre", "前置", asArray(step.pre_processing)),
+    toolSectionSummary("post", "后置", asArray(step.post_processing)),
+  ].filter((item): item is ToolSummaryItem => Boolean(item));
+}
+
+function formatToolSummary(stats: ToolSummaryItem[]) {
+  return stats.map((item) => item.text).join(" · ");
 }
 
 function buildStructuredGroups(log: LogRecord, steps: unknown[]) {
@@ -459,6 +604,8 @@ function buildStructuredGroups(log: LogRecord, steps: unknown[]) {
     const stepName = text(step.step_name, "未命名步骤");
     const stepStatus = text(step.status, "");
     const stepSummary = text(step.summary ?? step.error_message, statusText(stepStatus));
+    const toolStats = buildToolStats(step);
+    const toolSummary = formatToolSummary(toolStats);
     if (stepStatus === "skipped" && stepSummary.includes("前序步骤失败")) {
       return;
     }
@@ -471,6 +618,8 @@ function buildStructuredGroups(log: LogRecord, steps: unknown[]) {
         title: `步骤 ${stepOrder}: ${stepName}`,
         scope: "步骤",
         status: stepStatus,
+        toolSummary,
+        toolStats,
         summary: stepSummary,
         lines,
         level: statusLevel(stepStatus),
@@ -561,12 +710,6 @@ function buildGlobalLines(log: LogRecord, startedAt: string, endedAt: string) {
       icon: "output",
     });
   }
-  pushLine(target, text(log.message, "执行完成"), {
-    time: endedAt,
-    scope: "全局",
-    level: log.status === "failed" ? "ERROR" : "INFO",
-    icon: "finish",
-  });
   return target;
 }
 
@@ -647,6 +790,20 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
         >
           <span class="step-toggle" :class="{ expanded: isExpanded(group) }" aria-hidden="true"></span>
           <span class="group-title">{{ group.title }}</span>
+          <span class="group-tool-summary" :class="{ empty: !group.toolStats.length }">
+            <span
+              v-for="item in group.toolStats"
+              :key="item.key"
+              class="tool-summary-pill"
+              :class="[`section-${item.key}`, `state-${item.state}`]"
+            >
+              <span class="tool-summary-name">{{ item.label }}</span>
+              <span class="tool-summary-count">{{ item.total }} 个</span>
+              <span v-if="item.failed" class="tool-summary-result danger">失败 {{ item.failed }}</span>
+              <span v-else-if="item.skipped" class="tool-summary-result muted">跳过 {{ item.skipped }}</span>
+              <span v-else class="tool-summary-result success">正常</span>
+            </span>
+          </span>
           <span class="group-meta">{{ group.lines.length }} 条日志</span>
           <span class="group-status" :class="`status-${group.status || 'pending'}`">{{ statusText(group.status) }}</span>
         </button>
@@ -656,7 +813,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
             v-for="(line, index) in group.lines"
             :key="index"
             class="log-line"
-            :class="`level-${line.level.toLowerCase()}`"
+            :class="logLineClasses(line)"
             :data-copy-text="formatCopyLine(line)"
             @click="selectWholeLogLineOnTripleClick"
           >
@@ -664,6 +821,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
             <span class="log-token level" :class="`level-${line.level.toLowerCase()}`">[{{ line.level }}]</span>
             <span class="log-token scope">[{{ line.scope }}]</span>
             <span v-if="line.subScope" class="log-token sub-scope">[{{ line.subScope }}]</span>
+            <span v-if="line.subject" class="log-token subject">[{{ line.subject }}]</span>
             <span class="line-icon" :class="`icon-${line.icon}`"></span>
             <span class="log-message">{{ line.message }}</span>
           </div>
@@ -710,7 +868,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   display: grid;
   width: 100%;
   min-height: 42px;
-  grid-template-columns: 20px minmax(260px, 1fr) auto auto;
+  grid-template-columns: 20px minmax(190px, 0.82fr) minmax(230px, 1.18fr) max-content max-content;
   align-items: center;
   column-gap: 8px;
   border: 1px solid #e1e9f4;
@@ -811,7 +969,8 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
 }
 
 .log-token.scope,
-.log-token.sub-scope {
+.log-token.sub-scope,
+.log-token.subject {
   color: #475569;
   font-weight: 600;
 }
@@ -848,8 +1007,99 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   white-space: nowrap;
 }
 
-.group-meta {
+.group-tool-summary {
+  display: flex;
+  min-width: 0;
+  min-height: 22px;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.group-tool-summary.empty {
+  visibility: hidden;
+}
+
+.tool-summary-pill {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 180px;
+  height: 22px;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #697386;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 20px;
+  padding: 0 8px 0 7px;
+}
+
+.tool-summary-pill::before {
+  width: 5px;
+  height: 5px;
   flex: 0 0 auto;
+  border-radius: 999px;
+  background: #94a3b8;
+  content: "";
+}
+
+.tool-summary-pill.section-pre::before {
+  background: #3b82f6;
+}
+
+.tool-summary-pill.section-post::before {
+  background: #0f9f7f;
+}
+
+.tool-summary-pill.state-failed {
+  border-color: #f1d4d4;
+  background: #fffafa;
+}
+
+.tool-summary-pill.state-skipped {
+  border-color: #f4dfb7;
+  background: #fffaf0;
+}
+
+.tool-summary-name {
+  flex: 0 0 auto;
+  color: #475569;
+  font-weight: 650;
+}
+
+.tool-summary-count,
+.tool-summary-result {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-summary-count {
+  color: #8792a2;
+}
+
+.tool-summary-result.success {
+  color: #168a4a;
+}
+
+.tool-summary-result.danger {
+  color: #d92d20;
+  font-weight: 650;
+}
+
+.tool-summary-result.muted {
+  color: #b76e00;
+}
+
+.group-meta {
+  width: max-content;
+  justify-self: end;
   border-radius: 999px;
   background: #f1f5f9;
   color: #667085;
@@ -860,7 +1110,8 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
 }
 
 .group-status {
-  flex: 0 0 auto;
+  width: max-content;
+  justify-self: end;
   min-width: 36px;
   border-radius: 999px;
   font-size: 12px;
@@ -893,6 +1144,16 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
 .log-message {
   flex: 0 0 auto;
   color: #111827;
+}
+
+.log-line.tone-success .log-message {
+  color: #168a4a;
+  font-weight: 700;
+}
+
+.log-line.tone-success .line-icon {
+  background: #16a34a;
+  border-radius: 50%;
 }
 
 .log-line.level-warn .log-message {
