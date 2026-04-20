@@ -498,6 +498,19 @@ function mapToHeaderRows(value: unknown, fallback?: Array<{ key: string; value: 
   return entries.map(([key, rawValue]) => createHeaderRow(key, String(rawValue ?? "")));
 }
 
+function normalizeHeaderRows(value: unknown, fallback?: Array<{ key: string; value: string }>) {
+  if (Array.isArray(value)) {
+    const rows = value.map((item) => {
+      const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      return createHeaderRow(String(row.key ?? ""), String(row.value ?? ""));
+    });
+    if (rows.length) {
+      return rows;
+    }
+  }
+  return mapToHeaderRows(value, fallback);
+}
+
 function headerRowsToMap(rows: Array<{ key: string; value: string }>): JsonMap {
   const result: JsonMap = {};
   rows.forEach((row) => {
@@ -568,13 +581,18 @@ function normalizeGlobalRequestConfig(value: unknown): CaseGlobalRequestConfig {
       protocol: String(loginRequest.protocol ?? "http"),
       method: String(loginRequest.method ?? "POST"),
       url: String(loginRequest.url ?? ""),
-      headers_rows: mapToHeaderRows(loginRequest.headers, [{ key: "Content-Type", value: "application/json" }]),
-      body_text: stringifyBody(loginRequest.body),
+      headers_rows: normalizeHeaderRows(loginRequest.headers_rows ?? loginRequest.headers, [
+        { key: "Content-Type", value: "application/json" },
+      ]),
+      body_text:
+        "body_text" in loginRequest
+          ? String(loginRequest.body_text ?? "{\n  \n}")
+          : stringifyBody(loginRequest.body),
       extractions: normalizeExtractionRows(loginRequest.extractions),
     },
     header_config: {
       enabled: Boolean(headerConfig.enabled),
-      headers_rows: mapToHeaderRows(headerConfig.headers),
+      headers_rows: normalizeHeaderRows(headerConfig.headers_rows ?? headerConfig.headers),
     },
   };
 }
