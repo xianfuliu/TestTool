@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -41,6 +41,13 @@ class ToolExecutionError(ValueError):
         self.logs = logs or []
 
 
+class AssertionExecutionError(ToolExecutionError):
+    pass
+
+
+_INTERNAL_RUNTIME_VARIABLE_KEYS = {"current_step_name", "current_step_order"}
+
+
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
@@ -68,9 +75,541 @@ def _short_log_value(value: Any, limit: int = 240) -> str:
     return text if len(text) <= limit else f"{text[:limit]}..."
 
 
+def _compact_log_value(value: Any, limit: int = 1600) -> str:
+    if value in (None, ""):
+        return ""
+    normalised = _log_value(value)
+    if isinstance(normalised, str):
+        stripped = normalised.strip()
+        if not stripped:
+            return ""
+        try:
+            parsed = json.loads(stripped)
+        except (TypeError, ValueError):
+            text = " ".join(stripped.split())
+        else:
+            text = json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
+    else:
+        text = json.dumps(normalised, ensure_ascii=False, separators=(",", ":"))
+    return text if len(text) <= limit else f"{text[:limit]}..."
+
+
+def _format_log_time(value: Any = None) -> str:
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    if isinstance(value, str) and value.strip():
+        text = value.strip()
+        try:
+            return datetime.fromisoformat(text).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        except ValueError:
+            return text[:23] if len(text) > 19 else text[:19]
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+
+def _parse_log_time(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    for candidate in (text, text.replace(" ", "T", 1)):
+        try:
+            return datetime.fromisoformat(candidate)
+        except ValueError:
+            continue
+    for pattern in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(text[:26], pattern)
+        except ValueError:
+            continue
+    return None
+
+
+def _refine_log_line_times(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    previous: datetime | None = None
+    for line in lines:
+        current = _parse_log_time(line.get("time")) or datetime.now()
+        if previous is not None and current <= previous:
+            current = previous + timedelta(milliseconds=1)
+        line["time"] = _format_log_time(current)
+        previous = current
+    return lines
+
+
+def _make_log_line(
+    level: str,
+    scope: str,
+    message: Any,
+    *,
+    sub_scope: str = "",
+    icon: str = "info",
+    timestamp: Any = None,
+) -> dict[str, Any]:
+    return {
+        "time": _format_log_time(timestamp),
+        "level": str(level or "INFO").upper(),
+        "scope": scope,
+        "sub_scope": sub_scope,
+        "icon": icon,
+        "message": "" if message is None else str(message),
+    }
+
+
+def _infer_log_level(message: Any, default: str = "INFO") -> str:
+    text = str(message or "").lower()
+    if any(keyword in text for keyword in ("error", "失败", "异常", "错误", "超时")):
+        return "ERROR"
+    if any(keyword in text for keyword in ("warn", "warning", "跳过", "未匹配")):
+        return "WARN"
+    if "debug" in text:
+        return "DEBUG"
+    return default
+
+
+def _append_raw_log_lines(
+    lines: list[dict[str, Any]],
+    raw_logs: Any,
+    *,
+    timestamp: Any,
+    scope: str,
+    sub_scope: str = "",
+    icon: str = "info",
+) -> None:
+    for item in _as_list(raw_logs):
+        lines.append(
+            _make_log_line(
+                _infer_log_level(item),
+                scope,
+                item,
+                sub_scope=sub_scope,
+                icon=icon,
+                timestamp=timestamp,
+            )
+        )
+
+
+def _append_variable_change_lines(
+    lines: list[dict[str, Any]],
+    changes: Any,
+    *,
+    timestamp: Any,
+    prefix: str = "",
+) -> None:
+    change_map = _as_dict(changes)
+    if not _has_variable_changes(change_map):
+        return
+    label = f"{prefix} - " if prefix else ""
+    for key, value in _as_dict(change_map.get("added")).items():
+        if key in _INTERNAL_RUNTIME_VARIABLE_KEYS:
+            continue
+        lines.append(
+            _make_log_line(
+                "INFO",
+                "变量池",
+                f"{label}新增变量 {key} = {_compact_log_value(value)}",
+                icon="variable",
+                timestamp=timestamp,
+            )
+        )
+    for key, value in _as_dict(change_map.get("changed")).items():
+        if key in _INTERNAL_RUNTIME_VARIABLE_KEYS:
+            continue
+        lines.append(
+            _make_log_line(
+                "INFO",
+                "变量池",
+                f"{label}更新变量 {key}: {_compact_log_value(_as_dict(value).get('before'))} -> {_compact_log_value(_as_dict(value).get('after'))}",
+                icon="variable",
+                timestamp=timestamp,
+            )
+        )
+    for key, value in _as_dict(change_map.get("removed")).items():
+        if key in _INTERNAL_RUNTIME_VARIABLE_KEYS:
+            continue
+        lines.append(
+            _make_log_line(
+                "WARN",
+                "变量池",
+                f"{label}移除变量 {key}，原值 {_compact_log_value(value)}",
+                icon="variable",
+                timestamp=timestamp,
+            )
+        )
+
+
+def _append_http_exchange_lines(
+    lines: list[dict[str, Any]],
+    request_data: Any,
+    response_data: Any,
+    *,
+    timestamp: Any,
+    scope: str,
+    sub_scope: str = "",
+) -> None:
+    request_map = _as_dict(request_data)
+    response_map = _as_dict(response_data)
+    method = str(request_map.get("method") or "").upper()
+    url = str(request_map.get("url") or "")
+    if method or url:
+        lines.append(
+            _make_log_line(
+                "INFO",
+                scope,
+                f"请求: {method or '-'} {url or '-'}",
+                sub_scope=sub_scope,
+                icon="request",
+                timestamp=timestamp,
+            )
+        )
+    request_headers = _safe_headers_for_log(_as_dict(request_map.get("headers")))
+    if request_headers:
+        lines.append(
+            _make_log_line(
+                "INFO",
+                scope,
+                f"请求头: {_compact_log_value(request_headers)}",
+                sub_scope=sub_scope,
+                icon="header",
+                timestamp=timestamp,
+            )
+        )
+    if request_map.get("params") not in (None, "", {}, []):
+        lines.append(
+            _make_log_line(
+                "INFO",
+                scope,
+                f"请求参数: {_compact_log_value(request_map.get('params'))}",
+                sub_scope=sub_scope,
+                icon="request",
+                timestamp=timestamp,
+            )
+        )
+    if request_map.get("body") not in (None, "", {}, []):
+        lines.append(
+            _make_log_line(
+                "INFO",
+                scope,
+                f"请求体: {_compact_log_value(request_map.get('body'))}",
+                sub_scope=sub_scope,
+                icon="request",
+                timestamp=timestamp,
+            )
+        )
+    status_code = response_map.get("status_code")
+    if status_code is not None:
+        level = "ERROR" if int(status_code or 0) >= 400 else "INFO"
+        lines.append(
+            _make_log_line(
+                level,
+                scope,
+                f"响应状态: {status_code}，耗时 {response_map.get('duration_ms') or 0}ms",
+                sub_scope=sub_scope,
+                icon="response",
+                timestamp=timestamp,
+            )
+        )
+    response_body = response_map.get("decrypted_body")
+    if response_body in (None, ""):
+        response_body = response_map.get("body")
+    if response_body in (None, ""):
+        response_body = response_map.get("raw_body")
+    if response_body not in (None, ""):
+        lines.append(
+            _make_log_line(
+                "INFO",
+                scope,
+                f"响应体: {_compact_log_value(response_body)}",
+                sub_scope=sub_scope,
+                icon="response",
+                timestamp=timestamp,
+            )
+        )
+
+
+def _append_tool_detail_lines(
+    lines: list[dict[str, Any]],
+    tool: Any,
+    *,
+    timestamp: Any,
+    scope: str,
+) -> None:
+    tool_map = _as_dict(tool)
+    tool_name = str(tool_map.get("name") or tool_map.get("tool_type") or "工具")
+    sub_scope = "" if scope == "断言" else tool_name
+    level = "ERROR" if tool_map.get("status") == "failed" else "INFO"
+    lines.append(
+        _make_log_line(
+            level,
+            scope,
+            f"执行断言: {tool_name}" if scope == "断言" else f"开始执行{scope}工具: {tool_name}",
+            sub_scope=sub_scope,
+            icon="assert" if scope == "断言" else "tool",
+            timestamp=timestamp,
+        )
+    )
+    _append_raw_log_lines(
+        lines,
+        tool_map.get("logs"),
+        timestamp=timestamp,
+        scope=scope,
+        sub_scope=sub_scope,
+        icon="assert" if scope == "断言" else "tool",
+    )
+    _append_http_exchange_lines(
+        lines,
+        tool_map.get("request"),
+        tool_map.get("response"),
+        timestamp=timestamp,
+        scope=scope,
+        sub_scope=sub_scope,
+    )
+    if tool_map.get("extractions") not in (None, "", {}, []):
+        lines.append(
+            _make_log_line(
+                "INFO",
+                scope,
+                f"提取结果: {_compact_log_value(tool_map.get('extractions'))}",
+                sub_scope=sub_scope,
+                icon="variable",
+                timestamp=timestamp,
+            )
+        )
+    if tool_map.get("assertions") not in (None, "", {}, []):
+        lines.append(
+            _make_log_line(
+                level,
+                scope,
+                f"断言结果: {_compact_log_value(tool_map.get('assertions'))}",
+                sub_scope=sub_scope,
+                icon="assert",
+                timestamp=timestamp,
+            )
+        )
+    _append_variable_change_lines(
+        lines,
+        tool_map.get("variable_changes"),
+        timestamp=timestamp,
+        prefix=tool_name,
+    )
+    if tool_map.get("error_message"):
+        lines.append(
+            _make_log_line(
+                "ERROR",
+                scope,
+                tool_map.get("error_message"),
+                sub_scope=sub_scope,
+                icon="error",
+                timestamp=timestamp,
+            )
+        )
+
+
+def _build_compact_execution_log_lines(execution_log: dict[str, Any]) -> list[dict[str, Any]]:
+    lines: list[dict[str, Any]] = []
+    started_at = execution_log.get("started_at")
+    ended_at = execution_log.get("ended_at")
+    case_name = execution_log.get("case_name") or "未命名用例"
+    lines.append(
+        _make_log_line(
+            "INFO",
+            "全局",
+            f"开始执行用例: {case_name}",
+            icon="start",
+            timestamp=started_at,
+        )
+    )
+
+    global_setup = _as_dict(execution_log.get("global_setup"))
+    context = _as_dict(global_setup.get("context"))
+    encryption = _as_dict(context.get("encryption"))
+    if encryption:
+        enabled = "启用" if encryption.get("enabled") else "未启用"
+        lines.append(
+            _make_log_line(
+                "INFO",
+                "全局",
+                f"加解密配置: {enabled}，加密URL={encryption.get('encrypt_url') or '-'}，解密URL={encryption.get('decrypt_url') or '-'}",
+                sub_scope="加解密",
+                icon="lock" if encryption.get("enabled") else "unlock",
+                timestamp=started_at,
+            )
+        )
+    header_config = _as_dict(context.get("header_config"))
+    if header_config.get("enabled") or header_config.get("after_replace"):
+        lines.append(
+            _make_log_line(
+                "INFO",
+                "全局",
+                f"全局请求头: {_compact_log_value(header_config.get('after_replace') or header_config.get('before_replace'))}",
+                sub_scope="全局请求头",
+                icon="header",
+                timestamp=started_at,
+            )
+        )
+    login_request = _as_dict(global_setup.get("login_request"))
+    if login_request:
+        lines.append(
+            _make_log_line(
+                "INFO",
+                "全局",
+                "开始获取登录态",
+                sub_scope="登录态获取",
+                icon="start",
+                timestamp=started_at,
+            )
+        )
+        _append_http_exchange_lines(
+            lines,
+            login_request.get("request"),
+            login_request,
+            timestamp=started_at,
+            scope="全局",
+            sub_scope="登录态获取",
+        )
+        extracted = _as_dict(login_request.get("extracted_variables"))
+        if extracted:
+            lines.append(
+                _make_log_line(
+                    "INFO",
+                    "全局",
+                    f"登录态变量: {_compact_log_value(extracted)}",
+                    sub_scope="登录态获取",
+                    icon="variable",
+                    timestamp=started_at,
+                )
+            )
+    _append_raw_log_lines(
+        lines,
+        global_setup.get("logs"),
+        timestamp=started_at,
+        scope="全局",
+        sub_scope="登录态获取" if login_request else "",
+        icon="info",
+    )
+    _append_variable_change_lines(
+        lines,
+        global_setup.get("variable_changes"),
+        timestamp=started_at,
+        prefix="全局配置",
+    )
+    if global_setup.get("error"):
+        lines.append(
+            _make_log_line(
+                "ERROR",
+                "全局",
+                f"全局配置执行失败: {global_setup.get('error')}",
+                icon="error",
+                timestamp=ended_at or started_at,
+            )
+        )
+
+    for step in _as_list(execution_log.get("steps")):
+        step_map = _as_dict(step)
+        step_time = step_map.get("started_at") or started_at
+        step_label = f"步骤 {step_map.get('step_order') or '-'}"
+        step_name = step_map.get("step_name") or "未命名步骤"
+        lines.append(
+            _make_log_line(
+                "INFO",
+                "步骤",
+                f"开始执行 {step_label}: {step_name}",
+                icon="start",
+                timestamp=step_time,
+            )
+        )
+        for change_detail in _as_list(step_map.get("variable_changes")):
+            detail = _as_dict(change_detail)
+            if not str(detail.get("stage") or "").startswith("步骤变量初始化"):
+                continue
+            _append_variable_change_lines(
+                lines,
+                detail.get("changes"),
+                timestamp=step_time,
+                prefix=str(detail.get("stage") or ""),
+            )
+
+        for tool in _as_list(step_map.get("pre_processing")):
+            _append_tool_detail_lines(lines, tool, timestamp=step_time, scope="前置")
+
+        main_request = _as_dict(step_map.get("main_request"))
+        if main_request:
+            main_encryption = _as_dict(main_request.get("encryption"))
+            if main_encryption:
+                lines.append(
+                    _make_log_line(
+                        "INFO",
+                        "全局",
+                        f"步骤加解密: {'启用' if main_encryption.get('enabled') else '未启用'}",
+                        sub_scope="加解密",
+                        icon="lock" if main_encryption.get("enabled") else "unlock",
+                        timestamp=step_time,
+                    )
+                )
+            global_headers = _as_dict(main_request.get("global_headers"))
+            if global_headers.get("enabled") or global_headers.get("after_replace"):
+                lines.append(
+                    _make_log_line(
+                        "INFO",
+                        "全局",
+                        f"步骤全局请求头: {_compact_log_value(global_headers.get('after_replace') or global_headers.get('before_replace'))}",
+                        sub_scope="全局请求头",
+                        icon="header",
+                        timestamp=step_time,
+                    )
+                )
+            _append_http_exchange_lines(
+                lines,
+                main_request.get("after_replace"),
+                main_request.get("response"),
+                timestamp=step_time,
+                scope="步骤",
+            )
+
+        for section_key, scope in (
+            ("assertions", "断言"),
+            ("post_processing", "后置"),
+        ):
+            for tool in _as_list(step_map.get(section_key)):
+                _append_tool_detail_lines(lines, tool, timestamp=step_time, scope=scope)
+
+        step_status = step_map.get("status")
+        lines.append(
+            _make_log_line(
+                "ERROR" if step_status == "failed" else "WARN" if step_status == "skipped" else "INFO",
+                "步骤",
+                f"{step_label}执行{'失败' if step_status == 'failed' else '跳过' if step_status == 'skipped' else '成功'}: {step_map.get('summary') or ''}".strip(),
+                icon="error" if step_status == "failed" else "warning" if step_status == "skipped" else "success",
+                timestamp=step_map.get("ended_at") or step_time,
+            )
+        )
+
+    case_outputs = execution_log.get("case_outputs")
+    if case_outputs not in (None, "", {}, []):
+        lines.append(
+            _make_log_line(
+                "INFO",
+                "全局",
+                f"用例出参: {_compact_log_value(case_outputs)}",
+                sub_scope="用例出参",
+                icon="output",
+                timestamp=ended_at or started_at,
+            )
+        )
+    lines.append(
+        _make_log_line(
+            "ERROR" if execution_log.get("status") == "failed" else "INFO",
+            "全局",
+            execution_log.get("message") or "执行完成",
+            icon="finish",
+            timestamp=ended_at or started_at,
+        )
+    )
+    return _refine_log_line_times(lines)
+
+
 def _variable_changes(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
-    before_keys = set(before.keys())
-    after_keys = set(after.keys())
+    before_keys = set(before.keys()) - _INTERNAL_RUNTIME_VARIABLE_KEYS
+    after_keys = set(after.keys()) - _INTERNAL_RUNTIME_VARIABLE_KEYS
     added = {key: _log_value(after[key]) for key in sorted(after_keys - before_keys)}
     removed = {key: _log_value(before[key]) for key in sorted(before_keys - after_keys)}
     changed: dict[str, Any] = {}
@@ -644,7 +1183,7 @@ def _execute_tool(
         if result.get("status") == "failed":
             failed = next((item for item in assertion_results if not _as_dict(item).get("passed")), {})
             failed_detail = _as_dict(failed)
-            raise ToolExecutionError(
+            raise AssertionExecutionError(
                 f"断言失败: {failed_detail.get('field')} {failed_detail.get('operator')} "
                 f"期望 {failed_detail.get('expected')}，实际 {failed_detail.get('actual')}",
                 result=result,
@@ -865,6 +1404,25 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         report_end = datetime.now()
         case_outputs = _resolve_case_outputs(case_item, runtime_variables)
+        failed_execution_log = {
+            "request_id": case_request_id,
+            "case_name": case_item.get("name") or "未命名用例",
+            "status": "failed",
+            "message": f"全局配置执行失败: {exc}",
+            "started_at": _format_log_time(report_start),
+            "ended_at": _format_log_time(report_end),
+            "global_setup": {
+                "logs": global_setup_logs,
+                "login_request": global_login_result,
+                "variable_changes": global_variable_changes,
+                "context": global_context,
+                "error": str(exc),
+            },
+            "steps": [],
+            "case_outputs": case_outputs,
+            "final_variables": _log_value(runtime_variables),
+        }
+        failed_execution_log["lines"] = _build_compact_execution_log_lines(failed_execution_log)
         execute(
             """
             UPDATE test_reports
@@ -898,6 +1456,7 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                             "context": global_context,
                         },
                         "case_outputs": case_outputs,
+                        "execution_log": failed_execution_log,
                     }
                 ),
                 report_id,
@@ -918,28 +1477,14 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             "steps": [],
             "case_outputs": case_outputs,
             "resolved_variables": runtime_variables,
-            "execution_log": {
-                "request_id": case_request_id,
-                "case_name": case_item.get("name") or "未命名用例",
-                "status": "failed",
-                "global_setup": {
-                    "logs": global_setup_logs,
-                    "login_request": global_login_result,
-                    "variable_changes": global_variable_changes,
-                    "context": global_context,
-                    "error": str(exc),
-                },
-                "steps": [],
-                "case_outputs": case_outputs,
-                "final_variables": _log_value(runtime_variables),
-            },
+            "execution_log": failed_execution_log,
         }
 
     step_summaries: list[dict[str, Any]] = []
     execution_steps: list[dict[str, Any]] = []
     last_source_data: Any = None
     overall_status = "success"
-    blocked = False
+    hard_stop = False
     global_setup_attached = False
 
     ordered_steps = sorted(steps, key=lambda item: (int(item.get("step_order") or 0), int(item.get("id") or 0)))
@@ -954,6 +1499,8 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             "step_name": step.get("name") or "未命名步骤",
             "status": "pending",
             "summary": "",
+            "started_at": _format_log_time(step_start),
+            "ended_at": "",
             "logs": logs,
             "global_setup": None,
             "global_context": global_context,
@@ -967,40 +1514,6 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
         }
         error_message = ""
         status = "pending"
-
-        if blocked:
-            status = "skipped"
-            logs.append("前序步骤失败，当前步骤已跳过")
-            _insert_step_result(
-                report_id,
-                case_item.get("id"),
-                step,
-                status,
-                request_payload,
-                response_payload,
-                logs,
-                error_message,
-                step_start,
-                datetime.now(),
-            )
-            step_summaries.append(
-                {
-                    "step_id": step.get("id"),
-                    "step_order": step.get("step_order"),
-                    "step_name": step.get("name") or "",
-                    "status": status,
-                    "message": "前序步骤失败，已跳过",
-                }
-            )
-            step_detail.update(
-                {
-                    "status": status,
-                    "summary": "前序步骤失败，已跳过",
-                    "logs": logs,
-                }
-            )
-            execution_steps.append(step_detail)
-            continue
 
         if step.get("enabled", True) is False:
             continue
@@ -1018,6 +1531,7 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             global_setup_attached = True
 
         try:
+            assertion_errors: list[str] = []
             step_variables_before = dict(runtime_variables)
             runtime_variables.update(_as_dict(step.get("variables")))
             runtime_variables["current_step_order"] = step.get("step_order")
@@ -1075,12 +1589,21 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                     )
                     tool_status = "success"
                     tool_error = ""
+                    is_assertion_failure = False
+                except AssertionExecutionError as exc:
+                    tool_result = exc.result
+                    next_source_data = exc.source_data if exc.source_data is not None else source_data
+                    tool_logs = exc.logs
+                    tool_status = "failed"
+                    tool_error = str(exc)
+                    is_assertion_failure = True
                 except ToolExecutionError as exc:
                     tool_result = exc.result
                     next_source_data = exc.source_data if exc.source_data is not None else source_data
                     tool_logs = exc.logs
                     tool_status = "failed"
                     tool_error = str(exc)
+                    is_assertion_failure = False
 
                 variable_changes = _variable_changes(variables_before_tool, runtime_variables)
                 logs.extend(tool_logs)
@@ -1106,6 +1629,9 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                     )
                 )
                 if tool_status == "failed":
+                    if section == "assertions" and is_assertion_failure:
+                        assertion_errors.append(tool_error)
+                        return next_source_data
                     raise ValueError(tool_error)
                 return next_source_data
 
@@ -1193,11 +1719,17 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                 current_source_data = execute_step_tool("post_processing", tool, current_source_data)
 
             last_source_data = current_source_data
-            status = "success"
+            if assertion_errors:
+                status = "failed"
+                overall_status = "failed"
+                error_message = "；".join(assertion_errors)
+                logs.append(f"步骤断言失败: {error_message}")
+            else:
+                status = "success"
         except Exception as exc:
             status = "failed"
             overall_status = "failed"
-            blocked = True
+            hard_stop = True
             error_message = str(exc)
             logs.append(f"步骤失败: {error_message}")
 
@@ -1205,6 +1737,7 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             {
                 "status": status,
                 "summary": error_message or "执行成功",
+                "ended_at": _format_log_time(datetime.now()),
                 "logs": logs,
                 "error_message": error_message,
             }
@@ -1232,6 +1765,8 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             }
         )
         execution_steps.append(step_detail)
+        if hard_stop:
+            break
 
     passed_steps = sum(1 for item in step_summaries if item["status"] == "success")
     failed_steps = sum(1 for item in step_summaries if item["status"] == "failed")
@@ -1251,6 +1786,8 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
         "case_name": case_item.get("name") or "未命名用例",
         "status": overall_status,
         "message": message,
+        "started_at": _format_log_time(report_start),
+        "ended_at": _format_log_time(report_end),
         "global_setup": {
             "logs": global_setup_logs,
             "login_request": global_login_result,
@@ -1261,6 +1798,7 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
         "case_outputs": _log_value(case_outputs),
         "final_variables": _log_value(runtime_variables),
     }
+    execution_log["lines"] = _build_compact_execution_log_lines(execution_log)
     execute(
         """
         UPDATE test_reports
