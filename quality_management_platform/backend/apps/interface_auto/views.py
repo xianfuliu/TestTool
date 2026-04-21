@@ -138,6 +138,42 @@ def _list_cases(where_sql: str = "", params=()):
     return [_hydrate_case_row(row) for row in fetch_all(query, params)]
 
 
+def _normalize_case_name(value):
+    return str(value or "").strip()
+
+
+def _validate_case_folder(project_id, folder_id):
+    if not project_id:
+        raise ValueError("project_id 不能为空")
+    if not folder_id:
+        return
+    folder = fetch_one(
+        "SELECT id FROM case_folders WHERE id = %s AND project_id = %s",
+        (folder_id, project_id),
+    )
+    if not folder:
+        raise ValueError("目标目录不存在或不属于当前项目")
+
+
+def _validate_unique_case_name(project_id, folder_id, name, exclude_id=None):
+    normalized_name = _normalize_case_name(name)
+    if not normalized_name:
+        raise ValueError("用例名称不能为空")
+    where_sql = "project_id = %s AND LOWER(name) = LOWER(%s)"
+    params = [project_id, normalized_name]
+    if folder_id:
+        where_sql = f"{where_sql} AND folder_id = %s"
+        params.append(folder_id)
+    else:
+        where_sql = f"{where_sql} AND folder_id IS NULL"
+    if exclude_id:
+        where_sql = f"{where_sql} AND id <> %s"
+        params.append(exclude_id)
+    duplicate = fetch_one(f"SELECT id FROM test_cases WHERE {where_sql} LIMIT 1", tuple(params))
+    if duplicate:
+        raise ValueError("目标同级目录下已存在同名测试用例")
+
+
 def _write_case_steps(case_id: int, steps):
     execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
     for index, step in enumerate(steps or [], start=1):
@@ -391,15 +427,20 @@ def cases(request, payload=None):
             return _list_cases("WHERE project_id = %s", (project_id,))
         return _list_cases()
     item = payload or {}
+    project_id = get_int(item.get("project_id"))
+    folder_id = get_int(item.get("folder_id"))
+    name = _normalize_case_name(item.get("name"))
+    _validate_case_folder(project_id, folder_id)
+    _validate_unique_case_name(project_id, folder_id, name)
     case_id = execute(
         """
         INSERT INTO test_cases (project_id, folder_id, name, description, environment_id, global_vars, global_request_config_text, output_variables_text, enable_encryption, encrypt_url, decrypt_url, sort_order, created_by)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
-            item.get("project_id"),
-            item.get("folder_id"),
-            item.get("name"),
+            project_id,
+            folder_id,
+            name,
             item.get("description", ""),
             item.get("environment_id"),
             _json_text(item.get("global_vars")),
@@ -423,6 +464,23 @@ def case_detail(request, case_id: int, payload=None):
         return _get_case_detail(case_id)
     if request.method == "PUT":
         item = payload or {}
+        current = fetch_one("SELECT * FROM test_cases WHERE id = %s", (case_id,))
+        if not current:
+            raise ValueError("测试用例不存在")
+        project_id = get_int(item.get("project_id", current.get("project_id")))
+        folder_id = get_int(item.get("folder_id", current.get("folder_id")))
+        name = _normalize_case_name(item.get("name", current.get("name")))
+        _validate_case_folder(project_id, folder_id)
+        _validate_unique_case_name(project_id, folder_id, name, case_id)
+        global_vars = item.get("global_vars", _json_value(current.get("global_vars"), {}))
+        global_request_config = item.get(
+            "global_request_config",
+            _json_value(current.get("global_request_config_text"), {}),
+        )
+        output_variables = item.get(
+            "output_variables",
+            _json_value(current.get("output_variables_text"), []),
+        )
         updated = execute(
             """
             UPDATE test_cases
@@ -430,17 +488,17 @@ def case_detail(request, case_id: int, payload=None):
             WHERE id = %s
             """,
             (
-                item.get("name"),
-                item.get("description", ""),
-                item.get("folder_id"),
-                item.get("environment_id"),
-                _json_text(item.get("global_vars")),
-                _json_text(item.get("global_request_config")),
-                _empty_list_json(item.get("output_variables")),
-                item.get("enable_encryption", False),
-                item.get("encrypt_url", ""),
-                item.get("decrypt_url", ""),
-                item.get("sort_order", 0),
+                name,
+                item.get("description", current.get("description", "")),
+                folder_id,
+                item.get("environment_id", current.get("environment_id")),
+                _json_text(global_vars),
+                _json_text(global_request_config),
+                _empty_list_json(output_variables),
+                item.get("enable_encryption", current.get("enable_encryption", False)),
+                item.get("encrypt_url", current.get("encrypt_url", "")),
+                item.get("decrypt_url", current.get("decrypt_url", "")),
+                item.get("sort_order", current.get("sort_order", 0)),
                 case_id,
             ),
         )

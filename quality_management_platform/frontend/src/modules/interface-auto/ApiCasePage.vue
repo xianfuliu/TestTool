@@ -75,6 +75,14 @@ type CaseNavNode = {
   children?: CaseNavNode[];
 };
 
+type CaseTreeNodeInstance = {
+  data: CaseNavNode;
+  parent?: CaseTreeNodeInstance | null;
+  childNodes?: CaseTreeNodeInstance[];
+};
+
+type CaseDropType = "before" | "after" | "inner";
+
 type TemplateWorkspacePayload = {
   folders: ApiFolder[];
   templates: ApiTemplate[];
@@ -1869,18 +1877,7 @@ function createDuplicateCaseName(baseName: string, folderId: number | null, excl
 
 function buildCasePayload(caseItem: TestCaseRecord) {
   return {
-    project_id: caseItem.project_id,
-    folder_id: caseItem.folder_id,
-    name: caseItem.name.trim(),
-    description: caseItem.description ?? "",
-    environment_id: caseItem.environment_id,
-    global_vars: parseMap(caseItem.global_vars),
-    global_request_config: serializeGlobalRequestConfig(caseItem.global_request_config),
-    output_variables: outputVariablesToPayload(caseItem.output_variables),
-    enable_encryption: Boolean(caseItem.enable_encryption),
-    encrypt_url: caseItem.encrypt_url ?? "",
-    decrypt_url: caseItem.decrypt_url ?? "",
-    sort_order: caseItem.sort_order ?? getNextCaseSortOrder(caseItem.folder_id),
+    ...buildCaseMetaPayload(caseItem),
     steps: caseItem.steps.map((step, index) => ({
       id: step.id,
       api_template_id: step.api_template_id,
@@ -1894,6 +1891,23 @@ function buildCasePayload(caseItem: TestCaseRecord) {
       enable_encryption: Boolean(step.enable_encryption),
       use_global_headers: step.use_global_headers !== false,
     })),
+  };
+}
+
+function buildCaseMetaPayload(caseItem: TestCaseRecord) {
+  return {
+    project_id: caseItem.project_id,
+    folder_id: caseItem.folder_id,
+    name: caseItem.name.trim(),
+    description: caseItem.description ?? "",
+    environment_id: caseItem.environment_id,
+    global_vars: parseMap(caseItem.global_vars),
+    global_request_config: serializeGlobalRequestConfig(caseItem.global_request_config),
+    output_variables: outputVariablesToPayload(caseItem.output_variables),
+    enable_encryption: Boolean(caseItem.enable_encryption),
+    encrypt_url: caseItem.encrypt_url ?? "",
+    decrypt_url: caseItem.decrypt_url ?? "",
+    sort_order: caseItem.sort_order ?? getNextCaseSortOrder(caseItem.folder_id),
   };
 }
 
@@ -2097,107 +2111,138 @@ function handleProjectPathChange(value: number[]) {
   context.setProject(null);
 }
 
-function allowCaseDrop(
-  draggingNode: { data: CaseNavNode },
-  dropNode: { data: CaseNavNode },
-  dropType: "prev" | "inner" | "next",
-) {
+function allowCaseDrop(draggingNode: CaseTreeNodeInstance, dropNode: CaseTreeNodeInstance, dropType: "prev" | "inner" | "next") {
   const draggedCase = draggingNode.data.caseItem;
   if (draggingNode.data.type !== "case" || !draggedCase) {
     return false;
   }
-  const draggedTopLevelFolderId = getTopLevelFolderId(draggedCase.folder_id);
-  if (!draggedTopLevelFolderId) {
-    return false;
-  }
   if (dropType === "inner") {
-    if (dropNode.data.type !== "folder" || !dropNode.data.folderId) {
-      return false;
-    }
-    return getTopLevelFolderId(dropNode.data.folderId) === draggedTopLevelFolderId;
+    return dropNode.data.type === "folder" && Boolean(dropNode.data.folderId);
   }
-  if (dropNode.data.type !== "case" || !dropNode.data.caseItem) {
-    return false;
-  }
-  return getTopLevelFolderId(dropNode.data.caseItem.folder_id) === draggedTopLevelFolderId;
+  return dropNode.data.type === "case" || dropNode.data.type === "folder";
 }
 
-function allowCaseDrag(node: { data: CaseNavNode }) {
+function allowCaseDrag(node: CaseTreeNodeInstance) {
   return node.data.type === "case";
 }
 
-async function onCaseTreeDrop(
-  draggingNode: { data: CaseNavNode },
-  dropNode: { data: CaseNavNode },
-  dropType: "before" | "after" | "inner",
+function getCaseDropTargetFolderId(dropNode: CaseTreeNodeInstance, dropType: CaseDropType) {
+  if (dropType === "inner") {
+    return dropNode.data.type === "folder" ? dropNode.data.folderId ?? null : null;
+  }
+  if (dropNode.data.type === "folder") {
+    return dropNode.data.parentFolderId ?? null;
+  }
+  return dropNode.data.caseItem?.folder_id ?? null;
+}
+
+function getDroppedSiblingCaseIds(dropNode: CaseTreeNodeInstance, dropType: CaseDropType) {
+  const siblingNodes = dropType === "inner" ? dropNode.childNodes ?? [] : dropNode.parent?.childNodes ?? [];
+  return siblingNodes
+    .filter((node) => node.data.type === "case" && node.data.caseItem?.id)
+    .map((node) => node.data.caseItem!.id!);
+}
+
+function hasSameLevelCaseName(caseItem: TestCaseRecord, targetFolderId: number | null) {
+  const targetName = caseItem.name.trim().toLowerCase();
+  return cases.value.some(
+    (item) =>
+      item.id !== caseItem.id &&
+      item.project_id === caseItem.project_id &&
+      item.folder_id === targetFolderId &&
+      item.name.trim().toLowerCase() === targetName,
+  );
+}
+
+function buildDroppedCaseOrder(
+  draggedCase: TestCaseRecord,
+  targetFolderId: number | null,
+  dropNode: CaseTreeNodeInstance,
+  dropType: CaseDropType,
 ) {
+  const movedCase = normalizeCase({ ...draggedCase, folder_id: targetFolderId });
+  const existingCases = cases.value
+    .filter((item) => item.folder_id === targetFolderId && item.id !== draggedCase.id)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const caseMap = new Map<number, TestCaseRecord>();
+  [...existingCases, movedCase].forEach((item) => {
+    if (item.id) {
+      caseMap.set(item.id, item);
+    }
+  });
+
+  const droppedIds = getDroppedSiblingCaseIds(dropNode, dropType);
+  if (draggedCase.id && droppedIds.includes(draggedCase.id)) {
+    const ordered = droppedIds.map((id) => caseMap.get(id)).filter((item): item is TestCaseRecord => Boolean(item));
+    const missing = [...caseMap.values()].filter((item) => !ordered.some((orderedItem) => orderedItem.id === item.id));
+    return [...ordered, ...missing];
+  }
+
+  if (dropType !== "inner" && dropNode.data.caseItem?.id) {
+    const targetIndex = existingCases.findIndex((item) => item.id === dropNode.data.caseItem?.id);
+    existingCases.splice(targetIndex === -1 ? existingCases.length : targetIndex + (dropType === "after" ? 1 : 0), 0, movedCase);
+    return existingCases;
+  }
+  if (dropType !== "inner" && dropNode.data.type === "folder" && dropType === "before") {
+    return [movedCase, ...existingCases];
+  }
+  return [...existingCases, movedCase];
+}
+
+async function persistCaseOrder(folderId: number | null, orderedCases: TestCaseRecord[]) {
+  await Promise.all(
+    orderedCases.map((item, index) => {
+      if (!item.id) {
+        return Promise.resolve();
+      }
+      const nextCase = normalizeCase({ ...item, folder_id: folderId, sort_order: index + 1 });
+      return put(`/api/interface-auto/cases/${item.id}/`, buildCaseMetaPayload(nextCase));
+    }),
+  );
+}
+
+async function onCaseTreeDrop(draggingNode: CaseTreeNodeInstance, dropNode: CaseTreeNodeInstance, dropType: CaseDropType) {
   const draggedCase = draggingNode.data.caseItem;
   if (!draggedCase?.id) {
     await loadWorkspace();
     return;
   }
 
-  let targetFolderId: number | null = null;
-  let insertIndex = 0;
-  if (dropType === "inner") {
-    targetFolderId = dropNode.data.folderId ?? null;
-    insertIndex = cases.value.filter((item) => item.folder_id === targetFolderId && item.id !== draggedCase.id).length;
-  } else {
-    const targetCase = dropNode.data.caseItem;
-    targetFolderId = targetCase?.folder_id ?? null;
-    const siblings = cases.value
-      .filter((item) => item.folder_id === targetFolderId && item.id !== draggedCase.id)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-    const targetIndex = siblings.findIndex((item) => item.id === targetCase?.id);
-    insertIndex = targetIndex === -1 ? siblings.length : targetIndex + (dropType === "after" ? 1 : 0);
-  }
-
-  const draggedTopLevelFolderId = getTopLevelFolderId(draggedCase.folder_id);
-  const targetTopLevelFolderId = getTopLevelFolderId(targetFolderId);
-  if (!targetFolderId || !draggedTopLevelFolderId || draggedTopLevelFolderId !== targetTopLevelFolderId) {
-    ElMessage.warning("测试用例只能拖动到同一级目录树下的一级目录或子级目录中");
+  const sourceFolderId = draggedCase.folder_id ?? null;
+  const targetFolderId = getCaseDropTargetFolderId(dropNode, dropType);
+  if (dropType === "inner" && targetFolderId === null) {
     await loadWorkspace();
     return;
   }
 
-  const sameLevelDuplicate = cases.value.some(
-    (item) =>
-      item.id !== draggedCase.id &&
-      item.folder_id === targetFolderId &&
-      item.name.trim().toLowerCase() === draggedCase.name.trim().toLowerCase() &&
-      draggedCase.folder_id !== targetFolderId,
-  );
-  if (sameLevelDuplicate) {
+  if (hasSameLevelCaseName(draggedCase, targetFolderId)) {
     ElMessage.warning("目标同级目录下已存在同名测试用例");
     await loadWorkspace();
     return;
   }
 
-  const ordered = cases.value
-    .filter((item) => item.folder_id === targetFolderId && item.id !== draggedCase.id)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  ordered.splice(Math.max(0, insertIndex), 0, { ...draggedCase, folder_id: targetFolderId });
-
-  await Promise.all(
-    ordered.map((item, index) =>
-      put(`/api/interface-auto/cases/${item.id}/`, {
-        project_id: item.project_id,
-        folder_id: item.folder_id,
-        name: item.name,
-        description: item.description ?? "",
-        environment_id: item.environment_id,
-        global_vars: parseMap(item.global_vars),
-        enable_encryption: Boolean(item.enable_encryption),
-        encrypt_url: item.encrypt_url ?? "",
-        decrypt_url: item.decrypt_url ?? "",
-        sort_order: index + 1,
-      }),
-    ),
-  );
+  const targetOrderedCases = buildDroppedCaseOrder(draggedCase, targetFolderId, dropNode, dropType);
+  await persistCaseOrder(targetFolderId, targetOrderedCases);
+  if (sourceFolderId !== targetFolderId) {
+    const sourceOrderedCases = cases.value
+      .filter((item) => item.folder_id === sourceFolderId && item.id !== draggedCase.id)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    await persistCaseOrder(sourceFolderId, sourceOrderedCases);
+  }
 
   if (form.id === draggedCase.id) {
     form.folder_id = targetFolderId;
+    form.sort_order = targetOrderedCases.findIndex((item) => item.id === draggedCase.id) + 1;
   }
+  openedTabs.value = openedTabs.value.map((item) =>
+    item.id === draggedCase.id
+      ? normalizeCase({
+          ...item,
+          folder_id: targetFolderId,
+          sort_order: targetOrderedCases.findIndex((caseItem) => caseItem.id === draggedCase.id) + 1,
+        })
+      : item,
+  );
   await loadWorkspace();
   selectedCaseNodeId.value = `case-${draggedCase.id}`;
 }
