@@ -156,6 +156,28 @@ SCHEMA_SQL = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
+    CREATE TABLE IF NOT EXISTS database_connections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        business_group_id INT NOT NULL,
+        name VARCHAR(120) NOT NULL,
+        db_type VARCHAR(30) DEFAULT 'MySQL',
+        host VARCHAR(255) DEFAULT '',
+        port INT DEFAULT 3306,
+        database_name VARCHAR(255) DEFAULT '',
+        username VARCHAR(255) DEFAULT '',
+        password VARCHAR(255) DEFAULT '',
+        charset VARCHAR(50) DEFAULT 'utf8mb4',
+        description TEXT,
+        enabled BOOLEAN DEFAULT TRUE,
+        created_by VARCHAR(50) DEFAULT 'admin',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_database_connection_group_name (business_group_id, name),
+        INDEX idx_database_connection_group_id (business_group_id),
+        INDEX idx_database_connection_enabled (enabled)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
     CREATE TABLE IF NOT EXISTS global_tools (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
@@ -251,6 +273,66 @@ SCHEMA_SQL = [
         summary_json JSON NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_test_reports_suite_id (suite_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS scheduler_tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        business_group_id INT NULL,
+        project_id INT NULL,
+        name VARCHAR(120) NOT NULL,
+        task_type VARCHAR(40) DEFAULT 'test_suite',
+        source_module VARCHAR(80) DEFAULT '',
+        source_id INT NULL,
+        description TEXT,
+        schedule_type VARCHAR(30) DEFAULT 'cron',
+        cron_expression VARCHAR(120) DEFAULT '',
+        interval_seconds INT DEFAULT 0,
+        run_at DATETIME NULL,
+        timezone VARCHAR(64) DEFAULT 'Asia/Shanghai',
+        target_config LONGTEXT NULL,
+        notify_config LONGTEXT NULL,
+        misfire_policy VARCHAR(30) DEFAULT 'fire_once',
+        allow_concurrent BOOLEAN DEFAULT FALSE,
+        timeout_seconds INT DEFAULT 1800,
+        retry_count INT DEFAULT 0,
+        retry_interval_seconds INT DEFAULT 30,
+        enabled BOOLEAN DEFAULT FALSE,
+        status VARCHAR(30) DEFAULT 'idle',
+        last_run_status VARCHAR(30) DEFAULT '',
+        last_run_message TEXT NULL,
+        last_run_at DATETIME NULL,
+        next_run_at DATETIME NULL,
+        run_count INT DEFAULT 0,
+        fail_count INT DEFAULT 0,
+        created_by VARCHAR(50) DEFAULT 'admin',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_scheduler_tasks_project_id (project_id),
+        INDEX idx_scheduler_tasks_business_group_id (business_group_id),
+        INDEX idx_scheduler_tasks_enabled_next_run (enabled, next_run_at),
+        INDEX idx_scheduler_tasks_source (source_module, source_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS scheduler_task_runs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        task_id INT NOT NULL,
+        trigger_type VARCHAR(30) DEFAULT 'manual',
+        status VARCHAR(30) DEFAULT 'running',
+        started_at DATETIME NULL,
+        finished_at DATETIME NULL,
+        duration_ms FLOAT DEFAULT 0,
+        executor VARCHAR(60) DEFAULT 'web',
+        retry_no INT DEFAULT 0,
+        message TEXT NULL,
+        request_snapshot LONGTEXT NULL,
+        result_snapshot LONGTEXT NULL,
+        logs LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_scheduler_task_runs_task_id (task_id),
+        INDEX idx_scheduler_task_runs_status (status),
+        INDEX idx_scheduler_task_runs_created_at (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """

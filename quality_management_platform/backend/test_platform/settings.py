@@ -26,6 +26,8 @@ INSTALLED_APPS = [
     "apps.interface_auto",
     "apps.tool_cards",
     "apps.data_query",
+    "apps.data_assets",
+    "apps.scheduler",
 ]
 
 MIDDLEWARE = [

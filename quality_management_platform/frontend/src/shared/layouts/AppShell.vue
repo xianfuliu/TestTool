@@ -226,6 +226,18 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    title: "资产管理",
+    items: [
+      {
+        type: "item",
+        path: "/data-assets/databases",
+        label: "数据库",
+        subtitle: "按业务维护数据库连接资产",
+        icon: DataAnalysis,
+      },
+    ],
+  },
+  {
     title: "数据服务",
     items: [
       {

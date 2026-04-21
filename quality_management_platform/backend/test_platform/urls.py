@@ -8,4 +8,6 @@ urlpatterns = [
     path("api/interface-auto/", include("apps.interface_auto.urls")),
     path("api/tool-cards/", include("apps.tool_cards.urls")),
     path("api/data-query/", include("apps.data_query.urls")),
+    path("api/data-assets/", include("apps.data_assets.urls")),
+    path("api/scheduler/", include("apps.scheduler.urls")),
 ]

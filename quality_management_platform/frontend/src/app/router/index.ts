@@ -4,7 +4,9 @@ const AppShell = () => import("@/shared/layouts/AppShell.vue");
 const LoginPage = () => import("@/modules/auth/LoginPage.vue");
 const ApiToolPage = () => import("@/modules/api-tool/ApiToolWorkbenchPage.vue");
 const ModulePlaceholderPage = () => import("@/modules/common/ModulePlaceholderPage.vue");
+const DatabaseAssetPage = () => import("@/modules/data-assets/DatabaseAssetPage.vue");
 const DataQueryPage = () => import("@/modules/data-query/DataQueryPage.vue");
+const SchedulerTaskPage = () => import("@/modules/scheduler/SchedulerTaskPage.vue");
 const ApiCasePage = () => import("@/modules/interface-auto/ApiCasePage.vue");
 const ApiGlobalToolPage = () => import("@/modules/interface-auto/ApiGlobalToolPage.vue");
 const ApiReportPage = () => import("@/modules/interface-auto/ApiReportPage.vue");
@@ -195,6 +197,15 @@ const routes: RouteRecordRaw[] = [
         component: ToolCardsPage,
       },
       {
+        path: "data-assets/databases",
+        name: "data-assets-databases",
+        component: DatabaseAssetPage,
+        meta: {
+          title: "数据库资产",
+          subtitle: "按业务维护数据库连接信息，供查询、自动化和工具配置复用。",
+        },
+      },
+      {
         path: "data-query",
         name: "data-query",
         component: DataQueryPage,
@@ -202,7 +213,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: "scheduler/tasks",
         name: "scheduler-tasks",
-        component: ModulePlaceholderPage,
+        component: SchedulerTaskPage,
         meta: {
           title: "定时任务",
           subtitle: "统一管理自动化任务和平台级调度配置。",

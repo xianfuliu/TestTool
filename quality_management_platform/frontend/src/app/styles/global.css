@@ -100,6 +100,23 @@ select {
   line-height: var(--qm-form-line-height);
 }
 
+.compact-select-popper,
+.compact-select-popper .el-select-dropdown__item,
+.compact-select-popper .el-cascader-node,
+.compact-select-popper .el-picker-panel,
+.compact-select-popper .el-picker-panel__body,
+.compact-select-popper .el-date-table,
+.compact-select-popper .el-time-panel {
+  font-family: var(--qm-form-font-family);
+  font-size: 12px;
+}
+
+.compact-select-popper .el-select-dropdown__item,
+.compact-select-popper .el-cascader-node {
+  height: 30px;
+  line-height: 30px;
+}
+
 .project-cascader .el-input__wrapper {
   min-height: var(--qm-form-control-height-sm);
   border-radius: 6px;

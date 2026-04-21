@@ -48,6 +48,7 @@ Write-Host ""
 Write-Host "Starting TestTool for LAN access..." -ForegroundColor Cyan
 Write-Host "Backend:  http://$lanIp`:8000" -ForegroundColor DarkCyan
 Write-Host "Frontend: http://$lanIp`:5173" -ForegroundColor Green
+Write-Host "Scheduler worker starts with backend runserver." -ForegroundColor DarkGreen
 Write-Host ""
 Write-Host "If coworkers cannot access it, rerun this script as Administrator to open Windows Firewall ports automatically." -ForegroundColor Yellow
 Write-Host "Close the two new terminal windows to stop the services." -ForegroundColor Yellow
