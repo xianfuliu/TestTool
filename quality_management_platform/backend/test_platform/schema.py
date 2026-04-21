@@ -137,6 +137,7 @@ SCHEMA_SQL = [
         assertions JSON NULL,
         variables JSON NULL,
         enable_encryption BOOLEAN DEFAULT FALSE,
+        use_global_headers BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_case_id (case_id)

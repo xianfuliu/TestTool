@@ -796,6 +796,28 @@ def _parse_global_variable_value(value: Any, variable_type: str | None) -> Any:
     return value
 
 
+def _enabled_by_default(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "no", "n"}
+    return bool(value)
+
+
+def _enabled_by_config(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    return bool(value)
+
+
+def _config_enabled(config: dict[str, Any], snake_key: str, camel_key: str) -> bool:
+    if snake_key in config:
+        return _enabled_by_config(config.get(snake_key))
+    if camel_key in config:
+        return _enabled_by_config(config.get(camel_key))
+    return False
+
+
 def _load_project_variables(project_id: Any) -> dict[str, Any]:
     if not project_id:
         return {}
@@ -826,6 +848,7 @@ def _normalise_step(step: dict[str, Any]) -> dict[str, Any]:
         "variables": _parse_json_value(step.get("variables"), {}),
         "enabled": step.get("enabled", True) is not False,
         "enable_encryption": bool(step.get("enable_encryption")),
+        "use_global_headers": _enabled_by_default(step.get("use_global_headers", True)),
     }
 
 
@@ -1067,7 +1090,8 @@ def _execute_http_tool(
     encryption: EncryptionConfig,
     global_headers: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    use_global_encryption = bool(config.get("use_global_encryption") or config.get("useGlobalEncryption"))
+    use_global_encryption = _config_enabled(config, "use_global_encryption", "useGlobalEncryption")
+    use_global_headers = _config_enabled(config, "use_global_headers", "useGlobalHeaders")
     request_encryption = (
         encryption
         if use_global_encryption
@@ -1092,7 +1116,7 @@ def _execute_http_tool(
             base_url=str(environment.get("base_url") or ""),
             global_headers=merge_header_maps(
                 _as_dict(environment.get("headers")),
-                _as_dict(global_headers),
+                _as_dict(global_headers) if use_global_headers else {},
             ),
             encryption=request_encryption,
             allow_legacy_placeholders=True,
@@ -1646,7 +1670,7 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                     f"加密URL={encryption.encrypt_url or '-'}，解密URL={encryption.decrypt_url or '-'}"
                 )
 
-            def resolve_current_global_headers() -> tuple[dict[str, Any], dict[str, Any]]:
+            def resolve_global_headers_for_tool() -> tuple[dict[str, Any], dict[str, Any]]:
                 if not header_config.get("enabled"):
                     return {}, dict(environment_headers)
                 rendered_headers = _as_dict(
@@ -1658,6 +1682,11 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                 )
                 return rendered_headers, merge_header_maps(environment_headers, rendered_headers)
 
+            def resolve_current_global_headers() -> tuple[dict[str, Any], dict[str, Any]]:
+                if not _enabled_by_default(step.get("use_global_headers", True)):
+                    return {}, dict(environment_headers)
+                return resolve_global_headers_for_tool()
+
             def execute_step_tool(section: str, tool: dict[str, Any], source_data: Any) -> Any:
                 variables_before_tool = dict(runtime_variables)
                 try:
@@ -1667,7 +1696,7 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
                         runtime_variables,
                         environment,
                         encryption,
-                        resolve_current_global_headers()[1],
+                        resolve_global_headers_for_tool()[1],
                     )
                     result_status = str(_as_dict(tool_result).get("status") or "success").lower()
                     tool_status = "failed" if result_status == "failed" else "success"
@@ -1760,11 +1789,13 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             }
             resolved_global_headers, request_global_headers = resolve_current_global_headers()
             global_header_detail = {
-                "enabled": bool(header_config.get("enabled")),
+                "enabled": bool(header_config.get("enabled")) and _enabled_by_default(step.get("use_global_headers", True)),
+                "global_enabled": bool(header_config.get("enabled")),
+                "step_enabled": _enabled_by_default(step.get("use_global_headers", True)),
                 "before_replace": _log_value(raw_global_headers),
                 "after_replace": _log_value(resolved_global_headers),
             }
-            if header_config.get("enabled"):
+            if header_config.get("enabled") and _enabled_by_default(step.get("use_global_headers", True)):
                 logs.append("全局请求头：已按当前变量池完成变量替换")
             main_result = execute_request_definition(
                 RequestDefinition(

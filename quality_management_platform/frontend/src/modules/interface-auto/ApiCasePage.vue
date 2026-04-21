@@ -20,6 +20,7 @@ import { useBusinessProjectContext } from "@/shared/composables/useBusinessProje
 import apiToolIcon from "@/assets/interface-auto/tool-icons/api.png";
 import assertionToolIcon from "@/assets/interface-auto/tool-icons/assrt.png";
 import extractionToolIcon from "@/assets/interface-auto/tool-icons/extraction.png";
+import headersToolIcon from "@/assets/interface-auto/tool-icons/headers.png";
 import httpToolIcon from "@/assets/interface-auto/tool-icons/http.png";
 import lockToolIcon from "@/assets/interface-auto/tool-icons/lock.png";
 import logToolIcon from "@/assets/interface-auto/tool-icons/log.png";
@@ -28,7 +29,6 @@ import sqlToolIcon from "@/assets/interface-auto/tool-icons/sql.png";
 import startToolIcon from "@/assets/interface-auto/tool-icons/start.png";
 import stopingToolIcon from "@/assets/interface-auto/tool-icons/stoping.png";
 import stopToolIcon from "@/assets/interface-auto/tool-icons/stop.png";
-import unlockToolIcon from "@/assets/interface-auto/tool-icons/unlock.png";
 import type {
   ApiFolder,
   ApiTemplate,
@@ -196,6 +196,7 @@ const toolForm = reactive({
   url: "",
   timeout: 30,
   useGlobalEncryption: false,
+  useGlobalHeaders: false,
   headersText: "{\n  \n}",
   bodyText: "{\n  \n}",
   database: "",
@@ -226,24 +227,7 @@ const currentProjectName = computed(() => context.selectedProject.value?.name ??
 const visibleGlobalVariables = computed(() =>
   Array.isArray(globalVariables.value) ? globalVariables.value : [],
 );
-const outputVariableText = computed({
-  get: () =>
-    (Array.isArray(form.output_variables) ? form.output_variables : [])
-      .map((item) => String(item.name || item.source || "").trim())
-      .filter(Boolean)
-      .join(", "),
-  set: (value: string) => {
-    const names = Array.from(
-      new Set(
-        value
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-      ),
-    );
-    form.output_variables = names.map((name) => createOutputVariableRow(name, name));
-  },
-});
+const outputVariableText = ref("");
 const globalConfigExpanded = computed({
   get: () => (activeTabKey.value ? Boolean(globalConfigExpandedMap[activeTabKey.value]) : false),
   set: (value: boolean) => {
@@ -579,6 +563,25 @@ function normalizeOutputVariables(value: unknown): CaseOutputVariable[] {
   );
 }
 
+function outputVariablesToText(rows: CaseOutputVariable[]) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((item) => String(item.name || item.source || "").trim())
+    .filter(Boolean)
+    .join(",");
+}
+
+function syncOutputVariablesFromText() {
+  const names = Array.from(
+    new Set(
+      outputVariableText.value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+  form.output_variables = names.map((name) => createOutputVariableRow(name, name));
+}
+
 function outputVariablesToPayload(rows: CaseOutputVariable[]) {
   return rows
     .map((row) => ({
@@ -727,6 +730,7 @@ function normalizeStep(step: Partial<CaseStep>): CaseStep {
     post_processing: normalizeToolMap(step.post_processing),
     variables: parseMap(step.variables),
     enable_encryption: Boolean(step.enable_encryption),
+    use_global_headers: step.use_global_headers !== false,
     api_name: step.api_name ?? template?.name ?? step.name ?? "未命名接口",
     api_method: step.api_method ?? template?.method ?? "GET",
     api_url_path: step.api_url_path ?? template?.url_path ?? "",
@@ -981,6 +985,7 @@ function resetToolForm() {
   toolForm.url = "";
   toolForm.timeout = 30;
   toolForm.useGlobalEncryption = false;
+  toolForm.useGlobalHeaders = false;
   toolForm.headersText = "{}";
   toolForm.bodyText = "{}";
   toolForm.database = "";
@@ -1030,6 +1035,7 @@ function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
     toolForm.url = String(config.url ?? "");
     toolForm.timeout = Number(config.timeout ?? 30) || 30;
     toolForm.useGlobalEncryption = Boolean(config.use_global_encryption ?? config.useGlobalEncryption ?? false);
+    toolForm.useGlobalHeaders = Boolean(config.use_global_headers ?? config.useGlobalHeaders ?? false);
     const rawHeaders =
       typeof config.headers === "string"
         ? (() => {
@@ -1230,6 +1236,16 @@ function handleToolGlobalEncryptionChange(value: string | number | boolean) {
   }
 }
 
+function handleToolGlobalHeadersChange(value: string | number | boolean) {
+  if (!Boolean(value)) {
+    return;
+  }
+  if (!form.global_request_config.header_config.enabled) {
+    ElMessage.warning("全局请求头未启用，请先启用");
+    toolForm.useGlobalHeaders = false;
+  }
+}
+
 function handleLoginGlobalEncryptionChange(event: Event) {
   const checked = (event.target as HTMLInputElement).checked;
   if (!checked) {
@@ -1250,6 +1266,7 @@ function createDefaultToolConfig(toolType: string, tab: ToolTabKey) {
         url: "",
         timeout: 30,
         use_global_encryption: false,
+        use_global_headers: false,
         headers: {},
         body: {},
         extractions: [{ variable: "", path: "" }],
@@ -1329,6 +1346,10 @@ function saveToolDialog() {
       if (toolForm.useGlobalEncryption && !validateGlobalEncryptionForHttpTool()) {
         return;
       }
+      if (toolForm.useGlobalHeaders && !form.global_request_config.header_config.enabled) {
+        ElMessage.warning("全局请求头未启用，请先启用");
+        return;
+      }
       const headerEntries = toolHeaderRows.value
         .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
         .filter((row) => row.key || row.value);
@@ -1355,6 +1376,7 @@ function saveToolDialog() {
         url: toolForm.url.trim(),
         timeout: Number(toolForm.timeout) || 30,
         use_global_encryption: toolForm.useGlobalEncryption,
+        use_global_headers: toolForm.useGlobalHeaders,
         headers,
         body,
         extractions: extractionRows,
@@ -1530,6 +1552,7 @@ function resetForm(caseItem?: TestCaseRecord) {
   if (activeTabKey.value) {
     ensureGlobalConfigState(activeTabKey.value);
   }
+  outputVariableText.value = outputVariablesToText(form.output_variables);
   variableRows.value = mapToVariableRows(form.global_vars);
   form.steps.forEach((step) => getStepTab(step));
   activeStepKey.value = form.steps[0] ? getStepKey(form.steps[0]) : "";
@@ -1869,6 +1892,7 @@ function buildCasePayload(caseItem: TestCaseRecord) {
       post_processing: ensureToolMap(step, "post_processing"),
       variables: parseMap(step.variables),
       enable_encryption: Boolean(step.enable_encryption),
+      use_global_headers: step.use_global_headers !== false,
     })),
   };
 }
@@ -1905,6 +1929,7 @@ async function saveCase(options?: { silent?: boolean }) {
     return null;
   }
 
+  syncOutputVariablesFromText();
   saving.value = true;
   try {
     form.project_id = currentProjectId.value;
@@ -2197,6 +2222,7 @@ function createStepFromTemplate(template: ApiTemplate): CaseStep {
     post_processing: {},
     variables: {},
     enable_encryption: false,
+    use_global_headers: form.global_request_config.header_config.enabled,
     api_name: template.name,
     api_method: template.method,
     api_url_path: template.url_path,
@@ -2327,6 +2353,12 @@ function syncAllStepEncryptionStatus(enabled: boolean) {
   });
 }
 
+function syncAllStepGlobalHeadersStatus(enabled: boolean) {
+  form.steps.forEach((item) => {
+    item.use_global_headers = enabled;
+  });
+}
+
 function handleGlobalEncryptionChange(event: Event) {
   const checked = (event.target as HTMLInputElement).checked;
   form.enable_encryption = checked;
@@ -2340,6 +2372,13 @@ function handleGlobalEncryptionChange(event: Event) {
   markActiveModified();
 }
 
+function handleGlobalHeaderConfigChange(event: Event) {
+  const checked = (event.target as HTMLInputElement).checked;
+  form.global_request_config.header_config.enabled = checked;
+  syncAllStepGlobalHeadersStatus(checked);
+  markActiveModified();
+}
+
 function toggleStepEncryption(step: CaseStep) {
   const nextState = !step.enable_encryption;
   if (nextState && !form.enable_encryption) {
@@ -2347,6 +2386,20 @@ function toggleStepEncryption(step: CaseStep) {
     return;
   }
   step.enable_encryption = nextState;
+  markActiveModified();
+}
+
+function isStepGlobalHeadersEnabled(step: CaseStep) {
+  return Boolean(form.global_request_config.header_config.enabled) && step.use_global_headers !== false;
+}
+
+function toggleStepGlobalHeaders(step: CaseStep) {
+  const nextState = !isStepGlobalHeadersEnabled(step);
+  if (nextState && !form.global_request_config.header_config.enabled) {
+    ElMessage.warning("全局请求头未启用，请先启用");
+    return;
+  }
+  step.use_global_headers = nextState;
   markActiveModified();
 }
 
@@ -2898,7 +2951,11 @@ onBeforeUnmount(() => {
                     <div class="global-config-section-card">
                       <div class="global-config-toolbar align-left">
                         <label class="encryption-check compact-check">
-                          <input v-model="form.global_request_config.header_config.enabled" type="checkbox" />
+                          <input
+                            :checked="form.global_request_config.header_config.enabled"
+                            type="checkbox"
+                            @change="handleGlobalHeaderConfigChange"
+                          />
                           <span class="global-config-section-title">全局请求头</span>
                         </label>
                       </div>
@@ -2928,6 +2985,7 @@ onBeforeUnmount(() => {
                         v-model="outputVariableText"
                         class="text-field global-output-input"
                         placeholder="例如：token,userId,orderNo"
+                        @input="syncOutputVariablesFromText"
                       />
                     </div>
                     <div class="global-config-hint">多个变量使用英文逗号隔开；执行完成后会从变量池取同名变量作为用例出参，供后续测试用例使用。</div>
@@ -2958,26 +3016,66 @@ onBeforeUnmount(() => {
                 <div class="step-card-header">
                   <span class="step-title">step{{ step.step_order }}</span>
                   <div class="step-header-actions">
-                    <button class="step-icon" title="步骤加解密" @click.stop="toggleStepEncryption(step)">
-                      <img
-                        class="step-icon-image"
-                        :src="step.enable_encryption ? lockToolIcon : unlockToolIcon"
-                        :alt="step.enable_encryption ? '已启用加解密' : '未启用加解密'"
-                      />
-                    </button>
-                    <button class="step-icon" title="复制步骤" @click.stop="duplicateStep(step)">
-                      <el-icon><CopyDocument /></el-icon>
-                    </button>
-                    <button class="step-icon" title="启停步骤" @click.stop="toggleStepEnabled(step)">
-                      <img
-                        class="step-icon-image"
-                        :src="step.enabled ? stopToolIcon : startToolIcon"
-                        :alt="step.enabled ? '停用步骤' : '启用步骤'"
-                      />
-                    </button>
-                    <button class="step-icon danger" title="删除步骤" @click.stop="deleteStep(step)">
-                      <el-icon><Delete /></el-icon>
-                    </button>
+                    <el-tooltip
+                      :content="step.enable_encryption ? '使用全局加解密' : '未使用全局加解密'"
+                      placement="top"
+                      popper-class="qm-app-tooltip"
+                      :show-after="180"
+                    >
+                      <button
+                        class="step-icon"
+                        :class="{ muted: !step.enable_encryption }"
+                        @click.stop="toggleStepEncryption(step)"
+                      >
+                        <img
+                          class="step-icon-image"
+                          :src="lockToolIcon"
+                          :alt="step.enable_encryption ? '已启用加解密' : '未启用加解密'"
+                        />
+                      </button>
+                    </el-tooltip>
+                    <el-tooltip
+                      :content="isStepGlobalHeadersEnabled(step) ? '使用全局请求头' : '未使用全局请求头'"
+                      placement="top"
+                      popper-class="qm-app-tooltip"
+                      :show-after="180"
+                    >
+                      <button
+                        class="step-icon"
+                        :class="{ muted: !isStepGlobalHeadersEnabled(step) }"
+                        @click.stop="toggleStepGlobalHeaders(step)"
+                      >
+                        <img
+                          class="step-icon-image step-headers-icon-image"
+                          :src="headersToolIcon"
+                          :alt="isStepGlobalHeadersEnabled(step) ? '已启用全局请求头' : '未启用全局请求头'"
+                        />
+                      </button>
+                    </el-tooltip>
+                    <el-tooltip content="复制步骤" placement="top" popper-class="qm-app-tooltip" :show-after="180">
+                      <button class="step-icon" @click.stop="duplicateStep(step)">
+                        <el-icon><CopyDocument /></el-icon>
+                      </button>
+                    </el-tooltip>
+                    <el-tooltip
+                      :content="step.enabled ? '停用步骤' : '启用步骤'"
+                      placement="top"
+                      popper-class="qm-app-tooltip"
+                      :show-after="180"
+                    >
+                      <button class="step-icon" @click.stop="toggleStepEnabled(step)">
+                        <img
+                          class="step-icon-image"
+                          :src="step.enabled ? stopToolIcon : startToolIcon"
+                          :alt="step.enabled ? '停用步骤' : '启用步骤'"
+                        />
+                      </button>
+                    </el-tooltip>
+                    <el-tooltip content="删除步骤" placement="top" popper-class="qm-app-tooltip" :show-after="180">
+                      <button class="step-icon danger" @click.stop="deleteStep(step)">
+                        <el-icon><Delete /></el-icon>
+                      </button>
+                    </el-tooltip>
                   </div>
                 </div>
 
@@ -3164,11 +3262,16 @@ onBeforeUnmount(() => {
             <label>超时时间:</label>
             <el-input-number v-model="toolForm.timeout" :min="1" :max="300" />
           </div>
-          <div class="tool-dialog-row tool-dialog-switch-row">
-            <label>加解密:</label>
-            <el-checkbox v-model="toolForm.useGlobalEncryption" @change="handleToolGlobalEncryptionChange">
-              使用全局加解密
-            </el-checkbox>
+          <div class="tool-dialog-row tool-dialog-switch-row global-option-row">
+            <label>全局配置:</label>
+            <div class="global-option-checks">
+              <el-checkbox v-model="toolForm.useGlobalEncryption" @change="handleToolGlobalEncryptionChange">
+                使用全局加解密
+              </el-checkbox>
+              <el-checkbox v-model="toolForm.useGlobalHeaders" @change="handleToolGlobalHeadersChange">
+                使用全局请求头
+              </el-checkbox>
+            </div>
           </div>
           <el-tabs v-model="httpToolTab" class="tool-inner-tabs">
             <el-tab-pane label="请求头" name="headers">
@@ -4127,6 +4230,16 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 
+.step-headers-icon-image {
+  width: 12px;
+  height: 12px;
+}
+
+.step-icon.muted .step-icon-image {
+  opacity: 0.32;
+  filter: grayscale(1);
+}
+
 .step-icon.danger,
 .tool-action.danger {
   color: #e25555;
@@ -4441,7 +4554,7 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
-.tool-dialog-row label {
+.tool-dialog-row > label {
   width: 74px;
   flex: 0 0 74px;
   color: #334155;
@@ -4450,6 +4563,33 @@ onBeforeUnmount(() => {
 
 .tool-dialog-switch-row :deep(.el-checkbox) {
   height: 32px;
+}
+
+.global-option-row {
+  align-items: center;
+}
+
+.global-option-checks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  min-height: 32px;
+}
+
+.global-option-checks :deep(.el-checkbox) {
+  flex: 0 0 auto;
+  height: 32px;
+  margin-right: 0;
+}
+
+.global-option-checks :deep(.el-checkbox__input) {
+  flex: 0 0 auto;
+}
+
+.global-option-checks :deep(.el-checkbox__label) {
+  padding-left: 6px;
+  white-space: nowrap;
 }
 
 .name-row .dialog-input {

@@ -32,6 +32,14 @@ def _json_value(value, default):
         return default
 
 
+def _enabled_by_default(value) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "no", "n"}
+    return bool(value)
+
+
 def _column_exists(cursor, table_name: str, column_name: str) -> bool:
     cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
     return cursor.fetchone() is not None
@@ -57,6 +65,13 @@ def _ensure_case_schema_extensions():
                     ADD COLUMN output_variables_text LONGTEXT NULL AFTER global_request_config_text
                     """
                 )
+            if not _column_exists(cursor, "test_case_steps", "use_global_headers"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_case_steps
+                    ADD COLUMN use_global_headers BOOLEAN DEFAULT TRUE AFTER enable_encryption
+                    """
+                )
         connection.commit()
     _CASE_SCHEMA_READY = True
 
@@ -77,6 +92,7 @@ def _hydrate_step_row(step_row):
     hydrated["post_processing"] = _json_value(hydrated.get("post_processing"), {})
     hydrated["assertions"] = _json_value(hydrated.get("assertions"), {})
     hydrated["variables"] = _json_value(hydrated.get("variables"), {})
+    hydrated["use_global_headers"] = _enabled_by_default(hydrated.get("use_global_headers", True))
     return hydrated
 
 
@@ -137,9 +153,10 @@ def _write_case_steps(case_id: int, steps):
                 post_processing,
                 assertions,
                 variables,
-                enable_encryption
+                enable_encryption,
+                use_global_headers
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 case_id,
@@ -152,6 +169,7 @@ def _write_case_steps(case_id: int, steps):
                 _json_text(step.get("assertions")),
                 _json_text(step.get("variables")),
                 step.get("enable_encryption", False),
+                _enabled_by_default(step.get("use_global_headers", True)),
             ),
         )
 

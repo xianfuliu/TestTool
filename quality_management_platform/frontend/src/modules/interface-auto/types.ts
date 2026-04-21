@@ -169,6 +169,7 @@ export type CaseStep = {
   assertions: CaseToolMap | string | null;
   variables: JsonMap | string | null;
   enable_encryption: boolean;
+  use_global_headers: boolean;
   api_name?: string;
   api_method?: string;
   api_url_path?: string;
