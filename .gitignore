@@ -4,6 +4,7 @@ venv
 *.idea
 build
 dist
+node_modules/
 TestTool.spec
 .trae/
 README_TRAE.md
