@@ -345,6 +345,7 @@ def default_global_request_config() -> dict[str, Any]:
             "protocol": "http",
             "method": "POST",
             "url": "",
+            "use_global_encryption": False,
             "headers": {
                 "Content-Type": "application/json",
             },
@@ -417,6 +418,13 @@ def normalize_global_request_config(
             or raw_login_request.get("url")
             or base["login_request"]["url"]
         ).strip(),
+        "use_global_encryption": bool(
+            raw_login.get("use_global_encryption")
+            or raw_login.get("useGlobalEncryption")
+            or raw_login_request.get("use_global_encryption")
+            or raw_login_request.get("useGlobalEncryption")
+            or False
+        ),
         "headers": login_headers or dict(base["login_request"]["headers"]),
         "params": login_params if login_params not in (None, "") else {},
         "body": login_body if login_body not in (None, "") else {},
@@ -851,6 +859,16 @@ def resolve_global_request_runtime(
 
     login_request = _as_dict(normalized_config.get("login_request"))
     if login_request.get("enabled"):
+        base_encryption = encryption or EncryptionConfig()
+        login_encryption = (
+            base_encryption
+            if login_request.get("use_global_encryption")
+            else EncryptionConfig(
+                enabled=False,
+                encrypt_url=base_encryption.encrypt_url,
+                decrypt_url=base_encryption.decrypt_url,
+            )
+        )
         login_result = execute_request_definition(
             RequestDefinition(
                 protocol=str(login_request.get("protocol") or "http"),
@@ -868,7 +886,7 @@ def resolve_global_request_runtime(
                 variables=runtime_variables,
                 base_url=base_url,
                 global_headers=_as_dict(base_headers),
-                encryption=encryption or EncryptionConfig(),
+                encryption=login_encryption,
                 allow_legacy_placeholders=allow_legacy_placeholders,
             ),
         )
@@ -904,6 +922,7 @@ def resolve_global_request_runtime(
             "decrypted_body": login_result.decrypted_body,
             "duration_ms": login_result.duration_ms,
             "extracted_variables": extracted_variables,
+            "use_global_encryption": bool(login_request.get("use_global_encryption")),
         }
 
     header_config = _as_dict(normalized_config.get("header_config"))

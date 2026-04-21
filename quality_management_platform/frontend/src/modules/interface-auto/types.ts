@@ -57,7 +57,7 @@ export type TemplateDebugConfig = {
     protocol: string;
     method: string;
     url: string;
-    use_global_encryption: boolean;
+    use_global_encryption?: boolean;
     headers_rows: GlobalRequestHeaderRow[];
     body_text: string;
     extractions: GlobalRequestExtractionRow[];
@@ -76,6 +76,7 @@ export type CaseGlobalRequestConfig = {
     protocol: string;
     method: string;
     url: string;
+    use_global_encryption: boolean;
     headers_rows: GlobalRequestHeaderRow[];
     body_text: string;
     extractions: GlobalRequestExtractionRow[];

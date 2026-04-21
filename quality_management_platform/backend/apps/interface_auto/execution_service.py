@@ -1444,6 +1444,7 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             "enabled": bool(login_config.get("enabled")),
             "method": login_config.get("method"),
             "url": login_config.get("url"),
+            "use_global_encryption": bool(login_config.get("use_global_encryption")),
             "extractions": _log_value(login_config.get("extractions")),
         },
         "header_config": {

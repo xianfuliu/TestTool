@@ -40,6 +40,7 @@ import type {
   CaseToolRecord,
   CascaderOption,
   EnvironmentRecord,
+  GlobalVariableRecord,
   JsonMap,
   TestCaseRecord,
   TreeNode,
@@ -89,7 +90,7 @@ type VariableRow = {
   description?: string;
 };
 
-type GlobalConfigTab = "encryption" | "variables" | "login_headers";
+type GlobalConfigTab = "encryption" | "variables" | "login_headers" | "outputs";
 
 const TOOL_TAB_LABELS: Record<ToolTabKey, string> = {
   pre_processing: "前置",
@@ -147,6 +148,7 @@ const cases = ref<TestCaseRecord[]>([]);
 const apiFolders = ref<ApiFolder[]>([]);
 const templates = ref<ApiTemplate[]>([]);
 const environments = ref<EnvironmentRecord[]>([]);
+const globalVariables = ref<GlobalVariableRecord[]>([]);
 const variableRows = ref<VariableRow[]>([]);
 const globalConfigExpandedMap = reactive<Record<string, boolean>>({});
 const activeGlobalConfigTab = ref<GlobalConfigTab>("encryption");
@@ -221,6 +223,27 @@ const cascaderProps = {
 
 const currentProjectId = computed(() => context.selectedProject.value?.id ?? null);
 const currentProjectName = computed(() => context.selectedProject.value?.name ?? "");
+const visibleGlobalVariables = computed(() =>
+  Array.isArray(globalVariables.value) ? globalVariables.value : [],
+);
+const outputVariableText = computed({
+  get: () =>
+    (Array.isArray(form.output_variables) ? form.output_variables : [])
+      .map((item) => String(item.name || item.source || "").trim())
+      .filter(Boolean)
+      .join(", "),
+  set: (value: string) => {
+    const names = Array.from(
+      new Set(
+        value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    );
+    form.output_variables = names.map((name) => createOutputVariableRow(name, name));
+  },
+});
 const globalConfigExpanded = computed({
   get: () => (activeTabKey.value ? Boolean(globalConfigExpandedMap[activeTabKey.value]) : false),
   set: (value: boolean) => {
@@ -391,6 +414,7 @@ function createDefaultGlobalRequestConfig(): CaseGlobalRequestConfig {
       protocol: "http",
       method: "POST",
       url: "",
+      use_global_encryption: false,
       headers_rows: [createHeaderRow("Content-Type", "application/json")],
       body_text: "{\n  \n}",
       extractions: [createExtractionRow()],
@@ -581,6 +605,7 @@ function normalizeGlobalRequestConfig(value: unknown): CaseGlobalRequestConfig {
       protocol: String(loginRequest.protocol ?? "http"),
       method: String(loginRequest.method ?? "POST"),
       url: String(loginRequest.url ?? ""),
+      use_global_encryption: Boolean(loginRequest.use_global_encryption ?? loginRequest.useGlobalEncryption ?? false),
       headers_rows: normalizeHeaderRows(loginRequest.headers_rows ?? loginRequest.headers, [
         { key: "Content-Type", value: "application/json" },
       ]),
@@ -604,6 +629,7 @@ function serializeGlobalRequestConfig(config: CaseGlobalRequestConfig) {
       protocol: config.login_request.protocol || "http",
       method: config.login_request.method || "POST",
       url: config.login_request.url.trim(),
+      use_global_encryption: Boolean(config.login_request.use_global_encryption),
       headers: headerRowsToMap(config.login_request.headers_rows),
       body: parseBody(config.login_request.body_text),
       extractions: extractionRowsToPayload(config.login_request.extractions),
@@ -1204,6 +1230,16 @@ function handleToolGlobalEncryptionChange(value: string | number | boolean) {
   }
 }
 
+function handleLoginGlobalEncryptionChange(event: Event) {
+  const checked = (event.target as HTMLInputElement).checked;
+  if (!checked) {
+    return;
+  }
+  if (!validateGlobalEncryptionForHttpTool()) {
+    form.global_request_config.login_request.use_global_encryption = false;
+  }
+}
+
 function createDefaultToolConfig(toolType: string, tab: ToolTabKey) {
   if (toolType === "http_request") {
     return {
@@ -1531,6 +1567,7 @@ async function loadWorkspace() {
     apiFolders.value = [];
     templates.value = [];
     environments.value = [];
+    globalVariables.value = [];
     variableRows.value = [];
     openedTabs.value = [];
     activeTabKey.value = "";
@@ -1541,13 +1578,14 @@ async function loadWorkspace() {
   }
   loading.value = true;
   try {
-    const [folderRows, caseRows, templateWorkspace, environmentRows] = await Promise.all([
+    const [folderRows, caseRows, templateWorkspace, environmentRows, globalVariableRows] = await Promise.all([
       get<CaseFolder[]>("/api/interface-auto/case-folders/", { project_id: currentProjectId.value }),
       get<Array<Partial<TestCaseRecord>>>("/api/interface-auto/cases/", { project_id: currentProjectId.value }),
       get<TemplateWorkspacePayload>("/api/interface-auto/api-template-workspace/", {
         project_id: currentProjectId.value,
       }),
       get<EnvironmentRecord[]>("/api/interface-auto/environments/"),
+      get<GlobalVariableRecord[]>("/api/interface-auto/variables/", { project_id: currentProjectId.value }),
     ]);
     folders.value = folderRows;
     cases.value = caseRows.map((item) => normalizeCase(item));
@@ -1558,6 +1596,7 @@ async function loadWorkspace() {
       headers: parseMap(item.headers),
       variables: parseMap(item.variables),
     }));
+    globalVariables.value = Array.isArray(globalVariableRows) ? globalVariableRows : [];
   } finally {
     loading.value = false;
   }
@@ -1860,6 +1899,9 @@ async function saveCase(options?: { silent?: boolean }) {
   }
   if (form.enable_encryption && (!form.encrypt_url.trim() || !form.decrypt_url.trim())) {
     ElMessage.warning("启用加解密功能必须配置加密URL和解密URL");
+    return null;
+  }
+  if (form.global_request_config.login_request.use_global_encryption && !validateGlobalEncryptionForHttpTool()) {
     return null;
   }
 
@@ -2289,6 +2331,7 @@ function handleGlobalEncryptionChange(event: Event) {
   const checked = (event.target as HTMLInputElement).checked;
   form.enable_encryption = checked;
   if (!checked) {
+    form.global_request_config.login_request.use_global_encryption = false;
     if (toolDialogVisible.value && toolDialogKind.value === "http_request") {
       toolForm.useGlobalEncryption = false;
     }
@@ -2730,6 +2773,14 @@ onBeforeUnmount(() => {
                   >
                     全局请求头
                   </button>
+                  <button
+                    class="global-config-tab"
+                    :class="{ active: activeGlobalConfigTab === 'outputs' }"
+                    type="button"
+                    @click="activeGlobalConfigTab = 'outputs'"
+                  >
+                    出参
+                  </button>
                 </div>
 
                 <div class="global-config-content">
@@ -2751,23 +2802,21 @@ onBeforeUnmount(() => {
                   </div>
 
                   <div v-else-if="activeGlobalConfigTab === 'variables'" class="global-config-tab-panel">
-                    <div class="global-config-kv-table variable-kv-table">
+                    <div v-if="visibleGlobalVariables.length" class="global-variable-view">
                       <div
-                        v-for="(row, index) in variableRows"
-                        :key="row.rowKey"
-                        class="global-config-kv-row variable-kv-row"
+                        v-for="row in visibleGlobalVariables"
+                        :key="row.id"
+                        class="global-variable-item"
                       >
-                        <input v-model="row.name" class="tool-input config-input" placeholder="变量名" @input="form.global_vars = variableRowsToMap(variableRows)" />
-                        <input v-model="row.value" class="tool-input config-input" placeholder="变量值" @input="form.global_vars = variableRowsToMap(variableRows)" />
-                        <div class="global-config-row-actions">
-                          <button class="row-icon add" type="button" @click="addVariableRow">+</button>
-                          <button class="row-icon remove" type="button" @click="removeVariableRow(index)">-</button>
-                        </div>
+                        <span class="global-variable-name">{{ row.name }}</span>
+                        <span class="global-variable-value">{{ row.value }}</span>
+                        <span class="global-variable-type">{{ row.variable_type || "string" }}</span>
                       </div>
                     </div>
+                    <div v-else class="global-config-empty">暂无全局变量，请在变量管理中配置。</div>
                   </div>
 
-                  <div v-else class="global-config-tab-panel global-config-stack">
+                  <div v-else-if="activeGlobalConfigTab === 'login_headers'" class="global-config-tab-panel global-config-stack">
                     <div class="global-config-section-card">
                       <div class="global-config-toolbar align-left">
                         <label class="encryption-check compact-check">
@@ -2788,6 +2837,18 @@ onBeforeUnmount(() => {
                               <span class="global-config-inline-label">URL</span>
                               <input v-model="form.global_request_config.login_request.url" class="text-field" placeholder="请输入登录URL" />
                             </div>
+                          </div>
+
+                          <div class="global-config-inline-field">
+                            <span class="global-config-inline-label">加解密</span>
+                            <label class="encryption-check compact-check">
+                              <input
+                                v-model="form.global_request_config.login_request.use_global_encryption"
+                                type="checkbox"
+                                @change="handleLoginGlobalEncryptionChange"
+                              />
+                              <span>使用全局加解密</span>
+                            </label>
                           </div>
 
                           <div class="global-config-inline-field body-inline-field config-list-inline-field">
@@ -2858,6 +2919,18 @@ onBeforeUnmount(() => {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  <div v-else class="global-config-tab-panel">
+                    <div class="global-output-config">
+                      <span class="global-config-inline-label">用例变量输出</span>
+                      <input
+                        v-model="outputVariableText"
+                        class="text-field global-output-input"
+                        placeholder="例如：token,userId,orderNo"
+                      />
+                    </div>
+                    <div class="global-config-hint">多个变量使用英文逗号隔开；执行完成后会从变量池取同名变量作为用例出参，供后续测试用例使用。</div>
                   </div>
                 </div>
               </div>
@@ -3673,6 +3746,66 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.global-variable-view {
+  display: grid;
+  gap: 6px;
+}
+
+.global-variable-item {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 1.4fr) 88px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid #e5edf7;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 0 10px;
+  color: #334155;
+  font-size: 12px;
+}
+
+.global-variable-name {
+  font-weight: 700;
+}
+
+.global-variable-value {
+  min-width: 0;
+  overflow: hidden;
+  color: #475569;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-variable-type {
+  justify-self: end;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #3b5b8f;
+  font-size: 11px;
+  line-height: 20px;
+  padding: 0 8px;
+}
+
+.global-config-empty {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  color: #7b8ba0;
+  font-size: 12px;
+}
+
+.global-output-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.global-output-input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .global-config-kv-row {
