@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 import traceback
 from datetime import datetime, timedelta
@@ -18,9 +19,13 @@ SCHEDULE_TYPES = {"cron", "interval", "once", "manual"}
 MISFIRE_POLICIES = {"fire_once", "skip", "fire_all"}
 RUN_RETENTION_COUNT = 200  # 单个任务只保留最近200条执行记录
 RUN_RETENTION_DAYS = 7  # 保留最近7天的执行记录
+_SCHEMA_READY = False
 
 
 def _ensure_schema_ready() -> None:
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
     execute(
         """
         CREATE TABLE IF NOT EXISTS scheduler_tasks (
@@ -62,6 +67,7 @@ def _ensure_schema_ready() -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """
     )
+    execute("ALTER TABLE scheduler_tasks MODIFY COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     execute(
         """
         CREATE TABLE IF NOT EXISTS scheduler_task_runs (
@@ -85,6 +91,7 @@ def _ensure_schema_ready() -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """
     )
+    _SCHEMA_READY = True
 
 
 def _json_text(value: Any) -> str:
@@ -554,7 +561,8 @@ def task_detail(request, task_id: int, payload=None):
                 retry_count = %s,
                 retry_interval_seconds = %s,
                 enabled = %s,
-                next_run_at = %s
+                next_run_at = %s,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             """,
             (
@@ -898,10 +906,41 @@ def run_due_tasks(limit: int = 20) -> list[dict[str, Any]]:
     return results
 
 
+def _validate_task_can_start(task_id: int) -> None:
+    task = _hydrate_task(fetch_one(f"{_task_query_base()} WHERE st.id = %s", (task_id,)))
+    if not task:
+        raise ValueError("定时任务不存在")
+    if not task.get("allow_concurrent"):
+        running = fetch_one(
+            "SELECT id FROM scheduler_task_runs WHERE task_id = %s AND status = 'running' LIMIT 1",
+            (task_id,),
+        )
+        if running:
+            raise ValueError("当前任务正在执行，未开启并发执行")
+
+
+def _execute_task_background(task_id: int, trigger_type: str) -> None:
+    try:
+        execute_scheduler_task(task_id, trigger_type=trigger_type, executor="web")
+    except Exception:
+        traceback.print_exc()
+
+
 @api_view
 def run_task(_request, task_id: int, payload=None):
-    return execute_scheduler_task(
-        task_id,
-        trigger_type=str((payload or {}).get("trigger_type") or "manual"),
-        executor="web",
+    _ensure_schema_ready()
+    trigger_type = str((payload or {}).get("trigger_type") or "manual")
+    _validate_task_can_start(task_id)
+    thread = threading.Thread(
+        target=_execute_task_background,
+        args=(task_id, trigger_type),
+        daemon=True,
+        name=f"scheduler-task-{task_id}-{int(time.time())}",
     )
+    thread.start()
+    return {
+        "accepted": True,
+        "task_id": task_id,
+        "status": "queued",
+        "message": "任务已提交后台异步执行，请稍后查看执行记录",
+    }, 202

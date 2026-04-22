@@ -173,6 +173,13 @@ export type SchedulerTaskRunRecord = {
   created_at?: string;
 };
 
+export type SchedulerTaskRunStartResponse = {
+  accepted: boolean;
+  task_id: number;
+  status: "queued" | string;
+  message: string;
+};
+
 export type SchedulerRunRetention = {
   count: number;
   days: number;
@@ -230,7 +237,7 @@ export function updateSchedulerTaskStatus(taskId: number, enabled: boolean) {
 }
 
 export function runSchedulerTask(taskId: number) {
-  return post<SchedulerTaskRunRecord>(`${BASE}/tasks/${taskId}/run/`, { trigger_type: "manual" });
+  return post<SchedulerTaskRunStartResponse>(`${BASE}/tasks/${taskId}/run/`, { trigger_type: "manual" });
 }
 
 export function fetchSchedulerTaskRuns(taskId: number, params?: { page?: number; page_size?: number; limit?: number }) {

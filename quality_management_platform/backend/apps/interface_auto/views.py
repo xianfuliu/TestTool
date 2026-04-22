@@ -440,7 +440,7 @@ def test_suites(request, payload=None):
             LEFT JOIN projects p ON p.id = ts.project_id
             LEFT JOIN business_groups bg ON bg.id = p.business_group_id
             {where_sql}
-            ORDER BY ts.updated_at DESC, ts.id DESC
+            ORDER BY ts.id DESC
             """,
             tuple(params),
         )

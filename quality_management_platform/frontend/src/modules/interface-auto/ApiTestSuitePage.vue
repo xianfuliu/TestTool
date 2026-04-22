@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Delete,
   Edit,
+  Folder,
   RefreshRight,
   Search,
   Tickets,
@@ -16,6 +17,7 @@ import {
 
 import { get } from "@/shared/api/client";
 import AppPagination from "@/shared/components/AppPagination.vue";
+import CronExpressionBuilder from "@/shared/components/CronExpressionBuilder.vue";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
 import {
   createSchedulerTask,
@@ -105,13 +107,6 @@ const form = reactive<SuiteForm>({
   retry_interval_seconds: 30,
 });
 
-const cronPresets = [
-  { label: "每 5 分钟", value: "*/5 * * * *" },
-  { label: "每小时", value: "0 * * * *" },
-  { label: "每天 9 点", value: DEFAULT_CRON },
-  { label: "工作日 9 点", value: "0 9 * * 1-5" },
-];
-
 const businessProjectCascaderProps = {
   emitPath: true,
 };
@@ -141,6 +136,21 @@ const selectedProjectPath = computed<number[]>({
   },
   set(value) {
     selectedProjectId.value = value?.length ? value[value.length - 1] : ALL_PROJECT;
+  },
+});
+
+const formProjectPath = computed<number[]>({
+  get() {
+    if (!form.project_id) {
+      return [];
+    }
+    const project = projectOptions.value.find((item) => item.id === form.project_id);
+    return project?.business_group_id ? [project.business_group_id, project.id] : [form.project_id];
+  },
+  async set(value) {
+    const projectId = value?.length ? value[value.length - 1] : null;
+    form.project_id = projectId;
+    await handleDialogProjectChange(projectId);
   },
 });
 
@@ -511,11 +521,7 @@ async function runSuiteNow(row: TestSuiteRecord) {
   try {
     const taskId = await ensureSchedulerTask(row);
     const result = await runSchedulerTask(taskId);
-    if (result.status === "success") {
-      ElMessage.success(result.message || "测试集执行成功");
-    } else {
-      ElMessage.warning(result.message || "测试集执行完成，请查看执行记录");
-    }
+    ElMessage.success(result.message || "测试集已提交后台异步执行，请稍后查看执行记录");
     await loadSuites();
   } catch (error) {
     ElMessage.error((error as Error).message);
@@ -599,20 +605,6 @@ function formatDate(value?: string | null) {
 
 function schedulerEnabled(row: TestSuiteRecord) {
   return Boolean(row.scheduler_task?.enabled);
-}
-
-function statusType(row: TestSuiteRecord) {
-  if (row.scheduler_task?.status === "running") {
-    return "warning";
-  }
-  return schedulerEnabled(row) ? "success" : "info";
-}
-
-function statusLabel(row: TestSuiteRecord) {
-  if (row.scheduler_task?.status === "running") {
-    return "执行中";
-  }
-  return schedulerEnabled(row) ? "已启用" : "未启用";
 }
 
 function runStatusType(status?: string) {
@@ -708,12 +700,7 @@ onMounted(async () => {
         </el-table-column>
         <el-table-column prop="name" label="测试集名称" min-width="210" align="center" header-align="center" show-overflow-tooltip />
         <el-table-column prop="project_name" label="项目" width="120" align="center" header-align="center" show-overflow-tooltip />
-        <el-table-column label="状态" width="92" align="center" header-align="center">
-          <template #default="{ row }">
-            <el-tag size="small" :type="statusType(row)" effect="light">{{ statusLabel(row) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="Cron表达式" width="150" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="调度规则" width="150" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono-text">{{ row.scheduler_task?.cron_expression || "-" }}</span>
           </template>
@@ -727,6 +714,9 @@ onMounted(async () => {
         <el-table-column label="下次执行" width="160" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ formatDate(row.scheduler_task?.next_run_at) }}</template>
         </el-table-column>
+        <el-table-column label="更新时间" width="160" align="center" header-align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ formatDate(row.updated_at) }}</template>
+        </el-table-column>
         <el-table-column label="上次结果" width="96" align="center" header-align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="runStatusType(row.scheduler_task?.last_run_status)" effect="light">
@@ -734,8 +724,14 @@ onMounted(async () => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" width="160" align="center" header-align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ formatDate(row.updated_at) }}</template>
+        <el-table-column label="状态" width="92" align="center" header-align="center">
+          <template #default="{ row }">
+            <el-switch
+              :model-value="schedulerEnabled(row)"
+              size="small"
+              @change="handleToggleSchedule(row, $event)"
+            />
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="300" fixed="right" align="center" header-align="center">
           <template #default="{ row }">
@@ -752,12 +748,6 @@ onMounted(async () => {
               </el-button>
               <el-button size="small" text :icon="View" @click="openExecutionRecords(row)">记录</el-button>
               <el-button size="small" text type="primary" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
-              <el-switch
-                class="schedule-switch"
-                :model-value="schedulerEnabled(row)"
-                size="small"
-                @change="handleToggleSchedule(row, $event)"
-              />
               <el-button size="small" text type="danger" :icon="Delete" @click="removeSuite(row)">删除</el-button>
             </div>
           </template>
@@ -789,20 +779,17 @@ onMounted(async () => {
           <el-form label-width="86px" class="suite-form" @submit.prevent>
             <div class="basic-grid">
               <el-form-item label="所属项目" required>
-                <el-select
-                  v-model="form.project_id"
-                  placeholder="请选择项目"
+                <el-cascader
+                  v-model="formProjectPath"
+                  class="dialog-project-cascader"
+                  :options="businessProjectOptions"
+                  :props="businessProjectCascaderProps"
+                  clearable
                   filterable
+                  placeholder="请选择业务 / 项目"
+                  popper-class="compact-select-popper"
                   :disabled="Boolean(form.id)"
-                  @change="handleDialogProjectChange"
-                >
-                  <el-option
-                    v-for="project in projectOptions"
-                    :key="project.id"
-                    :label="project.name"
-                    :value="project.id"
-                  />
-                </el-select>
+                />
               </el-form-item>
               <el-form-item label="测试集名称" required>
                 <el-input v-model="form.name" clearable maxlength="100" placeholder="请输入测试集名称" />
@@ -822,15 +809,23 @@ onMounted(async () => {
 
           <div class="case-picker" v-loading="workspaceLoading">
             <section class="case-column folder-column">
-              <div class="column-title">文件夹</div>
+              <div class="column-title">目录</div>
               <el-tree
                 class="folder-tree"
                 node-key="id"
                 :data="folderTreeData"
                 :default-expanded-keys="['all']"
+                default-expand-all
                 highlight-current
                 @node-click="handleFolderNodeClick"
-              />
+              >
+                <template #default="{ data }">
+                  <span class="folder-tree-node">
+                    <el-icon class="folder-tree-icon"><Folder /></el-icon>
+                    <span class="folder-tree-label">{{ data.label }}</span>
+                  </span>
+                </template>
+              </el-tree>
             </section>
 
             <section class="case-column available-column">
@@ -854,7 +849,14 @@ onMounted(async () => {
                 @selection-change="handleAvailableSelectionChange"
               >
                 <el-table-column type="selection" width="38" />
-                <el-table-column prop="name" label="用例名称" min-width="160" show-overflow-tooltip />
+                <el-table-column prop="name" label="用例名称" min-width="160" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <span class="case-name-cell">
+                      <el-icon class="case-mark-icon"><Tickets /></el-icon>
+                      <span class="case-name-text">{{ row.name }}</span>
+                    </span>
+                  </template>
+                </el-table-column>
               </el-table>
             </section>
 
@@ -874,8 +876,14 @@ onMounted(async () => {
                 @selection-change="handleSelectedSelectionChange"
               >
                 <el-table-column type="selection" width="38" />
-                <el-table-column type="index" label="#" width="48" />
-                <el-table-column prop="name" label="用例名称" min-width="170" show-overflow-tooltip />
+                <el-table-column prop="name" label="用例名称" min-width="170" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <span class="case-name-cell">
+                      <el-icon class="case-mark-icon"><Tickets /></el-icon>
+                      <span class="case-name-text">{{ row.name }}</span>
+                    </span>
+                  </template>
+                </el-table-column>
               </el-table>
             </section>
           </div>
@@ -883,26 +891,9 @@ onMounted(async () => {
 
         <el-tab-pane label="调度配置" name="schedule">
           <div class="schedule-panel">
-            <div class="schedule-head">
-              <div>
-                <p class="panel-title">Cron表达式配置</p>
-                <p class="panel-caption">保存后会同步到公共定时任务，执行器、重试、记录保留和日志详情都复用定时任务能力。</p>
-              </div>
-              <el-switch v-model="form.enabled" inline-prompt active-text="启用" inactive-text="停用" />
-            </div>
-
             <el-form label-width="112px" class="suite-form">
               <el-form-item label="Cron表达式" required>
-                <div class="cron-row">
-                  <el-input v-model="form.cron_expression" clearable placeholder="例如：0 9 * * *" />
-                  <el-button
-                    v-for="preset in cronPresets"
-                    :key="preset.value"
-                    @click="form.cron_expression = preset.value"
-                  >
-                    {{ preset.label }}
-                  </el-button>
-                </div>
+                <CronExpressionBuilder v-model="form.cron_expression" />
               </el-form-item>
               <div class="advanced-grid">
                 <el-form-item label="超时时间">
@@ -993,9 +984,7 @@ onMounted(async () => {
 }
 
 .filter-row,
-.column-head,
-.schedule-head,
-.cron-row {
+.column-head {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1018,6 +1007,10 @@ onMounted(async () => {
 
 .business-project-filter {
   width: 220px;
+}
+
+.dialog-project-cascader {
+  width: 100%;
 }
 
 .keyword-input {
@@ -1077,10 +1070,6 @@ onMounted(async () => {
   padding-right: 3px;
 }
 
-.schedule-switch {
-  margin: 0 4px;
-}
-
 .basic-grid,
 .advanced-grid {
   display: grid;
@@ -1101,6 +1090,9 @@ onMounted(async () => {
 }
 
 .column-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 28px;
   color: #303133;
   font-size: 13px;
@@ -1109,7 +1101,7 @@ onMounted(async () => {
 }
 
 .column-head {
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .case-search {
@@ -1122,6 +1114,35 @@ onMounted(async () => {
   border: 1px solid #e4e7ed;
   border-radius: 8px;
   overflow: auto;
+}
+
+.folder-tree-node,
+.case-name-cell {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px;
+}
+
+.folder-tree-icon {
+  flex: 0 0 auto;
+  color: #8a97a8;
+  font-size: 14px;
+}
+
+.folder-tree-label,
+.case-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-mark-icon {
+  flex: 0 0 auto;
+  color: #1677ff;
+  font-size: 14px;
 }
 
 .case-transfer {
@@ -1137,35 +1158,6 @@ onMounted(async () => {
 
 .schedule-panel {
   padding: 4px 0 8px;
-}
-
-.schedule-head {
-  justify-content: space-between;
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #eef1f6;
-}
-
-.panel-title {
-  margin: 0;
-  color: #303133;
-  font-size: 16px;
-  font-weight: 650;
-}
-
-.panel-caption {
-  margin: 6px 0 0;
-  color: #697586;
-  font-size: 13px;
-}
-
-.cron-row {
-  flex-wrap: wrap;
-  width: 100%;
-}
-
-.cron-row .el-input {
-  width: 280px;
 }
 
 .field-unit {

@@ -5,6 +5,7 @@ import { Delete, Edit, RefreshRight, Search, Tickets, VideoPlay } from "@element
 import { ElMessage, ElMessageBox } from "element-plus";
 
 import AppPagination from "@/shared/components/AppPagination.vue";
+import CronExpressionBuilder from "@/shared/components/CronExpressionBuilder.vue";
 import {
   createSchedulerTask,
   deleteSchedulerTask,
@@ -80,40 +81,6 @@ const scheduleTypeOptions: Array<{ label: string; value: SchedulerScheduleType }
   { label: "手动触发", value: "manual" },
 ];
 
-const cronPresets = [
-  { label: "每 5 分钟", value: "*/5 * * * *" },
-  { label: "每小时", value: "0 * * * *" },
-  { label: "每天 9 点", value: "0 9 * * *" },
-  { label: "工作日 9 点", value: "0 9 * * 1-5" },
-];
-
-type CronBuilderMode = "every_minutes" | "hourly" | "daily" | "weekly" | "monthly";
-
-const minuteOptions = Array.from({ length: 60 }, (_, value) => ({
-  label: `${String(value).padStart(2, "0")} 分`,
-  value,
-}));
-
-const hourOptions = Array.from({ length: 24 }, (_, value) => ({
-  label: `${String(value).padStart(2, "0")} 点`,
-  value,
-}));
-
-const weekDayOptions = [
-  { label: "周日", value: 0 },
-  { label: "周一", value: 1 },
-  { label: "周二", value: 2 },
-  { label: "周三", value: 3 },
-  { label: "周四", value: 4 },
-  { label: "周五", value: 5 },
-  { label: "周六", value: 6 },
-];
-
-const monthDayOptions = Array.from({ length: 31 }, (_, index) => ({
-  label: `${index + 1} 日`,
-  value: index + 1,
-}));
-
 const businessProjectCascaderProps = {
   checkStrictly: true,
   emitPath: true,
@@ -185,15 +152,6 @@ const form = reactive<SchedulerForm>({
   retry_count: 0,
   retry_interval_seconds: 30,
   enabled: false,
-});
-
-const cronBuilder = reactive({
-  mode: "daily" as CronBuilderMode,
-  everyMinutes: 5,
-  minute: 0,
-  hour: 9,
-  weekDays: [1, 2, 3, 4, 5],
-  monthDay: 1,
 });
 
 const filteredProjects = computed(() => {
@@ -277,141 +235,6 @@ function normalizeSwitchValue(value: boolean | string | number | null | undefine
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
-function clampNumber(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) {
-    return min;
-  }
-  return Math.min(max, Math.max(min, value));
-}
-
-function parseCronNumber(value: string | undefined, min: number, max: number, fallback: number) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) {
-    return fallback;
-  }
-  return clampNumber(parsed, min, max);
-}
-
-function parseCronWeekDays(value: string | undefined) {
-  if (!value || value === "*") {
-    return [1, 2, 3, 4, 5];
-  }
-  const days = new Set<number>();
-  for (const section of value.split(",")) {
-    const [startText, endText] = section.split("-");
-    const start = Number(startText);
-    const end = endText === undefined ? start : Number(endText);
-    if (!Number.isInteger(start) || !Number.isInteger(end)) {
-      continue;
-    }
-    const from = Math.min(start, end);
-    const to = Math.max(start, end);
-    for (let day = from; day <= to; day += 1) {
-      const normalized = day === 7 ? 0 : day;
-      if (normalized >= 0 && normalized <= 6) {
-        days.add(normalized);
-      }
-    }
-  }
-  return Array.from(days).sort((a, b) => a - b);
-}
-
-function formatCronWeekDays(value: number[]) {
-  const days = Array.from(new Set(value.map((item) => (item === 7 ? 0 : item))))
-    .filter((item) => item >= 0 && item <= 6)
-    .sort((a, b) => a - b);
-  if (days.length === 0) {
-    return "1";
-  }
-  const sections: string[] = [];
-  let start = days[0];
-  let previous = days[0];
-  for (let index = 1; index <= days.length; index += 1) {
-    const current = days[index];
-    if (current === previous + 1) {
-      previous = current;
-      continue;
-    }
-    sections.push(start === previous ? `${start}` : `${start}-${previous}`);
-    start = current;
-    previous = current;
-  }
-  return sections.join(",");
-}
-
-function buildCronExpression() {
-  const minute = clampNumber(cronBuilder.minute, 0, 59);
-  const hour = clampNumber(cronBuilder.hour, 0, 23);
-  if (cronBuilder.mode === "every_minutes") {
-    return `*/${clampNumber(cronBuilder.everyMinutes, 1, 59)} * * * *`;
-  }
-  if (cronBuilder.mode === "hourly") {
-    return `${minute} * * * *`;
-  }
-  if (cronBuilder.mode === "weekly") {
-    return `${minute} ${hour} * * ${formatCronWeekDays(cronBuilder.weekDays)}`;
-  }
-  if (cronBuilder.mode === "monthly") {
-    return `${minute} ${hour} ${clampNumber(cronBuilder.monthDay, 1, 31)} * *`;
-  }
-  return `${minute} ${hour} * * *`;
-}
-
-function syncCronBuilderFromExpression(expression: string) {
-  const [minute, hour, day, month, week] = expression.trim().split(/\s+/);
-  if (!minute || !hour || !day || !month || !week) {
-    cronBuilder.mode = "daily";
-    cronBuilder.minute = 0;
-    cronBuilder.hour = 9;
-    return;
-  }
-
-  if (minute.startsWith("*/") && hour === "*" && day === "*" && month === "*" && week === "*") {
-    cronBuilder.mode = "every_minutes";
-    cronBuilder.everyMinutes = parseCronNumber(minute.slice(2), 1, 59, 5);
-    return;
-  }
-
-  if (hour === "*" && day === "*" && month === "*" && week === "*") {
-    cronBuilder.mode = "hourly";
-    cronBuilder.minute = parseCronNumber(minute, 0, 59, 0);
-    return;
-  }
-
-  if (day === "*" && month === "*" && week !== "*") {
-    cronBuilder.mode = "weekly";
-    cronBuilder.minute = parseCronNumber(minute, 0, 59, 0);
-    cronBuilder.hour = parseCronNumber(hour, 0, 23, 9);
-    cronBuilder.weekDays = parseCronWeekDays(week);
-    return;
-  }
-
-  if (day !== "*" && month === "*" && week === "*") {
-    cronBuilder.mode = "monthly";
-    cronBuilder.minute = parseCronNumber(minute, 0, 59, 0);
-    cronBuilder.hour = parseCronNumber(hour, 0, 23, 9);
-    cronBuilder.monthDay = parseCronNumber(day, 1, 31, 1);
-    return;
-  }
-
-  cronBuilder.mode = "daily";
-  cronBuilder.minute = parseCronNumber(minute, 0, 59, 0);
-  cronBuilder.hour = parseCronNumber(hour, 0, 23, 9);
-}
-
-function applyCronPreset(expression: string) {
-  form.cron_expression = expression;
-  syncCronBuilderFromExpression(expression);
-}
-
-watch(
-  cronBuilder,
-  () => {
-    form.cron_expression = buildCronExpression();
-  },
-  { deep: true },
-);
-
 watch(runsDrawerVisible, (visible) => {
   if (visible) {
     startRunDetailPolling();
@@ -486,7 +309,6 @@ function resetForm() {
   form.retry_count = 0;
   form.retry_interval_seconds = 30;
   form.enabled = false;
-  syncCronBuilderFromExpression(form.cron_expression);
 }
 
 function openCreateDialog() {
@@ -524,7 +346,6 @@ function openEditDialog(row: SchedulerTaskRecord) {
   form.retry_count = Number(row.retry_count) || 0;
   form.retry_interval_seconds = Number(row.retry_interval_seconds) || 30;
   form.enabled = row.enabled;
-  syncCronBuilderFromExpression(form.cron_expression);
   dialogTab.value = "basic";
   dialogVisible.value = true;
 }
@@ -656,11 +477,7 @@ async function runTaskNow(row: SchedulerTaskRecord) {
   runningTaskIds.value = new Set(runningTaskIds.value).add(row.id);
   try {
     const result = await runSchedulerTask(row.id);
-    if (result.status === "success") {
-      ElMessage.success(result.message || "任务执行成功");
-    } else {
-      ElMessage.warning(result.message || "任务执行完成，请查看执行记录");
-    }
+    ElMessage.success(result.message || "任务已提交后台异步执行，请稍后查看执行记录");
     await loadTasks();
     if (runsDrawerVisible.value && currentRunTask.value?.id === row.id) {
       await loadRuns({ silent: true });
@@ -1283,22 +1100,22 @@ onBeforeUnmount(() => {
         cell-class-name="task-table-cell"
         header-cell-class-name="task-table-header-cell"
       >
-        <el-table-column label="序号" width="70" align="center" header-align="center">
+        <el-table-column label="序号" width="58" align="center" header-align="center">
           <template #default="{ $index }">
             {{ getRowIndex($index) }}
           </template>
         </el-table-column>
-        <el-table-column label="业务" width="92" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="业务" width="82" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.business_group_name || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="项目" width="104" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="项目" width="94" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.project_name || "-" }}
           </template>
         </el-table-column>
-        <el-table-column label="任务名称" min-width="190" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="任务名称" min-width="320" align="left" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="task-name-cell">
               <span class="task-type-badge" :class="`task-type-badge--${taskTypeMeta(row.task_type).tone}`">
@@ -1308,39 +1125,44 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="调度规则" min-width="150" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="调度规则" min-width="128" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono-text">{{ formatSchedule(row) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="下次执行时间" min-width="160" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="下次执行时间" min-width="148" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.enabled ? formatDateTime(row.next_run_at) : "已停用" }}
           </template>
         </el-table-column>
-        <el-table-column label="最近一次执行时间" min-width="170" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="最近一次执行时间" min-width="154" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
             {{ formatDateTime(row.last_run_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="上次结果" width="96" align="center" header-align="center">
+        <el-table-column label="更新时间" min-width="148" align="center" header-align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ formatDateTime(row.updated_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="执行统计" width="100" align="center" header-align="center">
+          <template #default="{ row }">
+            <span class="stat-text">{{ row.run_count || 0 }} 次 / 失败 {{ row.fail_count || 0 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="上次结果" width="84" align="center" header-align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="runStatusType(row.last_run_status)" effect="light">
               {{ runStatusLabel(row.last_run_status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="执行统计" width="110" align="center" header-align="center">
-          <template #default="{ row }">
-            <span class="stat-text">{{ row.run_count || 0 }} 次 / 失败 {{ row.fail_count || 0 }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="92" align="center" header-align="center">
+        <el-table-column label="状态" width="78" align="center" header-align="center">
           <template #default="{ row }">
             <el-switch :model-value="row.enabled" size="small" @change="handleToggleTask(row, $event)" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="250" align="center" header-align="center">
+        <el-table-column label="操作" width="220" align="center" header-align="center">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button
@@ -1414,107 +1236,8 @@ onBeforeUnmount(() => {
                   <el-option v-for="item in scheduleTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="启用状态">
-                <el-switch v-model="form.enabled" active-text="启用" inactive-text="停用" />
-              </el-form-item>
-              <el-form-item v-if="form.schedule_type === 'cron'" label="快捷规则" class="full-row">
-                <div class="preset-row">
-                  <el-button
-                    v-for="item in cronPresets"
-                    :key="item.value"
-                    size="small"
-                    :type="form.cron_expression === item.value ? 'primary' : 'default'"
-                    plain
-                    @click="applyCronPreset(item.value)"
-                  >
-                    {{ item.label }}
-                  </el-button>
-                </div>
-              </el-form-item>
               <el-form-item v-if="form.schedule_type === 'cron'" label="Cron 规则" class="full-row">
-                <div class="cron-builder">
-                  <el-radio-group v-model="cronBuilder.mode" size="small" class="cron-mode-group">
-                    <el-radio-button label="every_minutes">每 N 分钟</el-radio-button>
-                    <el-radio-button label="hourly">每小时</el-radio-button>
-                    <el-radio-button label="daily">每天</el-radio-button>
-                    <el-radio-button label="weekly">每周</el-radio-button>
-                    <el-radio-button label="monthly">每月</el-radio-button>
-                  </el-radio-group>
-
-                  <div class="cron-row" v-if="cronBuilder.mode === 'every_minutes'">
-                    <span>每</span>
-                    <el-input-number
-                      v-model="cronBuilder.everyMinutes"
-                      :min="1"
-                      :max="59"
-                      controls-position="right"
-                    />
-                    <span>分钟执行</span>
-                  </div>
-
-                  <div class="cron-row" v-else-if="cronBuilder.mode === 'hourly'">
-                    <span>每小时的</span>
-                    <el-select
-                      v-model="cronBuilder.minute"
-                      class="cron-select"
-                      popper-class="compact-select-popper"
-                    >
-                      <el-option v-for="item in minuteOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <span>执行</span>
-                  </div>
-
-                  <div class="cron-row" v-else-if="cronBuilder.mode === 'daily'">
-                    <span>每天</span>
-                    <el-select v-model="cronBuilder.hour" class="cron-select" popper-class="compact-select-popper">
-                      <el-option v-for="item in hourOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <el-select v-model="cronBuilder.minute" class="cron-select" popper-class="compact-select-popper">
-                      <el-option v-for="item in minuteOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <span>执行</span>
-                  </div>
-
-                  <div class="cron-row" v-else-if="cronBuilder.mode === 'weekly'">
-                    <span>每周</span>
-                    <el-select
-                      v-model="cronBuilder.weekDays"
-                      class="cron-select cron-select--wide"
-                      multiple
-                      collapse-tags
-                      collapse-tags-tooltip
-                      popper-class="compact-select-popper"
-                    >
-                      <el-option v-for="item in weekDayOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <el-select v-model="cronBuilder.hour" class="cron-select" popper-class="compact-select-popper">
-                      <el-option v-for="item in hourOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <el-select v-model="cronBuilder.minute" class="cron-select" popper-class="compact-select-popper">
-                      <el-option v-for="item in minuteOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <span>执行</span>
-                  </div>
-
-                  <div class="cron-row" v-else>
-                    <span>每月</span>
-                    <el-select v-model="cronBuilder.monthDay" class="cron-select" popper-class="compact-select-popper">
-                      <el-option v-for="item in monthDayOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <el-select v-model="cronBuilder.hour" class="cron-select" popper-class="compact-select-popper">
-                      <el-option v-for="item in hourOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <el-select v-model="cronBuilder.minute" class="cron-select" popper-class="compact-select-popper">
-                      <el-option v-for="item in minuteOptions" :key="item.value" :label="item.label" :value="item.value" />
-                    </el-select>
-                    <span>执行</span>
-                  </div>
-
-                  <div class="cron-preview">
-                    <span>Cron</span>
-                    <code>{{ form.cron_expression }}</code>
-                  </div>
-                </div>
+                <CronExpressionBuilder v-model="form.cron_expression" />
               </el-form-item>
               <el-form-item v-if="form.schedule_type === 'interval'" label="间隔秒数">
                 <el-input-number v-model="form.interval_seconds" :min="60" :step="60" controls-position="right" />
@@ -1921,7 +1644,7 @@ onBeforeUnmount(() => {
 .task-name-cell {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   min-width: 0;
   width: 100%;
@@ -1969,7 +1692,7 @@ onBeforeUnmount(() => {
 
 .task-name-label {
   display: inline-block;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2056,77 +1779,6 @@ onBeforeUnmount(() => {
 
 .business-project-cascader {
   width: 100%;
-}
-
-.preset-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.cron-builder {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #e5edf6;
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.cron-mode-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-}
-
-.cron-builder :deep(.el-radio-button__inner) {
-  min-width: 74px;
-  padding: 7px 12px;
-  font-size: 12px;
-}
-
-.cron-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  color: #4e5969;
-  font-size: 12px;
-}
-
-.cron-row :deep(.el-input-number) {
-  width: 120px;
-}
-
-.cron-select {
-  width: 104px !important;
-}
-
-.cron-select--wide {
-  width: 210px !important;
-}
-
-.cron-preview {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 5px 10px;
-  border-radius: 6px;
-  background: #eef4ff;
-  color: #64748b;
-  font-size: 12px;
-}
-
-.cron-preview code {
-  color: #1d4ed8;
-  font-family: Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .dialog-footer {
