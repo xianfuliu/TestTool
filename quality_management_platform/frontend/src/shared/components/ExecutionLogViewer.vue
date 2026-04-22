@@ -835,9 +835,10 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
 <style scoped>
 .execution-log-viewer {
   max-height: 68vh;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 10px 12px;
-  border: 1px solid #dce5f0;
+  border: 0;
   border-radius: 6px;
   background: #f8fafc;
   color: #1f2937;
@@ -847,7 +848,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
 }
 
 .step-log-list {
-  min-width: 720px;
+  min-width: 0;
 }
 
 .step-log-group + .step-log-group {
@@ -957,6 +958,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
   font-size: 12px;
   line-height: 1.65;
+  overflow: auto;
   user-select: text;
 }
 

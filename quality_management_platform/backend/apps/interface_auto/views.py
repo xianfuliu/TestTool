@@ -7,6 +7,7 @@ from apps.common.http import api_view, get_int
 from test_platform.db import connect, execute, executemany, fetch_all, fetch_one
 
 from .execution_service import execute_case_run
+from .report_service import delete_report, get_report_detail, list_report_groups, list_report_records, list_reports
 from . import template_service
 
 
@@ -926,24 +927,21 @@ def scheduler_status(_request, scheduler_id: int, payload=None):
 
 @api_view
 def reports(_request, payload=None):
-    return {
-        "data": fetch_all("SELECT * FROM test_reports ORDER BY created_at DESC LIMIT 100"),
-        "pagination": {
-            "total": fetch_one("SELECT COUNT(*) AS count FROM test_reports")["count"],
-            "page": 1,
-            "page_size": 100,
-            "total_pages": 1,
-            "has_prev": False,
-            "has_next": False,
-        },
-    }
+    if str((payload or {}).get("view") or "") == "suite_groups":
+        return list_report_groups(payload or {})
+    if str((payload or {}).get("view") or "") == "group_records":
+        return list_report_records(payload or {})
+    return list_reports(payload or {})
 
 
 @api_view
 def report_detail(request, report_id: int, payload=None):
     if request.method == "GET":
-        return fetch_one("SELECT * FROM test_reports WHERE id = %s", (report_id,))
-    return {"deleted": execute("DELETE FROM test_reports WHERE id = %s", (report_id,)) > 0}
+        report = get_report_detail(report_id)
+        if not report:
+            raise ValueError("测试报告不存在")
+        return report
+    return {"deleted": delete_report(report_id)}
 
 
 @api_view

@@ -521,7 +521,7 @@ async function runSuiteNow(row: TestSuiteRecord) {
   try {
     const taskId = await ensureSchedulerTask(row);
     const result = await runSchedulerTask(taskId);
-    ElMessage.success(result.message || "测试集已提交后台异步执行，请稍后查看执行记录");
+    ElMessage.success(result.message || "测试集已提交后台异步执行，请稍后在测试报告查看结果");
     await loadSuites();
   } catch (error) {
     ElMessage.error((error as Error).message);
@@ -533,12 +533,7 @@ async function runSuiteNow(row: TestSuiteRecord) {
 }
 
 async function openExecutionRecords(row: TestSuiteRecord) {
-  const taskId = row.scheduler_task?.id;
-  if (!taskId) {
-    ElMessage.warning("当前测试集还没有关联的定时任务，请先保存调度配置");
-    return;
-  }
-  await router.push({ path: "/scheduler/tasks", query: { taskId } });
+  await router.push({ path: "/interface-auto/reports", query: { suiteId: row.id, projectId: row.project_id } });
 }
 
 function handleFolderNodeClick(node: FolderTreeNode) {

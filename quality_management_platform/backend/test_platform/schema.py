@@ -255,7 +255,10 @@ SCHEMA_SQL = [
     """
     CREATE TABLE IF NOT EXISTS test_reports (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        report_type VARCHAR(30) DEFAULT 'test_case',
         scheduler_id INT NULL,
+        scheduler_task_id INT NULL,
+        scheduler_run_id INT NULL,
         suite_id INT NULL,
         case_id INT NULL,
         project_id INT NULL,
@@ -272,7 +275,10 @@ SCHEMA_SQL = [
         trigger_type VARCHAR(50) DEFAULT 'manual',
         summary_json JSON NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_test_reports_suite_id (suite_id)
+        INDEX idx_test_reports_suite_id (suite_id),
+        INDEX idx_test_reports_project_id (project_id),
+        INDEX idx_test_reports_type_created_at (report_type, created_at),
+        INDEX idx_test_reports_scheduler_run_id (scheduler_run_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """

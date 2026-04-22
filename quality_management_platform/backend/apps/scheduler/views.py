@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from apps.common.http import api_view, get_int
+from apps.interface_auto.report_service import create_scheduler_execution_report
 from test_platform.db import execute, fetch_all, fetch_one
 
 from .cron import CronExpressionError, get_next_cron_time, validate_cron_expression
@@ -816,12 +817,55 @@ def execute_scheduler_task(
         if retry_interval:
             time.sleep(retry_interval)
 
-    result["retry_attempts"] = attempts
-    trimmed_logs, logs_meta = trim_scheduler_logs(logs)
-    result["logs_meta"] = logs_meta
-
     finished_at = datetime.now()
     duration_ms = round((time.perf_counter() - started) * 1000, 2)
+    result["retry_attempts"] = attempts
+    try:
+        report_info = create_scheduler_execution_report(
+            task,
+            result,
+            run_id=run_id,
+            trigger_type=trigger_type,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_ms=duration_ms,
+        )
+    except Exception as exc:
+        report_info = None
+        logs.append(
+            make_log_line(
+                f"测试报告生成失败: {exc}",
+                level="ERROR",
+                scope="测试报告",
+                meta={"error_type": exc.__class__.__name__},
+            )
+        )
+    if report_info:
+        result["report_id"] = report_info.get("report_id")
+        result["report"] = report_info
+        email_delivery = report_info.get("email_delivery") if isinstance(report_info.get("email_delivery"), dict) else {}
+        email_status = email_delivery.get("status") if isinstance(email_delivery, dict) else ""
+        email_message = email_delivery.get("message") if isinstance(email_delivery, dict) else ""
+        logs.append(
+            make_log_line(
+                f"测试报告已生成: {report_info.get('report_name') or report_info.get('report_id')}",
+                level="INFO",
+                scope="测试报告",
+                meta={"report_id": report_info.get("report_id")},
+            )
+        )
+        if email_status:
+            logs.append(
+                make_log_line(
+                    f"邮件发送状态: {email_status}，{email_message}",
+                    level="ERROR" if email_status == "failed" else "INFO",
+                    scope="测试报告",
+                    sub_scope="邮件",
+                    meta=email_delivery,
+                )
+            )
+    trimmed_logs, logs_meta = trim_scheduler_logs(logs)
+    result["logs_meta"] = logs_meta
     execute(
         """
         UPDATE scheduler_task_runs

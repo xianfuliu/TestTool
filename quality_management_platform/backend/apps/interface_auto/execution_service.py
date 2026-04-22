@@ -25,6 +25,8 @@ from apps.common.request_execution import (
 )
 from test_platform.db import DATABASE_CONFIG, execute, fetch_all, fetch_one
 
+from .report_service import ensure_report_schema_ready
+
 
 class ToolExecutionError(ValueError):
     def __init__(
@@ -1386,7 +1388,12 @@ def _insert_step_result(
     )
 
 
-def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
+def execute_case_run(
+    case_snapshot: dict[str, Any],
+    *,
+    create_report: bool = True,
+    trigger_type: str = "manual",
+) -> dict[str, Any]:
     case_item = {
         **dict(case_snapshot or {}),
         "global_vars": _parse_json_value(case_snapshot.get("global_vars"), {}),
@@ -1413,37 +1420,42 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
 
     report_start = datetime.now()
     report_name = f"{case_item.get('name') or '未命名用例'}_{report_start.strftime('%Y%m%d%H%M%S')}"
-    report_id = execute(
-        """
-        INSERT INTO test_reports (
-            case_id,
-            project_id,
-            report_name,
-            status,
-            total_cases,
-            passed_cases,
-            failed_cases,
-            error_cases,
-            start_time,
-            trigger_type,
-            summary_json
+    report_id: int | None = None
+    if create_report:
+        ensure_report_schema_ready()
+        report_id = execute(
+            """
+            INSERT INTO test_reports (
+                report_type,
+                case_id,
+                project_id,
+                report_name,
+                status,
+                total_cases,
+                passed_cases,
+                failed_cases,
+                error_cases,
+                start_time,
+                trigger_type,
+                summary_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                "test_case",
+                case_item.get("id"),
+                case_item.get("project_id"),
+                report_name,
+                "running",
+                1,
+                0,
+                0,
+                0,
+                report_start,
+                trigger_type,
+                _json_text({"request_id": case_request_id, "steps": [], "report_type": "test_case"}),
+            ),
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            case_item.get("id"),
-            case_item.get("project_id"),
-            report_name,
-            "running",
-            1,
-            0,
-            0,
-            0,
-            report_start,
-            "manual",
-            _json_text({"request_id": case_request_id, "steps": []}),
-        ),
-    )
 
     base_encryption = EncryptionConfig(
         enabled=bool(case_item.get("enable_encryption")),
@@ -1529,45 +1541,47 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             "final_variables": _log_value(runtime_variables),
         }
         failed_execution_log["lines"] = _build_compact_execution_log_lines(failed_execution_log)
-        execute(
-            """
-            UPDATE test_reports
-            SET status = %s,
-                passed_cases = %s,
-                failed_cases = %s,
-                error_cases = %s,
-                end_time = %s,
-                duration = %s,
-                summary_json = %s
-            WHERE id = %s
-            """,
-            (
-                "failed",
-                0,
-                1,
-                0,
-                report_end,
-                round((report_end - report_start).total_seconds(), 3),
-                _json_text(
-                    {
-                        "request_id": case_request_id,
-                        "passed_steps": 0,
-                        "failed_steps": 0,
-                        "skipped_steps": 0,
-                        "steps": [],
-                        "global_setup": {
-                            "logs": global_setup_logs,
-                            "error": str(exc),
-                            "variable_changes": global_variable_changes,
-                            "context": global_context,
-                        },
-                        "case_outputs": case_outputs,
-                        "execution_log": failed_execution_log,
-                    }
+        if report_id:
+            execute(
+                """
+                UPDATE test_reports
+                SET status = %s,
+                    passed_cases = %s,
+                    failed_cases = %s,
+                    error_cases = %s,
+                    end_time = %s,
+                    duration = %s,
+                    summary_json = %s
+                WHERE id = %s
+                """,
+                (
+                    "failed",
+                    0,
+                    1,
+                    0,
+                    report_end,
+                    round((report_end - report_start).total_seconds(), 3),
+                    _json_text(
+                        {
+                            "report_type": "test_case",
+                            "request_id": case_request_id,
+                            "passed_steps": 0,
+                            "failed_steps": 0,
+                            "skipped_steps": 0,
+                            "steps": [],
+                            "global_setup": {
+                                "logs": global_setup_logs,
+                                "error": str(exc),
+                                "variable_changes": global_variable_changes,
+                                "context": global_context,
+                            },
+                            "case_outputs": case_outputs,
+                            "execution_log": failed_execution_log,
+                        }
+                    ),
+                    report_id,
                 ),
-                report_id,
-            ),
-        )
+            )
         return {
             "report_id": report_id,
             "request_id": case_request_id,
@@ -1881,18 +1895,19 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
             }
         )
         response_payload["execution_log"] = step_detail
-        _insert_step_result(
-            report_id,
-            case_item.get("id"),
-            step,
-            status,
-            request_payload,
-            response_payload,
-            logs,
-            error_message,
-            step_start,
-            datetime.now(),
-        )
+        if report_id:
+            _insert_step_result(
+                report_id,
+                case_item.get("id"),
+                step,
+                status,
+                request_payload,
+                response_payload,
+                logs,
+                error_message,
+                step_start,
+                datetime.now(),
+            )
         step_summaries.append(
             {
                 "step_id": step.get("id"),
@@ -1937,45 +1952,47 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
         "final_variables": _log_value(runtime_variables),
     }
     execution_log["lines"] = _build_compact_execution_log_lines(execution_log)
-    execute(
-        """
-        UPDATE test_reports
-        SET status = %s,
-            passed_cases = %s,
-            failed_cases = %s,
-            error_cases = %s,
-            end_time = %s,
-            duration = %s,
-            summary_json = %s
-        WHERE id = %s
-        """,
-        (
-            overall_status,
-            1 if overall_status == "success" else 0,
-            1 if overall_status == "failed" else 0,
-            0,
-            report_end,
-            round((report_end - report_start).total_seconds(), 3),
-            _json_text(
-                {
-                    "request_id": case_request_id,
-                    "passed_steps": passed_steps,
-                    "failed_steps": failed_steps,
-                    "skipped_steps": skipped_steps,
-                    "steps": step_summaries,
-                    "global_setup": {
-                        "logs": global_setup_logs,
-                        "login_request": global_login_result,
-                        "variable_changes": global_variable_changes,
-                        "context": global_context,
-                    },
-                    "case_outputs": case_outputs,
-                    "execution_log": execution_log,
-                }
+    if report_id:
+        execute(
+            """
+            UPDATE test_reports
+            SET status = %s,
+                passed_cases = %s,
+                failed_cases = %s,
+                error_cases = %s,
+                end_time = %s,
+                duration = %s,
+                summary_json = %s
+            WHERE id = %s
+            """,
+            (
+                overall_status,
+                1 if overall_status == "success" else 0,
+                1 if overall_status == "failed" else 0,
+                0,
+                report_end,
+                round((report_end - report_start).total_seconds(), 3),
+                _json_text(
+                    {
+                        "report_type": "test_case",
+                        "request_id": case_request_id,
+                        "passed_steps": passed_steps,
+                        "failed_steps": failed_steps,
+                        "skipped_steps": skipped_steps,
+                        "steps": step_summaries,
+                        "global_setup": {
+                            "logs": global_setup_logs,
+                            "login_request": global_login_result,
+                            "variable_changes": global_variable_changes,
+                            "context": global_context,
+                        },
+                        "case_outputs": case_outputs,
+                        "execution_log": execution_log,
+                    }
+                ),
+                report_id,
             ),
-            report_id,
-        ),
-    )
+        )
 
     return {
         "report_id": report_id,

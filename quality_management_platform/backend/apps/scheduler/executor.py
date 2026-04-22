@@ -74,10 +74,16 @@ def _execute_test_suite(config: dict[str, Any], log_callback: LogProgressCallbac
             "suite_name": suite.get("name"),
         },
         log_callback=log_callback,
+        create_individual_reports=False,
     )
 
 
-def _execute_test_cases(config: dict[str, Any], log_callback: LogProgressCallback | None = None) -> dict[str, Any]:
+def _execute_test_cases(
+    config: dict[str, Any],
+    log_callback: LogProgressCallback | None = None,
+    *,
+    create_individual_reports: bool = True,
+) -> dict[str, Any]:
     case_ids = [_int_value(item) for item in config.get("case_ids") or []]
     case_ids = [item for item in case_ids if item]
     if not case_ids:
@@ -103,7 +109,7 @@ def _execute_test_cases(config: dict[str, Any], log_callback: LogProgressCallbac
             _append_case_result_logs(logs, result)
             _emit_progress(log_callback, logs)
             continue
-        result = execute_case_run(case_detail)
+        result = execute_case_run(case_detail, create_report=create_individual_reports)
         results.append(result)
         _append_case_result_logs(logs, result)
         _emit_progress(log_callback, logs)
