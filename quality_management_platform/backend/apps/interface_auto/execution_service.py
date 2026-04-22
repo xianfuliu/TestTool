@@ -1849,17 +1849,20 @@ def execute_case_run(case_snapshot: dict[str, Any]) -> dict[str, Any]:
 
             for tool in _tool_entries(step.get("assertions")):
                 current_source_data = execute_step_tool("assertions", tool, current_source_data)
+                if assertion_errors:
+                    break
 
-            for tool in _tool_entries(step.get("post_processing")):
-                current_source_data = execute_step_tool("post_processing", tool, current_source_data)
-
-            last_source_data = current_source_data
             if assertion_errors:
                 status = "failed"
                 overall_status = "failed"
+                hard_stop = True
                 error_message = "；".join(assertion_errors)
-                logs.append(f"步骤断言失败: {error_message}")
+                logs.append(f"步骤断言失败，已终止后续步骤: {error_message}")
             else:
+                for tool in _tool_entries(step.get("post_processing")):
+                    current_source_data = execute_step_tool("post_processing", tool, current_source_data)
+
+                last_source_data = current_source_data
                 status = "success"
         except Exception as exc:
             status = "failed"

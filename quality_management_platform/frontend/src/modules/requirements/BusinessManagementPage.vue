@@ -133,7 +133,7 @@ const detailTitle = computed(() => {
 
 const detailSubtitle = computed(() => {
   if (selectedProject.value) {
-    return "项目是跨测试中心、自动化、需求协同共同复用的全局主数据。";
+    return "项目是跨功能测试、测试平台、需求协同共同复用的全局主数据。";
   }
   if (selectedGroup.value) {
     return "业务组用于统一组织项目归属，后续会被多个模块复用。";
@@ -575,7 +575,7 @@ void loadData();
   <div class="page-shell business-page">
     <ModuleHeader
       title="业务管理"
-      subtitle="把旧接口自动化里的业务管理迁成质量管理平台的全局主数据，供需求协同、测试中心和自动化模块共同复用。"
+      subtitle="把旧接口自动化里的业务管理迁成质量管理平台的全局主数据，供需求协同、功能测试和测试平台共同复用。"
     />
 
     <div class="business-summary">

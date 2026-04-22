@@ -59,14 +59,14 @@ const moduleCards: ModuleCard[] = [
     accent: "37, 99, 235",
   },
   {
-    title: "测试中心",
-    description: "测试数据、用例、缺陷与自动化能力的一体化空间。",
+    title: "功能测试",
+    description: "测试数据、用例与缺陷管理的一体化空间。",
     icon: Files,
     accent: "14, 165, 233",
   },
   {
     title: "调度任务",
-    description: "统一管理定时任务、自动化调度与平台级执行策略。",
+    description: "统一管理定时任务、测试平台调度与执行策略。",
     icon: Operation,
     accent: "16, 185, 129",
   },

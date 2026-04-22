@@ -11,7 +11,7 @@ const props = withDefaults(
   }>(),
   {
     title: "业务组 / 项目上下文",
-    subtitle: "统一使用全局主数据，供需求协同、测试中心和自动化模块复用。",
+    subtitle: "统一使用全局主数据，供需求协同、功能测试和测试平台复用。",
     compact: false,
   },
 );

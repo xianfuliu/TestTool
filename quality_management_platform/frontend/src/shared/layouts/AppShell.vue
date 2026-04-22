@@ -3,20 +3,32 @@ import { KeepAlive, computed, onBeforeUnmount, onMounted, reactive, ref } from "
 import type { Component } from "vue";
 import { useRoute } from "vue-router";
 import {
+  AlarmClock,
+  Briefcase,
   Calendar,
+  Coin,
+  Collection,
+  CollectionTag,
   Connection,
-  DataAnalysis,
-  Document,
+  CopyDocument,
+  DataBoard,
+  DataLine,
   Expand,
-  Files,
   Fold,
-  Grid,
+  FolderOpened,
+  Histogram,
+  Link,
   List,
   Monitor,
+  Odometer,
+  PriceTag,
   Promotion,
   Reading,
   Setting,
-  Timer,
+  SetUp,
+  Tickets,
+  Tools,
+  TrendCharts,
   Warning,
 } from "@element-plus/icons-vue";
 
@@ -63,14 +75,14 @@ const menuGroups: MenuGroup[] = [
         path: "/requirements/business",
         label: "业务管理",
         subtitle: "管理业务线与归属关系",
-        icon: Grid,
+        icon: Briefcase,
       },
       {
         type: "item",
         path: "/requirements/manage",
         label: "需求管理",
         subtitle: "统一维护需求条目",
-        icon: Document,
+        icon: Tickets,
       },
       {
         type: "item",
@@ -82,19 +94,19 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: "测试中心",
+    title: "功能测试",
     items: [
       {
         type: "submenu",
         label: "用例管理",
-        icon: List,
+        icon: Collection,
         children: [
           {
             type: "item",
             path: "/cases/library",
             label: "用例库",
             subtitle: "维护测试用例资产",
-            icon: List,
+            icon: FolderOpened,
           },
           {
             type: "item",
@@ -122,26 +134,26 @@ const menuGroups: MenuGroup[] = [
         path: "/test-data",
         label: "测试数据",
         subtitle: "证件与模拟数据",
-        icon: Files,
+        icon: DataBoard,
       },
       {
         type: "item",
         path: "/api-tool",
         label: "接口工具",
         subtitle: "接口调试与配置",
-        icon: Monitor,
+        icon: Link,
       },
       {
         type: "item",
         path: "/tool-cards",
         label: "工具卡片",
         subtitle: "工具资产中心",
-        icon: Grid,
+        icon: Tools,
       },
     ],
   },
   {
-    title: "自动化",
+    title: "测试平台",
     items: [
       {
         type: "submenu",
@@ -153,7 +165,7 @@ const menuGroups: MenuGroup[] = [
             path: "/interface-auto/templates",
             label: "接口模板",
             subtitle: "统一维护接口模板",
-            icon: Document,
+            icon: CopyDocument,
           },
           {
             type: "item",
@@ -167,28 +179,28 @@ const menuGroups: MenuGroup[] = [
             path: "/interface-auto/test-suites",
             label: "测试集",
             subtitle: "组装用例集合并预留调度监控",
-            icon: Files,
+            icon: CollectionTag,
           },
           {
             type: "item",
             path: "/interface-auto/reports",
             label: "测试报告",
             subtitle: "查看执行结果与报告",
-            icon: Files,
+            icon: TrendCharts,
           },
           {
             type: "item",
             path: "/interface-auto/tools",
             label: "全局工具",
             subtitle: "管理通用工具能力",
-            icon: Grid,
+            icon: SetUp,
           },
           {
             type: "item",
             path: "/interface-auto/variables",
             label: "变量管理",
             subtitle: "沉淀全局变量与环境变量",
-            icon: DataAnalysis,
+            icon: PriceTag,
           },
         ],
       },
@@ -198,6 +210,20 @@ const menuGroups: MenuGroup[] = [
         label: "UI 自动化",
         subtitle: "预留 UI 自动化能力",
         icon: Monitor,
+      },
+      {
+        type: "item",
+        path: "/automation/performance",
+        label: "性能压测",
+        subtitle: "预留性能压测能力",
+        icon: Odometer,
+      },
+      {
+        type: "item",
+        path: "/automation/coverage",
+        label: "代码覆盖率",
+        subtitle: "预留代码覆盖率能力",
+        icon: Histogram,
       },
     ],
   },
@@ -209,7 +235,7 @@ const menuGroups: MenuGroup[] = [
         path: "/scheduler/tasks",
         label: "定时任务",
         subtitle: "统一管理平台调度配置",
-        icon: Timer,
+        icon: AlarmClock,
       },
     ],
   },
@@ -233,7 +259,7 @@ const menuGroups: MenuGroup[] = [
         path: "/data-assets/databases",
         label: "数据库",
         subtitle: "按业务维护数据库连接资产",
-        icon: DataAnalysis,
+        icon: Coin,
       },
     ],
   },
@@ -245,7 +271,7 @@ const menuGroups: MenuGroup[] = [
         path: "/data-query",
         label: "数据查询",
         subtitle: "SQL 查询与分析",
-        icon: DataAnalysis,
+        icon: DataLine,
       },
     ],
   },
@@ -390,7 +416,8 @@ function hideCollapsedTooltip() {
                   :key="child.path"
                   :index="child.path"
                 >
-                  {{ child.label }}
+                  <el-icon><component :is="child.icon" /></el-icon>
+                  <span>{{ child.label }}</span>
                 </el-menu-item>
               </el-sub-menu>
             </template>
