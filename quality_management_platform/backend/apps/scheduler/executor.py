@@ -4,8 +4,9 @@ import json
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from django.conf import settings
 
@@ -14,25 +15,42 @@ from apps.interface_auto.views import _ensure_case_schema_extensions, _get_case_
 from test_platform.db import fetch_all, fetch_one
 
 
-def execute_task_target(task: dict[str, Any]) -> dict[str, Any]:
+MAX_SCHEDULER_LOG_LINES = 500
+MAX_CASE_EXECUTION_LOG_LINES = 180
+MAX_SCRIPT_OUTPUT_CHARS = 5000
+
+LogProgressCallback = Callable[[list[dict[str, Any]], dict[str, Any]], None]
+
+
+def execute_task_target(task: dict[str, Any], log_callback: LogProgressCallback | None = None) -> dict[str, Any]:
     target_type = str(task.get("task_type") or "").strip()
     target_config = _json_value(task.get("target_config"), {})
 
     if target_type == "test_case":
-        return _execute_test_cases(target_config)
+        return _execute_test_cases(target_config, log_callback=log_callback)
     if target_type == "test_suite":
-        return _execute_test_suite(target_config)
+        return _execute_test_suite(target_config, log_callback=log_callback)
     if target_type == "python_script":
         return _execute_python_script(target_config, int(task.get("timeout_seconds") or 1800))
+    logs, logs_meta = trim_scheduler_logs(
+        [
+            make_log_line(
+                f"任务类型 {target_type or 'unknown'} 暂未接入执行器",
+                level="WARN",
+                scope="调度",
+            )
+        ]
+    )
     return {
         "status": "skipped",
         "message": f"任务类型 {target_type or 'unknown'} 暂未接入执行器",
         "summary": {},
-        "logs": [],
+        "logs": logs,
+        "logs_meta": logs_meta,
     }
 
 
-def _execute_test_suite(config: dict[str, Any]) -> dict[str, Any]:
+def _execute_test_suite(config: dict[str, Any], log_callback: LogProgressCallback | None = None) -> dict[str, Any]:
     suite_id = _int_value(config.get("suite_id"))
     if not suite_id:
         raise ValueError("请先绑定测试集")
@@ -54,11 +72,12 @@ def _execute_test_suite(config: dict[str, Any]) -> dict[str, Any]:
             "case_ids": [row["case_id"] for row in rows],
             "suite_id": suite_id,
             "suite_name": suite.get("name"),
-        }
+        },
+        log_callback=log_callback,
     )
 
 
-def _execute_test_cases(config: dict[str, Any]) -> dict[str, Any]:
+def _execute_test_cases(config: dict[str, Any], log_callback: LogProgressCallback | None = None) -> dict[str, Any]:
     case_ids = [_int_value(item) for item in config.get("case_ids") or []]
     case_ids = [item for item in case_ids if item]
     if not case_ids:
@@ -67,24 +86,43 @@ def _execute_test_cases(config: dict[str, Any]) -> dict[str, Any]:
     _ensure_case_schema_extensions()
     started_at = time.perf_counter()
     results: list[dict[str, Any]] = []
+    logs: list[dict[str, Any]] = [
+        make_log_line(f"开始执行接口用例任务，共 {len(case_ids)} 个用例", scope="调度", sub_scope="接口用例")
+    ]
+    _emit_progress(log_callback, logs)
     for case_id in case_ids:
         case_detail = _get_case_detail(case_id)
         if not case_detail:
-            results.append(
-                {
-                    "case_id": case_id,
-                    "status": "failed",
-                    "message": "用例不存在",
-                }
-            )
+            result = {
+                "case_id": case_id,
+                "case_name": f"用例 {case_id}",
+                "status": "failed",
+                "message": "用例不存在",
+            }
+            results.append(result)
+            _append_case_result_logs(logs, result)
+            _emit_progress(log_callback, logs)
             continue
-        results.append(execute_case_run(case_detail))
+        result = execute_case_run(case_detail)
+        results.append(result)
+        _append_case_result_logs(logs, result)
+        _emit_progress(log_callback, logs)
 
     failed = [item for item in results if item.get("status") != "success"]
     duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    summary_message = f"执行完成，成功 {len(results) - len(failed)} 个，失败 {len(failed)} 个"
+    logs.append(
+        make_log_line(
+            summary_message,
+            level="ERROR" if failed else "INFO",
+            scope="调度",
+            sub_scope="接口用例",
+        )
+    )
+    logs, logs_meta = trim_scheduler_logs(logs)
     return {
         "status": "failed" if failed else "success",
-        "message": f"执行完成，成功 {len(results) - len(failed)} 个，失败 {len(failed)} 个",
+        "message": summary_message,
         "summary": {
             "total_cases": len(results),
             "passed_cases": len(results) - len(failed),
@@ -92,7 +130,76 @@ def _execute_test_cases(config: dict[str, Any]) -> dict[str, Any]:
             "duration_ms": duration_ms,
         },
         "results": results,
-        "logs": [f"测试用例执行数量：{len(results)}"],
+        "logs": logs,
+        "logs_meta": logs_meta,
+    }
+
+
+def _append_case_result_logs(logs: list[dict[str, Any]], result: dict[str, Any]) -> None:
+    case_name = str(result.get("case_name") or result.get("case_id") or "未命名用例")
+    status = str(result.get("status") or "unknown")
+    message = str(result.get("message") or "")
+    status_label = "成功" if status == "success" else "失败" if status == "failed" else "跳过"
+    logs.append(
+        make_log_line(
+            f"[{status_label}] {case_name}: {message or status}",
+            level="ERROR" if status == "failed" else "WARN" if status == "skipped" else "INFO",
+            scope="用例",
+            sub_scope=case_name,
+            meta={"case_id": result.get("case_id"), "status": status},
+        )
+    )
+
+    if status == "success":
+        return
+    execution_lines = _case_execution_log_lines(result)
+    if not execution_lines:
+        return
+    logs.append(
+        make_log_line(
+            f"{case_name} 失败执行日志：",
+            level="ERROR",
+            scope="用例",
+            sub_scope=case_name,
+        )
+    )
+    logs.extend(execution_lines[-MAX_CASE_EXECUTION_LOG_LINES:])
+
+
+def _case_execution_log_lines(result: dict[str, Any]) -> list[dict[str, Any]]:
+    execution_log = _as_dict(result.get("execution_log"))
+    raw_lines = execution_log.get("lines")
+    if not isinstance(raw_lines, list):
+        return []
+    case_name = str(result.get("case_name") or result.get("case_id") or "未命名用例")
+    return [
+        normalise_log_line(_as_dict(line), fallback_scope="用例执行", fallback_sub_scope=case_name)
+        for line in raw_lines
+        if isinstance(line, dict)
+    ]
+
+
+def trim_scheduler_logs(logs: list[Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    normalised = normalise_log_lines(logs)
+    if len(logs) <= MAX_SCHEDULER_LOG_LINES:
+        return normalised, {
+            "truncated": False,
+            "omitted": 0,
+            "limit": MAX_SCHEDULER_LOG_LINES,
+            "total": len(normalised),
+        }
+    omitted = len(normalised) - MAX_SCHEDULER_LOG_LINES
+    marker = make_log_line(
+        f"... 已省略 {omitted} 行日志 ...",
+        level="WARN",
+        scope="调度",
+        meta={"omitted": omitted},
+    )
+    return normalised[:40] + [marker] + normalised[-(MAX_SCHEDULER_LOG_LINES - 41):], {
+        "truncated": True,
+        "omitted": omitted,
+        "limit": MAX_SCHEDULER_LOG_LINES,
+        "total": len(normalised),
     }
 
 
@@ -126,6 +233,31 @@ def _execute_python_script(config: dict[str, Any], timeout_seconds: int) -> dict
     duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
     output = (completed.stdout or "").strip()
     error_output = (completed.stderr or "").strip()
+    logs: list[dict[str, Any]] = [
+        make_log_line(
+            f"Python 脚本执行完成，退出码 {completed.returncode}",
+            level="INFO" if completed.returncode == 0 else "ERROR",
+            scope="Python",
+            meta={"return_code": completed.returncode, "script_path": str(resolved_script)},
+        )
+    ]
+    logs.extend(
+        _text_block_to_log_lines(
+            output[-MAX_SCRIPT_OUTPUT_CHARS:],
+            level="INFO",
+            scope="Python",
+            sub_scope="stdout",
+        )
+    )
+    logs.extend(
+        _text_block_to_log_lines(
+            error_output[-MAX_SCRIPT_OUTPUT_CHARS:],
+            level="ERROR",
+            scope="Python",
+            sub_scope="stderr",
+        )
+    )
+    logs, logs_meta = trim_scheduler_logs(logs)
     return {
         "status": "success" if completed.returncode == 0 else "failed",
         "message": "脚本执行成功" if completed.returncode == 0 else f"脚本退出码：{completed.returncode}",
@@ -133,10 +265,99 @@ def _execute_python_script(config: dict[str, Any], timeout_seconds: int) -> dict
             "return_code": completed.returncode,
             "duration_ms": duration_ms,
         },
-        "stdout": output[-5000:],
-        "stderr": error_output[-5000:],
-        "logs": [line for line in [output[-5000:], error_output[-5000:]] if line],
+        "stdout": output[-MAX_SCRIPT_OUTPUT_CHARS:],
+        "stderr": error_output[-MAX_SCRIPT_OUTPUT_CHARS:],
+        "logs": logs,
+        "logs_meta": logs_meta,
     }
+
+
+def _emit_progress(callback: LogProgressCallback | None, logs: list[dict[str, Any]]) -> None:
+    if not callback:
+        return
+    trimmed, logs_meta = trim_scheduler_logs(logs)
+    callback(trimmed, logs_meta)
+
+
+def _text_block_to_log_lines(
+    value: str,
+    *,
+    level: str,
+    scope: str,
+    sub_scope: str = "",
+) -> list[dict[str, Any]]:
+    if not value:
+        return []
+    return [
+        make_log_line(line, level=level, scope=scope, sub_scope=sub_scope, raw=line)
+        for line in value.splitlines()
+        if line.strip()
+    ]
+
+
+def make_log_line(
+    message: Any,
+    *,
+    level: str = "INFO",
+    scope: str = "调度",
+    sub_scope: str = "",
+    subject: str = "",
+    raw: Any = None,
+    meta: dict[str, Any] | None = None,
+    time_value: Any = None,
+) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "time": str(time_value or datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        "level": str(level or "INFO").upper(),
+        "scope": str(scope or "调度"),
+        "sub_scope": str(sub_scope or ""),
+        "subject": str(subject or ""),
+        "message": str(message or ""),
+    }
+    if raw not in (None, ""):
+        item["raw"] = raw
+    if meta:
+        item["meta"] = meta
+    return item
+
+
+def normalise_log_lines(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [normalise_log_line(item) for item in value if item not in (None, "")]
+
+
+def normalise_log_line(
+    value: Any,
+    *,
+    fallback_scope: str = "调度",
+    fallback_sub_scope: str = "",
+) -> dict[str, Any]:
+    if isinstance(value, dict):
+        level = str(value.get("level") or _infer_log_level(value.get("message") or value.get("content"))).upper()
+        return make_log_line(
+            value.get("message") or value.get("content") or value.get("description") or "",
+            level=level,
+            scope=str(value.get("scope") or value.get("category") or fallback_scope),
+            sub_scope=str(value.get("sub_scope") or value.get("subScope") or fallback_sub_scope),
+            subject=str(value.get("subject") or value.get("tool_name") or value.get("toolName") or ""),
+            raw=value.get("raw"),
+            meta=_as_dict(value.get("meta")) or None,
+            time_value=value.get("time") or value.get("timestamp") or value.get("created_at"),
+        )
+    text = str(value)
+    return make_log_line(text, level=_infer_log_level(text), scope=fallback_scope, sub_scope=fallback_sub_scope, raw=text)
+
+
+def _infer_log_level(value: Any) -> str:
+    text = str(value or "").lower()
+    if any(keyword in text for keyword in ("error", "exception", "traceback", "失败", "异常", "错误", "超时")):
+        return "ERROR"
+    if any(keyword in text for keyword in ("warn", "warning", "跳过", "省略")):
+        return "WARN"
+    if "debug" in text:
+        return "DEBUG"
+    return "INFO"
 
 
 def _resolve_script_path(value: str) -> Path:
@@ -162,6 +383,10 @@ def _json_value(value: Any, default: Any) -> Any:
         return json.loads(value)
     except (TypeError, ValueError):
         return default
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _int_value(value: Any) -> int | None:

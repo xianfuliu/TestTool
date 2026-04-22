@@ -96,6 +96,61 @@ export type SchedulerTaskPayload = {
   enabled: boolean;
 };
 
+export type SchedulerExecutionLogLine = {
+  time?: string;
+  level?: string;
+  scope?: string;
+  sub_scope?: string;
+  subScope?: string;
+  subject?: string;
+  message?: string;
+  raw?: unknown;
+  meta?: Record<string, unknown>;
+};
+
+export type SchedulerLogsMeta = {
+  truncated?: boolean;
+  omitted?: number;
+  limit?: number;
+  total?: number;
+};
+
+export type SchedulerRetryAttempt = {
+  retry_no: number;
+  attempt_no?: number;
+  status: string;
+  message?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  duration_ms?: number;
+};
+
+export type SchedulerCaseRunResult = {
+  report_id?: number;
+  request_id?: string;
+  case_id?: number;
+  case_name?: string;
+  status?: string;
+  message?: string;
+  execution_log?: {
+    lines?: SchedulerExecutionLogLine[];
+  };
+  [key: string]: unknown;
+};
+
+export type SchedulerRunSnapshot = {
+  status?: string;
+  message?: string;
+  summary?: Record<string, unknown>;
+  results?: SchedulerCaseRunResult[];
+  stdout?: string;
+  stderr?: string;
+  error?: Record<string, unknown>;
+  retry_attempts?: SchedulerRetryAttempt[];
+  logs_meta?: SchedulerLogsMeta;
+  [key: string]: unknown;
+};
+
 export type SchedulerTaskRunRecord = {
   id: number;
   task_id: number;
@@ -108,9 +163,27 @@ export type SchedulerTaskRunRecord = {
   retry_no: number;
   message: string;
   request_snapshot: Record<string, unknown>;
-  result_snapshot: Record<string, unknown>;
-  logs: string[];
+  result_snapshot: SchedulerRunSnapshot;
+  logs: SchedulerExecutionLogLine[];
+  logs_meta?: SchedulerLogsMeta;
+  has_detail?: boolean;
+  details_loaded?: boolean;
+  logs_size?: number;
+  result_size?: number;
   created_at?: string;
+};
+
+export type SchedulerRunRetention = {
+  count: number;
+  days: number;
+};
+
+export type SchedulerRunPage = {
+  items: SchedulerTaskRunRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+  retention?: SchedulerRunRetention;
 };
 
 const BASE = "/api/scheduler";
@@ -160,6 +233,13 @@ export function runSchedulerTask(taskId: number) {
   return post<SchedulerTaskRunRecord>(`${BASE}/tasks/${taskId}/run/`, { trigger_type: "manual" });
 }
 
-export function fetchSchedulerTaskRuns(taskId: number, limit = 50) {
-  return get<SchedulerTaskRunRecord[]>(`${BASE}/tasks/${taskId}/runs/`, { limit });
+export function fetchSchedulerTaskRuns(taskId: number, params?: { page?: number; page_size?: number; limit?: number }) {
+  return get<SchedulerRunPage>(`${BASE}/tasks/${taskId}/runs/`, {
+    page: params?.page ?? 1,
+    page_size: params?.page_size ?? params?.limit ?? 20,
+  });
+}
+
+export function fetchSchedulerTaskRunDetail(taskId: number, runId: number) {
+  return get<SchedulerTaskRunRecord>(`${BASE}/tasks/${taskId}/runs/${runId}/detail/`);
 }

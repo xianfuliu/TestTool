@@ -8,12 +8,18 @@ import {
   createSchedulerTask,
   deleteSchedulerTask,
   fetchSchedulerContext,
+  fetchSchedulerTaskRunDetail,
   fetchSchedulerTaskRuns,
   fetchSchedulerTasks,
   runSchedulerTask,
   updateSchedulerTask,
   updateSchedulerTaskStatus,
+  type SchedulerCaseRunResult,
   type SchedulerContext,
+  type SchedulerExecutionLogLine,
+  type SchedulerLogsMeta,
+  type SchedulerRetryAttempt,
+  type SchedulerRunRetention,
   type SchedulerScheduleType,
   type SchedulerTaskPayload,
   type SchedulerTaskRecord,
@@ -23,6 +29,7 @@ import {
 
 const ALL_VALUE = "all";
 const TASK_POLL_INTERVAL_MS = 15000;
+const RUN_DETAIL_POLL_INTERVAL_MS = 3000;
 
 type SelectValue = number | typeof ALL_VALUE;
 
@@ -126,9 +133,19 @@ const dialogTab = ref("basic");
 const runsDrawerVisible = ref(false);
 const currentRunTask = ref<SchedulerTaskRecord | null>(null);
 const runs = ref<SchedulerTaskRunRecord[]>([]);
+const runCurrentPage = ref(1);
+const runPageSize = ref(10);
+const runTotal = ref(0);
+const runPageSizeOptions = [10, 20, 50, 100];
+const runRetention = ref<SchedulerRunRetention | null>(null);
+const expandedRunIds = ref<number[]>([]);
+const runDetailLoadingIds = ref<Set<number>>(new Set());
+const scriptLogActiveTabs = reactive<Record<number, string>>({});
 const runningTaskIds = ref<Set<number>>(new Set());
 let taskPollingTimer: number | null = null;
+let runDetailPollingTimer: number | null = null;
 let taskPollingInFlight = false;
+let runDetailPollingInFlight = false;
 
 const context = reactive<SchedulerContext>({
   business_groups: [],
@@ -391,6 +408,15 @@ watch(
   { deep: true },
 );
 
+watch(runsDrawerVisible, (visible) => {
+  if (visible) {
+    startRunDetailPolling();
+    return;
+  }
+  stopRunDetailPolling();
+  expandedRunIds.value = [];
+});
+
 async function loadContext() {
   const data = await fetchSchedulerContext();
   context.business_groups = data.business_groups || [];
@@ -632,6 +658,9 @@ async function runTaskNow(row: SchedulerTaskRecord) {
       ElMessage.warning(result.message || "任务执行完成，请查看执行记录");
     }
     await loadTasks();
+    if (runsDrawerVisible.value && currentRunTask.value?.id === row.id) {
+      await loadRuns({ silent: true });
+    }
   } catch (error) {
     ElMessage.error((error as Error).message);
   } finally {
@@ -644,14 +673,111 @@ async function runTaskNow(row: SchedulerTaskRecord) {
 async function openRunsDrawer(row: SchedulerTaskRecord) {
   currentRunTask.value = row;
   runsDrawerVisible.value = true;
-  runsLoading.value = true;
-  try {
-    runs.value = await fetchSchedulerTaskRuns(row.id);
-  } catch (error) {
-    ElMessage.error((error as Error).message);
-  } finally {
-    runsLoading.value = false;
+  runCurrentPage.value = 1;
+  expandedRunIds.value = [];
+  runs.value = [];
+  await loadRuns();
+  startRunDetailPolling();
+}
+
+async function loadRuns(options: { silent?: boolean } = {}) {
+  if (!currentRunTask.value) {
+    return;
   }
+  const silent = options.silent === true;
+  if (!silent) {
+    runsLoading.value = true;
+  }
+  try {
+    const detailById = new Map(runs.value.filter((item) => item.details_loaded).map((item) => [item.id, item]));
+    const page = await fetchSchedulerTaskRuns(currentRunTask.value.id, {
+      page: runCurrentPage.value,
+      page_size: runPageSize.value,
+    });
+    runs.value = (page.items || []).map((item) => {
+      const detail = detailById.get(item.id);
+      if (!detail) {
+        return item;
+      }
+      return item.status === detail.status
+        ? { ...item, ...detail, status: item.status, message: item.message, duration_ms: item.duration_ms }
+        : item;
+    });
+    runTotal.value = Number(page.total) || 0;
+    runRetention.value = page.retention ?? null;
+    await Promise.all(
+      runs.value
+        .filter((item) => expandedRunIds.value.includes(item.id) && !item.details_loaded)
+        .map((item) => refreshRunDetail(item, { silent: true })),
+    );
+  } catch (error) {
+    if (!silent) {
+      ElMessage.error((error as Error).message);
+    }
+  } finally {
+    if (!silent) {
+      runsLoading.value = false;
+    }
+  }
+}
+
+async function refreshRunDetail(row: SchedulerTaskRunRecord, options: { silent?: boolean } = {}) {
+  if (!currentRunTask.value) {
+    return;
+  }
+  const silent = options.silent === true;
+  if (!silent) {
+    setRunDetailLoading(row.id, true);
+  }
+  try {
+    const detail = await fetchSchedulerTaskRunDetail(currentRunTask.value.id, row.id);
+    runs.value = runs.value.map((item) => (item.id === detail.id ? { ...item, ...detail, details_loaded: true } : item));
+  } catch (error) {
+    if (!silent) {
+      ElMessage.error((error as Error).message);
+    }
+  } finally {
+    if (!silent) {
+      setRunDetailLoading(row.id, false);
+    }
+  }
+}
+
+async function ensureRunDetail(row: SchedulerTaskRunRecord) {
+  if (row.details_loaded || runDetailLoadingIds.value.has(row.id)) {
+    return;
+  }
+  await refreshRunDetail(row);
+}
+
+function setRunDetailLoading(runId: number, loading: boolean) {
+  const next = new Set(runDetailLoadingIds.value);
+  if (loading) {
+    next.add(runId);
+  } else {
+    next.delete(runId);
+  }
+  runDetailLoadingIds.value = next;
+}
+
+function handleRunExpandChange(row: SchedulerTaskRunRecord, expandedRows: SchedulerTaskRunRecord[]) {
+  expandedRunIds.value = expandedRows.map((item) => item.id);
+  if (expandedRunIds.value.includes(row.id)) {
+    void ensureRunDetail(row);
+  }
+}
+
+async function handleRunPageChange(page: number) {
+  runCurrentPage.value = page;
+  expandedRunIds.value = [];
+  await loadRuns();
+}
+
+async function handleRunPageSizeChange(size: number) {
+  runPageSize.value = size;
+  runCurrentPage.value = 1;
+  expandedRunIds.value = [];
+  await loadRuns();
 }
 
 async function pollTasks() {
@@ -663,7 +789,7 @@ async function pollTasks() {
     await loadTasks({ silent: true });
     if (runsDrawerVisible.value && currentRunTask.value) {
       try {
-        runs.value = await fetchSchedulerTaskRuns(currentRunTask.value.id);
+        await loadRuns({ silent: true });
       } catch {
         // Keep scheduled polling quiet; manual refresh actions still show errors.
       }
@@ -687,9 +813,44 @@ function stopTaskPolling() {
   }
 }
 
+async function pollRunDetails() {
+  if (runDetailPollingInFlight || document.hidden || !runsDrawerVisible.value || !currentRunTask.value) {
+    return;
+  }
+  const runningRows = runs.value.filter((row) => row.status === "running");
+  if (!runningRows.length) {
+    return;
+  }
+  runDetailPollingInFlight = true;
+  try {
+    for (const row of runningRows) {
+      if (expandedRunIds.value.includes(row.id)) {
+        await refreshRunDetail(row, { silent: true });
+      }
+    }
+  } finally {
+    runDetailPollingInFlight = false;
+  }
+}
+
+function startRunDetailPolling() {
+  stopRunDetailPolling();
+  runDetailPollingTimer = window.setInterval(() => {
+    void pollRunDetails();
+  }, RUN_DETAIL_POLL_INTERVAL_MS);
+}
+
+function stopRunDetailPolling() {
+  if (runDetailPollingTimer !== null) {
+    window.clearInterval(runDetailPollingTimer);
+    runDetailPollingTimer = null;
+  }
+}
+
 function handleVisibilityChange() {
   if (!document.hidden) {
     void pollTasks();
+    void pollRunDetails();
   }
 }
 
@@ -762,6 +923,202 @@ function formatDateTime(value: string | null | undefined) {
   return String(value).replace("T", " ").replace(/\.\d+$/, "").replace(/Z$/, "");
 }
 
+function runStatusRank(status: string | undefined) {
+  if (status === "failed") {
+    return 0;
+  }
+  if (status === "running") {
+    return 1;
+  }
+  if (status === "skipped") {
+    return 2;
+  }
+  return 3;
+}
+
+function getRunCaseResults(row: SchedulerTaskRunRecord): SchedulerCaseRunResult[] {
+  const results = row.result_snapshot?.results;
+  return Array.isArray(results)
+    ? [...results].sort((left, right) => runStatusRank(left.status) - runStatusRank(right.status))
+    : [];
+}
+
+function normalizeLogLine(line: SchedulerExecutionLogLine | string | unknown): SchedulerExecutionLogLine {
+  if (typeof line === "string") {
+    return {
+      level: inferLogLevel(line),
+      scope: "调度",
+      message: line,
+    };
+  }
+  if (line && typeof line === "object") {
+    const record = line as SchedulerExecutionLogLine;
+    return {
+      ...record,
+      level: String(record.level || inferLogLevel(record.message)).toUpperCase(),
+      scope: record.scope || "调度",
+      sub_scope: record.sub_scope || record.subScope || "",
+      message: String(record.message ?? ""),
+    };
+  }
+  return {
+    level: "INFO",
+    scope: "调度",
+    message: String(line ?? ""),
+  };
+}
+
+function getRunLogs(row: SchedulerTaskRunRecord) {
+  return Array.isArray(row.logs) ? row.logs.filter(Boolean).map((item) => normalizeLogLine(item)) : [];
+}
+
+function getCaseExecutionLines(result: SchedulerCaseRunResult) {
+  const lines = result.execution_log?.lines;
+  return Array.isArray(lines) ? lines.slice(-220).map((line) => normalizeLogLine(line)) : [];
+}
+
+function formatExecutionLine(line: SchedulerExecutionLogLine) {
+  const subScope = line.sub_scope || line.subScope;
+  const sections = [
+    line.time ? `[${formatDateTime(line.time)}]` : "",
+    line.level ? `[${line.level}]` : "",
+    line.scope ? `[${line.scope}]` : "",
+    subScope ? `[${subScope}]` : "",
+    line.subject ? `[${line.subject}]` : "",
+  ].filter(Boolean);
+  return `${sections.join(" ")} ${line.message ?? ""}`.trim();
+}
+
+function executionLineClass(line: SchedulerExecutionLogLine) {
+  return String(line.level || "INFO").toLowerCase();
+}
+
+function inferLogLevel(value: unknown) {
+  const text = String(value || "").toLowerCase();
+  if (/(error|exception|traceback|失败|异常|错误|超时)/i.test(text)) {
+    return "ERROR";
+  }
+  if (/(warn|warning|跳过|省略)/i.test(text)) {
+    return "WARN";
+  }
+  return "INFO";
+}
+
+function getRunLogsMeta(row: SchedulerTaskRunRecord): SchedulerLogsMeta {
+  return row.logs_meta || row.result_snapshot?.logs_meta || {};
+}
+
+function getLogTruncationText(row: SchedulerTaskRunRecord) {
+  const meta = getRunLogsMeta(row);
+  if (!meta.truncated) {
+    return "";
+  }
+  return `日志已截断，当前保留 ${meta.limit || "-"} 行，省略 ${meta.omitted || 0} 行`;
+}
+
+function getRunFailureSummary(row: SchedulerTaskRunRecord) {
+  const result = row.result_snapshot || {};
+  const error = result.error && typeof result.error === "object" ? (result.error as Record<string, unknown>) : {};
+  const failedCases = getRunCaseResults(row).filter((item) => item.status === "failed");
+  const firstFailed = failedCases[0];
+  const reason =
+    row.message ||
+    String(result.message || "") ||
+    String(firstFailed?.message || "") ||
+    String(error.message || "") ||
+    "-";
+  return [
+    { label: "失败原因", value: reason },
+    { label: "失败用例", value: failedCases.length ? `${failedCases.length} 个` : "-" },
+    {
+      label: "首个失败",
+      value: firstFailed ? firstFailed.case_name || `用例 ${firstFailed.case_id || "-"}` : "-",
+    },
+    { label: "错误类型", value: String(error.type || "-") },
+    { label: "耗时", value: row.duration_ms ? `${row.duration_ms}ms` : "-" },
+  ];
+}
+
+function getRetryAttempts(row: SchedulerTaskRunRecord): SchedulerRetryAttempt[] {
+  const attempts = row.result_snapshot?.retry_attempts;
+  return Array.isArray(attempts) ? attempts : [];
+}
+
+function hasRetryInfo(row: SchedulerTaskRunRecord) {
+  return row.retry_no > 0 || getRetryAttempts(row).length > 1;
+}
+
+function getPythonOutput(row: SchedulerTaskRunRecord, key: "stdout" | "stderr") {
+  return String(row.result_snapshot?.[key] || "");
+}
+
+function getPythonTraceback(row: SchedulerTaskRunRecord) {
+  const error = row.result_snapshot?.error;
+  return error && typeof error === "object" ? String((error as Record<string, unknown>).traceback || "") : "";
+}
+
+function hasPythonLogSections(row: SchedulerTaskRunRecord) {
+  return Boolean(getPythonOutput(row, "stdout") || getPythonOutput(row, "stderr") || getPythonTraceback(row));
+}
+
+function getScriptActiveTab(row: SchedulerTaskRunRecord) {
+  if (!scriptLogActiveTabs[row.id]) {
+    scriptLogActiveTabs[row.id] = row.status === "failed" && getPythonOutput(row, "stderr") ? "stderr" : "stdout";
+  }
+  return scriptLogActiveTabs[row.id];
+}
+
+function setScriptActiveTab(runId: number, tabName: string | number) {
+  scriptLogActiveTabs[runId] = String(tabName);
+}
+
+function handleScriptTabChange(row: SchedulerTaskRunRecord, tabName: string | number) {
+  setScriptActiveTab(row.id, tabName);
+}
+
+function formatRunSummary(row: SchedulerTaskRunRecord) {
+  const summary = row.result_snapshot?.summary;
+  if (!summary || typeof summary !== "object") {
+    return "";
+  }
+  const parts = Object.entries(summary)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${key}: ${value}`);
+  return parts.join("，");
+}
+
+function formatRunRetention() {
+  if (!runRetention.value) {
+    return "";
+  }
+  return `仅保留每个任务最近 ${runRetention.value.count} 条 / ${runRetention.value.days} 天执行记录`;
+}
+
+function formatRunPayloadSize(row: SchedulerTaskRunRecord) {
+  const size = Number(row.logs_size || 0) + Number(row.result_size || 0);
+  if (!size) {
+    return "";
+  }
+  if (size >= 1024 * 1024) {
+    return `${(size / 1024 / 1024).toFixed(1)}MB`;
+  }
+  if (size >= 1024) {
+    return `${(size / 1024).toFixed(1)}KB`;
+  }
+  return `${size}B`;
+}
+
+function formatSnapshot(value: unknown) {
+  if (!value || (typeof value === "object" && Object.keys(value as Record<string, unknown>).length === 0)) {
+    return "";
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 function formatSchedule(row: SchedulerTaskRecord) {
   if (row.schedule_type === "cron") {
     return row.cron_expression || "-";
@@ -818,6 +1175,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopTaskPolling();
+  stopRunDetailPolling();
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
@@ -1246,14 +1604,141 @@ onBeforeUnmount(() => {
       </template>
     </el-dialog>
 
-    <el-drawer v-model="runsDrawerVisible" :title="currentRunTask ? `${currentRunTask.name} - 执行记录` : '执行记录'" size="720px">
+    <el-drawer v-model="runsDrawerVisible" :title="currentRunTask ? `${currentRunTask.name} - 执行记录` : '执行记录'" size="920px">
       <div class="runs-drawer" v-loading="runsLoading">
-        <el-table :data="runs" class="runs-table" height="100%" empty-text="暂无执行记录">
+        <div class="runs-toolbar">
+          <span>{{ formatRunRetention() || "执行记录按最新时间倒序展示" }}</span>
+          <el-button size="small" :icon="RefreshRight" @click="loadRuns()">刷新记录</el-button>
+        </div>
+        <el-table
+          :data="runs"
+          class="runs-table"
+          height="100%"
+          empty-text="暂无执行记录"
+          row-key="id"
+          @expand-change="handleRunExpandChange"
+        >
+          <el-table-column type="expand" width="42">
+            <template #default="{ row }">
+              <div class="run-detail-panel" v-loading="runDetailLoadingIds.has(row.id)">
+                <template v-if="row.details_loaded">
+                  <div class="run-detail-summary">
+                    <span class="run-detail-label">结果</span>
+                    <span :class="['run-detail-message', row.status === 'failed' ? 'failed' : '']">
+                      {{ row.message || row.result_snapshot?.message || "-" }}
+                    </span>
+                  </div>
+                  <div v-if="formatRunSummary(row)" class="run-detail-summary">
+                    <span class="run-detail-label">统计</span>
+                    <span class="run-detail-message">{{ formatRunSummary(row) }}</span>
+                  </div>
+
+                  <div v-if="row.status === 'failed'" class="failure-summary">
+                    <div v-for="item in getRunFailureSummary(row)" :key="item.label" class="failure-summary-item">
+                      <span>{{ item.label }}</span>
+                      <strong>{{ item.value }}</strong>
+                    </div>
+                  </div>
+
+                  <div v-if="getLogTruncationText(row)" class="run-log-alert">
+                    {{ getLogTruncationText(row) }}
+                  </div>
+
+                  <div v-if="hasRetryInfo(row)" class="retry-attempts">
+                    <div class="run-detail-label">重试记录</div>
+                    <div class="retry-attempt-list">
+                      <div v-for="attempt in getRetryAttempts(row)" :key="`${row.id}-retry-${attempt.retry_no}`" class="retry-attempt-item">
+                        <el-tag size="small" :type="runStatusType(attempt.status)" effect="light">
+                          {{ runStatusLabel(attempt.status) }}
+                        </el-tag>
+                        <span>第 {{ attempt.attempt_no || attempt.retry_no + 1 }} 次</span>
+                        <span>{{ attempt.duration_ms ? `${attempt.duration_ms}ms` : "-" }}</span>
+                        <strong>{{ attempt.message || "-" }}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="hasPythonLogSections(row)" class="script-log-block">
+                    <div class="run-detail-label">脚本输出</div>
+                    <el-tabs
+                      class="script-log-tabs"
+                      :model-value="getScriptActiveTab(row)"
+                      @tab-change="handleScriptTabChange(row, $event)"
+                    >
+                      <el-tab-pane label="stdout" name="stdout">
+                        <pre class="run-snapshot">{{ getPythonOutput(row, "stdout") || "无 stdout 输出" }}</pre>
+                      </el-tab-pane>
+                      <el-tab-pane label="stderr" name="stderr">
+                        <pre class="run-snapshot">{{ getPythonOutput(row, "stderr") || "无 stderr 输出" }}</pre>
+                      </el-tab-pane>
+                      <el-tab-pane v-if="getPythonTraceback(row)" label="traceback" name="traceback">
+                        <pre class="run-snapshot">{{ getPythonTraceback(row) }}</pre>
+                      </el-tab-pane>
+                    </el-tabs>
+                  </div>
+
+                  <div v-if="getRunCaseResults(row).length" class="case-run-list">
+                    <div
+                      v-for="caseResult in getRunCaseResults(row)"
+                      :key="`${row.id}-${caseResult.case_id || caseResult.request_id}`"
+                      class="case-run-card"
+                    >
+                      <div class="case-run-head">
+                        <div class="case-run-title">
+                          <el-tag size="small" :type="runStatusType(caseResult.status || '')" effect="light">
+                            {{ runStatusLabel(caseResult.status || '') }}
+                          </el-tag>
+                          <span>{{ caseResult.case_name || `用例 ${caseResult.case_id || "-"}` }}</span>
+                        </div>
+                        <span class="case-run-id">{{ caseResult.request_id || "" }}</span>
+                      </div>
+                      <div v-if="caseResult.message" :class="['case-run-message', caseResult.status === 'failed' ? 'failed' : '']">
+                        {{ caseResult.message }}
+                      </div>
+                      <div v-if="getCaseExecutionLines(caseResult).length" class="run-log-list">
+                        <div
+                          v-for="(line, lineIndex) in getCaseExecutionLines(caseResult)"
+                          :key="`${row.id}-${caseResult.case_id || caseResult.request_id}-${lineIndex}`"
+                          :class="['run-log-line', executionLineClass(line)]"
+                        >
+                          {{ formatExecutionLine(line) }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="getRunLogs(row).length" class="run-log-block">
+                    <div class="run-detail-label">调度日志</div>
+                    <div class="run-log-list">
+                      <div
+                        v-for="(line, index) in getRunLogs(row)"
+                        :key="`${row.id}-log-${index}`"
+                        :class="['run-log-line', executionLineClass(line)]"
+                      >
+                        {{ formatExecutionLine(line) }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <pre
+                    v-if="!getRunCaseResults(row).length && !getRunLogs(row).length && formatSnapshot(row.result_snapshot)"
+                    class="run-snapshot"
+                  >{{ formatSnapshot(row.result_snapshot) }}</pre>
+                </template>
+                <el-empty v-else description="展开后正在加载日志详情" />
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">
               <el-tag size="small" :type="runStatusType(row.status)" effect="light">
                 {{ runStatusLabel(row.status) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="重试" width="74" align="center">
+            <template #default="{ row }">
+              {{ row.retry_no ? `${row.retry_no} 次` : "-" }}
             </template>
           </el-table-column>
           <el-table-column prop="trigger_type" label="触发方式" width="92" align="center" />
@@ -1267,8 +1752,22 @@ onBeforeUnmount(() => {
               {{ row.duration_ms ? `${row.duration_ms}ms` : "-" }}
             </template>
           </el-table-column>
+          <el-table-column label="详情大小" width="88" align="center">
+            <template #default="{ row }">
+              {{ formatRunPayloadSize(row) || "-" }}
+            </template>
+          </el-table-column>
           <el-table-column prop="message" label="结果描述" min-width="180" align="center" show-overflow-tooltip />
         </el-table>
+        <AppPagination
+          v-model:current-page="runCurrentPage"
+          v-model:page-size="runPageSize"
+          :page-sizes="runPageSizeOptions"
+          :total="runTotal"
+          :disabled="runsLoading"
+          @current-change="handleRunPageChange"
+          @size-change="handleRunPageSizeChange"
+        />
       </div>
     </el-drawer>
   </div>
@@ -1305,6 +1804,17 @@ onBeforeUnmount(() => {
 .scheduler-page :deep(.el-dialog__title),
 .scheduler-page :deep(.el-drawer__title) {
   font-size: 16px;
+}
+
+.scheduler-page :deep(.el-drawer__header) {
+  align-items: center;
+  min-height: 48px;
+  margin-bottom: 0;
+  padding: 14px 18px 10px;
+}
+
+.scheduler-page :deep(.el-drawer__body) {
+  padding: 0 18px 12px;
 }
 
 .scheduler-toolbar,
@@ -1610,11 +2120,250 @@ onBeforeUnmount(() => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  gap: 6px;
+}
+
+.runs-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .runs-table {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.run-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  background: #f8fafc;
+  border: 1px solid #e5edf6;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.run-detail-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.run-detail-label {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.run-detail-message {
+  min-width: 0;
+  color: #334155;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.run-detail-message.failed,
+.case-run-message.failed {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.failure-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.failure-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff7f7;
+}
+
+.failure-summary-item span {
+  color: #991b1b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.failure-summary-item strong {
+  overflow: hidden;
+  color: #7f1d1d;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-log-alert {
+  padding: 8px 10px;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+}
+
+.retry-attempts,
+.script-log-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.retry-attempt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.retry-attempt-item {
+  display: grid;
+  grid-template-columns: 72px 72px 86px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+}
+
+.retry-attempt-item strong {
+  overflow: hidden;
+  color: #334155;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.script-log-tabs {
+  padding: 0 10px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.script-log-tabs :deep(.el-tabs__header) {
+  margin-bottom: 8px;
+}
+
+.case-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.case-run-card {
+  padding: 10px 12px;
+  border: 1px solid #e5edf6;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.case-run-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.case-run-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.case-run-title span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-run-id {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+}
+
+.case-run-message {
+  margin-top: 8px;
+  color: #475569;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.run-log-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.run-log-list {
+  max-height: 320px;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.run-log-line {
+  color: #334155;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.run-log-line.error {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.run-log-line.warn {
+  color: #d97706;
+}
+
+.run-log-line.debug {
+  color: #6b7280;
+}
+
+.run-snapshot {
+  max-height: 320px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 @media (max-width: 1180px) {
@@ -1627,10 +2376,19 @@ onBeforeUnmount(() => {
     width: 100%;
     min-width: 0;
   }
+
+  .failure-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .failure-summary,
+  .retry-attempt-item {
     grid-template-columns: 1fr;
   }
 }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import traceback
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -9,12 +10,14 @@ from apps.common.http import api_view, get_int
 from test_platform.db import execute, fetch_all, fetch_one
 
 from .cron import CronExpressionError, get_next_cron_time, validate_cron_expression
-from .executor import execute_task_target
+from .executor import execute_task_target, make_log_line, normalise_log_lines, trim_scheduler_logs
 
 
 TASK_TYPES = {"test_suite", "test_case", "python_script", "http_callback", "custom"}
 SCHEDULE_TYPES = {"cron", "interval", "once", "manual"}
 MISFIRE_POLICIES = {"fire_once", "skip", "fire_all"}
+RUN_RETENTION_COUNT = 200  # 单个任务只保留最近200条执行记录
+RUN_RETENTION_DAYS = 7  # 保留最近7天的执行记录
 
 
 def _ensure_schema_ready() -> None:
@@ -308,14 +311,95 @@ def _hydrate_task(row: dict[str, Any] | None) -> dict[str, Any] | None:
     return item
 
 
-def _hydrate_run(row: dict[str, Any] | None) -> dict[str, Any] | None:
+def _hydrate_run(row: dict[str, Any] | None, *, include_detail: bool = True) -> dict[str, Any] | None:
     if not row:
         return None
     item = dict(row)
-    item["request_snapshot"] = _json_value(item.get("request_snapshot"), {})
-    item["result_snapshot"] = _json_value(item.get("result_snapshot"), {})
-    item["logs"] = _json_value(item.get("logs"), [])
+    if include_detail:
+        item["request_snapshot"] = _json_value(item.get("request_snapshot"), {})
+        item["result_snapshot"] = _json_value(item.get("result_snapshot"), {})
+        item["logs"] = normalise_log_lines(_json_value(item.get("logs"), []))
+        item["logs_meta"] = _logs_meta_from_result(item["result_snapshot"])
+        item["details_loaded"] = True
+    else:
+        item["request_snapshot"] = {}
+        item["result_snapshot"] = {}
+        item["logs"] = []
+        item["logs_meta"] = {}
+        item["details_loaded"] = False
+    item["has_detail"] = True
     return item
+
+
+def _logs_meta_from_result(result_snapshot: Any) -> dict[str, Any]:
+    result = result_snapshot if isinstance(result_snapshot, dict) else {}
+    meta = result.get("logs_meta")
+    return meta if isinstance(meta, dict) else {}
+
+
+def _run_status_label(status: str) -> str:
+    if status == "success":
+        return "成功"
+    if status == "failed":
+        return "失败"
+    if status == "skipped":
+        return "跳过"
+    return status
+
+
+def _persist_run_progress(
+    run_id: int,
+    logs: list[Any],
+    *,
+    status: str = "running",
+    message: str = "",
+    result_snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    trimmed_logs, logs_meta = trim_scheduler_logs(logs)
+    result = dict(result_snapshot or {})
+    result["logs_meta"] = logs_meta
+    execute(
+        """
+        UPDATE scheduler_task_runs
+        SET status = %s,
+            message = %s,
+            result_snapshot = %s,
+            logs = %s
+        WHERE id = %s
+        """,
+        (status, message, _json_text(result), _json_text(trimmed_logs), run_id),
+    )
+    return {"logs": trimmed_logs, "logs_meta": logs_meta, "result_snapshot": result}
+
+
+def _prune_task_runs(task_id: int) -> None:
+    cutoff = datetime.now() - timedelta(days=RUN_RETENTION_DAYS)
+    execute(
+        """
+        DELETE FROM scheduler_task_runs
+        WHERE task_id = %s
+          AND status <> 'running'
+          AND created_at < %s
+        """,
+        (task_id, _datetime_param(cutoff)),
+    )
+    execute(
+        """
+        DELETE FROM scheduler_task_runs
+        WHERE task_id = %s
+          AND status <> 'running'
+          AND id NOT IN (
+              SELECT id FROM (
+                  SELECT id
+                  FROM scheduler_task_runs
+                  WHERE task_id = %s
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT %s
+              ) retained_runs
+          )
+        """,
+        (task_id, task_id, RUN_RETENTION_COUNT),
+    )
 
 
 @api_view
@@ -522,19 +606,61 @@ def task_status(_request, task_id: int, payload=None):
 @api_view
 def task_runs(_request, task_id: int, payload=None):
     _ensure_schema_ready()
-    limit = get_int((payload or {}).get("limit"), 50) or 50
-    limit = max(1, min(limit, 200))
+    page = get_int((payload or {}).get("page"), 1) or 1
+    page_size = get_int((payload or {}).get("page_size") or (payload or {}).get("limit"), 20) or 20
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    offset = (page - 1) * page_size
+    total_row = fetch_one("SELECT COUNT(*) AS total FROM scheduler_task_runs WHERE task_id = %s", (task_id,))
     rows = fetch_all(
         """
-        SELECT *
+        SELECT
+            id,
+            task_id,
+            trigger_type,
+            status,
+            started_at,
+            finished_at,
+            duration_ms,
+            executor,
+            retry_no,
+            message,
+            created_at,
+            CHAR_LENGTH(COALESCE(logs, '')) AS logs_size,
+            CHAR_LENGTH(COALESCE(result_snapshot, '')) AS result_size
         FROM scheduler_task_runs
         WHERE task_id = %s
         ORDER BY created_at DESC, id DESC
-        LIMIT %s
+        LIMIT %s OFFSET %s
         """,
-        (task_id, limit),
+        (task_id, page_size, offset),
     )
-    return [_hydrate_run(row) for row in rows]
+    return {
+        "items": [_hydrate_run(row, include_detail=False) for row in rows],
+        "total": int((total_row or {}).get("total") or 0),
+        "page": page,
+        "page_size": page_size,
+        "retention": {
+            "count": RUN_RETENTION_COUNT,
+            "days": RUN_RETENTION_DAYS,
+        },
+    }
+
+
+@api_view
+def task_run_detail(_request, task_id: int, run_id: int, payload=None):
+    _ensure_schema_ready()
+    row = fetch_one(
+        """
+        SELECT *
+        FROM scheduler_task_runs
+        WHERE task_id = %s AND id = %s
+        """,
+        (task_id, run_id),
+    )
+    if not row:
+        raise ValueError("执行记录不存在")
+    return _hydrate_run(row, include_detail=True)
 
 
 def execute_scheduler_task(
@@ -556,6 +682,13 @@ def execute_scheduler_task(
             raise ValueError("当前任务正在执行，未开启并发执行")
 
     started_at = datetime.now()
+    logs: list[dict[str, Any]] = [
+        make_log_line(
+            "任务开始执行",
+            scope="调度",
+            meta={"task_id": task_id, "task_name": task.get("name"), "task_type": task.get("task_type")},
+        )
+    ]
     run_id = execute(
         """
         INSERT INTO scheduler_task_runs
@@ -569,24 +702,115 @@ def execute_scheduler_task(
             _datetime_param(started_at),
             executor,
             _json_text({"task_id": task_id, "task_name": task.get("name"), "task_type": task.get("task_type")}),
-            _json_text(["任务开始执行"]),
+            _json_text(logs),
         ),
     )
     execute("UPDATE scheduler_tasks SET status = 'running' WHERE id = %s", (task_id,))
 
     started = time.perf_counter()
-    try:
-        result = execute_task_target(task)
-        status = str(result.get("status") or "success")
-        if status not in {"success", "failed", "skipped"}:
-            status = "success"
-        message = str(result.get("message") or "")
-        logs = result.get("logs") if isinstance(result.get("logs"), list) else []
-    except Exception as exc:
-        status = "failed"
-        message = str(exc)
-        logs = [message]
-        result = {"status": status, "message": message}
+    max_retries = max(0, int(task.get("retry_count") or 0))
+    retry_interval = max(0, int(task.get("retry_interval_seconds") or 0))
+    attempts: list[dict[str, Any]] = []
+    status = "failed"
+    message = ""
+    result: dict[str, Any] = {}
+
+    for retry_no in range(max_retries + 1):
+        attempt_started = datetime.now()
+        attempt_timer = time.perf_counter()
+        logs.append(
+            make_log_line(
+                f"第 {retry_no + 1} 次执行开始",
+                scope="调度",
+                sub_scope="重试" if retry_no else "首次执行",
+                meta={"retry_no": retry_no},
+            )
+        )
+        _persist_run_progress(run_id, logs, message=f"第 {retry_no + 1} 次执行中")
+        attempt_offset = len(logs)
+
+        def persist_attempt_progress(partial_logs: list[dict[str, Any]], _logs_meta: dict[str, Any]) -> None:
+            _persist_run_progress(
+                run_id,
+                logs[:attempt_offset] + partial_logs,
+                message=f"第 {retry_no + 1} 次执行中",
+            )
+
+        try:
+            result = execute_task_target(task, log_callback=persist_attempt_progress)
+            status = str(result.get("status") or "success")
+            if status not in {"success", "failed", "skipped"}:
+                status = "success"
+            message = str(result.get("message") or "")
+            logs = logs[:attempt_offset] + normalise_log_lines(
+                result.get("logs") if isinstance(result.get("logs"), list) else []
+            )
+        except Exception as exc:
+            status = "failed"
+            message = str(exc)
+            error_traceback = traceback.format_exc()
+            logs = logs[:attempt_offset] + [
+                make_log_line(
+                    f"任务执行异常: {message}",
+                    level="ERROR",
+                    scope="调度",
+                    raw=error_traceback,
+                    meta={"error_type": exc.__class__.__name__},
+                )
+            ]
+            result = {
+                "status": status,
+                "message": message,
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "message": message,
+                    "traceback": error_traceback,
+                },
+            }
+
+        attempts.append(
+            {
+                "retry_no": retry_no,
+                "attempt_no": retry_no + 1,
+                "status": status,
+                "message": message,
+                "started_at": _datetime_param(attempt_started),
+                "finished_at": _datetime_param(datetime.now()),
+                "duration_ms": round((time.perf_counter() - attempt_timer) * 1000, 2),
+            }
+        )
+        logs.append(
+            make_log_line(
+                f"第 {retry_no + 1} 次执行{_run_status_label(status)}: {message or status}",
+                level="ERROR" if status == "failed" else "WARN" if status == "skipped" else "INFO",
+                scope="调度",
+                sub_scope="重试" if retry_no else "首次执行",
+                meta={"retry_no": retry_no, "status": status},
+            )
+        )
+        result = dict(result or {})
+        result["retry_attempts"] = list(attempts)
+        _persist_run_progress(run_id, logs, message=message, result_snapshot=result)
+
+        if status != "failed" or retry_no >= max_retries:
+            break
+
+        logs.append(
+            make_log_line(
+                f"{retry_interval} 秒后开始第 {retry_no + 2} 次重试",
+                level="WARN",
+                scope="调度",
+                sub_scope="重试",
+                meta={"retry_no": retry_no + 1, "retry_interval_seconds": retry_interval},
+            )
+        )
+        _persist_run_progress(run_id, logs, message=message, result_snapshot=result)
+        if retry_interval:
+            time.sleep(retry_interval)
+
+    result["retry_attempts"] = attempts
+    trimmed_logs, logs_meta = trim_scheduler_logs(logs)
+    result["logs_meta"] = logs_meta
 
     finished_at = datetime.now()
     duration_ms = round((time.perf_counter() - started) * 1000, 2)
@@ -596,6 +820,7 @@ def execute_scheduler_task(
         SET status = %s,
             finished_at = %s,
             duration_ms = %s,
+            retry_no = %s,
             message = %s,
             result_snapshot = %s,
             logs = %s
@@ -605,9 +830,10 @@ def execute_scheduler_task(
             status,
             _datetime_param(finished_at),
             duration_ms,
+            max(0, len(attempts) - 1),
             message,
             _json_text(result),
-            _json_text(logs),
+            _json_text(trimmed_logs),
             run_id,
         ),
     )
@@ -634,6 +860,7 @@ def execute_scheduler_task(
             task_id,
         ),
     )
+    _prune_task_runs(task_id)
     return _hydrate_run(fetch_one("SELECT * FROM scheduler_task_runs WHERE id = %s", (run_id,)))
 
 
