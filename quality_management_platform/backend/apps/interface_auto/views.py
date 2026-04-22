@@ -4,13 +4,15 @@ import json
 from datetime import datetime
 
 from apps.common.http import api_view, get_int
-from test_platform.db import connect, execute, fetch_all, fetch_one
+from test_platform.db import connect, execute, executemany, fetch_all, fetch_one
 
 from .execution_service import execute_case_run
 from . import template_service
 
 
 _CASE_SCHEMA_READY = False
+_SUITE_SCHEMA_READY = False
+SUITE_SCHEDULER_SOURCE = "interface_auto.test_suite"
 
 
 def _json_text(value):
@@ -213,6 +215,310 @@ def _write_case_steps(case_id: int, steps):
 def _delete_case_with_steps(case_id: int):
     execute("DELETE FROM test_case_steps WHERE case_id = %s", (case_id,))
     return execute("DELETE FROM test_cases WHERE id = %s", (case_id,)) > 0
+
+
+def _ensure_suite_schema_ready():
+    global _SUITE_SCHEMA_READY
+    if _SUITE_SCHEMA_READY:
+        return
+    execute(
+        """
+        CREATE TABLE IF NOT EXISTS test_suites (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            project_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            notify_emails JSON NULL,
+            email_config JSON NULL,
+            created_by VARCHAR(50) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_test_suites_project_name (project_id, name),
+            INDEX idx_test_suites_project_id (project_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+    execute(
+        """
+        CREATE TABLE IF NOT EXISTS test_suite_cases (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            suite_id INT NOT NULL,
+            case_id INT NOT NULL,
+            sort_order INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_test_suite_case (suite_id, case_id),
+            INDEX idx_test_suite_cases_suite_id (suite_id),
+            INDEX idx_test_suite_cases_case_id (case_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+    _SUITE_SCHEMA_READY = True
+
+
+def _normalise_suite_name(value):
+    return str(value or "").strip()
+
+
+def _validate_suite_payload(item, *, current_id=None):
+    project_id = get_int(item.get("project_id"))
+    if not project_id:
+        raise ValueError("请选择所属项目")
+    if not fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,)):
+        raise ValueError("所属项目不存在")
+
+    name = _normalise_suite_name(item.get("name"))
+    if not name:
+        raise ValueError("请输入测试集名称")
+
+    params = [project_id, name]
+    duplicate_sql = "SELECT id FROM test_suites WHERE project_id = %s AND LOWER(name) = LOWER(%s)"
+    if current_id:
+        duplicate_sql = f"{duplicate_sql} AND id <> %s"
+        params.append(current_id)
+    if fetch_one(f"{duplicate_sql} LIMIT 1", tuple(params)):
+        raise ValueError("当前项目下已存在同名测试集")
+
+    case_ids = []
+    for raw_case_id in item.get("case_ids") or []:
+        case_id = get_int(raw_case_id)
+        if case_id and case_id not in case_ids:
+            case_ids.append(case_id)
+    if not case_ids:
+        raise ValueError("请至少选择一个测试用例")
+
+    if case_ids:
+        placeholders = ", ".join(["%s"] * len(case_ids))
+        rows = fetch_all(
+            f"""
+            SELECT id
+            FROM test_cases
+            WHERE project_id = %s AND id IN ({placeholders})
+            """,
+            (project_id, *case_ids),
+        )
+        existed_ids = {int(row["id"]) for row in rows}
+        missing_ids = [case_id for case_id in case_ids if case_id not in existed_ids]
+        if missing_ids:
+            raise ValueError("所选测试用例不存在或不属于当前项目")
+
+    return {
+        "project_id": project_id,
+        "name": name,
+        "description": str(item.get("description") or "").strip(),
+        "case_ids": case_ids,
+        "notify_emails": item.get("notify_emails") or [],
+        "email_config": item.get("email_config") or {},
+    }
+
+
+def _suite_case_rows(suite_id: int):
+    return fetch_all(
+        """
+        SELECT
+            tsc.case_id,
+            tsc.sort_order,
+            tc.name,
+            tc.description,
+            tc.folder_id,
+            tc.project_id,
+            cf.name AS folder_name
+        FROM test_suite_cases tsc
+        INNER JOIN test_cases tc ON tc.id = tsc.case_id
+        LEFT JOIN case_folders cf ON cf.id = tc.folder_id
+        WHERE tsc.suite_id = %s
+        ORDER BY tsc.sort_order ASC, tsc.id ASC
+        """,
+        (suite_id,),
+    )
+
+
+def _suite_scheduler_tasks(suite_ids: list[int]):
+    if not suite_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(suite_ids))
+    rows = fetch_all(
+        f"""
+        SELECT *
+        FROM scheduler_tasks
+        WHERE task_type = 'test_suite'
+          AND source_module = %s
+          AND source_id IN ({placeholders})
+        ORDER BY updated_at DESC, id DESC
+        """,
+        (SUITE_SCHEDULER_SOURCE, *suite_ids),
+    )
+    tasks_by_suite_id = {}
+    for row in rows:
+        source_id = get_int(row.get("source_id"))
+        if source_id and source_id not in tasks_by_suite_id:
+            item = dict(row)
+            item["target_config"] = _json_value(item.get("target_config"), {})
+            item["notify_config"] = _json_value(item.get("notify_config"), {})
+            item["enabled"] = bool(item.get("enabled"))
+            item["allow_concurrent"] = bool(item.get("allow_concurrent"))
+            tasks_by_suite_id[source_id] = item
+    return tasks_by_suite_id
+
+
+def _hydrate_suite(row, scheduler_task=None, *, include_cases=False):
+    item = dict(row)
+    item["notify_emails"] = _json_value(item.get("notify_emails"), [])
+    item["email_config"] = _json_value(item.get("email_config"), {})
+    if include_cases:
+        item["cases"] = _suite_case_rows(item["id"])
+    else:
+        item["cases"] = []
+    item["case_ids"] = [case["case_id"] for case in item["cases"]]
+    item["case_count"] = len(item["cases"]) if include_cases else int(item.get("case_count") or 0)
+    item["scheduler_task"] = scheduler_task
+    return item
+
+
+def _write_suite_cases(suite_id: int, case_ids):
+    execute("DELETE FROM test_suite_cases WHERE suite_id = %s", (suite_id,))
+    values = [(suite_id, case_id, index) for index, case_id in enumerate(case_ids or [], start=1)]
+    executemany(
+        """
+        INSERT INTO test_suite_cases (suite_id, case_id, sort_order)
+        VALUES (%s, %s, %s)
+        """,
+        values,
+    )
+
+
+def _get_suite_detail(suite_id: int):
+    _ensure_suite_schema_ready()
+    row = fetch_one(
+        """
+        SELECT
+            ts.*,
+            p.name AS project_name,
+            p.business_group_id,
+            bg.name AS business_group_name
+        FROM test_suites ts
+        LEFT JOIN projects p ON p.id = ts.project_id
+        LEFT JOIN business_groups bg ON bg.id = p.business_group_id
+        WHERE ts.id = %s
+        """,
+        (suite_id,),
+    )
+    if not row:
+        return None
+    scheduler_task = _suite_scheduler_tasks([suite_id]).get(suite_id)
+    return _hydrate_suite(row, scheduler_task=scheduler_task, include_cases=True)
+
+
+@api_view
+def test_suites(request, payload=None):
+    _ensure_suite_schema_ready()
+    if request.method == "GET":
+        project_id = get_int((payload or {}).get("project_id"))
+        keyword = str((payload or {}).get("keyword") or "").strip()
+        conditions = []
+        params = []
+        if project_id:
+            conditions.append("ts.project_id = %s")
+            params.append(project_id)
+        if keyword:
+            like_value = f"%{keyword}%"
+            conditions.append("(ts.name LIKE %s OR ts.description LIKE %s)")
+            params.extend([like_value, like_value])
+        where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = fetch_all(
+            f"""
+            SELECT
+                ts.*,
+                p.name AS project_name,
+                p.business_group_id,
+                bg.name AS business_group_name,
+                (
+                    SELECT COUNT(*)
+                    FROM test_suite_cases tsc
+                    WHERE tsc.suite_id = ts.id
+                ) AS case_count
+            FROM test_suites ts
+            LEFT JOIN projects p ON p.id = ts.project_id
+            LEFT JOIN business_groups bg ON bg.id = p.business_group_id
+            {where_sql}
+            ORDER BY ts.updated_at DESC, ts.id DESC
+            """,
+            tuple(params),
+        )
+        tasks_by_suite_id = _suite_scheduler_tasks([int(row["id"]) for row in rows])
+        return [
+            _hydrate_suite(row, scheduler_task=tasks_by_suite_id.get(int(row["id"])), include_cases=False)
+            for row in rows
+        ]
+
+    item = _validate_suite_payload(payload or {})
+    suite_id = execute(
+        """
+        INSERT INTO test_suites (project_id, name, description, notify_emails, email_config, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (
+            item["project_id"],
+            item["name"],
+            item["description"],
+            _empty_list_json(item["notify_emails"]),
+            _json_text(item["email_config"]),
+            "admin",
+        ),
+    )
+    _write_suite_cases(suite_id, item["case_ids"])
+    return {"suite_id": suite_id}, 201
+
+
+@api_view
+def test_suite_detail(request, suite_id: int, payload=None):
+    _ensure_suite_schema_ready()
+    current = _get_suite_detail(suite_id)
+    if not current:
+        raise ValueError("测试集不存在")
+    if request.method == "GET":
+        return current
+    if request.method == "PUT":
+        item = _validate_suite_payload(payload or {}, current_id=suite_id)
+        updated = execute(
+            """
+            UPDATE test_suites
+            SET project_id = %s,
+                name = %s,
+                description = %s,
+                notify_emails = %s,
+                email_config = %s
+            WHERE id = %s
+            """,
+            (
+                item["project_id"],
+                item["name"],
+                item["description"],
+                _empty_list_json(item["notify_emails"]),
+                _json_text(item["email_config"]),
+                suite_id,
+            ),
+        )
+        _write_suite_cases(suite_id, item["case_ids"])
+        return {"updated": updated >= 0, "suite": _get_suite_detail(suite_id)}
+
+    task_rows = fetch_all(
+        """
+        SELECT id
+        FROM scheduler_tasks
+        WHERE task_type = 'test_suite'
+          AND source_module = %s
+          AND source_id = %s
+        """,
+        (SUITE_SCHEDULER_SOURCE, suite_id),
+    )
+    for task in task_rows:
+        execute("DELETE FROM scheduler_task_runs WHERE task_id = %s", (task["id"],))
+    execute(
+        "DELETE FROM scheduler_tasks WHERE task_type = 'test_suite' AND source_module = %s AND source_id = %s",
+        (SUITE_SCHEDULER_SOURCE, suite_id),
+    )
+    execute("DELETE FROM test_suite_cases WHERE suite_id = %s", (suite_id,))
+    return {"deleted": execute("DELETE FROM test_suites WHERE id = %s", (suite_id,)) > 0}
 
 
 @api_view

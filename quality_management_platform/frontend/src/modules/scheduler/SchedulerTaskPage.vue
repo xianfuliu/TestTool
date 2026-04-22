@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { Delete, Edit, RefreshRight, Search, Tickets, VideoPlay } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 
@@ -32,6 +33,8 @@ const TASK_POLL_INTERVAL_MS = 15000;
 const RUN_DETAIL_POLL_INTERVAL_MS = 3000;
 
 type SelectValue = number | typeof ALL_VALUE;
+
+const route = useRoute();
 
 type SchedulerForm = {
   id: number | null;
@@ -146,6 +149,7 @@ let taskPollingTimer: number | null = null;
 let runDetailPollingTimer: number | null = null;
 let taskPollingInFlight = false;
 let runDetailPollingInFlight = false;
+let openedTaskIdFromQuery: number | null = null;
 
 const context = reactive<SchedulerContext>({
   business_groups: [],
@@ -680,6 +684,19 @@ async function openRunsDrawer(row: SchedulerTaskRecord) {
   startRunDetailPolling();
 }
 
+async function openRunsDrawerFromQuery() {
+  const rawTaskId = Number(route.query.taskId);
+  if (!Number.isFinite(rawTaskId) || rawTaskId <= 0 || openedTaskIdFromQuery === rawTaskId) {
+    return;
+  }
+  const targetTask = tasks.value.find((item) => item.id === rawTaskId);
+  if (!targetTask) {
+    return;
+  }
+  openedTaskIdFromQuery = rawTaskId;
+  await openRunsDrawer(targetTask);
+}
+
 async function loadRuns(options: { silent?: boolean } = {}) {
   if (!currentRunTask.value) {
     return;
@@ -1169,9 +1186,17 @@ function runStatusLabel(status: string) {
 onMounted(async () => {
   await loadContext();
   await loadTasks();
+  await openRunsDrawerFromQuery();
   document.addEventListener("visibilitychange", handleVisibilityChange);
   startTaskPolling();
 });
+
+watch(
+  () => route.query.taskId,
+  async () => {
+    await openRunsDrawerFromQuery();
+  },
+);
 
 onBeforeUnmount(() => {
   stopTaskPolling();

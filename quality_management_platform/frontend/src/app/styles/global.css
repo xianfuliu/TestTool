@@ -24,6 +24,8 @@
   --qm-form-font-size: 13px;
   --qm-form-line-height: 1.5;
   --qm-form-control-height-sm: 28px;
+  --qm-dropdown-font-size: 12px;
+  --qm-dropdown-option-height: 30px;
   --el-color-primary: #1677ff;
   --el-border-radius-base: 8px;
   --el-border-color-light: #f0f0f0;
@@ -100,21 +102,79 @@ select {
   line-height: var(--qm-form-line-height);
 }
 
+select,
+.el-select,
+.el-cascader,
+.el-dropdown,
+.el-select__wrapper,
+.el-select__selection,
+.el-select__selected-item,
+.el-select__placeholder,
+.el-select__input,
+.el-select__tags-text,
+.el-select .el-input__inner,
+.el-cascader .el-input__inner,
+.el-cascader__label,
+.el-cascader__search-input,
+.el-cascader__placeholder,
+.el-dropdown-link {
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-dropdown-font-size) !important;
+  line-height: var(--qm-form-line-height);
+}
+
+.el-select__popper,
+.el-cascader__dropdown,
+.el-dropdown__popper,
+.el-select-dropdown,
+.el-select-dropdown__item,
+.el-cascader-panel,
+.el-cascader-node,
+.el-cascader-menu__empty-text,
+.el-dropdown-menu,
+.el-dropdown-menu__item,
+.el-autocomplete-suggestion,
+.el-autocomplete-suggestion li,
+.el-picker-panel,
+.el-picker-panel__body,
+.el-date-table,
+.el-time-panel,
+.el-time-spinner__item {
+  font-family: var(--qm-form-font-family);
+  font-size: var(--qm-dropdown-font-size) !important;
+}
+
+.el-select-dropdown__item,
+.el-cascader-node,
+.el-dropdown-menu__item,
+.el-autocomplete-suggestion li {
+  height: var(--qm-dropdown-option-height);
+  min-height: var(--qm-dropdown-option-height);
+  line-height: var(--qm-dropdown-option-height);
+}
+
+.el-cascader-node,
+.el-dropdown-menu__item {
+  align-items: center;
+}
+
 .compact-select-popper,
 .compact-select-popper .el-select-dropdown__item,
 .compact-select-popper .el-cascader-node,
+.compact-select-popper .el-dropdown-menu__item,
 .compact-select-popper .el-picker-panel,
 .compact-select-popper .el-picker-panel__body,
 .compact-select-popper .el-date-table,
 .compact-select-popper .el-time-panel {
   font-family: var(--qm-form-font-family);
-  font-size: 12px;
+  font-size: var(--qm-dropdown-font-size) !important;
 }
 
 .compact-select-popper .el-select-dropdown__item,
-.compact-select-popper .el-cascader-node {
-  height: 30px;
-  line-height: 30px;
+.compact-select-popper .el-cascader-node,
+.compact-select-popper .el-dropdown-menu__item {
+  height: var(--qm-dropdown-option-height);
+  line-height: var(--qm-dropdown-option-height);
 }
 
 .project-cascader .el-input__wrapper {
@@ -140,7 +200,7 @@ select {
 .project-cascader .el-cascader__label {
   color: #2d3a4b;
   font-family: var(--qm-form-font-family);
-  font-size: var(--qm-form-font-size);
+  font-size: var(--qm-dropdown-font-size);
   line-height: var(--qm-form-line-height);
 }
 
