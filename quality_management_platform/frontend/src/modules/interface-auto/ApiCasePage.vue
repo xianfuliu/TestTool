@@ -22,6 +22,8 @@ import {
   fetchDatabaseSchemas,
   type DatabaseConnectionRecord,
 } from "@/modules/data-assets/api";
+import CommonToolConfigForm from "./CommonToolConfigForm.vue";
+import { fetchGlobalTools } from "./globalToolApi";
 import apiToolIcon from "@/assets/interface-auto/tool-icons/api.png";
 import assertionToolIcon from "@/assets/interface-auto/tool-icons/assrt.png";
 import extractionToolIcon from "@/assets/interface-auto/tool-icons/extraction.png";
@@ -31,6 +33,7 @@ import lockToolIcon from "@/assets/interface-auto/tool-icons/lock.png";
 import logToolIcon from "@/assets/interface-auto/tool-icons/log.png";
 import runningToolIcon from "@/assets/interface-auto/tool-icons/running.png";
 import sqlToolIcon from "@/assets/interface-auto/tool-icons/sql.png";
+import pythonToolIcon from "@/assets/interface-auto/tool-icons/python.png";
 import startToolIcon from "@/assets/interface-auto/tool-icons/start.png";
 import stopingToolIcon from "@/assets/interface-auto/tool-icons/stoping.png";
 import stopToolIcon from "@/assets/interface-auto/tool-icons/stop.png";
@@ -45,6 +48,7 @@ import type {
   CaseToolRecord,
   CascaderOption,
   EnvironmentRecord,
+  GlobalToolRecord,
   GlobalVariableRecord,
   JsonMap,
   TestCaseRecord,
@@ -53,6 +57,7 @@ import type {
 
 type ToolTabKey = "pre_processing" | "assertions" | "post_processing";
 type ToolDialogKind = "http_request" | "sql_tool" | "python_script" | "parameter_extraction" | "assertion" | "generic";
+type CommonToolDialogKind = "http_request" | "sql_tool" | "python_script";
 
 type ToolDraftRow = {
   rowKey: string;
@@ -146,6 +151,8 @@ const ASSERTION_OPERATOR_OPTIONS = [
   { value: "less_equal", label: "<=" },
 ];
 
+const COMMON_TOOL_DIALOG_KINDS = new Set<string>(["http_request", "sql_tool", "python_script"]);
+
 const context = useBusinessProjectContext();
 const route = useRoute();
 const router = useRouter();
@@ -162,6 +169,7 @@ const apiFolders = ref<ApiFolder[]>([]);
 const templates = ref<ApiTemplate[]>([]);
 const environments = ref<EnvironmentRecord[]>([]);
 const globalVariables = ref<GlobalVariableRecord[]>([]);
+const globalTools = ref<GlobalToolRecord[]>([]);
 const databaseConnections = ref<DatabaseConnectionRecord[]>([]);
 const sqlDatabaseSchemas = ref<string[]>([]);
 const sqlDatabaseSchemasLoading = ref(false);
@@ -221,7 +229,6 @@ const toolForm = reactive({
   outputFieldsText: "",
   pythonScriptPath: "",
   pythonWorkingDir: "",
-  pythonArgsText: "",
   pythonScriptText: "",
   pythonTimeout: 60,
 });
@@ -252,6 +259,15 @@ const visibleGlobalVariables = computed(() =>
 );
 const enabledDatabaseConnections = computed(() =>
   databaseConnections.value.filter((item) => item.enabled !== false),
+);
+const enabledGlobalTools = computed(() => {
+  return globalTools.value
+    .filter((item) => item.enabled !== false)
+    .filter((item) => ["http_request", "sql_tool", "python_script"].includes(String(item.tool_type)));
+});
+const isCommonToolDialog = computed(() => COMMON_TOOL_DIALOG_KINDS.has(toolDialogKind.value));
+const commonToolDialogKind = computed<CommonToolDialogKind>(() =>
+  isCommonToolDialog.value ? (toolDialogKind.value as CommonToolDialogKind) : "http_request",
 );
 const outputVariableText = ref("");
 const globalConfigExpanded = computed({
@@ -853,16 +869,25 @@ function ensureToolMap(step: CaseStep, tab: ToolTabKey) {
   return step[tab] as CaseToolMap;
 }
 
+function normalizeToolPriority(tool: CaseToolRecord, fallbackIndex: number) {
+  const priority = Number(tool.priority ?? tool.sort_order ?? 0);
+  return Number.isFinite(priority) && priority > 0 ? priority : fallbackIndex + 1;
+}
+
 function getToolEntries(step: CaseStep, tab: ToolTabKey) {
   return Object.entries(ensureToolMap(step, tab))
     .map(([toolId, tool], index) => ({
       toolId,
+      orderIndex: index,
       tool: {
         ...tool,
-        priority: Number(tool.priority ?? index),
+        priority: normalizeToolPriority(tool, index),
       },
     }))
-    .sort((left, right) => Number(left.tool.priority ?? 0) - Number(right.tool.priority ?? 0));
+    .sort(
+      (left, right) =>
+        Number(left.tool.priority ?? 0) - Number(right.tool.priority ?? 0) || left.orderIndex - right.orderIndex,
+    );
 }
 
 function getStepMethod(step: CaseStep) {
@@ -914,8 +939,7 @@ function getToolSummary(tool: CaseToolRecord) {
     return database ? `库名：${database}` : "未配置数据库";
   }
   if (tool.tool_type === "python_script") {
-    const scriptPath = String(config.script_path ?? config.path ?? "");
-    return scriptPath ? `Python：${scriptPath}` : "内联 Python 脚本";
+    return "Python 脚本";
   }
   if (tool.tool_type === "parameter_extraction") {
     const extractions = Array.isArray(tool.extractions) ? tool.extractions : [];
@@ -956,6 +980,9 @@ function getToolTypeIcon(tool: CaseToolRecord) {
   if (toolType === "sql_tool") {
     return sqlToolIcon;
   }
+  if (toolType === "python_script") {
+    return pythonToolIcon;
+  }
   if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
     return extractionToolIcon;
   }
@@ -963,6 +990,29 @@ function getToolTypeIcon(tool: CaseToolRecord) {
     return assertionToolIcon;
   }
   return apiToolIcon;
+}
+
+function toCaseToolPreviewFromGlobalTool(globalTool: GlobalToolRecord): CaseToolRecord {
+  return {
+    id: String(globalTool.id),
+    name: globalTool.name,
+    tool_type: globalTool.tool_type,
+    summary: globalTool.description,
+    enabled: globalTool.enabled,
+    config: (globalTool.config ?? {}) as Record<string, unknown>,
+  };
+}
+
+function getGlobalToolLabel(globalTool: GlobalToolRecord) {
+  return getToolLabel(toCaseToolPreviewFromGlobalTool(globalTool));
+}
+
+function getGlobalToolSummary(globalTool: GlobalToolRecord) {
+  return getToolSummary(toCaseToolPreviewFromGlobalTool(globalTool));
+}
+
+function getGlobalToolTypeIcon(globalTool: GlobalToolRecord) {
+  return getToolTypeIcon(toCaseToolPreviewFromGlobalTool(globalTool));
 }
 
 function getToolPreviewRows(tool: CaseToolRecord) {
@@ -981,7 +1031,6 @@ function getToolPreviewRows(tool: CaseToolRecord) {
   }
   if (tool.tool_type === "python_script") {
     return [
-      String(config.script_path ?? config.path ?? ""),
       String(config.script ?? config.script_text ?? config.code ?? "").split("\n").find(Boolean) ?? "",
       Array.isArray(tool.output_fields) ? tool.output_fields.join(", ") : "",
     ].filter(Boolean).slice(0, 2);
@@ -1095,7 +1144,6 @@ function resetToolForm() {
   toolForm.outputFieldsText = "";
   toolForm.pythonScriptPath = "";
   toolForm.pythonWorkingDir = "";
-  toolForm.pythonArgsText = "";
   toolForm.pythonScriptText = "";
   toolForm.pythonTimeout = 60;
   sqlDatabaseSchemas.value = [];
@@ -1203,8 +1251,6 @@ function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
     toolForm.pythonWorkingDir = String(config.working_dir ?? config.cwd ?? "");
     toolForm.pythonScriptText = String(config.script ?? config.script_text ?? config.code ?? "");
     toolForm.pythonTimeout = Number(config.timeout_seconds ?? config.timeout ?? 60) || 60;
-    const args = config.args;
-    toolForm.pythonArgsText = Array.isArray(args) ? args.join(" ") : String(args ?? "");
     toolForm.outputFieldsText = Array.isArray(tool.output_fields)
       ? tool.output_fields.join(", ")
       : String(config.output_fields ?? "");
@@ -1272,6 +1318,13 @@ function openNewToolDialog(step: CaseStep, tab: ToolTabKey, toolType: string) {
   toolDialogVisible.value = true;
 }
 
+function openGlobalToolDialog(step: CaseStep, tab: ToolTabKey) {
+  globalToolDialogStepKey.value = getStepKey(step);
+  globalToolDialogTab.value = tab;
+  globalToolKeyword.value = "";
+  globalToolDialogVisible.value = true;
+}
+
 function openToolDialog(step: CaseStep, tab: ToolTabKey, toolId: string, options?: { isNew?: boolean }) {
   const tool = ensureToolMap(step, tab)[toolId];
   if (!tool) {
@@ -1332,10 +1385,60 @@ function removeToolRow(index: number) {
   toolRows.value.splice(index, 1);
 }
 
+function getNextToolPriority(map: CaseToolMap) {
+  const priorities = Object.values(map).map((tool, index) => normalizeToolPriority(tool, index));
+  return priorities.length ? Math.max(...priorities) + 1 : 1;
+}
+
 function updateToolPriorities(map: CaseToolMap) {
-  Object.values(map).forEach((tool, index) => {
-    tool.priority = index + 1;
-  });
+  Object.entries(map)
+    .map(([toolId, tool], index) => ({
+      toolId,
+      orderIndex: index,
+      priority: normalizeToolPriority(tool, index),
+    }))
+    .sort((left, right) => left.priority - right.priority || left.orderIndex - right.orderIndex)
+    .forEach(({ toolId }, index) => {
+      map[toolId].priority = index + 1;
+    });
+}
+
+function appendToolToMap(map: CaseToolMap, toolId: string, tool: CaseToolRecord) {
+  tool.id = toolId;
+  tool.priority = getNextToolPriority(map);
+  map[toolId] = tool;
+}
+
+function buildToolFromGlobalTool(globalTool: GlobalToolRecord): CaseToolRecord {
+  const config = deepClone((globalTool.config ?? {}) as Record<string, unknown>);
+  const outputFields = Array.isArray(config.output_fields) ? config.output_fields.map((item) => String(item)) : [];
+  return {
+    id: "",
+    name: globalTool.name,
+    summary: globalTool.description || getToolSummary({ tool_type: globalTool.tool_type, config }),
+    enabled: true,
+    tool_type: globalTool.tool_type,
+    tool_label: getToolLabel({ tool_type: globalTool.tool_type }),
+    source_global_tool_id: globalTool.id,
+    source_global_tool_name: globalTool.name,
+    output_fields: outputFields,
+    config,
+  };
+}
+
+function addGlobalToolToCurrentStep(globalTool: GlobalToolRecord) {
+  const step = getStepByKey(globalToolDialogStepKey.value);
+  if (!step) {
+    globalToolDialogVisible.value = false;
+    return;
+  }
+  const map = ensureToolMap(step, globalToolDialogTab.value);
+  const tool = buildToolFromGlobalTool(globalTool);
+  const toolId = createKey(globalTool.tool_type);
+  appendToolToMap(map, toolId, tool);
+  markActiveModified();
+  globalToolDialogVisible.value = false;
+  ElMessage.success(`已添加全局工具：${globalTool.name}`);
 }
 
 function getGlobalEncryptionConfigIssue() {
@@ -1420,9 +1523,6 @@ function createDefaultToolConfig(toolType: string, tab: ToolTabKey) {
       summary: "",
       output_fields: [],
       config: {
-        script_path: "",
-        working_dir: "",
-        args: "",
         script: "",
         timeout_seconds: 60,
         render_template: true,
@@ -1475,7 +1575,7 @@ function saveToolDialog() {
       name: "",
       summary: "",
       enabled: true,
-      priority: Object.keys(map).length + 1,
+      priority: getNextToolPriority(map),
       tool_type: toolDialogNewType.value || toolDialogKind.value,
       tool_label: getToolLabel({ tool_type: toolDialogNewType.value || toolDialogKind.value }),
       config: {},
@@ -1564,8 +1664,8 @@ function saveToolDialog() {
           .join(" / ");
       tool.tool_type = "sql_tool";
     } else if (toolDialogKind.value === "python_script") {
-      if (!toolForm.pythonScriptPath.trim() && !toolForm.pythonScriptText.trim()) {
-        ElMessage.warning("请输入脚本路径或脚本内容");
+      if (!toolForm.pythonScriptText.trim()) {
+        ElMessage.warning("请输入脚本内容");
         return;
       }
       const outputFields = toolForm.outputFieldsText
@@ -1574,17 +1674,12 @@ function saveToolDialog() {
         .filter(Boolean);
       tool.output_fields = outputFields;
       tool.config = {
-        script_path: toolForm.pythonScriptPath.trim(),
-        working_dir: toolForm.pythonWorkingDir.trim(),
-        args: toolForm.pythonArgsText.trim(),
         script: toolForm.pythonScriptText,
         timeout_seconds: Number(toolForm.pythonTimeout) || 60,
         render_template: true,
         output_fields: outputFields,
       };
-      tool.summary =
-        toolForm.summary.trim() ||
-        (toolForm.pythonScriptPath.trim() ? `Python：${toolForm.pythonScriptPath.trim()}` : "内联 Python 脚本");
+      tool.summary = toolForm.summary.trim() || "Python 脚本";
       tool.tool_type = "python_script";
     } else if (toolDialogKind.value === "parameter_extraction") {
       const extractions = toolRows.value
@@ -1626,9 +1721,7 @@ function saveToolDialog() {
       tool.summary = toolForm.summary.trim();
     }
     if (!existingTool) {
-      tool.id = toolId;
-      map[toolId] = tool;
-      updateToolPriorities(map);
+      appendToolToMap(map, toolId, tool);
       toolDialogToolId.value = toolId;
     }
     toolDialogCommitted.value = true;
@@ -1774,6 +1867,7 @@ async function loadWorkspace() {
     templates.value = [];
     environments.value = [];
     globalVariables.value = [];
+    globalTools.value = [];
     databaseConnections.value = [];
     variableRows.value = [];
     openedTabs.value = [];
@@ -1791,6 +1885,7 @@ async function loadWorkspace() {
       templateWorkspace,
       environmentRows,
       globalVariableRows,
+      globalToolRows,
       databaseConnectionRows,
     ] = await Promise.all([
       get<CaseFolder[]>("/api/interface-auto/case-folders/", { project_id: currentProjectId.value }),
@@ -1800,6 +1895,7 @@ async function loadWorkspace() {
       }),
       get<EnvironmentRecord[]>("/api/interface-auto/environments/"),
       get<GlobalVariableRecord[]>("/api/interface-auto/variables/", { project_id: currentProjectId.value }),
+      fetchGlobalTools(),
       fetchDatabaseConnections({ business_group_id: context.selectedGroupId.value ?? null }),
     ]);
     folders.value = folderRows;
@@ -1812,6 +1908,7 @@ async function loadWorkspace() {
       variables: parseMap(item.variables),
     }));
     globalVariables.value = Array.isArray(globalVariableRows) ? globalVariableRows : [];
+    globalTools.value = Array.isArray(globalToolRows) ? globalToolRows : [];
     databaseConnections.value = Array.isArray(databaseConnectionRows) ? databaseConnectionRows : [];
   } finally {
     loading.value = false;
@@ -2660,6 +2757,10 @@ function handleToolCommand(step: CaseStep, command: string | number | object) {
     addToolToStep(step, tab, "assertion");
     return;
   }
+  if (String(command) === "global_tool") {
+    openGlobalToolDialog(step, tab);
+    return;
+  }
   addToolToStep(step, tab, String(command));
 }
 
@@ -2674,9 +2775,8 @@ function copyTool(step: CaseStep, tab: ToolTabKey, toolId: string) {
     ...deepClone(source),
     id: cloneId,
     name: `${source.name ?? "工具"} 副本`,
-    priority: Object.keys(map).length + 1,
+    priority: getNextToolPriority(map),
   };
-  updateToolPriorities(map);
   markActiveModified();
 }
 
@@ -2731,7 +2831,7 @@ function onToolDrop(step: CaseStep, tab: ToolTabKey, targetToolId: string) {
   const map = ensureToolMap(step, tab);
   orderedToolIds.forEach((toolId, index) => {
     if (map[toolId]) {
-      map[toolId].priority = index;
+      map[toolId].priority = index + 1;
     }
   });
   markActiveModified();
@@ -3457,6 +3557,31 @@ onBeforeUnmount(() => {
       <button @click="closeAllTabs(); hideContextMenus()">关闭全部</button>
     </div>
 
+    <el-dialog v-model="globalToolDialogVisible" title="添加全局工具" width="720px" class="global-tool-picker-dialog">
+      <div class="global-tool-picker">
+        <div class="global-tool-search">
+          <el-icon><Search /></el-icon>
+          <input v-model="globalToolKeyword" placeholder="搜索全局工具..." />
+        </div>
+        <div class="global-tool-list">
+          <article v-for="tool in enabledGlobalTools" :key="tool.id" class="global-tool-option">
+            <div class="global-tool-option-main">
+              <img class="tool-type-icon" :src="getGlobalToolTypeIcon(tool)" :alt="getGlobalToolLabel(tool)" />
+              <div>
+                <div class="global-tool-option-title">
+                  <span>{{ tool.name }}</span>
+                  <em>{{ getGlobalToolLabel(tool) }}</em>
+                </div>
+                <p>{{ tool.description || getGlobalToolSummary(tool) || "暂无说明" }}</p>
+              </div>
+            </div>
+            <button class="action-button solid mini" @click="addGlobalToolToCurrentStep(tool)">添加</button>
+          </article>
+          <div v-if="!enabledGlobalTools.length" class="global-tool-empty">暂无可添加的全局工具</div>
+        </div>
+      </div>
+    </el-dialog>
+
     <el-dialog
       v-model="toolDialogVisible"
       :title="toolDialogTitle"
@@ -3465,149 +3590,36 @@ onBeforeUnmount(() => {
       @closed="handleToolDialogClosed"
     >
       <div class="step-tool-dialog-body">
-        <div class="tool-dialog-row name-row">
-          <label>名称:</label>
-          <input v-model="toolForm.name" class="tool-input dialog-input" placeholder="请输入工具名称" />
-        </div>
+        <CommonToolConfigForm
+          v-if="isCommonToolDialog"
+          :active="toolDialogVisible"
+          :kind="commonToolDialogKind"
+          :form="toolForm"
+          :header-rows="toolHeaderRows"
+          :rows="toolRows"
+          :database-connections="enabledDatabaseConnections"
+          :database-schemas="sqlDatabaseSchemas"
+          :database-schemas-loading="sqlDatabaseSchemasLoading"
+          :http-tab="httpToolTab"
+          show-name
+          show-http-global-options
+          @update:http-tab="httpToolTab = $event"
+          @database-change="handleSqlDatabaseConnectionChange"
+          @global-encryption-change="handleToolGlobalEncryptionChange"
+          @global-headers-change="handleToolGlobalHeadersChange"
+          @insert-header-row="insertHeaderRow"
+          @remove-header-row="removeHeaderRow"
+          @insert-row="insertToolRow"
+          @remove-row="removeToolRow"
+        />
 
-        <template v-if="toolDialogKind === 'http_request'">
-          <div class="tool-dialog-grid http-request-grid">
-            <div class="tool-dialog-row compact">
-              <label>请求方式:</label>
-              <el-select v-model="toolForm.method" class="tool-dialog-select">
-                <el-option
-                  v-for="method in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']"
-                  :key="method"
-                  :label="method"
-                  :value="method"
-                />
-              </el-select>
-            </div>
-            <div class="tool-dialog-row">
-              <label>请求URL:</label>
-              <input v-model="toolForm.url" class="tool-input dialog-input" placeholder="请输入完整请求地址" />
-            </div>
+        <template v-else>
+          <div class="tool-dialog-row name-row">
+            <label>名称:</label>
+            <input v-model="toolForm.name" class="tool-input dialog-input" placeholder="请输入工具名称" />
           </div>
-          <div class="tool-dialog-row timeout-row">
-            <label>超时时间:</label>
-            <el-input-number v-model="toolForm.timeout" :min="1" :max="300" />
-          </div>
-          <div class="tool-dialog-row tool-dialog-switch-row global-option-row">
-            <label>全局配置:</label>
-            <div class="global-option-checks">
-              <el-checkbox v-model="toolForm.useGlobalEncryption" @change="handleToolGlobalEncryptionChange">
-                使用全局加解密
-              </el-checkbox>
-              <el-checkbox v-model="toolForm.useGlobalHeaders" @change="handleToolGlobalHeadersChange">
-                使用全局请求头
-              </el-checkbox>
-            </div>
-          </div>
-          <el-tabs v-model="httpToolTab" class="tool-inner-tabs">
-            <el-tab-pane label="请求头" name="headers">
-              <div class="tool-dialog-section embedded flat-row-section http-config-panel">
-                <div v-for="(row, index) in toolHeaderRows" :key="row.rowKey" class="tool-config-row flat-row">
-                  <input v-model="row.key" class="tool-input config-input" placeholder="Header名称" />
-                  <input v-model="row.value" class="tool-input config-input wide" placeholder="Header值" />
-                  <button class="row-icon add" title="新增" @click="insertHeaderRow(index)">+</button>
-                  <button class="row-icon remove" title="删除" @click="removeHeaderRow(index)">-</button>
-                </div>
-              </div>
-            </el-tab-pane>
-            <el-tab-pane label="请求体" name="body">
-              <el-input v-model="toolForm.bodyText" class="http-body-input" type="textarea" :rows="9" resize="none" />
-            </el-tab-pane>
-          </el-tabs>
-          <div class="tool-dialog-labeled-section">
-            <div class="tool-dialog-section-title side-title">响应提取</div>
-            <div class="tool-dialog-section flat-row-section">
-              <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row flat-row">
-                <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
-                <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
-                <button class="row-icon add" title="新增" @click="insertToolRow(index)">+</button>
-                <button class="row-icon remove" title="删除" @click="removeToolRow(index)">-</button>
-              </div>
-            </div>
-          </div>
-        </template>
 
-        <template v-else-if="toolDialogKind === 'sql_tool'">
-          <div class="tool-dialog-row">
-            <label>数据库:</label>
-            <el-select
-              v-model="toolForm.databaseConnectionId"
-              class="tool-dialog-select"
-              clearable
-              filterable
-              placeholder="请选择资产数据库"
-              @change="handleSqlDatabaseConnectionChange"
-            >
-              <el-option
-                v-for="database in enabledDatabaseConnections"
-                :key="database.id"
-                :label="getDatabaseConnectionLabel(database)"
-                :value="database.id"
-              />
-            </el-select>
-          </div>
-          <div class="tool-dialog-row">
-            <label>库名:</label>
-            <el-select
-              v-model="toolForm.database"
-              class="tool-dialog-select"
-              clearable
-              filterable
-              :disabled="!toolForm.databaseConnectionId"
-              :loading="sqlDatabaseSchemasLoading"
-              placeholder="请选择库名"
-            >
-              <el-option v-for="schema in sqlDatabaseSchemas" :key="schema" :label="schema" :value="schema" />
-            </el-select>
-          </div>
-          <div class="tool-dialog-row textarea">
-            <label>SQL语句:</label>
-            <el-input v-model="toolForm.sqlText" type="textarea" :rows="8" resize="none" />
-          </div>
-          <div class="tool-dialog-row">
-            <label>输出字段:</label>
-            <input v-model="toolForm.outputFieldsText" class="tool-input dialog-input" placeholder="多个字段用英文逗号分隔" />
-          </div>
-        </template>
-
-        <template v-else-if="toolDialogKind === 'python_script'">
-          <div class="tool-dialog-row">
-            <label>脚本路径:</label>
-            <input v-model="toolForm.pythonScriptPath" class="tool-input dialog-input" placeholder="可填相对 scripts 目录或绝对路径" />
-          </div>
-          <div class="tool-dialog-row">
-            <label>工作目录:</label>
-            <input v-model="toolForm.pythonWorkingDir" class="tool-input dialog-input" placeholder="可选，默认脚本所在目录" />
-          </div>
-          <div class="tool-dialog-row">
-            <label>参数:</label>
-            <input v-model="toolForm.pythonArgsText" class="tool-input dialog-input" placeholder="支持 ${变量名}，多个参数用空格分隔" />
-          </div>
-          <div class="tool-dialog-row timeout-row">
-            <label>超时时间:</label>
-            <el-input-number v-model="toolForm.pythonTimeout" :min="1" :max="86400" />
-          </div>
-          <div class="tool-dialog-row textarea">
-            <label>脚本内容:</label>
-            <el-input
-              v-model="toolForm.pythonScriptText"
-              type="textarea"
-              :rows="8"
-              resize="none"
-              placeholder="可选。脚本内容和参数均支持 ${变量名}"
-            />
-          </div>
-          <div class="tool-dialog-row">
-            <label>输出字段:</label>
-            <input v-model="toolForm.outputFieldsText" class="tool-input dialog-input" placeholder="stdout JSON 中要写入上下文的字段" />
-          </div>
-        </template>
-
-        <template v-else-if="toolDialogKind === 'parameter_extraction'">
+          <template v-if="toolDialogKind === 'parameter_extraction'">
           <div class="tool-dialog-section">
             <div class="tool-dialog-section-title">参数提取</div>
             <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row parameter-row flat-row">
@@ -3617,9 +3629,9 @@ onBeforeUnmount(() => {
               <button class="row-icon remove" title="删除" @click="removeToolRow(index)">-</button>
             </div>
           </div>
-        </template>
+          </template>
 
-        <template v-else-if="toolDialogKind === 'assertion'">
+          <template v-else-if="toolDialogKind === 'assertion'">
           <div class="tool-dialog-section">
             <div class="tool-dialog-section-title">断言配置</div>
             <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row assertion-row flat-row">
@@ -3637,13 +3649,14 @@ onBeforeUnmount(() => {
               <button class="row-icon remove" title="删除" @click="removeToolRow(index)">-</button>
             </div>
           </div>
-        </template>
+          </template>
 
-        <template v-else>
+          <template v-else>
           <div class="tool-dialog-row textarea">
             <label>工具说明:</label>
             <el-input v-model="toolForm.summary" type="textarea" :rows="6" resize="none" />
           </div>
+          </template>
         </template>
       </div>
       <template #footer>
@@ -4776,6 +4789,102 @@ onBeforeUnmount(() => {
   color: #cf1322;
 }
 
+.global-tool-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.global-tool-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  border: 1px solid #d7e1ec;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #fff;
+  color: #64748b;
+}
+
+.global-tool-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.global-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.global-tool-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #dbe3ed;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fbfdff;
+}
+
+.global-tool-option-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.global-tool-option-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.global-tool-option-title em {
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: #edf4ff;
+  color: #2f7df6;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.global-tool-option p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.global-tool-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.action-button.mini {
+  width: auto;
+  min-width: 58px;
+  height: 30px;
+  padding: 0 12px;
+}
+
 .variable-toolbar {
   display: flex;
   justify-content: flex-end;
@@ -4923,6 +5032,15 @@ onBeforeUnmount(() => {
 .tool-dialog-row :deep(.el-select),
 .tool-dialog-row :deep(.el-input-number) {
   flex: 1 1 auto;
+}
+
+.python-code-editor {
+  flex: 1 1 auto;
+  height: 280px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
 }
 
 .tool-dialog-select {

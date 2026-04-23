@@ -62,6 +62,41 @@ def _normalise_args(value: Any, context: PythonExecutionContext) -> list[str]:
     ]
 
 
+def _normalise_output_fields(value: Any) -> list[dict[str, str]]:
+    fields: list[dict[str, str]] = []
+    raw_items = [item.strip() for item in value.split(",") if item.strip()] if isinstance(value, str) else _as_list(value)
+    for item in raw_items:
+        if isinstance(item, str):
+            field_name = item.strip()
+            variable_name = field_name
+        else:
+            item_map = _as_dict(item)
+            field_name = str(item_map.get("field") or item_map.get("name") or item_map.get("source") or "").strip()
+            variable_name = str(item_map.get("variable") or item_map.get("output") or item_map.get("name") or field_name).strip()
+        if field_name or variable_name:
+            fields.append({"field": field_name or variable_name, "variable": variable_name or field_name})
+    return fields
+
+
+def _build_inline_script(content: str, output_fields: Any) -> str:
+    field_names = [item["field"] for item in _normalise_output_fields(output_fields)]
+    epilogue = "\n".join(
+        [
+            "",
+            "import json as __testtool_json",
+            f"__testtool_output_fields = __testtool_json.loads({json.dumps(field_names, ensure_ascii=False)!r})",
+            "if __testtool_output_fields:",
+            "    __testtool_outputs = {}",
+            "    for __testtool_field in __testtool_output_fields:",
+            "        if __testtool_field in globals():",
+            "            __testtool_outputs[__testtool_field] = globals()[__testtool_field]",
+            "    print(__testtool_json.dumps(__testtool_outputs, ensure_ascii=False, default=str))",
+            "",
+        ]
+    )
+    return f"{content.rstrip()}\n{epilogue}"
+
+
 def _parse_stdout_body(stdout: str) -> Any:
     text = stdout.strip()
     if not text:
@@ -106,6 +141,7 @@ def execute_python_script(config: dict[str, Any], context: PythonExecutionContex
     if not script_path and not script_content:
         raise ValueError("请配置 Python 脚本路径或脚本内容")
 
+    raw_args = config.get("args") or []
     rendered_temp_script: str | None = None
     source_script_path = ""
     if script_path:
@@ -122,16 +158,20 @@ def execute_python_script(config: dict[str, Any], context: PythonExecutionContex
             executable_script = str(resolved_script)
         default_cwd = str(resolved_script.parent)
     else:
-        rendered_temp_script = _write_temp_script(_render_script_content(script_content, context))
+        rendered_script = _render_script_content(script_content, context)
+        rendered_temp_script = _write_temp_script(
+            _build_inline_script(rendered_script, config.get("output_fields") or [])
+        )
         executable_script = rendered_temp_script
         default_cwd = str(Path(settings.BASE_DIR))
 
     working_dir = str(config.get("working_dir") or config.get("cwd") or "").strip()
     cwd = _resolve_working_dir(working_dir) if working_dir else default_cwd
-    args = _normalise_args(config.get("args") or [], context)
+    args = _normalise_args(raw_args, context)
     timeout = max(1, min(int(config.get("timeout_seconds") or context.timeout_seconds or 60), 24 * 3600))
     env = dict(os.environ)
     env["TESTTOOL_VARIABLES"] = json_dumps(context.variables)
+    env["PYTHONIOENCODING"] = "utf-8"
     if source_script_path:
         env["PYTHONPATH"] = os.pathsep.join(
             [str(Path(source_script_path).parent), env.get("PYTHONPATH", "")]
@@ -146,6 +186,8 @@ def execute_python_script(config: dict[str, Any], context: PythonExecutionContex
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )
@@ -195,21 +237,25 @@ def execute_python_script(config: dict[str, Any], context: PythonExecutionContex
 
 def extract_python_output_variables(body: Any, output_fields: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     body_map = _as_dict(body)
+    fields = _normalise_output_fields(output_fields)
     if not body_map:
-        return {}, []
-    fields = _as_list(output_fields)
+        return {}, [
+            {
+                "variable": item["variable"],
+                "path": item["field"],
+                "resolved_path": item["field"],
+                "matched": False,
+                "value": None,
+            }
+            for item in fields
+        ]
     if not fields:
-        fields = list(body_map.keys())
+        fields = [{"field": key, "variable": key} for key in body_map.keys()]
     extracted: dict[str, Any] = {}
     details: list[dict[str, Any]] = []
     for item in fields:
-        if isinstance(item, str):
-            field_name = item.strip()
-            variable_name = field_name
-        else:
-            item_map = _as_dict(item)
-            field_name = str(item_map.get("field") or item_map.get("name") or item_map.get("source") or "").strip()
-            variable_name = str(item_map.get("variable") or item_map.get("output") or item_map.get("name") or field_name).strip()
+        field_name = item["field"]
+        variable_name = item["variable"]
         if not field_name or not variable_name:
             continue
         matched = field_name in body_map

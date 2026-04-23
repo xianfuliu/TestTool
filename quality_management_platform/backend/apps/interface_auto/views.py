@@ -14,6 +14,7 @@ from . import template_service
 _CASE_SCHEMA_READY = False
 _SUITE_SCHEMA_READY = False
 SUITE_SCHEDULER_SOURCE = "interface_auto.test_suite"
+GLOBAL_TOOL_TYPES = {"http_request", "sql_tool", "python_script"}
 
 
 def _json_text(value):
@@ -33,6 +34,11 @@ def _json_value(value, default):
         return json.loads(value)
     except (TypeError, ValueError):
         return default
+
+
+def _json_list_value(value):
+    parsed = _json_value(value, [])
+    return parsed if isinstance(parsed, list) else []
 
 
 def _enabled_by_default(value) -> bool:
@@ -97,6 +103,57 @@ def _hydrate_step_row(step_row):
     hydrated["variables"] = _json_value(hydrated.get("variables"), {})
     hydrated["use_global_headers"] = _enabled_by_default(hydrated.get("use_global_headers", True))
     return hydrated
+
+
+def _hydrate_global_tool_row(tool_row):
+    if not tool_row:
+        return {}
+    hydrated = dict(tool_row)
+    hydrated["config"] = _json_value(hydrated.get("config"), {})
+    hydrated["enabled"] = _enabled_by_default(hydrated.get("enabled", True))
+    return hydrated
+
+
+def _normalise_global_tool_payload(item):
+    tool_type = str(item.get("tool_type") or "").strip()
+    if tool_type not in GLOBAL_TOOL_TYPES:
+        raise ValueError("暂只支持 HTTP请求、SQL工具、Python脚本")
+    name = str(item.get("name") or "").strip()
+    if not name:
+        raise ValueError("工具名称不能为空")
+    config = _json_value(item.get("config"), {})
+    if not isinstance(config, dict):
+        config = {}
+    if tool_type == "http_request":
+        config["method"] = str(config.get("method") or "GET").upper()
+        config["url"] = str(config.get("url") or "").strip()
+        if not config["url"]:
+            raise ValueError("HTTP 请求 URL 不能为空")
+        config["timeout"] = int(config.get("timeout") or 30)
+    elif tool_type == "sql_tool":
+        config["database_connection_id"] = get_int(config.get("database_connection_id"))
+        config["database"] = str(config.get("database") or "").strip()
+        config["sql"] = str(config.get("sql") or "").strip()
+        config["output_fields"] = _json_list_value(config.get("output_fields"))
+        if not config["database_connection_id"]:
+            raise ValueError("请选择数据库")
+        if not config["database"]:
+            raise ValueError("请选择库名")
+        if not config["sql"]:
+            raise ValueError("SQL 语句不能为空")
+    elif tool_type == "python_script":
+        config["script"] = str(config.get("script") or config.get("script_text") or config.get("code") or "").strip()
+        config["timeout_seconds"] = int(config.get("timeout_seconds") or config.get("timeout") or 60)
+        config["output_fields"] = _json_list_value(config.get("output_fields"))
+        if not config["script"]:
+            raise ValueError("Python 脚本内容不能为空")
+    return {
+        "name": name,
+        "tool_type": tool_type,
+        "description": str(item.get("description") or "").strip(),
+        "config": config,
+        "enabled": _enabled_by_default(item.get("enabled", True)),
+    }
 
 
 def _list_case_steps(case_id: int):
@@ -954,15 +1011,18 @@ def global_tools(request, payload=None):
     if request.method == "GET":
         tool_type = (payload or {}).get("tool_type")
         if tool_type:
-            return fetch_all("SELECT * FROM global_tools WHERE tool_type = %s ORDER BY created_at DESC", (tool_type,))
-        return fetch_all("SELECT * FROM global_tools ORDER BY created_at DESC")
-    item = payload or {}
+            return [
+                _hydrate_global_tool_row(row)
+                for row in fetch_all("SELECT * FROM global_tools WHERE tool_type = %s ORDER BY created_at DESC", (tool_type,))
+            ]
+        return [_hydrate_global_tool_row(row) for row in fetch_all("SELECT * FROM global_tools ORDER BY created_at DESC")]
+    item = _normalise_global_tool_payload(payload or {})
     tool_id = execute(
         """
         INSERT INTO global_tools (name, tool_type, description, config, enabled, created_by)
         VALUES (%s, %s, %s, %s, %s, %s)
         """,
-        (item.get("name"), item.get("tool_type"), item.get("description", ""), _json_text(item.get("config")), item.get("enabled", True), "admin"),
+        (item["name"], item["tool_type"], item["description"], _json_text(item["config"]), item["enabled"], "admin"),
     )
     return {"tool_id": tool_id}, 201
 
@@ -970,12 +1030,12 @@ def global_tools(request, payload=None):
 @api_view
 def global_tool_detail(request, tool_id: int, payload=None):
     if request.method == "GET":
-        return fetch_one("SELECT * FROM global_tools WHERE id = %s", (tool_id,))
+        return _hydrate_global_tool_row(fetch_one("SELECT * FROM global_tools WHERE id = %s", (tool_id,)))
     if request.method == "PUT":
-        item = payload or {}
+        item = _normalise_global_tool_payload(payload or {})
         updated = execute(
             "UPDATE global_tools SET name = %s, tool_type = %s, description = %s, config = %s, enabled = %s WHERE id = %s",
-            (item.get("name"), item.get("tool_type"), item.get("description", ""), _json_text(item.get("config")), item.get("enabled", True), tool_id),
+            (item["name"], item["tool_type"], item["description"], _json_text(item["config"]), item["enabled"], tool_id),
         )
         return {"updated": updated >= 0}
     return {"deleted": execute("DELETE FROM global_tools WHERE id = %s", (tool_id,)) > 0}

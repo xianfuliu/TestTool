@@ -157,6 +157,27 @@ export type CaseToolRecord = {
 
 export type CaseToolMap = Record<string, CaseToolRecord>;
 
+export type GlobalToolType = "http_request" | "sql_tool" | "python_script";
+
+export type GlobalToolRecord = {
+  id: number;
+  name: string;
+  tool_type: GlobalToolType;
+  description: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type GlobalToolPayload = {
+  name: string;
+  tool_type: GlobalToolType;
+  description: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+};
+
 export type CaseStep = {
   id?: number;
   case_id?: number;
