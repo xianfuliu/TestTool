@@ -41,6 +41,11 @@ export type ReportCaseItem = {
   case_name: string;
   status: ReportStatus;
   message?: string;
+  duration?: number;
+  execution_time?: number;
+  duration_ms?: number;
+  started_at?: string;
+  ended_at?: string;
   summary?: {
     passed_steps?: number;
     failed_steps?: number;

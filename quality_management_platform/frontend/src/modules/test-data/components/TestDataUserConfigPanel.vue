@@ -3,6 +3,7 @@ import type { TestDataConfig, TestDataOptions } from "../types";
 
 defineProps<{
   options: TestDataOptions | null;
+  title?: string;
 }>();
 
 const form = defineModel<TestDataConfig>({ required: true });
@@ -12,7 +13,7 @@ const form = defineModel<TestDataConfig>({ required: true });
   <section class="work-panel">
     <div class="panel-head">
       <div class="panel-title-group">
-        <h2>参数配置</h2>
+        <h2>{{ title || "参数配置" }}</h2>
       </div>
     </div>
 
@@ -115,13 +116,18 @@ const form = defineModel<TestDataConfig>({ required: true });
         </el-form>
       </div>
     </el-scrollbar>
+
+    <div class="panel-footer">
+      <slot name="footer" />
+    </div>
   </section>
 </template>
 
 <style scoped>
 .work-panel {
   display: flex;
-  min-height: calc(100vh - 176px);
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #e6ebf0;
@@ -223,6 +229,24 @@ const form = defineModel<TestDataConfig>({ required: true });
 
 .config-form :deep(.plain-radio-group .el-radio__input.is-checked + .el-radio__label) {
   color: #135bd8;
+}
+
+.panel-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid #edf1f6;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+}
+
+.panel-footer :deep(.el-button) {
+  margin: 0;
+  min-height: 28px;
+  padding: 6px 12px;
+  font-size: 12px;
+  width: auto;
 }
 
 @media (max-width: 1440px) {

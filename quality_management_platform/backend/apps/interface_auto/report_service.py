@@ -445,6 +445,7 @@ def build_report_cases(report: dict[str, Any]) -> list[dict[str, Any]]:
             "case_name": report.get("case_name") or report.get("report_name"),
             "status": report.get("status"),
             "message": report.get("report_name"),
+            "duration": _case_duration_seconds(report, {}, rows),
             "summary": _step_summary(rows),
             "steps": [_step_from_row(row) for row in rows],
             "execution_log": {"lines": []},
@@ -624,10 +625,71 @@ def _case_from_result(value: Any, index: int) -> dict[str, Any]:
         "case_name": result.get("case_name") or execution_log.get("case_name") or f"用例 {index + 1}",
         "status": result.get("status") or execution_log.get("status") or "pending",
         "message": result.get("message") or execution_log.get("message") or "",
+        "duration": _case_duration_seconds(result, execution_log, steps),
         "summary": result.get("summary") or _step_summary(steps),
         "steps": steps,
         "execution_log": execution_log,
     }
+
+
+def _float_value(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def _parse_datetime_value(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    for pattern in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(raw[:26] if "%f" in pattern else raw[:19], pattern)
+        except ValueError:
+            continue
+    return None
+
+
+def _duration_seconds_from_range(start_value: Any, end_value: Any) -> float | None:
+    start = _parse_datetime_value(start_value)
+    end = _parse_datetime_value(end_value)
+    if not start or not end:
+        return None
+    seconds = (end - start).total_seconds()
+    return round(seconds, 3) if seconds >= 0 else None
+
+
+def _duration_seconds_from_item(item: Any) -> float | None:
+    record = _json_value(item, {})
+    for key in ("duration", "execution_time", "duration_seconds", "elapsed_seconds"):
+        seconds = _float_value(record.get(key))
+        if seconds is not None:
+            return round(seconds, 3)
+    milliseconds = _float_value(record.get("duration_ms") or record.get("elapsed_ms"))
+    if milliseconds is not None:
+        return round(milliseconds / 1000, 3)
+    return _duration_seconds_from_range(
+        record.get("started_at") or record.get("start_time"),
+        record.get("ended_at") or record.get("end_time"),
+    )
+
+
+def _case_duration_seconds(result: Any, execution_log: Any, steps: Any) -> float:
+    for source in (_json_value(result, {}), _json_value(execution_log, {})):
+        direct = _duration_seconds_from_item(source)
+        if direct is not None:
+            return direct
+    step_items = steps if isinstance(steps, list) else []
+    step_duration = sum((_duration_seconds_from_item(step) or 0) for step in step_items)
+    return round(step_duration, 3) if step_duration else 0
 
 
 def _step_summary(steps: Any) -> dict[str, int]:

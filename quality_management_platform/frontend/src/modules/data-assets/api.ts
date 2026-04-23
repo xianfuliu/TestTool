@@ -56,6 +56,10 @@ export function deleteDatabaseConnection(databaseId: number) {
   return del<{ deleted: boolean }>(`${BASE}/${databaseId}/`);
 }
 
+export function fetchDatabaseSchemas(databaseId: number) {
+  return get<{ schemas: string[] }>(`${BASE}/${databaseId}/schemas/`);
+}
+
 export function testDatabaseConnection(payload: DatabaseConnectionPayload) {
   return post<{ connected: boolean; message: string; duration_ms?: number }>(
     `${BASE}/test-connection/`,

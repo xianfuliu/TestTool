@@ -6,8 +6,11 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-import pymysql
-
+from apps.common.python_execution import (
+    PythonExecutionContext,
+    execute_python_script,
+    extract_python_output_variables,
+)
 from apps.common.request_execution import (
     EncryptionConfig,
     RequestDefinition,
@@ -18,12 +21,16 @@ from apps.common.request_execution import (
     json_loads,
     merge_header_maps,
     normalize_global_request_config,
-    render_sql_template,
     replace_template_data,
     replace_template_text,
     resolve_global_request_runtime,
 )
-from test_platform.db import DATABASE_CONFIG, execute, fetch_all, fetch_one
+from apps.common.sql_execution import (
+    SqlExecutionContext,
+    execute_sql_query,
+    extract_sql_output_variables,
+)
+from test_platform.db import execute, fetch_all, fetch_one
 
 from .report_service import ensure_report_schema_ready
 
@@ -812,6 +819,13 @@ def _enabled_by_config(value: Any) -> bool:
     return bool(value)
 
 
+def _int_value(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _config_enabled(config: dict[str, Any], snake_key: str, camel_key: str) -> bool:
     if snake_key in config:
         return _enabled_by_config(config.get(snake_key))
@@ -1034,55 +1048,14 @@ def _apply_extractions(
 
 
 def _execute_sql_tool(config: dict[str, Any], variables: dict[str, Any]) -> dict[str, Any]:
-    sql_text = str(config.get("sql") or "").strip()
-    if not sql_text:
-        raise ValueError("SQL 工具未配置查询语句")
-    resolved_sql = render_sql_template(sql_text, variables, allow_legacy_placeholders=True)
-    if not re.match(r"^\s*SELECT\b", resolved_sql, re.IGNORECASE):
-        raise ValueError("SQL 工具仅支持 SELECT 查询")
-
-    connection_config = {
-        "host": config.get("host") or DATABASE_CONFIG["host"],
-        "port": int(config.get("port") or DATABASE_CONFIG["port"]),
-        "user": config.get("user") or config.get("username") or DATABASE_CONFIG["user"],
-        "password": config.get("password") or DATABASE_CONFIG["password"],
-        "database": config.get("database") or config.get("database_name") or DATABASE_CONFIG["database"],
-        "charset": config.get("charset") or "utf8mb4",
-        "cursorclass": pymysql.cursors.DictCursor,
-        "autocommit": True,
-    }
-
-    with pymysql.connect(**connection_config) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(resolved_sql)
-            rows = cursor.fetchall()
-
-    serialised_rows: list[dict[str, Any]] = []
-    for row in rows:
-        serialised_row: dict[str, Any] = {}
-        for key, value in row.items():
-            if isinstance(value, datetime):
-                serialised_row[key] = value.isoformat()
-            else:
-                serialised_row[key] = value
-        serialised_rows.append(serialised_row)
-
-    return {
-        "request": {
-            "sql": resolved_sql,
-            "database": {
-                "host": connection_config["host"],
-                "port": connection_config["port"],
-                "database": connection_config["database"],
-                "user": connection_config["user"],
-            },
-        },
-        "status": "success",
-        "rows": serialised_rows,
-        "body": serialised_rows,
-        "raw_body": _json_text(serialised_rows),
-        "decrypted_body": serialised_rows,
-    }
+    return execute_sql_query(
+        config,
+        SqlExecutionContext(
+            variables=variables,
+            allow_legacy_placeholders=True,
+            allowed_statement_prefixes=(),
+        ),
+    )
 
 
 def _execute_http_tool(
@@ -1247,10 +1220,83 @@ def _execute_tool(
     if tool_type == "sql_tool":
         result = _execute_sql_tool(_as_dict(tool.get("config")), variables)
         output_rows = _as_list(result.get("rows"))
-        if output_rows:
-            variables.update(output_rows[0])
-            logs.append(f"SQL 输出变量已写入上下文: {', '.join(output_rows[0].keys())}")
-        return result, build_response_extraction_source(result), logs
+        output_fields = _as_list(tool.get("output_fields")) or _as_list(_as_dict(tool.get("config")).get("output_fields"))
+        extracted, extraction_details = extract_sql_output_variables(output_rows, output_fields)
+        variables.update(extracted)
+        if extracted:
+            logs.append(f"SQL 输出变量已写入上下文: {', '.join(extracted.keys())}")
+        sql_source_data = build_response_extraction_source(result)
+        extractions = _as_list(tool.get("extractions")) or _as_list(_as_dict(tool.get("config")).get("extractions"))
+        if extractions:
+            explicit_extracted, explicit_details = _resolve_extractions(extractions, sql_source_data, variables)
+            extracted.update(explicit_extracted)
+            extraction_details.extend(explicit_details)
+        result["extracted"] = extracted
+        result["extraction_details"] = extraction_details
+        missing_extractions = [detail for detail in extraction_details if not _as_dict(detail).get("matched")]
+        for detail in extraction_details:
+            matched = bool(_as_dict(detail).get("matched"))
+            logs.append(
+                f"SQL 提取{'成功' if matched else '失败'}: "
+                f"{_as_dict(detail).get('variable') or '-'} <- "
+                f"{_as_dict(detail).get('resolved_path') or _as_dict(detail).get('path') or '-'}"
+            )
+        if missing_extractions:
+            result["status"] = "failed"
+            result["error_message"] = "SQL 提取失败: " + "，".join(
+                f"{_as_dict(detail).get('variable') or '-'} <- "
+                f"{_as_dict(detail).get('resolved_path') or _as_dict(detail).get('path') or '-'}"
+                for detail in missing_extractions
+            )
+            result["failure_type"] = "extraction"
+        return result, sql_source_data, logs
+
+    if tool_type == "python_script":
+        config = _as_dict(tool.get("config"))
+        result = execute_python_script(
+            config,
+            PythonExecutionContext(
+                variables=variables,
+                timeout_seconds=_int_value(config.get("timeout_seconds") or config.get("timeout"), 60),
+                allow_legacy_placeholders=False,
+            ),
+        )
+        python_source_data = build_response_extraction_source(result)
+        output_fields = _as_list(tool.get("output_fields")) or _as_list(config.get("output_fields"))
+        extracted, extraction_details = extract_python_output_variables(result.get("body"), output_fields)
+        variables.update(extracted)
+        if extracted:
+            logs.append(f"Python 输出变量已写入上下文: {', '.join(extracted.keys())}")
+        extractions = _as_list(tool.get("extractions")) or _as_list(config.get("extractions"))
+        if extractions:
+            explicit_extracted, explicit_details = _resolve_extractions(extractions, python_source_data, variables)
+            extracted.update(explicit_extracted)
+            extraction_details.extend(explicit_details)
+        result["extracted"] = extracted
+        result["extraction_details"] = extraction_details
+        stdout = str(result.get("stdout") or "").strip()
+        stderr = str(result.get("stderr") or "").strip()
+        if stdout:
+            logs.append(f"Python stdout: {_short_log_value(stdout, 1200)}")
+        if stderr:
+            logs.append(f"Python stderr: {_short_log_value(stderr, 1200)}")
+        for detail in extraction_details:
+            detail_map = _as_dict(detail)
+            matched = bool(detail_map.get("matched"))
+            logs.append(
+                f"Python 提取{'成功' if matched else '失败'}: "
+                f"{detail_map.get('variable') or '-'} <- {detail_map.get('resolved_path') or detail_map.get('path') or '-'}"
+            )
+        missing_extractions = [detail for detail in extraction_details if not _as_dict(detail).get("matched")]
+        if missing_extractions and result.get("status") != "failed":
+            result["status"] = "failed"
+            result["error_message"] = "Python 提取失败: " + "，".join(
+                f"{_as_dict(detail).get('variable') or '-'} <- "
+                f"{_as_dict(detail).get('resolved_path') or _as_dict(detail).get('path') or '-'}"
+                for detail in missing_extractions
+            )
+            result["failure_type"] = "extraction"
+        return result, python_source_data, logs
 
     if tool_type in {"parameter_extract", "parameter_extraction"}:
         result = _execute_parameter_extraction_tool(tool, source_data, variables)

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ElMessage } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
-import type { TabsPaneContext } from "element-plus";
 
 import {
   fetchTestDataMeta,
@@ -20,8 +19,6 @@ import type {
   TestDataMeta,
   UserWorkspace,
 } from "./types";
-
-type WorkspaceTab = "user" | "enterprise";
 
 const fallbackConfig: TestDataConfig = {
   mode: "id_number",
@@ -52,7 +49,6 @@ const fallbackConfig: TestDataConfig = {
 
 const meta = ref<TestDataMeta | null>(null);
 const booting = ref(true);
-const activeTab = ref<WorkspaceTab>("user");
 const userLoading = ref(false);
 const enterpriseLoading = ref(false);
 const userDetailVisible = ref(false);
@@ -63,10 +59,6 @@ const enterpriseForm = reactive<TestDataConfig>({ ...fallbackConfig });
 
 const userWorkspace = ref<UserWorkspace | null>(null);
 const enterpriseWorkspace = ref<EnterpriseWorkspace | null>(null);
-
-const currentLoading = computed(() =>
-  activeTab.value === "user" ? userLoading.value : enterpriseLoading.value,
-);
 
 const userFrontImage = computed(() =>
   userWorkspace.value?.id_card.images.front
@@ -90,20 +82,22 @@ const userSections = computed<ResultSection[]>(() => {
     {
       title: "生成结果",
       rows: [
-        { key: "name", label: "姓名", value: data?.name ?? "", canBackfill: true, canRefresh: true },
+        { key: "name", label: "姓名", value: data?.name ?? "", canBackfill: true, canCopy: false, canRefresh: true },
         {
           key: "id_number",
           label: "身份证号",
           value: data?.id_number ?? "",
           canBackfill: true,
+          canCopy: false,
           canRefresh: true,
         },
-        { key: "phone", label: "手机号", value: data?.phone_number ?? "", canBackfill: true, canRefresh: true },
+        { key: "phone", label: "手机号", value: data?.phone_number ?? "", canBackfill: true, canCopy: false, canRefresh: true },
         {
           key: "bank_card",
           label: "银行卡号",
           value: data?.bank_card_number ?? "",
           canBackfill: true,
+          canCopy: false,
           canRefresh: true,
         },
       ],
@@ -122,6 +116,7 @@ const enterpriseSections = computed<ResultSection[]>(() => {
           label: "企业名称",
           value: data?.company_name ?? "",
           canBackfill: true,
+          canCopy: false,
           canRefresh: true,
         },
         {
@@ -129,6 +124,7 @@ const enterpriseSections = computed<ResultSection[]>(() => {
           label: "统一信用代码",
           value: data?.unified_social_credit_code ?? "",
           canBackfill: true,
+          canCopy: false,
           canRefresh: true,
         },
         {
@@ -136,6 +132,7 @@ const enterpriseSections = computed<ResultSection[]>(() => {
           label: "法人姓名",
           value: data?.legal_person ?? "",
           canBackfill: true,
+          canCopy: false,
           canRefresh: true,
         },
         {
@@ -143,6 +140,7 @@ const enterpriseSections = computed<ResultSection[]>(() => {
           label: "注册资本",
           value: data?.registered_capital ?? "",
           canBackfill: true,
+          canCopy: false,
           canRefresh: true,
         },
       ],
@@ -232,7 +230,6 @@ async function bootstrap() {
     meta.value = await fetchTestDataMeta();
     applyDefaults(userForm, meta.value.defaults);
     applyDefaults(enterpriseForm, meta.value.defaults);
-    activeTab.value = "user";
   } catch (error) {
     ElMessage.error((error as Error).message);
   } finally {
@@ -266,10 +263,6 @@ async function loadEnterpriseWorkspace(showMessage = true) {
   } finally {
     enterpriseLoading.value = false;
   }
-}
-
-function handleTabClick(tab: TabsPaneContext) {
-  activeTab.value = tab.paneName as WorkspaceTab;
 }
 
 async function handleRefreshUser(field: string) {
@@ -529,52 +522,51 @@ onMounted(() => {
       <el-skeleton :rows="12" animated />
     </div>
 
-    <el-tabs
-      v-else
-      v-model="activeTab"
-      class="workspace-tabs"
-      @tab-click="handleTabClick"
-    >
-      <el-tab-pane label="用户信息" name="user">
-        <div
-          v-loading="userLoading"
-          class="tab-workbench user-grid"
-          element-loading-text="正在生成用户信息"
-        >
-          <TestDataUserConfigPanel v-model="userForm" :options="meta?.options ?? null" />
+    <div v-else class="test-data-workbench">
+      <TestDataUserConfigPanel
+        v-model="userForm"
+        title="用户信息配置"
+        :options="meta?.options ?? null"
+      >
+        <template #footer>
+          <el-button type="primary" size="small" :loading="userLoading" @click="() => loadUserWorkspace()">
+            生成
+          </el-button>
+          <el-button size="small" @click="handleCopyAllUser">复制</el-button>
+          <el-button size="small" @click="handleEchoUser">回显</el-button>
+          <el-button size="small" plain @click="handleClearUser">清空</el-button>
+        </template>
+      </TestDataUserConfigPanel>
 
-          <TestDataResultPanel
-            title="生成结果"
-            :sections="userSections"
-            :loading="userLoading"
-            generate-label="生成"
-            :show-section-header="false"
-            @refresh="handleRefreshUser"
-            @copy="handleCopyUser"
-            @backfill="handleBackfillUser"
-            @generate="loadUserWorkspace"
-            @copy-all="handleCopyAllUser"
-            @echo-all="handleEchoUser"
-            @clear="handleClearUser"
-          />
-
-          <section class="work-panel preview-panel">
-            <div class="panel-head">
-              <div class="panel-title-group">
-                <h2>图片预览</h2>
-              </div>
+      <TestDataResultPanel
+        v-loading="userLoading"
+        title="用户信息生成结果"
+        :sections="userSections"
+        :loading="userLoading"
+        :show-section-header="false"
+        :show-footer="false"
+        inline-rows
+        element-loading-text="正在生成用户信息"
+        @refresh="handleRefreshUser"
+        @copy="handleCopyUser"
+        @backfill="handleBackfillUser"
+      >
+        <template #append>
+          <section class="result-preview">
+            <div class="result-preview-head">
+              <h3>身份证图片</h3>
               <div class="panel-head-actions">
                 <el-button size="small" plain :disabled="!userWorkspace" @click="userDetailVisible = true">
-                  查看 OCR
+                  查看详情
                 </el-button>
                 <el-button size="small" plain :disabled="!userWorkspace" @click="downloadUserImages">
-                  下载全部
+                  下载
                 </el-button>
               </div>
             </div>
 
             <div
-              class="panel-body preview-stack"
+              class="preview-stack result-preview-stack"
               :class="{ 'preview-stack--empty': !userFrontImage && !userBackImage }"
             >
               <template v-if="userFrontImage || userBackImage">
@@ -601,37 +593,41 @@ onMounted(() => {
               <div v-else class="preview-placeholder-text">点击生成后查看预览</div>
             </div>
           </section>
-        </div>
-      </el-tab-pane>
+        </template>
+      </TestDataResultPanel>
 
-      <el-tab-pane label="企业信息" name="enterprise">
-        <div
-          v-loading="enterpriseLoading"
-          class="tab-workbench enterprise-grid"
-          element-loading-text="正在生成企业信息"
-        >
-          <TestDataEnterpriseConfigPanel v-model="enterpriseForm" :options="meta?.options ?? null" />
+      <TestDataEnterpriseConfigPanel
+        v-model="enterpriseForm"
+        title="企业信息配置"
+        :options="meta?.options ?? null"
+      >
+        <template #footer>
+          <el-button type="primary" size="small" :loading="enterpriseLoading" @click="() => loadEnterpriseWorkspace()">
+            生成
+          </el-button>
+          <el-button size="small" @click="handleCopyAllEnterprise">复制</el-button>
+          <el-button size="small" @click="handleEchoEnterprise">回显</el-button>
+          <el-button size="small" plain @click="handleClearEnterprise">清空</el-button>
+        </template>
+      </TestDataEnterpriseConfigPanel>
 
-          <TestDataResultPanel
-            title="生成结果"
-            :sections="enterpriseSections"
-            :loading="enterpriseLoading"
-            generate-label="生成"
-            :show-section-header="false"
-            @refresh="handleRefreshEnterprise"
-            @copy="handleCopyEnterprise"
-            @backfill="handleBackfillEnterprise"
-            @generate="loadEnterpriseWorkspace"
-            @copy-all="handleCopyAllEnterprise"
-            @echo-all="handleEchoEnterprise"
-            @clear="handleClearEnterprise"
-          />
-
-          <section class="work-panel preview-panel">
-            <div class="panel-head">
-              <div class="panel-title-group">
-                <h2>图片预览</h2>
-              </div>
+      <TestDataResultPanel
+        v-loading="enterpriseLoading"
+        title="企业信息生成结果"
+        :sections="enterpriseSections"
+        :loading="enterpriseLoading"
+        :show-section-header="false"
+        :show-footer="false"
+        inline-rows
+        element-loading-text="正在生成企业信息"
+        @refresh="handleRefreshEnterprise"
+        @copy="handleCopyEnterprise"
+        @backfill="handleBackfillEnterprise"
+      >
+        <template #append>
+          <section class="result-preview">
+            <div class="result-preview-head">
+              <h3>营业执照图片</h3>
               <div class="panel-head-actions">
                 <el-button size="small" plain :disabled="!enterpriseWorkspace" @click="enterpriseDetailVisible = true">
                   查看详情
@@ -642,7 +638,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="panel-body license-body">
+            <div class="license-body result-license-body">
               <div v-if="enterpriseImage" class="preview-box preview-box-license">
                 <el-image
                   class="preview-image preview-image-license"
@@ -655,9 +651,9 @@ onMounted(() => {
               <div v-else class="preview-placeholder-text">点击生成后查看预览</div>
             </div>
           </section>
-        </div>
-      </el-tab-pane>
-    </el-tabs>
+        </template>
+      </TestDataResultPanel>
+    </div>
 
     <el-dialog v-model="userDetailVisible" title="身份证 OCR 结果" width="680px" destroy-on-close>
       <div class="detail-dialog">
@@ -668,6 +664,7 @@ onMounted(() => {
           :show-footer="false"
           :show-echo-all="false"
           :show-clear="false"
+          inline-rows
           @copy="handleCopyUser"
           @copy-all="handleCopyAllUser"
           @refresh="() => undefined"
@@ -687,6 +684,7 @@ onMounted(() => {
           :show-footer="false"
           :show-echo-all="false"
           :show-clear="false"
+          inline-rows
           @copy="handleCopyEnterprise"
           @copy-all="handleCopyAllEnterprise"
           @refresh="() => undefined"
@@ -718,72 +716,19 @@ onMounted(() => {
   padding: 18px;
 }
 
-.workspace-tabs {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #e6ebf0;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
-  padding: 0 14px 14px;
-}
-
-.workspace-tabs :deep(.el-tabs__header) {
-  margin: 0;
-}
-
-.workspace-tabs :deep(.el-tabs__nav-wrap::after) {
-  display: none;
-}
-
-.workspace-tabs :deep(.el-tabs__item) {
-  height: 54px;
-  padding: 0 18px;
-  color: #6b7380;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.workspace-tabs :deep(.el-tabs__item.is-active) {
-  color: #135bd8;
-  font-weight: 600;
-}
-
-.workspace-tabs :deep(.el-tabs__active-bar) {
-  height: 3px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #1677ff 0%, #4aa2ff 100%);
-}
-
-.workspace-tabs :deep(.el-tabs__content) {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  padding-top: 14px;
-}
-
-.workspace-tabs :deep(.el-tab-pane) {
-  display: block;
-  height: 100%;
-}
-
-.tab-workbench {
+.test-data-workbench {
   display: grid;
   height: 100%;
   min-height: 0;
   gap: 16px;
   align-items: stretch;
-}
-
-.user-grid {
-  grid-template-columns: minmax(280px, 314px) minmax(362px, 392px) minmax(348px, 382px);
-}
-
-.enterprise-grid {
-  grid-template-columns: minmax(286px, 320px) minmax(362px, 392px) minmax(348px, 382px);
+  overflow: auto;
+  width: 100%;
+  grid-template-columns:
+    minmax(320px, 0.95fr)
+    minmax(390px, 1.05fr)
+    minmax(320px, 0.95fr)
+    minmax(390px, 1.05fr);
 }
 
 .work-panel {
@@ -833,15 +778,24 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.preview-panel {
-  min-width: 0;
+.result-preview {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
 }
 
-.preview-panel .panel-body {
+.result-preview-head {
   display: flex;
-  flex: 1;
-  min-height: 0;
-  padding: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.result-preview-head h3 {
+  margin: 0;
+  color: var(--qm-title);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .preview-stack {
@@ -854,6 +808,11 @@ onMounted(() => {
   width: 100%;
 }
 
+.result-preview-stack {
+  flex: none;
+  gap: 10px;
+}
+
 .preview-stack--empty {
   display: flex;
   align-items: center;
@@ -861,17 +820,17 @@ onMounted(() => {
 }
 
 .preview-box {
-  border: 1px solid #e9eef5;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f6f8fb 100%);
-  padding: 10px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  transition: none;
 }
 
 .preview-box:hover {
-  border-color: #d9e2ee;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
-  transform: translateY(-1px);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 .preview-box-head {
@@ -887,13 +846,19 @@ onMounted(() => {
 .preview-image {
   width: 100%;
   overflow: hidden;
-  border: 1px solid #dde6f0;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .preview-image-id {
   height: 214px;
+}
+
+.result-preview .preview-image-id {
+  aspect-ratio: 1.58 / 1;
+  height: auto;
+  min-height: 238px;
 }
 
 .preview-empty {
@@ -902,9 +867,9 @@ onMounted(() => {
   justify-content: center;
   width: 100%;
   overflow: hidden;
-  border: 1px solid #dde6f0;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #a0a8b6;
   font-size: 13px;
   line-height: 1.6;
@@ -936,6 +901,11 @@ onMounted(() => {
   padding: 6px 0;
 }
 
+.result-license-body {
+  min-height: 0;
+  padding: 0;
+}
+
 .preview-box-license {
   display: flex;
   align-items: center;
@@ -947,11 +917,24 @@ onMounted(() => {
   margin: 0 auto;
 }
 
+.result-license-body .preview-box-license {
+  width: min(100%, 480px);
+  min-height: 0;
+  max-height: none;
+}
+
 .preview-image-license {
   width: 100%;
   height: 100%;
   max-width: 100%;
   max-height: 100%;
+}
+
+.result-license-body .preview-image-license {
+  aspect-ratio: 0.72 / 1;
+  height: auto;
+  min-height: 560px;
+  max-height: none;
 }
 
 .preview-empty-license {
@@ -976,17 +959,15 @@ onMounted(() => {
   max-height: 74vh !important;
 }
 
-@media (max-width: 1760px) {
-  .user-grid,
-  .enterprise-grid {
-    grid-template-columns: minmax(270px, 302px) minmax(350px, 378px) minmax(332px, 360px);
+@media (max-width: 1540px) {
+  .test-data-workbench {
+    grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr);
   }
 }
 
-@media (max-width: 1480px) {
-  .user-grid,
-  .enterprise-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 1180px) {
+  .test-data-workbench {
+    grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
   }
 
   .work-panel {
@@ -995,7 +976,7 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
-  .tab-workbench {
+  .test-data-workbench {
     grid-template-columns: 1fr;
   }
 

@@ -34,6 +34,7 @@ type NormalizedLogGroup = {
   toolStats: ToolSummaryItem[];
   summary: string;
   status: string;
+  durationLabel: string;
   lines: NormalizedLogLine[];
 };
 
@@ -212,6 +213,14 @@ function text(value: unknown, fallback = "") {
   return value === null || value === undefined || value === "" ? fallback : String(value);
 }
 
+function numberValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
 function parseDateTime(value?: unknown) {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value;
@@ -222,6 +231,44 @@ function parseDateTime(value?: unknown) {
   }
   const date = new Date(raw.replace(" ", "T"));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function durationFromRange(startValue: unknown, endValue: unknown) {
+  const start = parseDateTime(startValue);
+  const end = parseDateTime(endValue);
+  if (!start || !end) {
+    return null;
+  }
+  const seconds = (end.getTime() - start.getTime()) / 1000;
+  return seconds >= 0 ? seconds : null;
+}
+
+function durationFromRecord(record: LogRecord) {
+  for (const key of ["duration", "execution_time", "duration_seconds", "elapsed_seconds"]) {
+    const seconds = numberValue(record[key]);
+    if (seconds !== null) {
+      return seconds;
+    }
+  }
+  const milliseconds = numberValue(record.duration_ms ?? record.elapsed_ms);
+  if (milliseconds !== null) {
+    return milliseconds / 1000;
+  }
+  return durationFromRange(record.started_at ?? record.start_time, record.ended_at ?? record.end_time);
+}
+
+function formatDuration(seconds: number | null | undefined) {
+  const value = Number(seconds || 0);
+  if (!value) {
+    return "";
+  }
+  if (value < 1) {
+    return `${Math.round(value * 1000)}ms`;
+  }
+  if (value < 60) {
+    return `${value.toFixed(2)}s`;
+  }
+  return `${Math.floor(value / 60)}m ${(value % 60).toFixed(0)}s`;
 }
 
 function formatDateTime(value?: unknown): string {
@@ -531,6 +578,7 @@ function createGroup(input: {
   toolSummary?: string;
   toolStats?: ToolSummaryItem[];
   summary?: string;
+  durationSeconds?: number | null;
   level?: string;
   icon?: string;
 }): NormalizedLogGroup {
@@ -547,6 +595,7 @@ function createGroup(input: {
     toolStats: input.toolStats || [],
     summary: input.summary || statusText(status),
     status,
+    durationLabel: formatDuration(input.durationSeconds),
     lines,
   };
 }
@@ -604,6 +653,7 @@ function buildStructuredGroups(log: LogRecord, steps: unknown[]) {
     const stepName = text(step.step_name, "未命名步骤");
     const stepStatus = text(step.status, "");
     const stepSummary = text(step.summary ?? step.error_message, statusText(stepStatus));
+    const stepDuration = durationFromRecord(step);
     const toolStats = buildToolStats(step);
     const toolSummary = formatToolSummary(toolStats);
     if (stepStatus === "skipped" && stepSummary.includes("前序步骤失败")) {
@@ -621,6 +671,7 @@ function buildStructuredGroups(log: LogRecord, steps: unknown[]) {
         toolSummary,
         toolStats,
         summary: stepSummary,
+        durationSeconds: stepDuration,
         lines,
         level: statusLevel(stepStatus),
         icon: statusIcon(stepStatus),
@@ -805,6 +856,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
             </span>
           </span>
           <span class="group-meta">{{ group.lines.length }} 条日志</span>
+          <span v-if="group.durationLabel" class="group-duration">{{ group.durationLabel }}</span>
           <span class="group-status" :class="`status-${group.status || 'pending'}`">{{ statusText(group.status) }}</span>
         </button>
 
@@ -843,7 +895,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   background: #f8fafc;
   color: #1f2937;
   font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -868,8 +920,8 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
 .step-log-row {
   display: grid;
   width: 100%;
-  min-height: 42px;
-  grid-template-columns: 20px minmax(190px, 0.82fr) minmax(230px, 1.18fr) max-content max-content;
+  min-height: 38px;
+  grid-template-columns: 20px minmax(190px, 0.82fr) minmax(230px, 1.18fr) max-content max-content max-content;
   align-items: center;
   column-gap: 8px;
   border: 1px solid #e1e9f4;
@@ -879,7 +931,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  padding: 7px 10px;
+  padding: 6px 9px;
   text-align: left;
   transition:
     border-color 0.16s ease,
@@ -958,6 +1010,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
   font-size: 12px;
   line-height: 1.65;
+  max-height: 360px;
   overflow: auto;
   user-select: text;
 }
@@ -1002,7 +1055,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   min-width: 0;
   overflow: hidden;
   color: #172033;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 0;
   text-overflow: ellipsis;
@@ -1099,13 +1152,14 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   color: #b76e00;
 }
 
-.group-meta {
+.group-meta,
+.group-duration {
   width: max-content;
   justify-self: end;
   border-radius: 999px;
   background: #f1f5f9;
   color: #667085;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 18px;
   padding: 0 7px;
@@ -1116,7 +1170,7 @@ function buildStepLines(step: LogRecord, defaultStartedAt: string) {
   justify-self: end;
   min-width: 36px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 18px;
   padding: 0 7px;
   text-align: center;

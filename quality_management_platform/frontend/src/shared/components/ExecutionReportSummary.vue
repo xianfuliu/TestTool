@@ -227,9 +227,9 @@ function formatDate(value?: string | null) {
   justify-content: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid #edf2f7;
+  border-radius: 7px;
+  background: #fbfdff;
   text-align: center;
 }
 

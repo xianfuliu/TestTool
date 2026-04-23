@@ -17,6 +17,11 @@ import {
 import { del, get, post, put } from "@/shared/api/client";
 import ExecutionLogViewer from "@/shared/components/ExecutionLogViewer.vue";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
+import {
+  fetchDatabaseConnections,
+  fetchDatabaseSchemas,
+  type DatabaseConnectionRecord,
+} from "@/modules/data-assets/api";
 import apiToolIcon from "@/assets/interface-auto/tool-icons/api.png";
 import assertionToolIcon from "@/assets/interface-auto/tool-icons/assrt.png";
 import extractionToolIcon from "@/assets/interface-auto/tool-icons/extraction.png";
@@ -47,7 +52,7 @@ import type {
 } from "./types";
 
 type ToolTabKey = "pre_processing" | "assertions" | "post_processing";
-type ToolDialogKind = "http_request" | "sql_tool" | "parameter_extraction" | "assertion" | "generic";
+type ToolDialogKind = "http_request" | "sql_tool" | "python_script" | "parameter_extraction" | "assertion" | "generic";
 
 type ToolDraftRow = {
   rowKey: string;
@@ -157,6 +162,9 @@ const apiFolders = ref<ApiFolder[]>([]);
 const templates = ref<ApiTemplate[]>([]);
 const environments = ref<EnvironmentRecord[]>([]);
 const globalVariables = ref<GlobalVariableRecord[]>([]);
+const databaseConnections = ref<DatabaseConnectionRecord[]>([]);
+const sqlDatabaseSchemas = ref<string[]>([]);
+const sqlDatabaseSchemasLoading = ref(false);
 const variableRows = ref<VariableRow[]>([]);
 const globalConfigExpandedMap = reactive<Record<string, boolean>>({});
 const activeGlobalConfigTab = ref<GlobalConfigTab>("encryption");
@@ -207,9 +215,15 @@ const toolForm = reactive({
   useGlobalHeaders: false,
   headersText: "{\n  \n}",
   bodyText: "{\n  \n}",
+  databaseConnectionId: null as number | null,
   database: "",
   sqlText: "",
   outputFieldsText: "",
+  pythonScriptPath: "",
+  pythonWorkingDir: "",
+  pythonArgsText: "",
+  pythonScriptText: "",
+  pythonTimeout: 60,
 });
 const caseTreeRef = ref<any>(null);
 const templateTreeRef = ref<any>(null);
@@ -223,6 +237,7 @@ const dragOverToolId = ref("");
 
 const form = reactive<TestCaseRecord>(createDraftCase(0, null));
 let resetting = false;
+let sqlDatabaseSchemasRequestToken = 0;
 
 const cascaderProps = {
   expandTrigger: "hover" as const,
@@ -234,6 +249,9 @@ const currentProjectId = computed(() => context.selectedProject.value?.id ?? nul
 const currentProjectName = computed(() => context.selectedProject.value?.name ?? "");
 const visibleGlobalVariables = computed(() =>
   Array.isArray(globalVariables.value) ? globalVariables.value : [],
+);
+const enabledDatabaseConnections = computed(() =>
+  databaseConnections.value.filter((item) => item.enabled !== false),
 );
 const outputVariableText = ref("");
 const globalConfigExpanded = computed({
@@ -885,8 +903,19 @@ function getToolSummary(tool: CaseToolRecord) {
     return `${method} ${url}`.trim() || "未配置请求地址";
   }
   if (tool.tool_type === "sql_tool") {
+    const connectionName = String(config.database_connection_name ?? "");
     const database = String(config.database ?? "");
-    return database ? `数据库：${database}` : "未配置数据库";
+    if (connectionName && database) {
+      return `${connectionName} / ${database}`;
+    }
+    if (connectionName) {
+      return `数据库：${connectionName}`;
+    }
+    return database ? `库名：${database}` : "未配置数据库";
+  }
+  if (tool.tool_type === "python_script") {
+    const scriptPath = String(config.script_path ?? config.path ?? "");
+    return scriptPath ? `Python：${scriptPath}` : "内联 Python 脚本";
   }
   if (tool.tool_type === "parameter_extraction") {
     const extractions = Array.isArray(tool.extractions) ? tool.extractions : [];
@@ -950,6 +979,13 @@ function getToolPreviewRows(tool: CaseToolRecord) {
       Array.isArray(tool.output_fields) ? tool.output_fields.join(", ") : "",
     ].filter(Boolean).slice(0, 2);
   }
+  if (tool.tool_type === "python_script") {
+    return [
+      String(config.script_path ?? config.path ?? ""),
+      String(config.script ?? config.script_text ?? config.code ?? "").split("\n").find(Boolean) ?? "",
+      Array.isArray(tool.output_fields) ? tool.output_fields.join(", ") : "",
+    ].filter(Boolean).slice(0, 2);
+  }
   if (tool.tool_type === "parameter_extraction") {
     return (Array.isArray(tool.extractions) ? tool.extractions : [])
       .slice(0, 2)
@@ -986,6 +1022,63 @@ function createToolHeaderRow(key = "", value = ""): ToolHeaderRow {
   };
 }
 
+function normalizeDatabaseConnectionId(value: unknown): number | null {
+  const id = Number(value);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function getDatabaseConnectionById(databaseId: number | null) {
+  if (!databaseId) {
+    return null;
+  }
+  return databaseConnections.value.find((item) => item.id === databaseId) ?? null;
+}
+
+function getDatabaseConnectionLabel(item: DatabaseConnectionRecord) {
+  const host = item.host ? `${item.host}:${item.port}` : "";
+  return host ? `${item.name}（${host}）` : item.name;
+}
+
+async function loadSqlDatabaseSchemas(databaseId: number | null, options?: { preserveSelected?: boolean }) {
+  sqlDatabaseSchemasRequestToken += 1;
+  const requestToken = sqlDatabaseSchemasRequestToken;
+  sqlDatabaseSchemas.value = [];
+  if (!databaseId) {
+    return;
+  }
+
+  const previousSchema = toolForm.database.trim();
+  sqlDatabaseSchemasLoading.value = true;
+  try {
+    const result = await fetchDatabaseSchemas(databaseId);
+    if (requestToken !== sqlDatabaseSchemasRequestToken) {
+      return;
+    }
+    const schemas = Array.isArray(result.schemas) ? result.schemas : [];
+    sqlDatabaseSchemas.value = schemas;
+    if (options?.preserveSelected && previousSchema && schemas.includes(previousSchema)) {
+      toolForm.database = previousSchema;
+      return;
+    }
+    const defaultSchema = getDatabaseConnectionById(databaseId)?.database_name?.trim() ?? "";
+    toolForm.database = defaultSchema && schemas.includes(defaultSchema) ? defaultSchema : "";
+  } catch (error) {
+    if (requestToken === sqlDatabaseSchemasRequestToken) {
+      toolForm.database = "";
+      ElMessage.error((error as Error).message);
+    }
+  } finally {
+    if (requestToken === sqlDatabaseSchemasRequestToken) {
+      sqlDatabaseSchemasLoading.value = false;
+    }
+  }
+}
+
+function handleSqlDatabaseConnectionChange(value: number | string | null) {
+  toolForm.database = "";
+  void loadSqlDatabaseSchemas(normalizeDatabaseConnectionId(value));
+}
+
 function resetToolForm() {
   toolForm.name = "";
   toolForm.summary = "";
@@ -996,9 +1089,17 @@ function resetToolForm() {
   toolForm.useGlobalHeaders = false;
   toolForm.headersText = "{}";
   toolForm.bodyText = "{}";
+  toolForm.databaseConnectionId = null;
   toolForm.database = "";
   toolForm.sqlText = "";
   toolForm.outputFieldsText = "";
+  toolForm.pythonScriptPath = "";
+  toolForm.pythonWorkingDir = "";
+  toolForm.pythonArgsText = "";
+  toolForm.pythonScriptText = "";
+  toolForm.pythonTimeout = 60;
+  sqlDatabaseSchemas.value = [];
+  sqlDatabaseSchemasLoading.value = false;
   httpToolTab.value = "body";
   toolHeaderRows.value = [];
   toolRows.value = [];
@@ -1022,6 +1123,9 @@ function inferToolDialogKind(toolType: string, tab: ToolTabKey): ToolDialogKind 
   }
   if (toolType === "sql_tool") {
     return "sql_tool";
+  }
+  if (toolType === "python_script") {
+    return "python_script";
   }
   if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
     return "parameter_extraction";
@@ -1081,8 +1185,26 @@ function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
     return;
   }
   if (toolDialogKind.value === "sql_tool") {
-    toolForm.database = String(config.database ?? "");
+    toolForm.databaseConnectionId = normalizeDatabaseConnectionId(
+      config.database_connection_id ?? config.database_asset_id ?? config.connection_id,
+    );
+    toolForm.database = String(config.database ?? config.database_name ?? "");
     toolForm.sqlText = String(config.sql ?? "");
+    toolForm.outputFieldsText = Array.isArray(tool.output_fields)
+      ? tool.output_fields.join(", ")
+      : String(config.output_fields ?? "");
+    if (toolForm.databaseConnectionId) {
+      void loadSqlDatabaseSchemas(toolForm.databaseConnectionId, { preserveSelected: true });
+    }
+    return;
+  }
+  if (toolDialogKind.value === "python_script") {
+    toolForm.pythonScriptPath = String(config.script_path ?? config.path ?? "");
+    toolForm.pythonWorkingDir = String(config.working_dir ?? config.cwd ?? "");
+    toolForm.pythonScriptText = String(config.script ?? config.script_text ?? config.code ?? "");
+    toolForm.pythonTimeout = Number(config.timeout_seconds ?? config.timeout ?? 60) || 60;
+    const args = config.args;
+    toolForm.pythonArgsText = Array.isArray(args) ? args.join(" ") : String(args ?? "");
     toolForm.outputFieldsText = Array.isArray(tool.output_fields)
       ? tool.output_fields.join(", ")
       : String(config.output_fields ?? "");
@@ -1292,6 +1414,22 @@ function createDefaultToolConfig(toolType: string, tab: ToolTabKey) {
       },
     };
   }
+  if (toolType === "python_script") {
+    return {
+      name: "Python脚本",
+      summary: "",
+      output_fields: [],
+      config: {
+        script_path: "",
+        working_dir: "",
+        args: "",
+        script: "",
+        timeout_seconds: 60,
+        render_template: true,
+        output_fields: [],
+      },
+    };
+  }
   if (toolType === "parameter_extract" || toolType === "parameter_extraction") {
     return {
       name: "参数提取",
@@ -1392,12 +1530,42 @@ function saveToolDialog() {
       tool.summary = toolForm.summary.trim() || `${toolForm.method} ${toolForm.url.trim()}`.trim();
       tool.tool_type = "http_request";
     } else if (toolDialogKind.value === "sql_tool") {
+      if (!toolForm.databaseConnectionId) {
+        ElMessage.warning("请选择数据库");
+        return;
+      }
+      if (!toolForm.database.trim()) {
+        ElMessage.warning("请选择库名");
+        return;
+      }
       if (!toolForm.sqlText.trim()) {
         ElMessage.warning("请输入 SQL 语句");
         return;
       }
-      if (!/^select\b/i.test(toolForm.sqlText.trim())) {
-        ElMessage.warning("SQL 工具仅支持 SELECT 查询");
+      const outputFields = toolForm.outputFieldsText
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const selectedDatabaseConnection = getDatabaseConnectionById(toolForm.databaseConnectionId);
+      tool.output_fields = outputFields;
+      tool.config = {
+        database_connection_id: toolForm.databaseConnectionId,
+        database_connection_name: selectedDatabaseConnection?.name ?? "",
+        database: toolForm.database.trim(),
+        sql: toolForm.sqlText,
+      };
+      tool.summary =
+        toolForm.summary.trim() ||
+        [
+          selectedDatabaseConnection?.name ? `数据库：${selectedDatabaseConnection.name}` : "",
+          toolForm.database.trim() ? `库名：${toolForm.database.trim()}` : "",
+        ]
+          .filter(Boolean)
+          .join(" / ");
+      tool.tool_type = "sql_tool";
+    } else if (toolDialogKind.value === "python_script") {
+      if (!toolForm.pythonScriptPath.trim() && !toolForm.pythonScriptText.trim()) {
+        ElMessage.warning("请输入脚本路径或脚本内容");
         return;
       }
       const outputFields = toolForm.outputFieldsText
@@ -1406,11 +1574,18 @@ function saveToolDialog() {
         .filter(Boolean);
       tool.output_fields = outputFields;
       tool.config = {
-        database: toolForm.database.trim(),
-        sql: toolForm.sqlText,
+        script_path: toolForm.pythonScriptPath.trim(),
+        working_dir: toolForm.pythonWorkingDir.trim(),
+        args: toolForm.pythonArgsText.trim(),
+        script: toolForm.pythonScriptText,
+        timeout_seconds: Number(toolForm.pythonTimeout) || 60,
+        render_template: true,
+        output_fields: outputFields,
       };
-      tool.summary = toolForm.summary.trim() || (toolForm.database.trim() ? `数据库：${toolForm.database.trim()}` : "");
-      tool.tool_type = "sql_tool";
+      tool.summary =
+        toolForm.summary.trim() ||
+        (toolForm.pythonScriptPath.trim() ? `Python：${toolForm.pythonScriptPath.trim()}` : "内联 Python 脚本");
+      tool.tool_type = "python_script";
     } else if (toolDialogKind.value === "parameter_extraction") {
       const extractions = toolRows.value
         .map((row) => ({ variable: row.variable.trim(), path: row.path.trim() }))
@@ -1599,6 +1774,7 @@ async function loadWorkspace() {
     templates.value = [];
     environments.value = [];
     globalVariables.value = [];
+    databaseConnections.value = [];
     variableRows.value = [];
     openedTabs.value = [];
     activeTabKey.value = "";
@@ -1609,7 +1785,14 @@ async function loadWorkspace() {
   }
   loading.value = true;
   try {
-    const [folderRows, caseRows, templateWorkspace, environmentRows, globalVariableRows] = await Promise.all([
+    const [
+      folderRows,
+      caseRows,
+      templateWorkspace,
+      environmentRows,
+      globalVariableRows,
+      databaseConnectionRows,
+    ] = await Promise.all([
       get<CaseFolder[]>("/api/interface-auto/case-folders/", { project_id: currentProjectId.value }),
       get<Array<Partial<TestCaseRecord>>>("/api/interface-auto/cases/", { project_id: currentProjectId.value }),
       get<TemplateWorkspacePayload>("/api/interface-auto/api-template-workspace/", {
@@ -1617,6 +1800,7 @@ async function loadWorkspace() {
       }),
       get<EnvironmentRecord[]>("/api/interface-auto/environments/"),
       get<GlobalVariableRecord[]>("/api/interface-auto/variables/", { project_id: currentProjectId.value }),
+      fetchDatabaseConnections({ business_group_id: context.selectedGroupId.value ?? null }),
     ]);
     folders.value = folderRows;
     cases.value = caseRows.map((item) => normalizeCase(item));
@@ -1628,6 +1812,7 @@ async function loadWorkspace() {
       variables: parseMap(item.variables),
     }));
     globalVariables.value = Array.isArray(globalVariableRows) ? globalVariableRows : [];
+    databaseConnections.value = Array.isArray(databaseConnectionRows) ? databaseConnectionRows : [];
   } finally {
     loading.value = false;
   }
@@ -3348,8 +3533,36 @@ onBeforeUnmount(() => {
 
         <template v-else-if="toolDialogKind === 'sql_tool'">
           <div class="tool-dialog-row">
+            <label>数据库:</label>
+            <el-select
+              v-model="toolForm.databaseConnectionId"
+              class="tool-dialog-select"
+              clearable
+              filterable
+              placeholder="请选择资产数据库"
+              @change="handleSqlDatabaseConnectionChange"
+            >
+              <el-option
+                v-for="database in enabledDatabaseConnections"
+                :key="database.id"
+                :label="getDatabaseConnectionLabel(database)"
+                :value="database.id"
+              />
+            </el-select>
+          </div>
+          <div class="tool-dialog-row">
             <label>库名:</label>
-            <input v-model="toolForm.database" class="tool-input dialog-input" placeholder="请输入数据库名称" />
+            <el-select
+              v-model="toolForm.database"
+              class="tool-dialog-select"
+              clearable
+              filterable
+              :disabled="!toolForm.databaseConnectionId"
+              :loading="sqlDatabaseSchemasLoading"
+              placeholder="请选择库名"
+            >
+              <el-option v-for="schema in sqlDatabaseSchemas" :key="schema" :label="schema" :value="schema" />
+            </el-select>
           </div>
           <div class="tool-dialog-row textarea">
             <label>SQL语句:</label>
@@ -3358,6 +3571,39 @@ onBeforeUnmount(() => {
           <div class="tool-dialog-row">
             <label>输出字段:</label>
             <input v-model="toolForm.outputFieldsText" class="tool-input dialog-input" placeholder="多个字段用英文逗号分隔" />
+          </div>
+        </template>
+
+        <template v-else-if="toolDialogKind === 'python_script'">
+          <div class="tool-dialog-row">
+            <label>脚本路径:</label>
+            <input v-model="toolForm.pythonScriptPath" class="tool-input dialog-input" placeholder="可填相对 scripts 目录或绝对路径" />
+          </div>
+          <div class="tool-dialog-row">
+            <label>工作目录:</label>
+            <input v-model="toolForm.pythonWorkingDir" class="tool-input dialog-input" placeholder="可选，默认脚本所在目录" />
+          </div>
+          <div class="tool-dialog-row">
+            <label>参数:</label>
+            <input v-model="toolForm.pythonArgsText" class="tool-input dialog-input" placeholder="支持 ${变量名}，多个参数用空格分隔" />
+          </div>
+          <div class="tool-dialog-row timeout-row">
+            <label>超时时间:</label>
+            <el-input-number v-model="toolForm.pythonTimeout" :min="1" :max="86400" />
+          </div>
+          <div class="tool-dialog-row textarea">
+            <label>脚本内容:</label>
+            <el-input
+              v-model="toolForm.pythonScriptText"
+              type="textarea"
+              :rows="8"
+              resize="none"
+              placeholder="可选。脚本内容和参数均支持 ${变量名}"
+            />
+          </div>
+          <div class="tool-dialog-row">
+            <label>输出字段:</label>
+            <input v-model="toolForm.outputFieldsText" class="tool-input dialog-input" placeholder="stdout JSON 中要写入上下文的字段" />
           </div>
         </template>
 

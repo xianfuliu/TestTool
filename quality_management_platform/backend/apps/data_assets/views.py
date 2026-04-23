@@ -6,6 +6,7 @@ from typing import Any
 import pymysql
 
 from apps.common.http import api_view, get_int
+from apps.common.sql_execution import list_database_schemas
 from test_platform.db import execute, fetch_all, fetch_one
 
 
@@ -255,3 +256,9 @@ def database_detail(request, database_id: int, payload=None):
         return {"updated": updated >= 0}
 
     return {"deleted": execute("DELETE FROM database_connections WHERE id = %s", (database_id,)) > 0}
+
+
+@api_view
+def database_schemas(_request, database_id: int, payload=None):
+    _ensure_schema_ready()
+    return {"schemas": list_database_schemas(database_id)}

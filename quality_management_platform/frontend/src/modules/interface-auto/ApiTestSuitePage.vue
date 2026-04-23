@@ -533,7 +533,10 @@ async function runSuiteNow(row: TestSuiteRecord) {
 }
 
 async function openExecutionRecords(row: TestSuiteRecord) {
-  await router.push({ path: "/interface-auto/reports", query: { suiteId: row.id, projectId: row.project_id } });
+  await router.push({
+    path: "/interface-auto/reports",
+    query: { suiteId: row.id, projectId: row.project_id, keyword: row.name },
+  });
 }
 
 function handleFolderNodeClick(node: FolderTreeNode) {

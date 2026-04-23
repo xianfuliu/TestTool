@@ -31,7 +31,6 @@ const detailLoading = ref(false);
 const reports = ref<TestReportGroup[]>([]);
 const detail = ref<TestReportDetail | null>(null);
 const keyword = ref("");
-const statusFilter = ref("");
 const selectedProjectId = ref<number>(ALL_PROJECT);
 const suiteFilterId = ref<number | null>(null);
 const currentPage = ref(1);
@@ -93,6 +92,13 @@ const selectedProjectPath = computed<number[]>({
 
 const detailCases = computed(() => detail.value?.cases || []);
 
+function queryText(value: unknown) {
+  if (Array.isArray(value)) {
+    return value[0] === null || value[0] === undefined ? "" : String(value[0]);
+  }
+  return value === null || value === undefined ? "" : String(value);
+}
+
 function syncQueryFilters() {
   const rawSuiteId = Number(route.query.suiteId);
   suiteFilterId.value = Number.isFinite(rawSuiteId) && rawSuiteId > 0 ? rawSuiteId : null;
@@ -100,6 +106,7 @@ function syncQueryFilters() {
   if (Number.isFinite(rawProjectId) && rawProjectId > 0) {
     selectedProjectId.value = rawProjectId;
   }
+  keyword.value = queryText(route.query.keyword);
 }
 
 async function loadReports() {
@@ -109,7 +116,6 @@ async function loadReports() {
     const result = await fetchTestReportGroups({
       project_id: selectedProjectId.value === ALL_PROJECT ? null : selectedProjectId.value,
       suite_id: suiteFilterId.value,
-      status: statusFilter.value,
       keyword: keyword.value.trim(),
       page: currentPage.value,
       page_size: pageSize.value,
@@ -145,7 +151,6 @@ async function handleSearch() {
 async function resetSearch() {
   selectedProjectId.value = ALL_PROJECT;
   keyword.value = "";
-  statusFilter.value = "";
   currentPage.value = 1;
   await router.replace({ path: "/interface-auto/reports" });
   suiteFilterId.value = null;
@@ -247,7 +252,6 @@ async function loadGroupRecords(row: TestReportGroup, options: { page?: number; 
     const result = await fetchTestReportGroupRecords({
       suite_id: row.suite_id || null,
       case_id: row.suite_id ? null : row.case_id || null,
-      status: statusFilter.value,
       keyword: keyword.value.trim(),
       page,
       page_size: pageSize,
@@ -412,6 +416,44 @@ function formatDuration(value?: number) {
   return `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(0)}s`;
 }
 
+function numberValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function durationFromRange(startValue: unknown, endValue: unknown) {
+  if (!startValue || !endValue) {
+    return null;
+  }
+  const start = new Date(String(startValue).replace(" ", "T"));
+  const end = new Date(String(endValue).replace(" ", "T"));
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null;
+  }
+  const seconds = (end.getTime() - start.getTime()) / 1000;
+  return seconds >= 0 ? seconds : null;
+}
+
+function durationFromRecord(record: Record<string, unknown> | null | undefined) {
+  if (!record) {
+    return null;
+  }
+  for (const key of ["duration", "execution_time", "duration_seconds", "elapsed_seconds"]) {
+    const seconds = numberValue(record[key]);
+    if (seconds !== null) {
+      return seconds;
+    }
+  }
+  const milliseconds = numberValue(record.duration_ms ?? record.elapsed_ms);
+  if (milliseconds !== null) {
+    return milliseconds / 1000;
+  }
+  return durationFromRange(record.started_at ?? record.start_time, record.ended_at ?? record.end_time);
+}
+
 function passRate(row: { total_cases?: number; passed_cases?: number }) {
   const totalCases = Number(row.total_cases || 0);
   if (!totalCases) {
@@ -448,6 +490,22 @@ function caseSummaryText(caseItem: ReportCaseItem) {
   return `成功 ${passed}，失败 ${failed}，跳过 ${skipped}`;
 }
 
+function caseDurationLabel(caseItem: ReportCaseItem) {
+  const direct = durationFromRecord(caseItem as unknown as Record<string, unknown>);
+  if (direct) {
+    return formatDuration(direct);
+  }
+  const logDuration = durationFromRecord((caseItem.execution_log || null) as Record<string, unknown> | null);
+  if (logDuration) {
+    return formatDuration(logDuration);
+  }
+  const total = caseStepRows(caseItem).reduce((sum, step) => {
+    const seconds = durationFromRecord(step as Record<string, unknown>);
+    return sum + (seconds || 0);
+  }, 0);
+  return total ? formatDuration(total) : "";
+}
+
 watch(
   () => route.query.reportId,
   async (value) => {
@@ -461,7 +519,7 @@ watch(
 );
 
 watch(
-  () => route.query.suiteId,
+  () => [route.query.suiteId, route.query.projectId, route.query.keyword],
   async () => {
     syncQueryFilters();
     currentPage.value = 1;
@@ -509,8 +567,10 @@ onMounted(async () => {
             <el-collapse-item v-for="caseItem in detailCases" :key="caseItem.key" :name="caseItem.key" class="case-report-item">
               <template #title>
                 <div class="case-title">
+                  <span class="case-toggle" :class="{ expanded: expandedCaseKeys.includes(caseItem.key) }" aria-hidden="true"></span>
                   <span class="case-name">{{ caseItem.case_name }}</span>
                   <span class="case-summary">{{ caseSummaryText(caseItem) }}</span>
+                  <span v-if="caseDurationLabel(caseItem)" class="case-duration">{{ caseDurationLabel(caseItem) }}</span>
                   <span class="case-status" :class="`status-${caseItem.status || 'pending'}`">
                     {{ statusEnglish(caseItem.status) }}
                   </span>
@@ -545,20 +605,10 @@ onMounted(async () => {
             popper-class="compact-select-popper"
             @change="handleSearch"
           />
-          <span class="filter-label">状态</span>
-          <el-select v-model="statusFilter" class="status-filter" clearable placeholder="全部状态" popper-class="compact-select-popper">
-            <el-option label="成功" value="success" />
-            <el-option label="失败" value="failed" />
-            <el-option label="执行中" value="running" />
-            <el-option label="跳过" value="skipped" />
-          </el-select>
           <el-input v-model="keyword" class="keyword-input" :prefix-icon="Search" clearable placeholder="搜索报告 / 测试集 / 用例" @keyup.enter="handleSearch" />
           <el-button size="small" :icon="RefreshRight" :loading="loading" @click="refreshReports">刷新</el-button>
           <el-button size="small" type="primary" :icon="Search" @click="handleSearch">查询</el-button>
           <el-button size="small" @click="resetSearch">重置</el-button>
-        </div>
-        <div v-if="suiteFilterId" class="active-filter">
-          当前仅展示测试集 #{{ suiteFilterId }} 的报告
         </div>
       </section>
 
@@ -636,7 +686,7 @@ onMounted(async () => {
                   :total="getGroupRecordState(row).total"
                   :page-sizes="recordPageSizeOptions"
                   :disabled="getGroupRecordState(row).loading"
-                  :hide-on-single-page="true"
+                  :hide-on-single-page="false"
                   @current-change="(page) => loadGroupRecords(row, { page })"
                   @size-change="(size) => loadGroupRecords(row, { page: 1, pageSize: size })"
                 />
@@ -749,10 +799,6 @@ onMounted(async () => {
 
 .business-project-filter {
   width: 250px;
-}
-
-.status-filter {
-  width: 128px;
 }
 
 .keyword-input {
@@ -905,7 +951,7 @@ onMounted(async () => {
 }
 
 .case-collapse :deep(.el-collapse-item__header) {
-  min-height: 48px;
+  min-height: 44px;
   padding: 0 14px;
   border-bottom-color: transparent;
   background: transparent;
@@ -914,6 +960,10 @@ onMounted(async () => {
 
 .case-collapse :deep(.case-report-item.is-active .el-collapse-item__header) {
   border-bottom-color: #e5edf6;
+}
+
+.case-collapse :deep(.el-collapse-item__arrow) {
+  display: none;
 }
 
 .case-collapse :deep(.case-report-item .el-collapse-item__wrap) {
@@ -931,38 +981,91 @@ onMounted(async () => {
   min-width: 0;
   width: 100%;
   align-items: center;
-  grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr) minmax(140px, 1fr);
-  gap: 16px;
-  padding-right: 12px;
+  grid-template-columns: 20px minmax(190px, 0.82fr) minmax(230px, 1.18fr) max-content max-content;
+  column-gap: 8px;
+}
+
+.case-toggle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #64748b;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.case-toggle::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  border-right: 1.8px solid currentColor;
+  border-bottom: 1.8px solid currentColor;
+  content: "";
+  transform: translate(-58%, -50%) rotate(-45deg);
+  transform-origin: center;
+  transition: transform 0.16s ease;
+}
+
+.case-collapse :deep(.el-collapse-item__header:hover) .case-toggle {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.case-toggle.expanded::before {
+  transform: translate(-50%, -58%) rotate(45deg);
 }
 
 .case-name {
+  grid-column: 2;
   min-width: 0;
   overflow: hidden;
   color: #111827;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  line-height: 24px;
+  line-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .case-summary {
-  justify-self: center;
+  grid-column: 3;
+  justify-self: start;
   color: #64748b;
   font-weight: 600;
-  text-align: center;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.case-duration {
+  grid-column: 4;
+  width: max-content;
+  justify-self: end;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  padding: 0 7px;
   white-space: nowrap;
 }
 
 .case-status {
-  justify-self: center;
+  grid-column: 5;
+  justify-self: end;
   min-width: 76px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  line-height: 24px;
+  line-height: 22px;
   padding: 0 12px;
   text-align: center;
 }

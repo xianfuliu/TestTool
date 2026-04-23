@@ -12,6 +12,7 @@ withDefaults(
     showClear?: boolean;
     showFooter?: boolean;
     showSectionHeader?: boolean;
+    inlineRows?: boolean;
   }>(),
   {
     generateLabel: "生成数据",
@@ -19,6 +20,7 @@ withDefaults(
     showClear: true,
     showFooter: true,
     showSectionHeader: true,
+    inlineRows: false,
   },
 );
 
@@ -34,7 +36,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <section class="work-panel">
+  <section class="work-panel" :class="{ 'work-panel--inline-rows': inlineRows }">
     <div class="panel-head">
       <div class="panel-title-group">
         <h2>{{ title }}</h2>
@@ -89,6 +91,7 @@ const emit = defineEmits<{
             </div>
           </div>
         </section>
+        <slot name="append" />
       </div>
     </el-scrollbar>
 
@@ -106,7 +109,8 @@ const emit = defineEmits<{
 <style scoped>
 .work-panel {
   display: flex;
-  min-height: calc(100vh - 176px);
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #e6ebf0;
@@ -204,6 +208,21 @@ const emit = defineEmits<{
   gap: 5px;
 }
 
+.work-panel--inline-rows .row-main {
+  grid-template-columns: minmax(78px, auto) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 0;
+}
+
+.work-panel--inline-rows .row-label {
+  white-space: nowrap;
+}
+
+.work-panel--inline-rows .row-value {
+  line-height: 1.45;
+}
+
 .row-label {
   color: #5b6472;
   font-size: 12px;
@@ -223,8 +242,8 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-width: 112px;
+  gap: 4px;
+  min-width: 76px;
   flex-shrink: 0;
 }
 
