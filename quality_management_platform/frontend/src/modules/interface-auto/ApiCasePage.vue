@@ -120,12 +120,10 @@ const TOOL_TABS: ToolTabKey[] = ["pre_processing", "assertions", "post_processin
 
 const TOOL_OPTIONS: Record<ToolTabKey, Array<{ type: string; label: string }>> = {
   pre_processing: [
-    { type: "global_tool", label: "全局工具" },
-    { type: "parameter_extraction", label: "参数提取" },
-    { type: "data_prepare", label: "数据准备" },
+    { type: "http_request", label: "HTTP请求" },
     { type: "sql_tool", label: "SQL工具" },
     { type: "python_script", label: "Python脚本" },
-    { type: "http_request", label: "HTTP请求" },
+    { type: "global_tool", label: "全局工具" },
   ],
   assertions: [
     { type: "assertion", label: "断言" },
@@ -134,7 +132,6 @@ const TOOL_OPTIONS: Record<ToolTabKey, Array<{ type: string; label: string }>> =
     { type: "parameter_extraction", label: "参数提取" },
     { type: "http_request", label: "HTTP请求" },
     { type: "sql_tool", label: "SQL工具" },
-    { type: "data_prepare", label: "数据准备" },
     { type: "python_script", label: "Python脚本" },
     { type: "global_tool", label: "全局工具" },
   ],
@@ -1007,10 +1004,6 @@ function getGlobalToolLabel(globalTool: GlobalToolRecord) {
   return getToolLabel(toCaseToolPreviewFromGlobalTool(globalTool));
 }
 
-function getGlobalToolSummary(globalTool: GlobalToolRecord) {
-  return getToolSummary(toCaseToolPreviewFromGlobalTool(globalTool));
-}
-
 function getGlobalToolTypeIcon(globalTool: GlobalToolRecord) {
   return getToolTypeIcon(toCaseToolPreviewFromGlobalTool(globalTool));
 }
@@ -1318,13 +1311,6 @@ function openNewToolDialog(step: CaseStep, tab: ToolTabKey, toolType: string) {
   toolDialogVisible.value = true;
 }
 
-function openGlobalToolDialog(step: CaseStep, tab: ToolTabKey) {
-  globalToolDialogStepKey.value = getStepKey(step);
-  globalToolDialogTab.value = tab;
-  globalToolKeyword.value = "";
-  globalToolDialogVisible.value = true;
-}
-
 function openToolDialog(step: CaseStep, tab: ToolTabKey, toolId: string, options?: { isNew?: boolean }) {
   const tool = ensureToolMap(step, tab)[toolId];
   if (!tool) {
@@ -1426,18 +1412,12 @@ function buildToolFromGlobalTool(globalTool: GlobalToolRecord): CaseToolRecord {
   };
 }
 
-function addGlobalToolToCurrentStep(globalTool: GlobalToolRecord) {
-  const step = getStepByKey(globalToolDialogStepKey.value);
-  if (!step) {
-    globalToolDialogVisible.value = false;
-    return;
-  }
-  const map = ensureToolMap(step, globalToolDialogTab.value);
+function addGlobalToolToStep(step: CaseStep, tab: ToolTabKey, globalTool: GlobalToolRecord) {
+  const map = ensureToolMap(step, tab);
   const tool = buildToolFromGlobalTool(globalTool);
   const toolId = createKey(globalTool.tool_type);
   appendToolToMap(map, toolId, tool);
   markActiveModified();
-  globalToolDialogVisible.value = false;
   ElMessage.success(`已添加全局工具：${globalTool.name}`);
 }
 
@@ -2753,12 +2733,23 @@ function addToolToStep(step: CaseStep, tab: ToolTabKey, toolType: string) {
 
 function handleToolCommand(step: CaseStep, command: string | number | object) {
   const tab = getStepTab(step);
+  if (typeof command === "object" && command !== null) {
+    const payload = command as { kind?: string; toolId?: number | string };
+    if (payload.kind === "global_tool") {
+      const tool = enabledGlobalTools.value.find((item) => String(item.id) === String(payload.toolId));
+      if (!tool) {
+        ElMessage.warning("全局工具不存在或未启用");
+        return;
+      }
+      addGlobalToolToStep(step, tab, tool);
+      return;
+    }
+  }
   if (tab === "assertions") {
     addToolToStep(step, tab, "assertion");
     return;
   }
   if (String(command) === "global_tool") {
-    openGlobalToolDialog(step, tab);
     return;
   }
   addToolToStep(step, tab, String(command));
@@ -3430,13 +3421,51 @@ onBeforeUnmount(() => {
                     </button>
                     <template #dropdown>
                       <el-dropdown-menu>
-                        <el-dropdown-item
-                          v-for="option in TOOL_OPTIONS[getStepTab(step)]"
-                          :key="option.type"
-                          :command="option.type"
-                        >
-                          {{ option.label }}
-                        </el-dropdown-item>
+                        <template v-for="option in TOOL_OPTIONS[getStepTab(step)]" :key="option.type">
+                          <div v-if="option.type === 'global_tool'" class="tool-dropdown-submenu">
+                            <el-popover
+                              placement="right-start"
+                              trigger="hover"
+                              :width="200"
+                              :show-arrow="false"
+                              :offset="0"
+                              :show-after="0"
+                              :hide-after="0"
+                              transition="none"
+                              popper-class="global-tool-cascade-popper"
+                              teleported
+                            >
+                              <template #reference>
+                                <div class="tool-dropdown-submenu-trigger">
+                                  <span>{{ option.label }}</span>
+                                  <el-icon><ArrowRight /></el-icon>
+                                </div>
+                              </template>
+                              <div class="global-tool-cascade-menu">
+                                <button
+                                  v-for="globalTool in enabledGlobalTools"
+                                  :key="globalTool.id"
+                                  class="global-tool-cascade-item"
+                                  type="button"
+                                  @click="addGlobalToolToStep(step, getStepTab(step), globalTool)"
+                                >
+                                  <img
+                                    class="tool-type-icon"
+                                    :src="getGlobalToolTypeIcon(globalTool)"
+                                    :alt="getGlobalToolLabel(globalTool)"
+                                  />
+                                  <span class="global-tool-cascade-name">{{ globalTool.name }}</span>
+                                </button>
+                                <div v-if="!enabledGlobalTools.length" class="global-tool-cascade-empty">
+                                  暂无可用全局工具
+                                </div>
+                              </div>
+                            </el-popover>
+                          </div>
+                          <el-dropdown-item v-else :command="option.type">
+                            {{ option.label }}
+                          </el-dropdown-item>
+                        </template>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -3556,31 +3585,6 @@ onBeforeUnmount(() => {
       <button @click="closeOtherTabs(); hideContextMenus()">关闭其他</button>
       <button @click="closeAllTabs(); hideContextMenus()">关闭全部</button>
     </div>
-
-    <el-dialog v-model="globalToolDialogVisible" title="添加全局工具" width="720px" class="global-tool-picker-dialog">
-      <div class="global-tool-picker">
-        <div class="global-tool-search">
-          <el-icon><Search /></el-icon>
-          <input v-model="globalToolKeyword" placeholder="搜索全局工具..." />
-        </div>
-        <div class="global-tool-list">
-          <article v-for="tool in enabledGlobalTools" :key="tool.id" class="global-tool-option">
-            <div class="global-tool-option-main">
-              <img class="tool-type-icon" :src="getGlobalToolTypeIcon(tool)" :alt="getGlobalToolLabel(tool)" />
-              <div>
-                <div class="global-tool-option-title">
-                  <span>{{ tool.name }}</span>
-                  <em>{{ getGlobalToolLabel(tool) }}</em>
-                </div>
-                <p>{{ tool.description || getGlobalToolSummary(tool) || "暂无说明" }}</p>
-              </div>
-            </div>
-            <button class="action-button solid mini" @click="addGlobalToolToCurrentStep(tool)">添加</button>
-          </article>
-          <div v-if="!enabledGlobalTools.length" class="global-tool-empty">暂无可添加的全局工具</div>
-        </div>
-      </div>
-    </el-dialog>
 
     <el-dialog
       v-model="toolDialogVisible"
@@ -4789,100 +4793,99 @@ onBeforeUnmount(() => {
   color: #cf1322;
 }
 
-.global-tool-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.tool-dropdown-submenu {
+  position: relative;
+  min-width: 156px;
 }
 
-.global-tool-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  border: 1px solid #d7e1ec;
-  border-radius: 6px;
-  padding: 0 10px;
-  background: #fff;
-  color: #64748b;
-}
-
-.global-tool-search input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: none;
-  outline: none;
-  color: #1f2937;
-  font-size: 13px;
-}
-
-.global-tool-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 420px;
-  overflow: auto;
-}
-
-.global-tool-option {
+.tool-dropdown-submenu-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  border: 1px solid #dbe3ed;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #fbfdff;
+  gap: 18px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 5px 16px;
+  color: #344256;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 22px;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
 }
 
-.global-tool-option-main {
+.tool-dropdown-submenu-trigger .el-icon {
+  color: #8a96a8;
+  font-size: 12px;
+}
+
+.tool-dropdown-submenu:hover .tool-dropdown-submenu-trigger {
+  background: #edf5ff;
+  color: #2f7df6;
+}
+
+:global(.global-tool-cascade-popper) {
+  border: 1px solid #dfe7f1 !important;
+  border-radius: 4px !important;
+  margin-top: -6px !important;
+  padding: 6px !important;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 16%) !important;
+}
+
+:global(.global-tool-cascade-menu) {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
-.global-tool-option-title {
+:global(.global-tool-cascade-item) {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #172033;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.global-tool-option-title em {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  border: none;
   border-radius: 4px;
-  padding: 2px 6px;
-  background: #edf4ff;
+  padding: 5px 8px;
+  background: transparent;
+  color: #263445;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+:global(.global-tool-cascade-item .tool-type-icon) {
+  flex: 0 0 auto;
+}
+
+:global(.global-tool-cascade-item:hover) {
+  background: #edf5ff;
   color: #2f7df6;
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 600;
 }
 
-.global-tool-option p {
-  margin: 5px 0 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.4;
-  word-break: break-word;
+:global(.global-tool-cascade-name) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: inherit;
+  font-weight: 400;
+  line-height: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.global-tool-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 160px;
+:global(.global-tool-cascade-empty) {
+  padding: 8px 10px;
   color: #94a3b8;
   font-size: 13px;
-}
-
-.action-button.mini {
-  width: auto;
-  min-width: 58px;
-  height: 30px;
-  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .variable-toolbar {
