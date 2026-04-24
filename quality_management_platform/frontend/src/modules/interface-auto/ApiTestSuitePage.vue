@@ -696,7 +696,13 @@ onMounted(async () => {
         <el-table-column label="序号" width="70" align="center" header-align="center">
           <template #default="{ $index }">{{ (currentPage - 1) * pageSize + $index + 1 }}</template>
         </el-table-column>
-        <el-table-column prop="name" label="测试集名称" min-width="210" align="center" header-align="center" show-overflow-tooltip />
+        <el-table-column label="测试集名称" min-width="210" align="center" header-align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="suite-name-cell" :title="row.name">
+              <span>{{ row.name }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="project_name" label="项目" width="120" align="center" header-align="center" show-overflow-tooltip />
         <el-table-column label="调度规则" width="150" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">
@@ -1045,6 +1051,24 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   min-height: 24px;
+  white-space: nowrap;
+}
+
+.suite-name-cell {
+  display: inline-flex;
+  width: min(220px, 100%);
+  justify-content: flex-start;
+  min-width: 0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.suite-name-cell span {
+  min-width: 0;
+  overflow: hidden;
+  color: #111827;
+  font-weight: 650;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

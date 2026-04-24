@@ -42,17 +42,29 @@ type ExtractionRow = {
   path: string;
 };
 
+const ALL_FILTER_VALUE = 0;
+
 const TOOL_OPTIONS: ToolOption[] = [
   { type: "http_request", label: "HTTP请求" },
   { type: "sql_tool", label: "SQL工具" },
   { type: "python_script", label: "Python脚本" },
 ];
 
+const businessProjectFilterProps = {
+  emitPath: true,
+};
+
+const businessProjectDialogProps = {
+  emitPath: true,
+};
+
 const context = useBusinessProjectContext();
 const loading = ref(false);
 const saving = ref(false);
 const keyword = ref("");
 const typeFilter = ref<GlobalToolType | "">("");
+const selectedBusinessGroupId = ref<number>(ALL_FILTER_VALUE);
+const selectedProjectId = ref<number>(ALL_FILTER_VALUE);
 const tools = ref<GlobalToolRecord[]>([]);
 const databaseConnections = ref<DatabaseConnectionRecord[]>([]);
 const sqlDatabaseSchemas = ref<string[]>([]);
@@ -67,6 +79,8 @@ let schemaRequestToken = 0;
 
 const form = reactive({
   id: null as number | null,
+  project_id: null as number | null,
+  is_shared: false,
   name: "",
   tool_type: "http_request" as GlobalToolType,
   description: "",
@@ -93,7 +107,9 @@ const filteredTools = computed(() => {
     if (!text) {
       return true;
     }
-    return `${item.name} ${item.description} ${getToolTypeLabel(item.tool_type)}`.toLowerCase().includes(text);
+    return `${item.name} ${item.project_name ?? ""} ${item.business_group_name ?? ""} ${getToolTypeLabel(item.tool_type)}`
+      .toLowerCase()
+      .includes(text);
   });
 });
 
@@ -101,12 +117,104 @@ const enabledDatabaseConnections = computed(() =>
   databaseConnections.value.filter((item) => item.enabled !== false),
 );
 
+const projectOptions = computed(() => context.projects.value);
+
+const businessProjectOptions = computed(() =>
+  context.groups.value.map((group) => ({
+    value: group.id,
+    label: group.name,
+    children: projectOptions.value
+      .filter((project) => project.business_group_id === group.id)
+      .map((project) => ({
+        value: project.id,
+        label: project.name,
+      })),
+  })),
+);
+
+const selectedFilterPath = computed<number[]>({
+  get() {
+    if (selectedProjectId.value !== ALL_FILTER_VALUE) {
+      const project = projectOptions.value.find((item) => item.id === selectedProjectId.value);
+      return project?.business_group_id
+        ? [project.business_group_id, project.id]
+        : [selectedProjectId.value];
+    }
+    if (selectedBusinessGroupId.value !== ALL_FILTER_VALUE) {
+      return [selectedBusinessGroupId.value];
+    }
+    return [];
+  },
+  set(value) {
+    if (!value?.length) {
+      selectedBusinessGroupId.value = ALL_FILTER_VALUE;
+      selectedProjectId.value = ALL_FILTER_VALUE;
+      return;
+    }
+    if (value.length === 1) {
+      selectedBusinessGroupId.value = value[0];
+      selectedProjectId.value = ALL_FILTER_VALUE;
+      return;
+    }
+    selectedBusinessGroupId.value = value[0];
+    selectedProjectId.value = value[value.length - 1];
+  },
+});
+
+const formProjectPath = computed<number[]>({
+  get() {
+    if (!form.project_id) {
+      return [];
+    }
+    const project = projectOptions.value.find((item) => item.id === form.project_id);
+    return project?.business_group_id ? [project.business_group_id, project.id] : [form.project_id];
+  },
+  async set(value) {
+    const projectId = value?.length ? value[value.length - 1] : null;
+    form.project_id = projectId;
+    await handleDialogProjectChange(projectId);
+  },
+});
+
 function createKey(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
 function getToolTypeLabel(type: string) {
   return TOOL_OPTIONS.find((item) => item.type === type)?.label ?? type;
+}
+
+function getToolTypePrefix(type: string) {
+  if (type === "http_request") {
+    return "HTTP";
+  }
+  if (type === "sql_tool") {
+    return "SQL";
+  }
+  if (type === "python_script") {
+    return "Python";
+  }
+  return getToolTypeLabel(type);
+}
+
+function getProjectById(projectId: number | null) {
+  if (!projectId) {
+    return null;
+  }
+  return projectOptions.value.find((item) => item.id === projectId) ?? null;
+}
+
+function getDefaultProjectId() {
+  if (selectedProjectId.value !== ALL_FILTER_VALUE) {
+    return selectedProjectId.value;
+  }
+  if (selectedBusinessGroupId.value !== ALL_FILTER_VALUE) {
+    return projectOptions.value.find((item) => item.business_group_id === selectedBusinessGroupId.value)?.id ?? null;
+  }
+  if (context.selectedProjectId.value) {
+    return context.selectedProjectId.value;
+  }
+  return projectOptions.value[0]?.id ?? null;
 }
 
 function parseMap(value: unknown): Record<string, unknown> {
@@ -207,6 +315,28 @@ function normalizeDatabaseConnectionId(value: unknown) {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
+async function loadDatabaseConnectionsForProject(projectId: number | null, options?: { preserveSelected?: boolean }) {
+  const businessGroupId = getProjectById(projectId)?.business_group_id ?? null;
+  if (!businessGroupId) {
+    databaseConnections.value = [];
+    sqlDatabaseSchemas.value = [];
+    form.databaseConnectionId = null;
+    form.database = "";
+    return;
+  }
+  const rows = await fetchDatabaseConnections({ business_group_id: businessGroupId });
+  databaseConnections.value = Array.isArray(rows) ? rows : [];
+  const selectedDatabaseId = form.databaseConnectionId;
+  const matched = selectedDatabaseId
+    ? databaseConnections.value.find((item) => item.id === selectedDatabaseId) ?? null
+    : null;
+  if (!options?.preserveSelected || !matched) {
+    form.databaseConnectionId = null;
+    form.database = "";
+    sqlDatabaseSchemas.value = [];
+  }
+}
+
 async function loadSqlDatabaseSchemas(databaseId: number | null, options?: { preserveSelected?: boolean }) {
   schemaRequestToken += 1;
   const requestToken = schemaRequestToken;
@@ -245,8 +375,17 @@ function handleDatabaseChange(value: number | string | null) {
   void loadSqlDatabaseSchemas(normalizeDatabaseConnectionId(value));
 }
 
+async function handleDialogProjectChange(projectId: number | null, options?: { preserveSelected?: boolean }) {
+  await loadDatabaseConnectionsForProject(projectId, options);
+  if (options?.preserveSelected && form.databaseConnectionId) {
+    await loadSqlDatabaseSchemas(form.databaseConnectionId, { preserveSelected: true });
+  }
+}
+
 function resetForm(type: GlobalToolType = "http_request") {
   form.id = null;
+  form.project_id = getDefaultProjectId();
+  form.is_shared = false;
   form.name = "";
   form.tool_type = type;
   form.description = "";
@@ -272,6 +411,8 @@ function fillForm(tool: GlobalToolRecord) {
   resetForm(tool.tool_type);
   const config = parseMap(tool.config);
   form.id = tool.id;
+  form.project_id = tool.project_id;
+  form.is_shared = tool.is_shared === true;
   form.name = tool.name;
   form.description = tool.description ?? "";
   form.enabled = tool.enabled !== false;
@@ -296,18 +437,17 @@ function fillForm(tool: GlobalToolRecord) {
     form.database = String(config.database ?? "");
     form.sqlText = String(config.sql ?? "");
     form.outputFieldsText = normalizeOutputFields(config.output_fields).join(", ");
-    if (form.databaseConnectionId) {
-      void loadSqlDatabaseSchemas(form.databaseConnectionId, { preserveSelected: true });
-    }
   } else if (tool.tool_type === "python_script") {
     form.pythonScriptText = String(config.script ?? config.script_text ?? config.code ?? "");
     form.pythonTimeout = Number(config.timeout_seconds ?? config.timeout ?? 60) || 60;
     form.outputFieldsText = normalizeOutputFields(config.output_fields).join(", ");
   }
+  void handleDialogProjectChange(form.project_id, { preserveSelected: true });
 }
 
-function openCreateDialog() {
+async function openCreateDialog() {
   resetForm("http_request");
+  await handleDialogProjectChange(form.project_id);
   dialogTitle.value = "新增全局工具";
   dialogVisible.value = true;
 }
@@ -319,6 +459,10 @@ function openEditDialog(tool: GlobalToolRecord) {
 }
 
 function buildPayload(): GlobalToolPayload | null {
+  if (!form.project_id) {
+    ElMessage.warning("请选择所属项目");
+    return null;
+  }
   const name = form.name.trim();
   if (!name) {
     ElMessage.warning("请输入工具名称");
@@ -341,10 +485,12 @@ function buildPayload(): GlobalToolPayload | null {
       return null;
     }
     return {
+      project_id: form.project_id,
       name,
       tool_type: "http_request",
       description: form.description.trim(),
       enabled: form.id ? form.enabled : false,
+      is_shared: form.is_shared,
       config: {
         method: form.method,
         url: form.url.trim(),
@@ -370,10 +516,12 @@ function buildPayload(): GlobalToolPayload | null {
     }
     const selectedDatabase = getDatabaseConnectionById(form.databaseConnectionId);
     return {
+      project_id: form.project_id,
       name,
       tool_type: "sql_tool",
       description: form.description.trim(),
       enabled: form.id ? form.enabled : false,
+      is_shared: form.is_shared,
       config: {
         database_connection_id: form.databaseConnectionId,
         database_connection_name: selectedDatabase?.name ?? "",
@@ -388,10 +536,12 @@ function buildPayload(): GlobalToolPayload | null {
     return null;
   }
   return {
+    project_id: form.project_id,
     name,
     tool_type: "python_script",
     description: form.description.trim(),
     enabled: form.id ? form.enabled : false,
+    is_shared: form.is_shared,
     config: {
       script: form.pythonScriptText,
       timeout_seconds: Number(form.pythonTimeout) || 60,
@@ -474,28 +624,17 @@ function removeExtractionRow(index: number) {
   }
 }
 
-function getToolSummary(tool: GlobalToolRecord) {
-  const config = parseMap(tool.config);
-  if (tool.tool_type === "http_request") {
-    return `${String(config.method ?? "GET")} ${String(config.url ?? "")}`.trim();
-  }
-  if (tool.tool_type === "sql_tool") {
-    return [String(config.database_connection_name ?? ""), String(config.database ?? "")]
-      .filter(Boolean)
-      .join(" / ");
-  }
-  return String(config.script ?? "").split("\n").find(Boolean) ?? "Python 脚本";
-}
-
 async function loadData() {
   loading.value = true;
   try {
-    const [toolRows, databaseRows] = await Promise.all([
-      fetchGlobalTools(),
-      fetchDatabaseConnections({ business_group_id: context.selectedGroupId.value ?? null }),
-    ]);
+    const toolRows = await fetchGlobalTools({
+      business_group_id:
+        selectedProjectId.value === ALL_FILTER_VALUE && selectedBusinessGroupId.value !== ALL_FILTER_VALUE
+          ? selectedBusinessGroupId.value
+          : null,
+      project_id: selectedProjectId.value !== ALL_FILTER_VALUE ? selectedProjectId.value : null,
+    });
     tools.value = Array.isArray(toolRows) ? toolRows : [];
-    databaseConnections.value = Array.isArray(databaseRows) ? databaseRows : [];
   } catch (error) {
     ElMessage.error((error as Error).message);
   } finally {
@@ -513,7 +652,7 @@ watch(
 );
 
 watch(
-  () => context.selectedGroupId.value,
+  [selectedBusinessGroupId, selectedProjectId],
   () => {
     void loadData();
   },
@@ -521,6 +660,10 @@ watch(
 
 onMounted(async () => {
   await context.ensureLoaded();
+  selectedProjectId.value = context.selectedProjectId.value ?? ALL_FILTER_VALUE;
+  selectedBusinessGroupId.value = context.selectedProjectId.value
+    ? (context.selectedGroupId.value ?? ALL_FILTER_VALUE)
+    : ALL_FILTER_VALUE;
   await loadData();
 });
 </script>
@@ -529,6 +672,18 @@ onMounted(async () => {
   <div class="global-tool-page" v-loading="loading">
     <section class="scheduler-toolbar">
       <div class="filter-row">
+        <span class="filter-label">业务/项目</span>
+        <el-cascader
+          v-model="selectedFilterPath"
+          class="business-project-filter"
+          :options="businessProjectOptions"
+          :props="businessProjectFilterProps"
+          clearable
+          filterable
+          placeholder="全部业务 / 项目"
+          popper-class="compact-select-popper"
+        />
+
         <span class="filter-label">工具类型</span>
         <el-select v-model="typeFilter" class="type-filter" clearable placeholder="全部工具">
           <el-option v-for="option in TOOL_OPTIONS" :key="option.type" :label="option.label" :value="option.type" />
@@ -538,7 +693,7 @@ onMounted(async () => {
           v-model="keyword"
           clearable
           class="keyword-input"
-          placeholder="搜索工具名称 / 描述"
+          placeholder="搜索工具名称"
           :prefix-icon="Search"
         />
 
@@ -555,30 +710,46 @@ onMounted(async () => {
         cell-class-name="task-table-cell"
         header-cell-class-name="task-table-header-cell"
       >
-        <el-table-column label="序号" width="70" align="center" header-align="center">
+        <el-table-column label="序号" width="76" align="center" header-align="center">
           <template #default="{ $index }">{{ $index + 1 }}</template>
         </el-table-column>
-        <el-table-column prop="name" label="工具名称" min-width="180" align="center" header-align="center" show-overflow-tooltip />
-        <el-table-column label="类型" width="110" align="center" header-align="center">
+        <el-table-column
+          label="工具名称"
+          min-width="360"
+          align="center"
+          header-align="center"
+          class-name="tool-name-column"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
-            <el-tag size="small" effect="light">{{ getToolTypeLabel(row.tool_type) }}</el-tag>
+            <span class="tool-name-cell" :title="`${getToolTypePrefix(row.tool_type)} ${row.name}`">
+              <span class="tool-type-prefix">{{ getToolTypePrefix(row.tool_type) }}</span>
+              <span class="tool-name-text">{{ row.name }}</span>
+            </span>
           </template>
         </el-table-column>
-        <el-table-column label="配置摘要" min-width="260" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column prop="business_group_name" label="业务" min-width="220" align="center" header-align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.business_group_name || "-" }}</template>
+        </el-table-column>
+        <el-table-column prop="project_name" label="项目" min-width="220" align="center" header-align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.project_name || "-" }}</template>
+        </el-table-column>
+        <el-table-column label="共享" width="100" align="center" header-align="center">
           <template #default="{ row }">
-            <span class="mono-text">{{ getToolSummary(row) || "-" }}</span>
+            <el-tag size="small" :type="row.is_shared ? 'success' : 'info'" effect="light">
+              {{ row.is_shared ? "共享" : "私有" }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="180" align="center" header-align="center" show-overflow-tooltip />
-        <el-table-column label="状态" width="92" align="center" header-align="center">
+        <el-table-column label="状态" width="96" align="center" header-align="center">
           <template #default="{ row }">
             <el-switch v-model="row.enabled" size="small" @change="toggleToolStatus(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" width="170" align="center" header-align="center" show-overflow-tooltip>
+        <el-table-column label="更新时间" min-width="240" align="center" header-align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ row.updated_at || row.created_at || "-" }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right" align="center" header-align="center">
+        <el-table-column label="操作" min-width="190" align="center" header-align="center">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button size="small" text type="primary" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
@@ -600,14 +771,31 @@ onMounted(async () => {
       class="global-tool-dialog"
     >
       <el-form label-width="74px" class="global-tool-form" @submit.prevent>
-        <el-form-item label="工具类型" required>
-          <el-select v-model="form.tool_type" class="dialog-control" :disabled="Boolean(form.id)">
-            <el-option v-for="option in TOOL_OPTIONS" :key="option.type" :label="option.label" :value="option.type" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="名称" required>
-          <el-input v-model="form.name" clearable maxlength="100" placeholder="请输入工具名称" />
-        </el-form-item>
+        <div class="basic-grid">
+          <el-form-item label="所属项目" required>
+            <el-cascader
+              v-model="formProjectPath"
+              class="dialog-project-cascader"
+              :options="businessProjectOptions"
+              :props="businessProjectDialogProps"
+              clearable
+              filterable
+              placeholder="请选择业务 / 项目"
+              popper-class="compact-select-popper"
+            />
+          </el-form-item>
+          <el-form-item label="共享">
+            <el-switch v-model="form.is_shared" size="small" />
+          </el-form-item>
+          <el-form-item label="工具类型" required class="basic-grid-wide">
+            <el-select v-model="form.tool_type" class="dialog-control" :disabled="Boolean(form.id)">
+              <el-option v-for="option in TOOL_OPTIONS" :key="option.type" :label="option.label" :value="option.type" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="名称" required class="basic-grid-wide">
+            <el-input v-model="form.name" clearable maxlength="100" placeholder="请输入工具名称" />
+          </el-form-item>
+        </div>
 
         <CommonToolConfigForm
           :active="dialogVisible"
@@ -693,6 +881,10 @@ onMounted(async () => {
   width: 160px;
 }
 
+.business-project-filter {
+  width: 220px;
+}
+
 .keyword-input {
   width: min(360px, 26vw);
   min-width: 220px;
@@ -730,10 +922,37 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.mono-text {
-  color: #334155;
-  font-family: Consolas, "Liberation Mono", monospace;
+.task-table :deep(.tool-name-column .cell) {
+  justify-content: flex-start;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.tool-name-cell {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.tool-type-prefix {
+  flex: 0 0 auto;
+  color: #2563eb;
   font-size: 12px;
+  font-weight: 600;
+}
+
+.tool-name-text {
+  min-width: 0;
+  overflow: hidden;
+  color: #1f2937;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .table-actions {
@@ -751,6 +970,20 @@ onMounted(async () => {
 }
 
 .dialog-control {
+  width: 100%;
+}
+
+.basic-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(140px, 0.55fr);
+  gap: 0 12px;
+}
+
+.basic-grid-wide {
+  grid-column: 1 / -1;
+}
+
+.dialog-project-cascader {
   width: 100%;
 }
 
@@ -847,12 +1080,17 @@ onMounted(async () => {
     flex-wrap: wrap;
   }
 
+  .basic-grid {
+    grid-template-columns: 1fr;
+  }
+
   .config-row {
     grid-template-columns: 1fr;
   }
 
   .keyword-input,
-  .type-filter {
+  .type-filter,
+  .business-project-filter {
     width: 100%;
   }
 }

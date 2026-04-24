@@ -180,14 +180,20 @@ SCHEMA_SQL = [
     """
     CREATE TABLE IF NOT EXISTS global_tools (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT NULL,
         name VARCHAR(100) NOT NULL,
         tool_type VARCHAR(50) NOT NULL,
         description TEXT,
         config JSON NULL,
         enabled BOOLEAN DEFAULT TRUE,
+        is_shared BOOLEAN DEFAULT FALSE,
         created_by VARCHAR(50) DEFAULT 'admin',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_global_tools_project_id (project_id),
+        INDEX idx_global_tools_type (tool_type),
+        INDEX idx_global_tools_enabled (enabled),
+        INDEX idx_global_tools_shared (is_shared)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
@@ -278,7 +284,10 @@ SCHEMA_SQL = [
         INDEX idx_test_reports_suite_id (suite_id),
         INDEX idx_test_reports_project_id (project_id),
         INDEX idx_test_reports_type_created_at (report_type, created_at),
-        INDEX idx_test_reports_scheduler_run_id (scheduler_run_id)
+        INDEX idx_test_reports_scheduler_run_id (scheduler_run_id),
+        INDEX idx_test_reports_suite_created_id (suite_id, created_at, id),
+        INDEX idx_test_reports_case_created_id (case_id, created_at, id),
+        INDEX idx_test_reports_project_created_id (project_id, created_at, id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """

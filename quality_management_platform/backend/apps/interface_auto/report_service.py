@@ -37,6 +37,11 @@ def _column_exists(cursor, table_name: str, column_name: str) -> bool:
     return cursor.fetchone() is not None
 
 
+def _index_exists(cursor, table_name: str, index_name: str) -> bool:
+    cursor.execute(f"SHOW INDEX FROM {table_name} WHERE Key_name = %s", (index_name,))
+    return cursor.fetchone() is not None
+
+
 def _datetime_param(value: datetime | None) -> str | None:
     return value.strftime("%Y-%m-%d %H:%M:%S") if value else None
 
@@ -107,7 +112,10 @@ def ensure_report_schema_ready() -> None:
                     INDEX idx_test_reports_suite_id (suite_id),
                     INDEX idx_test_reports_project_id (project_id),
                     INDEX idx_test_reports_type_created_at (report_type, created_at),
-                    INDEX idx_test_reports_scheduler_run_id (scheduler_run_id)
+                    INDEX idx_test_reports_scheduler_run_id (scheduler_run_id),
+                    INDEX idx_test_reports_suite_created_id (suite_id, created_at, id),
+                    INDEX idx_test_reports_case_created_id (case_id, created_at, id),
+                    INDEX idx_test_reports_project_created_id (project_id, created_at, id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """
             )
@@ -117,6 +125,27 @@ def ensure_report_schema_ready() -> None:
                 cursor.execute("ALTER TABLE test_reports ADD COLUMN scheduler_task_id INT NULL AFTER scheduler_id")
             if not _column_exists(cursor, "test_reports", "scheduler_run_id"):
                 cursor.execute("ALTER TABLE test_reports ADD COLUMN scheduler_run_id INT NULL AFTER scheduler_task_id")
+            if not _index_exists(cursor, "test_reports", "idx_test_reports_suite_created_id"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_reports
+                    ADD INDEX idx_test_reports_suite_created_id (suite_id, created_at, id)
+                    """
+                )
+            if not _index_exists(cursor, "test_reports", "idx_test_reports_case_created_id"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_reports
+                    ADD INDEX idx_test_reports_case_created_id (case_id, created_at, id)
+                    """
+                )
+            if not _index_exists(cursor, "test_reports", "idx_test_reports_project_created_id"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_reports
+                    ADD INDEX idx_test_reports_project_created_id (project_id, created_at, id)
+                    """
+                )
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS test_step_results (
@@ -216,15 +245,31 @@ def list_reports(params: dict[str, Any] | None = None) -> dict[str, Any]:
         """,
         values,
     )
-    rows = fetch_all(
+    id_rows = fetch_all(
         f"""
-        {_report_query_base()}
+        SELECT tr.id
+        FROM test_reports tr
+        LEFT JOIN test_suites ts ON ts.id = tr.suite_id
+        LEFT JOIN test_cases tc ON tc.id = tr.case_id
         {where_sql}
         ORDER BY tr.created_at DESC, tr.id DESC
         LIMIT %s OFFSET %s
         """,
         (*values, page_size, (page - 1) * page_size + skip),
     )
+    report_ids = [int(row["id"]) for row in id_rows if row.get("id")]
+    rows: list[dict[str, Any]] = []
+    if report_ids:
+        placeholders = ", ".join(["%s"] * len(report_ids))
+        fetched_rows = fetch_all(
+            f"""
+            {_report_query_base()}
+            WHERE tr.id IN ({placeholders})
+            """,
+            report_ids,
+        )
+        rows_by_id = {int(row["id"]): row for row in fetched_rows if row.get("id")}
+        rows = [rows_by_id[report_id] for report_id in report_ids if report_id in rows_by_id]
     total = max(0, int((total_row or {}).get("count") or 0) - skip)
     return {
         "data": [hydrate_report_row(row) for row in rows],

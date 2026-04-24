@@ -13,6 +13,7 @@ from . import template_service
 
 _CASE_SCHEMA_READY = False
 _SUITE_SCHEMA_READY = False
+_GLOBAL_TOOL_SCHEMA_READY = False
 SUITE_SCHEDULER_SOURCE = "interface_auto.test_suite"
 GLOBAL_TOOL_TYPES = {"http_request", "sql_tool", "python_script"}
 
@@ -44,6 +45,14 @@ def _json_list_value(value):
 def _enabled_by_default(value) -> bool:
     if value is None:
         return True
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "no", "n"}
+    return bool(value)
+
+
+def _bool_value(value, default: bool = False) -> bool:
+    if value is None:
+        return default
     if isinstance(value, str):
         return value.strip().lower() not in {"false", "0", "no", "n"}
     return bool(value)
@@ -111,6 +120,9 @@ def _hydrate_global_tool_row(tool_row):
     hydrated = dict(tool_row)
     hydrated["config"] = _json_value(hydrated.get("config"), {})
     hydrated["enabled"] = _enabled_by_default(hydrated.get("enabled", True))
+    hydrated["project_id"] = get_int(hydrated.get("project_id"))
+    hydrated["business_group_id"] = get_int(hydrated.get("business_group_id"))
+    hydrated["is_shared"] = _bool_value(hydrated.get("is_shared"), False)
     return hydrated
 
 
@@ -121,6 +133,19 @@ def _normalise_global_tool_payload(item):
     name = str(item.get("name") or "").strip()
     if not name:
         raise ValueError("工具名称不能为空")
+    project_id = get_int(item.get("project_id"))
+    if not project_id:
+        raise ValueError("请选择所属项目")
+    project = fetch_one(
+        """
+        SELECT p.id, p.business_group_id
+        FROM projects p
+        WHERE p.id = %s
+        """,
+        (project_id,),
+    )
+    if not project:
+        raise ValueError("所属项目不存在")
     config = _json_value(item.get("config"), {})
     if not isinstance(config, dict):
         config = {}
@@ -149,11 +174,88 @@ def _normalise_global_tool_payload(item):
             raise ValueError("Python 脚本内容不能为空")
     return {
         "name": name,
+        "project_id": project_id,
         "tool_type": tool_type,
         "description": str(item.get("description") or "").strip(),
         "config": config,
         "enabled": _enabled_by_default(item.get("enabled", True)),
+        "is_shared": _bool_value(item.get("is_shared"), False),
     }
+
+
+def _ensure_global_tool_schema_ready():
+    global _GLOBAL_TOOL_SCHEMA_READY
+    if _GLOBAL_TOOL_SCHEMA_READY:
+        return
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS global_tools (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    project_id INT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    tool_type VARCHAR(50) NOT NULL,
+                    description TEXT,
+                    config JSON NULL,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    is_shared BOOLEAN DEFAULT FALSE,
+                    created_by VARCHAR(50) DEFAULT 'admin',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_global_tools_project_id (project_id),
+                    INDEX idx_global_tools_type (tool_type),
+                    INDEX idx_global_tools_enabled (enabled),
+                    INDEX idx_global_tools_shared (is_shared)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
+            )
+            if not _column_exists(cursor, "global_tools", "project_id"):
+                cursor.execute(
+                    """
+                    ALTER TABLE global_tools
+                    ADD COLUMN project_id INT NULL AFTER id
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE global_tools
+                    ADD INDEX idx_global_tools_project_id (project_id)
+                    """
+                )
+            if not _column_exists(cursor, "global_tools", "is_shared"):
+                cursor.execute(
+                    """
+                    ALTER TABLE global_tools
+                    ADD COLUMN is_shared BOOLEAN DEFAULT FALSE AFTER enabled
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE global_tools
+                    ADD INDEX idx_global_tools_shared (is_shared)
+                    """
+                )
+        connection.commit()
+    _GLOBAL_TOOL_SCHEMA_READY = True
+
+
+def _global_tools_select(where_sql: str = "", params=()):
+    _ensure_global_tool_schema_ready()
+    query = """
+        SELECT
+            gt.*,
+            p.name AS project_name,
+            p.business_group_id,
+            bg.name AS business_group_name
+        FROM global_tools gt
+        LEFT JOIN projects p ON p.id = gt.project_id
+        LEFT JOIN business_groups bg ON bg.id = p.business_group_id
+    """
+    if where_sql:
+        query = f"{query} {where_sql}"
+    query = f"{query} ORDER BY gt.updated_at DESC, gt.id DESC"
+    return [_hydrate_global_tool_row(row) for row in fetch_all(query, params)]
 
 
 def _list_case_steps(case_id: int):
@@ -581,6 +683,7 @@ def test_suite_detail(request, suite_id: int, payload=None):
 
 @api_view
 def overview(_request, payload=None):
+    _ensure_global_tool_schema_ready()
     return {
         "business_groups": fetch_all("SELECT * FROM business_groups ORDER BY created_at ASC"),
         "projects": fetch_all(
@@ -591,7 +694,7 @@ def overview(_request, payload=None):
             ORDER BY p.created_at ASC
             """
         ),
-        "global_tools": fetch_all("SELECT * FROM global_tools ORDER BY created_at DESC"),
+        "global_tools": _global_tools_select(),
         "global_variables": fetch_all("SELECT * FROM global_variables ORDER BY name ASC"),
         "environments": fetch_all("SELECT * FROM environments ORDER BY created_at DESC"),
         "reports": fetch_all("SELECT * FROM test_reports ORDER BY created_at DESC LIMIT 20"),
@@ -1008,34 +1111,85 @@ def report_steps(_request, report_id: int, payload=None):
 
 @api_view
 def global_tools(request, payload=None):
+    _ensure_global_tool_schema_ready()
     if request.method == "GET":
-        tool_type = (payload or {}).get("tool_type")
+        payload = payload or {}
+        tool_type = str(payload.get("tool_type") or "").strip()
+        keyword = str(payload.get("keyword") or "").strip()
+        business_group_id = get_int(payload.get("business_group_id"))
+        project_id = get_int(payload.get("project_id"))
+        visible_project_id = get_int(payload.get("visible_project_id"))
+        conditions = []
+        params = []
         if tool_type:
-            return [
-                _hydrate_global_tool_row(row)
-                for row in fetch_all("SELECT * FROM global_tools WHERE tool_type = %s ORDER BY created_at DESC", (tool_type,))
-            ]
-        return [_hydrate_global_tool_row(row) for row in fetch_all("SELECT * FROM global_tools ORDER BY created_at DESC")]
+            conditions.append("gt.tool_type = %s")
+            params.append(tool_type)
+        if keyword:
+            like_value = f"%{keyword}%"
+            conditions.append("(gt.name LIKE %s OR gt.description LIKE %s)")
+            params.extend([like_value, like_value])
+        if visible_project_id:
+            conditions.append("(gt.project_id = %s OR gt.is_shared = %s)")
+            params.extend([visible_project_id, True])
+        else:
+            if project_id:
+                conditions.append("gt.project_id = %s")
+                params.append(project_id)
+            elif business_group_id:
+                conditions.append("p.business_group_id = %s")
+                params.append(business_group_id)
+        where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        return _global_tools_select(where_sql, tuple(params))
     item = _normalise_global_tool_payload(payload or {})
     tool_id = execute(
         """
-        INSERT INTO global_tools (name, tool_type, description, config, enabled, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO global_tools (project_id, name, tool_type, description, config, enabled, is_shared, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
-        (item["name"], item["tool_type"], item["description"], _json_text(item["config"]), item["enabled"], "admin"),
+        (
+            item["project_id"],
+            item["name"],
+            item["tool_type"],
+            item["description"],
+            _json_text(item["config"]),
+            item["enabled"],
+            item["is_shared"],
+            "admin",
+        ),
     )
     return {"tool_id": tool_id}, 201
 
 
 @api_view
 def global_tool_detail(request, tool_id: int, payload=None):
+    _ensure_global_tool_schema_ready()
     if request.method == "GET":
-        return _hydrate_global_tool_row(fetch_one("SELECT * FROM global_tools WHERE id = %s", (tool_id,)))
+        rows = _global_tools_select("WHERE gt.id = %s", (tool_id,))
+        return rows[0] if rows else {}
     if request.method == "PUT":
         item = _normalise_global_tool_payload(payload or {})
         updated = execute(
-            "UPDATE global_tools SET name = %s, tool_type = %s, description = %s, config = %s, enabled = %s WHERE id = %s",
-            (item["name"], item["tool_type"], item["description"], _json_text(item["config"]), item["enabled"], tool_id),
+            """
+            UPDATE global_tools
+            SET project_id = %s,
+                name = %s,
+                tool_type = %s,
+                description = %s,
+                config = %s,
+                enabled = %s,
+                is_shared = %s
+            WHERE id = %s
+            """,
+            (
+                item["project_id"],
+                item["name"],
+                item["tool_type"],
+                item["description"],
+                _json_text(item["config"]),
+                item["enabled"],
+                item["is_shared"],
+                tool_id,
+            ),
         )
         return {"updated": updated >= 0}
     return {"deleted": execute("DELETE FROM global_tools WHERE id = %s", (tool_id,)) > 0}
@@ -1043,6 +1197,7 @@ def global_tool_detail(request, tool_id: int, payload=None):
 
 @api_view
 def global_tool_status(_request, tool_id: int, payload=None):
+    _ensure_global_tool_schema_ready()
     updated = execute("UPDATE global_tools SET enabled = %s WHERE id = %s", (bool((payload or {}).get("enabled", False)), tool_id))
     return {"updated": updated >= 0}
 

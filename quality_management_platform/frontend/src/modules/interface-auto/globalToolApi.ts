@@ -3,9 +3,19 @@ import type { GlobalToolPayload, GlobalToolRecord, GlobalToolType } from "./type
 
 const BASE = "/api/interface-auto/global-tools";
 
-export function fetchGlobalTools(params?: { tool_type?: GlobalToolType | "" }) {
+export function fetchGlobalTools(params?: {
+  tool_type?: GlobalToolType | "";
+  keyword?: string;
+  business_group_id?: number | null;
+  project_id?: number | null;
+  visible_project_id?: number | null;
+}) {
   return get<GlobalToolRecord[]>(`${BASE}/`, {
     tool_type: params?.tool_type ?? "",
+    keyword: params?.keyword ?? "",
+    business_group_id: params?.business_group_id ?? "",
+    project_id: params?.project_id ?? "",
+    visible_project_id: params?.visible_project_id ?? "",
   });
 }
 

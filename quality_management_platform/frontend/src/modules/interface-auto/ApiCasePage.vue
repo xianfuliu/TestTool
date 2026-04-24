@@ -1875,7 +1875,9 @@ async function loadWorkspace() {
       }),
       get<EnvironmentRecord[]>("/api/interface-auto/environments/"),
       get<GlobalVariableRecord[]>("/api/interface-auto/variables/", { project_id: currentProjectId.value }),
-      fetchGlobalTools(),
+      currentProjectId.value
+        ? fetchGlobalTools({ visible_project_id: currentProjectId.value })
+        : Promise.resolve([] as GlobalToolRecord[]),
       fetchDatabaseConnections({ business_group_id: context.selectedGroupId.value ?? null }),
     ]);
     folders.value = folderRows;

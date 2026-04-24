@@ -161,21 +161,28 @@ export type GlobalToolType = "http_request" | "sql_tool" | "python_script";
 
 export type GlobalToolRecord = {
   id: number;
+  project_id: number | null;
+  project_name?: string | null;
+  business_group_id?: number | null;
+  business_group_name?: string | null;
   name: string;
   tool_type: GlobalToolType;
   description: string;
   config: Record<string, unknown>;
   enabled: boolean;
+  is_shared: boolean;
   created_at?: string;
   updated_at?: string;
 };
 
 export type GlobalToolPayload = {
+  project_id: number;
   name: string;
   tool_type: GlobalToolType;
   description: string;
   config: Record<string, unknown>;
   enabled: boolean;
+  is_shared: boolean;
 };
 
 export type CaseStep = {
