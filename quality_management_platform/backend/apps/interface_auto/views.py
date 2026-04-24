@@ -84,6 +84,20 @@ def _ensure_case_schema_extensions():
                     ADD COLUMN global_request_config_text LONGTEXT NULL AFTER global_vars
                     """
                 )
+            if not _column_exists(cursor, "test_cases", "schema_version"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_cases
+                    ADD COLUMN schema_version INT DEFAULT 1 AFTER global_vars
+                    """
+                )
+            if not _column_exists(cursor, "test_cases", "parameterize_config"):
+                cursor.execute(
+                    """
+                    ALTER TABLE test_cases
+                    ADD COLUMN parameterize_config JSON NULL AFTER schema_version
+                    """
+                )
             if not _column_exists(cursor, "test_cases", "output_variables_text"):
                 cursor.execute(
                     """
@@ -107,6 +121,8 @@ def _hydrate_case_row(case_row):
         return {}
     hydrated = dict(case_row)
     hydrated["global_vars"] = _json_value(hydrated.get("global_vars"), {})
+    hydrated["schema_version"] = get_int(hydrated.get("schema_version")) or 1
+    hydrated["parameterize_config"] = _json_value(hydrated.get("parameterize_config"), None)
     hydrated["global_request_config"] = _json_value(hydrated.get("global_request_config_text"), {})
     hydrated["output_variables"] = _json_value(hydrated.get("output_variables_text"), [])
     return hydrated
@@ -1120,8 +1136,8 @@ def cases(request, payload=None):
     _validate_unique_case_name(project_id, folder_id, name)
     case_id = execute(
         """
-        INSERT INTO test_cases (project_id, folder_id, name, description, environment_id, global_vars, global_request_config_text, output_variables_text, enable_encryption, encrypt_url, decrypt_url, sort_order, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO test_cases (project_id, folder_id, name, description, environment_id, global_vars, schema_version, parameterize_config, global_request_config_text, output_variables_text, enable_encryption, encrypt_url, decrypt_url, sort_order, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             project_id,
@@ -1130,6 +1146,8 @@ def cases(request, payload=None):
             item.get("description", ""),
             item.get("environment_id"),
             _json_text(item.get("global_vars")),
+            get_int(item.get("schema_version")) or 1,
+            _json_text(item.get("parameterize_config")),
             _json_text(item.get("global_request_config")),
             _empty_list_json(item.get("output_variables")),
             item.get("enable_encryption", False),
@@ -1167,10 +1185,14 @@ def case_detail(request, case_id: int, payload=None):
             "output_variables",
             _json_value(current.get("output_variables_text"), []),
         )
+        parameterize_config = item.get(
+            "parameterize_config",
+            _json_value(current.get("parameterize_config"), None),
+        )
         updated = execute(
             """
             UPDATE test_cases
-            SET name = %s, description = %s, folder_id = %s, environment_id = %s, global_vars = %s, global_request_config_text = %s, output_variables_text = %s, enable_encryption = %s, encrypt_url = %s, decrypt_url = %s, sort_order = %s
+            SET name = %s, description = %s, folder_id = %s, environment_id = %s, global_vars = %s, schema_version = %s, parameterize_config = %s, global_request_config_text = %s, output_variables_text = %s, enable_encryption = %s, encrypt_url = %s, decrypt_url = %s, sort_order = %s
             WHERE id = %s
             """,
             (
@@ -1179,6 +1201,8 @@ def case_detail(request, case_id: int, payload=None):
                 folder_id,
                 item.get("environment_id", current.get("environment_id")),
                 _json_text(global_vars),
+                get_int(item.get("schema_version", current.get("schema_version"))) or 1,
+                _json_text(parameterize_config),
                 _json_text(global_request_config),
                 _empty_list_json(output_variables),
                 item.get("enable_encryption", current.get("enable_encryption", False)),
@@ -1211,6 +1235,7 @@ def execute_case(_request, case_id: int, payload=None):
                 "name": payload.get("name", execution_case.get("name")),
                 "description": payload.get("description", execution_case.get("description", "")),
                 "environment_id": payload.get("environment_id", execution_case.get("environment_id")),
+                "schema_version": payload.get("schema_version", execution_case.get("schema_version", 1)),
                 "enable_encryption": payload.get("enable_encryption", execution_case.get("enable_encryption", False)),
                 "encrypt_url": payload.get("encrypt_url", execution_case.get("encrypt_url", "")),
                 "decrypt_url": payload.get("decrypt_url", execution_case.get("decrypt_url", "")),
@@ -1229,6 +1254,13 @@ def execute_case(_request, case_id: int, payload=None):
             payload.get("output_variables"),
             execution_case.get("output_variables", []),
         )
+        execution_case["parameterize_config"] = _json_value(
+            payload.get("parameterize_config"),
+            execution_case.get("parameterize_config"),
+        )
+        for runtime_key in ("run_mode", "parameter_limit", "parameter_start_index"):
+            if runtime_key in payload:
+                execution_case[runtime_key] = payload.get(runtime_key)
         if "steps" in payload:
             execution_case["steps"] = [
                 _hydrate_step_row(step)

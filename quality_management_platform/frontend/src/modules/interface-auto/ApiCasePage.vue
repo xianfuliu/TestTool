@@ -66,8 +66,12 @@ type ToolDraftRow = {
   field: string;
   operator: string;
   expected: string;
+  fieldPrefix: string;
+  fieldPath: string;
   variable: string;
   path: string;
+  extractorType: string;
+  source: string;
 };
 
 type ToolHeaderRow = {
@@ -110,7 +114,14 @@ type VariableRow = {
   description?: string;
 };
 
-type GlobalConfigTab = "encryption" | "variables" | "login_headers" | "outputs";
+type GlobalConfigTab = "encryption" | "variables" | "login_headers" | "parameterize" | "outputs";
+
+type ParameterizeConfig = {
+  enabled: boolean;
+  source_type: "inline_json" | "csv_text";
+  rows?: Array<Record<string, unknown>>;
+  csv_text?: string;
+};
 
 const TOOL_TAB_LABELS: Record<ToolTabKey, string> = {
   pre_processing: "前置",
@@ -148,6 +159,72 @@ const ASSERTION_OPERATOR_OPTIONS = [
   { value: "less", label: "<" },
   { value: "greater_equal", label: ">=" },
   { value: "less_equal", label: "<=" },
+  { value: "exists", label: "exists" },
+  { value: "not_exists", label: "not exists" },
+  { value: "regex_match", label: "regex" },
+];
+
+type AssertionFieldMode = "variable" | "jsonpath" | "path" | "header" | "scalar";
+
+type AssertionFieldSourceOption = {
+  value: string;
+  label: string;
+  mode: AssertionFieldMode;
+  placeholder: string;
+};
+
+const ASSERTION_FIELD_SOURCE_OPTIONS: AssertionFieldSourceOption[] = [
+  { value: "", label: "变量", mode: "variable", placeholder: "变量名，例如 token" },
+  { value: "$", label: "$", mode: "jsonpath", placeholder: "$.data.allow 或 data.allow" },
+  { value: "headers.", label: "headers.", mode: "header", placeholder: "Header 名，例如 Authorization" },
+  {
+    value: "response_headers.",
+    label: "response_headers.",
+    mode: "header",
+    placeholder: "Header 名，例如 X-Trace-Id",
+  },
+  { value: "body.", label: "body.", mode: "path", placeholder: "响应体路径，例如 data.allow" },
+  {
+    value: "response_body.",
+    label: "response_body.",
+    mode: "path",
+    placeholder: "响应体路径，例如 data.id",
+  },
+  {
+    value: "decrypted_body.",
+    label: "decrypted_body.",
+    mode: "path",
+    placeholder: "解密响应路径，例如 allow",
+  },
+  {
+    value: "response_decrypted_body.",
+    label: "response_decrypted_body.",
+    mode: "path",
+    placeholder: "解密响应路径，例如 data.allow",
+  },
+  { value: "raw_body", label: "raw_body", mode: "scalar", placeholder: "该来源无需填写路径" },
+  { value: "status_code", label: "status_code", mode: "scalar", placeholder: "该来源无需填写路径" },
+];
+
+const ASSERTION_FIELD_PREFIX_OPTIONS = ASSERTION_FIELD_SOURCE_OPTIONS;
+
+const SCALAR_ASSERTION_FIELD_PREFIXES = new Set(
+  ASSERTION_FIELD_SOURCE_OPTIONS.filter((option) => option.mode === "scalar").map((option) => option.value),
+);
+
+const EXTRACTOR_TYPE_OPTIONS = [
+  { value: "jsonpath", label: "JSONPath" },
+  { value: "regex", label: "Regex" },
+  { value: "header", label: "Header" },
+  { value: "cookie", label: "Cookie" },
+  { value: "status_code", label: "Status" },
+];
+
+const EXTRACTOR_SOURCE_OPTIONS = [
+  { value: "body", label: "Body" },
+  { value: "response_headers", label: "Header" },
+  { value: "cookie", label: "Cookie" },
+  { value: "status_code", label: "Status" },
 ];
 
 const COMMON_TOOL_DIALOG_KINDS = new Set<string>(["http_request", "sql_tool", "python_script"]);
@@ -245,6 +322,13 @@ const form = reactive<TestCaseRecord>(createDraftCase(0, null));
 let resetting = false;
 let sqlDatabaseSchemasRequestToken = 0;
 
+const parameterizeConfig = computed<ParameterizeConfig>({
+  get: () => normalizeParameterizeConfig(form.parameterize_config),
+  set: (value) => {
+    form.parameterize_config = value;
+  },
+});
+
 const cascaderProps = {
   expandTrigger: "hover" as const,
   emitPath: true,
@@ -277,6 +361,8 @@ const commonToolDialogKind = computed<CommonToolDialogKind>(() =>
   isCommonToolDialog.value ? (toolDialogKind.value as CommonToolDialogKind) : "http_request",
 );
 const outputVariableText = ref("");
+const parameterizeText = ref("");
+const parameterizeValidationMessage = ref("");
 const globalConfigExpanded = computed({
   get: () => (activeTabKey.value ? Boolean(globalConfigExpandedMap[activeTabKey.value]) : false),
   set: (value: boolean) => {
@@ -459,6 +545,15 @@ function createDefaultGlobalRequestConfig(): CaseGlobalRequestConfig {
   };
 }
 
+function createDefaultParameterizeConfig(): ParameterizeConfig {
+  return {
+    enabled: false,
+    source_type: "inline_json",
+    rows: [],
+    csv_text: "",
+  };
+}
+
 function createDraftCase(projectId: number, folderId: number | null): TestCaseRecord {
   return {
     id: undefined,
@@ -468,6 +563,8 @@ function createDraftCase(projectId: number, folderId: number | null): TestCaseRe
     name: "",
     description: "",
     environment_id: null,
+    schema_version: 1,
+    parameterize_config: createDefaultParameterizeConfig(),
     global_vars: {},
     global_request_config: createDefaultGlobalRequestConfig(),
     output_variables: [],
@@ -498,6 +595,116 @@ function parseMap(value: unknown): JsonMap {
     return value as JsonMap;
   }
   return {};
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> {
+  if (!value) {
+    return {};
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function normalizeParameterizeConfig(value: unknown): ParameterizeConfig {
+  const raw = parseJsonRecord(value);
+  const sourceType = raw.source_type === "csv_text" ? "csv_text" : "inline_json";
+  const rows = Array.isArray(raw.rows) ? (raw.rows as Array<Record<string, unknown>>) : [];
+  return {
+    enabled: Boolean(raw.enabled),
+    source_type: sourceType,
+    rows,
+    csv_text: String(raw.csv_text ?? ""),
+  };
+}
+
+function parameterizeConfigToText(config: ParameterizeConfig) {
+  if (config.source_type === "csv_text") {
+    return config.csv_text ?? "";
+  }
+  return JSON.stringify(config.rows ?? [], null, 2);
+}
+
+function syncParameterizeTextFromConfig() {
+  parameterizeText.value = parameterizeConfigToText(normalizeParameterizeConfig(form.parameterize_config));
+  parameterizeValidationMessage.value = "";
+}
+
+function parseParameterizeText(config: ParameterizeConfig) {
+  if (config.source_type === "csv_text") {
+    const lines = parameterizeText.value.split(/\r?\n/).filter((line) => line.trim());
+    if (config.enabled && lines.length < 2) {
+      throw new Error("CSV needs a header and at least one data row");
+    }
+    return {
+      enabled: config.enabled,
+      source_type: "csv_text" as const,
+      csv_text: parameterizeText.value,
+    };
+  }
+  const text = parameterizeText.value.trim();
+  const parsed = text ? (JSON.parse(text) as unknown) : [];
+  if (!Array.isArray(parsed)) {
+    throw new Error("Inline JSON must be an array");
+  }
+  if (config.enabled && parsed.some((row) => !row || typeof row !== "object" || Array.isArray(row))) {
+    throw new Error("Each parameter row must be an object");
+  }
+  return {
+    enabled: config.enabled,
+    source_type: "inline_json" as const,
+    rows: parsed as Array<Record<string, unknown>>,
+  };
+}
+
+function syncParameterizeConfigFromText(options?: { silent?: boolean }) {
+  const config = normalizeParameterizeConfig(form.parameterize_config);
+  try {
+    form.parameterize_config = parseParameterizeText(config);
+    parameterizeValidationMessage.value = "OK";
+    if (!options?.silent) {
+      ElMessage.success("Parameter data is valid");
+    }
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid parameter data";
+    parameterizeValidationMessage.value = message;
+    if (!options?.silent) {
+      ElMessage.warning(message);
+    }
+    return false;
+  }
+}
+
+function setParameterizeEnabled(event: Event) {
+  const checked = Boolean((event.target as HTMLInputElement | null)?.checked);
+  parameterizeConfig.value = {
+    ...parameterizeConfig.value,
+    enabled: checked,
+  };
+}
+
+function setParameterizeSourceType(value: string) {
+  parameterizeConfig.value = {
+    ...parameterizeConfig.value,
+    source_type: value === "csv_text" ? "csv_text" : "inline_json",
+  };
+  syncParameterizeTextFromConfig();
+}
+
+function handleParameterizeTextInput() {
+  parameterizeValidationMessage.value = "";
+  markActiveModified();
 }
 
 function parseBody(value: unknown) {
@@ -802,6 +1009,8 @@ function normalizeCase(item?: Partial<TestCaseRecord>): TestCaseRecord {
     name: item?.name ?? "",
     description: item?.description ?? "",
     environment_id: item?.environment_id ?? null,
+    schema_version: item?.schema_version ?? 1,
+    parameterize_config: normalizeParameterizeConfig(item?.parameterize_config),
     global_vars: parseMap(item?.global_vars),
     global_request_config: normalizeGlobalRequestConfig(item?.global_request_config),
     output_variables: normalizeOutputVariables(item?.output_variables),
@@ -1055,14 +1264,107 @@ function formatAssertionOperator(operator?: string) {
   return ASSERTION_OPERATOR_OPTIONS.find((item) => item.value === operator)?.label ?? "=";
 }
 
+function splitAssertionField(value: unknown) {
+  const field = String(value ?? "").trim();
+  if (!field) {
+    return {
+      prefix: "body.",
+      path: "",
+    };
+  }
+  const exactPrefix = ASSERTION_FIELD_PREFIX_OPTIONS.find(
+    (option) => option.value && !option.value.endsWith(".") && field === option.value,
+  );
+  if (exactPrefix) {
+    return {
+      prefix: exactPrefix.value,
+      path: "",
+    };
+  }
+  const dottedPrefix = ASSERTION_FIELD_PREFIX_OPTIONS
+    .filter((option) => option.value.endsWith("."))
+    .sort((left, right) => right.value.length - left.value.length)
+    .find((option) => field.startsWith(option.value));
+  if (dottedPrefix) {
+    return {
+      prefix: dottedPrefix.value,
+      path: field.slice(dottedPrefix.value.length),
+    };
+  }
+  if (field.startsWith("$")) {
+    return {
+      prefix: "$",
+      path: field.slice(1),
+    };
+  }
+  return {
+    prefix: "",
+    path: field,
+  };
+}
+
+function getAssertionFieldSourceOption(prefix: string) {
+  return ASSERTION_FIELD_SOURCE_OPTIONS.find((option) => option.value === prefix) ?? ASSERTION_FIELD_SOURCE_OPTIONS[0];
+}
+
+function isScalarAssertionPrefix(prefix: string) {
+  return SCALAR_ASSERTION_FIELD_PREFIXES.has(prefix);
+}
+
+function isAssertionPathDisabled(prefix: string) {
+  return getAssertionFieldSourceOption(prefix).mode === "scalar";
+}
+
+function getAssertionFieldPlaceholder(prefix: string) {
+  return getAssertionFieldSourceOption(prefix).placeholder;
+}
+
+function buildAssertionField(row: ToolDraftRow) {
+  const prefix = row.fieldPrefix || "";
+  const path = row.fieldPath.trim();
+  if (!prefix) {
+    return path;
+  }
+  if (isScalarAssertionPrefix(prefix)) {
+    return prefix;
+  }
+  if (prefix === "$") {
+    if (!path) {
+      return "$";
+    }
+    if (path === "$" || path.startsWith("$")) {
+      return path;
+    }
+    return path.startsWith(".") || path.startsWith("[") ? `$${path}` : `$.${path}`;
+  }
+  if (!path) {
+    return "";
+  }
+  const normalizedPath = path.replace(/^\.+/, "");
+  if (!normalizedPath) {
+    return "";
+  }
+  return normalizedPath.startsWith(prefix) ? normalizedPath : `${prefix}${normalizedPath}`;
+}
+
+function handleAssertionPrefixChange(row: ToolDraftRow) {
+  if (isAssertionPathDisabled(row.fieldPrefix)) {
+    row.fieldPath = "";
+  }
+}
+
 function createToolRow(): ToolDraftRow {
   return {
     rowKey: createKey("tool-row"),
     field: "",
     operator: "equal",
     expected: "",
+    fieldPrefix: "body.",
+    fieldPath: "",
     variable: "",
     path: "",
+    extractorType: "jsonpath",
+    source: "body",
   };
 }
 
@@ -1229,8 +1531,12 @@ function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
           field: "",
           operator: "equal",
           expected: "",
+          fieldPrefix: "body.",
+          fieldPath: "",
           variable: String((item as Record<string, unknown>).variable ?? ""),
           path: String((item as Record<string, unknown>).path ?? ""),
+          extractorType: String((item as Record<string, unknown>).type ?? "jsonpath"),
+          source: String((item as Record<string, unknown>).from ?? (item as Record<string, unknown>).source ?? "body"),
         }))
       : [createToolRow()];
     return;
@@ -1271,8 +1577,12 @@ function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
           field: "",
           operator: "equal",
           expected: "",
+          fieldPrefix: "body.",
+          fieldPath: "",
           variable: String((item as Record<string, unknown>).variable ?? ""),
           path: String((item as Record<string, unknown>).path ?? ""),
+          extractorType: String((item as Record<string, unknown>).type ?? "jsonpath"),
+          source: String((item as Record<string, unknown>).from ?? (item as Record<string, unknown>).source ?? "body"),
         }))
       : [createToolRow()];
     return;
@@ -1284,14 +1594,22 @@ function fillToolDialogFromRecord(tool: CaseToolRecord, tab: ToolTabKey) {
         ? config.assertions
         : [];
     toolRows.value = rows.length
-      ? rows.map((item) => ({
-          rowKey: createKey("assert"),
-          field: String((item as Record<string, unknown>).field ?? ""),
-          operator: String((item as Record<string, unknown>).operator ?? "equal"),
-          expected: String((item as Record<string, unknown>).expected ?? ""),
-          variable: "",
-          path: "",
-        }))
+      ? rows.map((item) => {
+          const field = String((item as Record<string, unknown>).field ?? "");
+          const parsedField = splitAssertionField(field);
+          return {
+            rowKey: createKey("assert"),
+            field,
+            operator: String((item as Record<string, unknown>).operator ?? "equal"),
+            expected: String((item as Record<string, unknown>).expected ?? ""),
+            fieldPrefix: parsedField.prefix,
+            fieldPath: parsedField.path,
+            variable: "",
+            path: "",
+            extractorType: "jsonpath",
+            source: "body",
+          };
+        })
       : [createToolRow()];
   }
 }
@@ -1601,7 +1919,13 @@ function saveToolDialog() {
         body = toolForm.bodyText;
       }
       const extractionRows = toolRows.value
-        .map((row) => ({ variable: row.variable.trim(), path: row.path.trim() }))
+        .map((row) => ({
+          variable: row.variable.trim(),
+          path: row.path.trim(),
+          type: row.extractorType || "jsonpath",
+          from: row.source || "body",
+          expr: row.path.trim(),
+        }))
         .filter((row) => row.variable || row.path);
       if (extractionRows.some((row) => !row.variable || !row.path)) {
         ElMessage.warning("响应提取的变量名称和 JSONPath 不能为空");
@@ -1673,7 +1997,13 @@ function saveToolDialog() {
       tool.tool_type = "python_script";
     } else if (toolDialogKind.value === "parameter_extraction") {
       const extractions = toolRows.value
-        .map((row) => ({ variable: row.variable.trim(), path: row.path.trim() }))
+        .map((row) => ({
+          variable: row.variable.trim(),
+          path: row.path.trim(),
+          type: row.extractorType || "jsonpath",
+          from: row.source || "body",
+          expr: row.path.trim(),
+        }))
         .filter((row) => row.variable || row.path);
       if (!extractions.length) {
         ElMessage.warning("请至少配置一条参数提取规则");
@@ -1690,7 +2020,7 @@ function saveToolDialog() {
     } else if (toolDialogKind.value === "assertion") {
       const assertions = toolRows.value
         .map((row) => ({
-          field: row.field.trim(),
+          field: buildAssertionField(row),
           operator: row.operator,
           expected: row.expected.trim(),
         }))
@@ -1819,6 +2149,7 @@ function resetForm(caseItem?: TestCaseRecord) {
     ensureGlobalConfigState(activeTabKey.value);
   }
   outputVariableText.value = outputVariablesToText(form.output_variables);
+  syncParameterizeTextFromConfig();
   variableRows.value = mapToVariableRows(form.global_vars);
   form.steps.forEach((step) => getStepTab(step));
   activeStepKey.value = form.steps[0] ? getStepKey(form.steps[0]) : "";
@@ -2171,6 +2502,8 @@ function buildCaseMetaPayload(caseItem: TestCaseRecord) {
     name: caseItem.name.trim(),
     description: caseItem.description ?? "",
     environment_id: caseItem.environment_id,
+    schema_version: caseItem.schema_version ?? 1,
+    parameterize_config: normalizeParameterizeConfig(caseItem.parameterize_config),
     global_vars: parseMap(caseItem.global_vars),
     global_request_config: serializeGlobalRequestConfig(caseItem.global_request_config),
     output_variables: outputVariablesToPayload(caseItem.output_variables),
@@ -2214,6 +2547,10 @@ async function saveCase(options?: { silent?: boolean }) {
   }
 
   syncOutputVariablesFromText();
+  if (!syncParameterizeConfigFromText({ silent: true })) {
+    ElMessage.warning(parameterizeValidationMessage.value || "Invalid parameter data");
+    return null;
+  }
   saving.value = true;
   try {
     form.project_id = currentProjectId.value;
@@ -3157,6 +3494,14 @@ onBeforeUnmount(() => {
                   </button>
                   <button
                     class="global-config-tab"
+                    :class="{ active: activeGlobalConfigTab === 'parameterize' }"
+                    type="button"
+                    @click="activeGlobalConfigTab = 'parameterize'"
+                  >
+                    参数化
+                  </button>
+                  <button
+                    class="global-config-tab"
                     :class="{ active: activeGlobalConfigTab === 'outputs' }"
                     type="button"
                     @click="activeGlobalConfigTab = 'outputs'"
@@ -3307,6 +3652,57 @@ onBeforeUnmount(() => {
                             </div>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-else-if="activeGlobalConfigTab === 'parameterize'" class="global-config-tab-panel global-config-stack">
+                    <div class="global-config-section-card">
+                      <div class="global-config-toolbar align-left">
+                        <label class="encryption-check compact-check">
+                          <input
+                            :checked="parameterizeConfig.enabled"
+                            type="checkbox"
+                            @change="setParameterizeEnabled"
+                          />
+                          <span class="global-config-section-title">参数化</span>
+                        </label>
+                      </div>
+                      <div class="global-config-section-panel">
+                        <div class="global-config-inline-grid two-columns">
+                          <div class="global-config-inline-field compact-inline-field">
+                            <span class="global-config-inline-label">来源</span>
+                            <el-select
+                              :model-value="parameterizeConfig.source_type"
+                              class="env-select"
+                              size="small"
+                              @update:model-value="setParameterizeSourceType"
+                            >
+                              <el-option label="Inline JSON" value="inline_json" />
+                              <el-option label="CSV Text" value="csv_text" />
+                            </el-select>
+                          </div>
+                          <div class="global-config-inline-field compact-inline-field">
+                            <button class="action-button compact" type="button" @click="syncParameterizeConfigFromText()">
+                              校验数据
+                            </button>
+                            <span
+                              v-if="parameterizeValidationMessage"
+                              class="parameterize-validation"
+                              :class="{ ok: parameterizeValidationMessage === 'OK' }"
+                            >
+                              {{ parameterizeValidationMessage }}
+                            </span>
+                          </div>
+                        </div>
+                        <el-input
+                          v-model="parameterizeText"
+                          class="parameterize-editor"
+                          type="textarea"
+                          :rows="8"
+                          resize="none"
+                          @input="handleParameterizeTextInput"
+                        />
                       </div>
                     </div>
                   </div>
@@ -3639,6 +4035,22 @@ onBeforeUnmount(() => {
           <div class="tool-dialog-section">
             <div class="tool-dialog-section-title">参数提取</div>
             <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row parameter-row flat-row">
+              <el-select v-model="row.source" class="tool-dialog-select">
+                <el-option
+                  v-for="option in EXTRACTOR_SOURCE_OPTIONS"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <el-select v-model="row.extractorType" class="tool-dialog-select">
+                <el-option
+                  v-for="option in EXTRACTOR_TYPE_OPTIONS"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
               <input v-model="row.variable" class="tool-input config-input" placeholder="变量名称" />
               <input v-model="row.path" class="tool-input config-input wide" placeholder="JSONPath表达式" />
               <button class="row-icon add" title="新增" @click="insertToolRow(index)">+</button>
@@ -3651,7 +4063,24 @@ onBeforeUnmount(() => {
           <div class="tool-dialog-section">
             <div class="tool-dialog-section-title">断言配置</div>
             <div v-for="(row, index) in toolRows" :key="row.rowKey" class="tool-config-row assertion-row flat-row">
-              <input v-model="row.field" class="tool-input config-input wide" placeholder="支持变量或 jsonpath" />
+              <el-select
+                v-model="row.fieldPrefix"
+                class="assertion-source-select"
+                @change="handleAssertionPrefixChange(row)"
+              >
+                <el-option
+                  v-for="option in ASSERTION_FIELD_SOURCE_OPTIONS"
+                  :key="option.value || 'runtime-variable'"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <input
+                v-model="row.fieldPath"
+                class="tool-input config-input wide"
+                :disabled="isAssertionPathDisabled(row.fieldPrefix)"
+                :placeholder="getAssertionFieldPlaceholder(row.fieldPrefix)"
+              />
               <el-select v-model="row.operator" class="tool-dialog-operator">
                 <el-option
                   v-for="option in ASSERTION_OPERATOR_OPTIONS"
@@ -5072,6 +5501,10 @@ onBeforeUnmount(() => {
   min-width: 88px;
 }
 
+.assertion-source-select {
+  min-width: 180px;
+}
+
 .tool-dialog-section {
   border: 1px solid #dbe3ed;
   border-radius: 8px;
@@ -5176,11 +5609,24 @@ onBeforeUnmount(() => {
 }
 
 .tool-config-row.assertion-row {
-  grid-template-columns: minmax(220px, 1fr) 88px minmax(140px, 1fr) 30px 30px;
+  grid-template-columns: 180px minmax(220px, 1fr) 88px minmax(140px, 1fr) 30px 30px;
 }
 
 .tool-config-row.parameter-row {
-  grid-template-columns: 180px minmax(220px, 1fr) 30px 30px;
+  grid-template-columns: 120px 120px 160px minmax(220px, 1fr) 30px 30px;
+}
+
+.parameterize-editor {
+  width: 100%;
+}
+
+.parameterize-validation {
+  color: #b45309;
+  font-size: 12px;
+}
+
+.parameterize-validation.ok {
+  color: #15803d;
 }
 
 .row-icon {

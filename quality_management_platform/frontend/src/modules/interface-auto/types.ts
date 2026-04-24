@@ -1,4 +1,4 @@
-export type JsonMap = Record<string, string>;
+export type JsonMap = Record<string, unknown>;
 
 export type ApiFolder = {
   id: number;
@@ -68,6 +68,9 @@ export type GlobalRequestExtractionRow = {
   rowKey?: string;
   variable: string;
   path: string;
+  type?: string;
+  source?: string;
+  expr?: string;
 };
 
 export type CaseGlobalRequestConfig = {
@@ -171,7 +174,7 @@ export type CaseToolRecord = {
   tool_label?: string;
   assertion_type?: string;
   output_fields?: string[];
-  extractions?: Array<{ variable: string; path: string }>;
+  extractions?: Array<{ variable: string; path: string; type?: string; source?: string; from?: string; expr?: string }>;
   assertions?: Array<{ field: string; operator: string; expected: string }>;
   config?: Record<string, unknown>;
   [key: string]: unknown;
@@ -238,6 +241,8 @@ export type TestCaseRecord = {
   name: string;
   description: string;
   environment_id: number | null;
+  schema_version?: number;
+  parameterize_config?: JsonMap | string | null;
   global_vars: JsonMap | string | null;
   global_request_config: CaseGlobalRequestConfig;
   output_variables: CaseOutputVariable[];

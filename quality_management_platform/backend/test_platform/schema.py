@@ -114,6 +114,8 @@ SCHEMA_SQL = [
         description TEXT,
         environment_id INT NULL,
         global_vars JSON NULL,
+        schema_version INT DEFAULT 1,
+        parameterize_config JSON NULL,
         enable_encryption BOOLEAN DEFAULT FALSE,
         encrypt_url VARCHAR(500) DEFAULT '',
         decrypt_url VARCHAR(500) DEFAULT '',

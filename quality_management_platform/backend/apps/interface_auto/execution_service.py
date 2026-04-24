@@ -32,7 +32,14 @@ from apps.common.sql_execution import (
 )
 from test_platform.db import execute, fetch_all, fetch_one
 
+from .compiler_service import (
+    compile_case_snapshot_to_ir,
+    mask_sensitive_values,
+    merge_runtime_variables,
+)
+from .extractor_service import run_extractors
 from .report_service import ensure_report_schema_ready
+from .validator_service import validate_assertions
 
 
 class ToolExecutionError(ValueError):
@@ -724,6 +731,25 @@ def _safe_headers_for_log(headers: dict[str, Any]) -> dict[str, Any]:
     return {str(key): _mask_header_value(str(key), value) for key, value in _as_dict(headers).items()}
 
 
+def _safe_compiled_ir_for_log(compiled_ir: dict[str, Any]) -> dict[str, Any]:
+    safe_ir = _as_dict(_log_value(compiled_ir))
+    if safe_ir.get("variables"):
+        safe_ir["variables"] = mask_sensitive_values(_as_dict(safe_ir.get("variables")))
+    runtime = _as_dict(safe_ir.get("runtime"))
+    if runtime:
+        for key in ("project_variables", "environment_variables", "case_variables", "base_variables"):
+            if runtime.get(key):
+                runtime[key] = mask_sensitive_values(_as_dict(runtime.get(key)))
+        parameter_instances = []
+        for item in _as_list(runtime.get("parameter_instances")):
+            instance = dict(_as_dict(item))
+            instance["values"] = instance.get("values_masked") or mask_sensitive_values(_as_dict(instance.get("values")))
+            parameter_instances.append(instance)
+        runtime["parameter_instances"] = parameter_instances
+        safe_ir["runtime"] = runtime
+    return safe_ir
+
+
 def _generate_request_id() -> str:
     return datetime.now().strftime("%Y%m%d%H%M%S%f")
 
@@ -903,9 +929,13 @@ def _normalise_output_variables(value: Any) -> list[dict[str, str]]:
     return rows
 
 
-def _tool_entries(tool_map: dict[str, Any] | None) -> list[dict[str, Any]]:
+def _tool_entries(tool_map: Any) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
-    for tool_id, raw_tool in _as_dict(tool_map).items():
+    if isinstance(tool_map, list):
+        iterable = [(str(index), item) for index, item in enumerate(tool_map)]
+    else:
+        iterable = list(_as_dict(tool_map).items())
+    for tool_id, raw_tool in iterable:
         tool = _as_dict(raw_tool)
         if tool and tool.get("enabled", True) is False:
             continue
@@ -1004,41 +1034,7 @@ def _resolve_extractions(
     source_data: Any,
     variables: dict[str, Any],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    extracted: dict[str, Any] = {}
-    details: list[dict[str, Any]] = []
-    for row in extractions:
-        variable_name = str(row.get("variable") or "").strip()
-        response_path = replace_template_text(
-            str(row.get("path") or "").strip(),
-            variables,
-            allow_legacy_placeholders=True,
-        )
-        if not variable_name or not response_path:
-            details.append(
-                {
-                    "variable": variable_name,
-                    "path": str(row.get("path") or "").strip(),
-                    "resolved_path": response_path,
-                    "matched": False,
-                    "value": None,
-                    "message": "变量名称或提取路径为空",
-                }
-            )
-            continue
-        value = extract_response_value(source_data, response_path)
-        if value is not None:
-            extracted[variable_name] = value
-        details.append(
-            {
-                "variable": variable_name,
-                "path": str(row.get("path") or "").strip(),
-                "resolved_path": response_path,
-                "matched": value is not None,
-                "value": _log_value(value),
-            }
-        )
-    variables.update(extracted)
-    return extracted, details
+    return run_extractors(extractions, source_data, variables)
 
 
 def _apply_extractions(
@@ -1136,27 +1132,7 @@ def _execute_assertion_tool(
     variables: dict[str, Any],
 ) -> dict[str, Any]:
     assertions = _as_list(tool.get("assertions")) or _as_list(_as_dict(tool.get("config")).get("assertions"))
-    results: list[dict[str, Any]] = []
-    for row in assertions:
-        assertion = _as_dict(row)
-        field = str(assertion.get("field") or "").strip()
-        operator = str(assertion.get("operator") or "equal").strip()
-        expected = replace_template_text(
-            str(assertion.get("expected") or ""),
-            variables,
-            allow_legacy_placeholders=True,
-        )
-        actual = _resolve_assertion_subject(field, source_data, variables)
-        passed = _assert_value(actual, operator, expected)
-        results.append(
-            {
-                "field": field,
-                "operator": operator,
-                "expected": expected,
-                "actual": actual,
-                "passed": passed,
-            }
-        )
+    results = validate_assertions(assertions, source_data, variables)
     failed = [item for item in results if not item["passed"]]
     return {
         "request": {"assertions": assertions},
@@ -1437,38 +1413,49 @@ def _insert_step_result(
     )
 
 
-def execute_case_run(
-    case_snapshot: dict[str, Any],
+def _execute_compiled_case_ir_once(
+    compiled_ir: dict[str, Any],
     *,
+    parameter_instance: dict[str, Any] | None = None,
     create_report: bool = True,
     trigger_type: str = "manual",
 ) -> dict[str, Any]:
-    case_item = {
-        **dict(case_snapshot or {}),
-        "global_vars": _parse_json_value(case_snapshot.get("global_vars"), {}),
-        "global_request_config": normalize_global_request_config(
-            case_snapshot.get("global_request_config"),
-        ),
-        "output_variables": _normalise_output_variables(
-            case_snapshot.get("output_variables"),
-        ),
-    }
-    steps = [_normalise_step(step) for step in _as_list(case_snapshot.get("steps"))]
+    case_item = dict(_as_dict(compiled_ir.get("case")))
+    case_item["output_variables"] = _as_list(compiled_ir.get("outputs"))
+    steps = [dict(step) for step in _as_list(compiled_ir.get("steps"))]
     enabled_steps = [step for step in steps if step.get("enabled", True) is not False]
-    environment = _load_environment(case_item.get("environment_id"))
-    runtime_variables = _build_runtime_variables(case_item, environment)
-    case_request_id = str(runtime_variables.get("request_id") or _generate_request_id())
+    runtime_context = _as_dict(compiled_ir.get("runtime"))
+    environment = _as_dict(runtime_context.get("environment"))
+    parameter_info = _as_dict(parameter_instance)
+    row_variables = _as_dict(parameter_info.get("values"))
+    runtime_variables = merge_runtime_variables(
+        _as_dict(runtime_context.get("project_variables")),
+        _as_dict(runtime_context.get("environment_variables")),
+        _as_dict(runtime_context.get("case_variables")),
+        {},
+        row_variables,
+    )
+    runtime_variables.update(_as_dict(runtime_context.get("metadata")))
+    if parameter_info:
+        runtime_variables["parameter_index"] = parameter_info.get("index")
+        runtime_variables["parameter_label"] = parameter_info.get("label") or ""
+    base_request_id = str(runtime_variables.get("request_id") or _generate_request_id())
+    if parameter_info.get("enabled") and parameter_info.get("index") is not None:
+        case_request_id = f"{base_request_id}-{int(parameter_info.get('index')) + 1}"
+    else:
+        case_request_id = base_request_id
     runtime_variables["request_id"] = case_request_id
-
-    template_ids = [
-        int(step.get("api_template_id"))
-        for step in steps
-        if step.get("api_template_id")
-    ]
-    templates = _load_templates(template_ids)
+    parameter_report_info = {
+        "parameter_index": parameter_info.get("index"),
+        "parameter_label": parameter_info.get("label") or "",
+        "parameter_values_masked": parameter_info.get("values_masked") or mask_sensitive_values(row_variables),
+    }
+    compiled_ir_for_log = _safe_compiled_ir_for_log(compiled_ir)
 
     report_start = datetime.now()
     report_name = f"{case_item.get('name') or '未命名用例'}_{report_start.strftime('%Y%m%d%H%M%S')}"
+    if parameter_report_info.get("parameter_label"):
+        report_name = f"{report_name}_{parameter_report_info.get('parameter_label')}"
     report_id: int | None = None
     if create_report:
         ensure_report_schema_ready()
@@ -1502,7 +1489,15 @@ def execute_case_run(
                 0,
                 report_start,
                 trigger_type,
-                _json_text({"request_id": case_request_id, "steps": [], "report_type": "test_case"}),
+                _json_text(
+                    {
+                        "request_id": case_request_id,
+                        "steps": [],
+                        "report_type": "test_case",
+                        "compiled_case_ir": compiled_ir_for_log,
+                        "parameter": parameter_report_info,
+                    }
+                ),
             ),
         )
 
@@ -1513,13 +1508,15 @@ def execute_case_run(
     )
     environment_headers = _as_dict(environment.get("headers"))
     combined_global_headers = dict(environment_headers)
-    normalized_global_config = normalize_global_request_config(case_item.get("global_request_config"))
+    normalized_global_config = normalize_global_request_config(compiled_ir.get("global_request_config"))
     login_config = _as_dict(normalized_global_config.get("login_request"))
     header_config = _as_dict(normalized_global_config.get("header_config"))
     raw_global_headers = _as_dict(header_config.get("headers"))
     global_context = {
         "initial_variable_pool": _log_value(runtime_variables),
         "global_variables": _log_value(runtime_variables),
+        "parameter": parameter_report_info,
+        "variable_precedence": _as_list(runtime_context.get("variable_precedence")),
         "encryption": {
             "enabled": base_encryption.enabled,
             "encrypt_url": base_encryption.encrypt_url,
@@ -1578,6 +1575,8 @@ def execute_case_run(
             "message": f"全局配置执行失败: {exc}",
             "started_at": _format_log_time(report_start),
             "ended_at": _format_log_time(report_end),
+            "parameter": parameter_report_info,
+            "compiled_case_ir": compiled_ir_for_log,
             "global_setup": {
                 "logs": global_setup_logs,
                 "login_request": global_login_result,
@@ -1618,6 +1617,8 @@ def execute_case_run(
                             "failed_steps": 0,
                             "skipped_steps": 0,
                             "steps": [],
+                            "parameter": parameter_report_info,
+                            "compiled_case_ir": compiled_ir_for_log,
                             "global_setup": {
                                 "logs": global_setup_logs,
                                 "error": str(exc),
@@ -1644,6 +1645,8 @@ def execute_case_run(
                 "skipped_steps": 0,
             },
             "steps": [],
+            "parameter": parameter_report_info,
+            "compiled_case_ir": compiled_ir_for_log,
             "case_outputs": case_outputs,
             "resolved_variables": runtime_variables,
             "execution_log": failed_execution_log,
@@ -1703,6 +1706,7 @@ def execute_case_run(
             assertion_errors: list[str] = []
             step_variables_before = dict(runtime_variables)
             runtime_variables.update(_as_dict(step.get("variables")))
+            runtime_variables.update(row_variables)
             runtime_variables["current_step_order"] = step.get("step_order")
             runtime_variables["current_step_name"] = step.get("name") or ""
             step_variable_changes = _variable_changes(step_variables_before, runtime_variables)
@@ -1831,24 +1835,24 @@ def execute_case_run(
                     raise ValueError(tool_error)
                 return next_source_data
 
-            for tool in _tool_entries(step.get("pre_processing")):
+            for tool in _tool_entries(step.get("pre_tools")):
                 current_source_data = execute_step_tool("pre_processing", tool, current_source_data)
 
             template_id = step.get("api_template_id")
-            template = templates.get(int(template_id)) if template_id else None
-            if not template:
+            compiled_request = _as_dict(step.get("request"))
+            if not compiled_request:
                 raise ValueError("步骤未绑定有效的接口模板")
 
             raw_main_request = {
-                "protocol": "http",
-                "url": str(template.get("url_path") or ""),
-                "method": str(template.get("method") or "GET").upper(),
-                "headers": _log_value(_as_dict(template.get("headers"))),
-                "params": _log_value(template.get("params")),
-                "body": _log_value(template.get("body")),
-                "timeout": int(template.get("timeout") or 30),
-                "retry_enabled": bool(template.get("retry_enabled")),
-                "retry_count": int(template.get("retry_count") or 0),
+                "protocol": str(compiled_request.get("protocol") or "http"),
+                "url": str(compiled_request.get("url") or ""),
+                "method": str(compiled_request.get("method") or "GET").upper(),
+                "headers": _log_value(_as_dict(compiled_request.get("headers"))),
+                "params": _log_value(compiled_request.get("params")),
+                "body": _log_value(compiled_request.get("body")),
+                "timeout": int(compiled_request.get("timeout") or 30),
+                "retry_enabled": bool(compiled_request.get("retry_enabled")),
+                "retry_count": int(compiled_request.get("retry_count") or 0),
             }
             resolved_global_headers, request_global_headers = resolve_current_global_headers()
             global_header_detail = {
@@ -1865,9 +1869,9 @@ def execute_case_run(
                     protocol=raw_main_request["protocol"],
                     url=raw_main_request["url"],
                     method=raw_main_request["method"],
-                    headers=_as_dict(template.get("headers")),
-                    params=template.get("params"),
-                    body=template.get("body"),
+                    headers=_as_dict(compiled_request.get("headers")),
+                    params=compiled_request.get("params"),
+                    body=compiled_request.get("body"),
                     timeout=raw_main_request["timeout"],
                     retry_enabled=raw_main_request["retry_enabled"],
                     retry_count=raw_main_request["retry_count"],
@@ -1893,7 +1897,7 @@ def execute_case_run(
             }
             main_request_detail = {
                 "template_id": template_id,
-                "template_name": template.get("name") or "",
+                "template_name": compiled_request.get("template_name") or "",
                 "before_replace": raw_main_request,
                 "after_replace": _log_value(main_result.request),
                 "global_headers": global_header_detail,
@@ -1906,14 +1910,115 @@ def execute_case_run(
                 f"主请求完成: {main_result.request.get('method')} {main_result.request.get('url')} -> {main_result.status_code}"
             )
             logs.append("主请求参数已记录: 变量替换前、变量替换后、响应信息")
-            if main_result.status_code >= 400:
-                raise ValueError(f"接口请求失败，状态码 {main_result.status_code}")
+            main_request_failed = main_result.status_code >= 400
+            if main_request_failed:
+                logs.append(f"main request returned HTTP {main_result.status_code}; validators will decide the step result")
             current_source_data = _extract_response_source(response_payload["main_request"])
 
-            for tool in _tool_entries(step.get("assertions")):
-                current_source_data = execute_step_tool("assertions", tool, current_source_data)
-                if assertion_errors:
-                    break
+            standard_extractors = _as_list(step.get("extractors"))
+            if standard_extractors:
+                variables_before_extract = dict(runtime_variables)
+                extracted, extraction_details = _resolve_extractions(
+                    standard_extractors,
+                    current_source_data,
+                    runtime_variables,
+                )
+                missing_extractions = [
+                    detail for detail in extraction_details if not _as_dict(detail).get("matched")
+                ]
+                extraction_logs = []
+                for detail in extraction_details:
+                    detail_map = _as_dict(detail)
+                    status_text = "success" if detail_map.get("matched") else "failed"
+                    extraction_logs.append(
+                        "response extraction "
+                        f"{status_text}: {detail_map.get('variable') or detail_map.get('var') or '-'} <- "
+                        f"{detail_map.get('expr') or detail_map.get('path') or '-'}"
+                    )
+                variable_changes = _variable_changes(variables_before_extract, runtime_variables)
+                logs.extend(extraction_logs)
+                _append_variable_change_logs(logs, "standard_extractors", variable_changes)
+                if _has_variable_changes(variable_changes):
+                    step_detail["variable_changes"].append(
+                        _variable_change_detail("extractors", variable_changes, runtime_variables)
+                    )
+                extractor_result = {
+                    "request": {"extractors": standard_extractors},
+                    "status": "failed" if missing_extractions else "success",
+                    "body": extracted,
+                    "raw_body": _json_text(extracted),
+                    "decrypted_body": extracted,
+                    "extracted": extracted,
+                    "extraction_details": extraction_details,
+                    "failure_type": "extraction" if missing_extractions else "",
+                }
+                if missing_extractions:
+                    extractor_result["error_message"] = "response extraction failed: " + "; ".join(
+                        f"{_as_dict(detail).get('variable') or _as_dict(detail).get('var') or '-'} <- "
+                        f"{_as_dict(detail).get('expr') or _as_dict(detail).get('path') or '-'} "
+                        f"({_as_dict(detail).get('error_type') or 'not_found'})"
+                        for detail in missing_extractions
+                    )
+                response_payload.setdefault("post_processing", []).append(extractor_result)
+                step_detail["post_processing"].append(
+                    _build_tool_log_detail(
+                        "post_processing",
+                        {
+                            "id": "standard_extractors",
+                            "name": "standard_extractors",
+                            "tool_type": "parameter_extraction",
+                        },
+                        extractor_result,
+                        extraction_logs,
+                        variable_changes,
+                        status=str(extractor_result.get("status") or "success"),
+                        error_message=str(extractor_result.get("error_message") or ""),
+                    )
+                )
+                if missing_extractions:
+                    raise ValueError(str(extractor_result.get("error_message") or "response extraction failed"))
+
+            standard_validators = _as_list(step.get("validators"))
+            if standard_validators:
+                validation_results = validate_assertions(standard_validators, current_source_data, runtime_variables)
+                failed_validations = [item for item in validation_results if not _as_dict(item).get("passed")]
+                validator_result = {
+                    "request": {"assertions": standard_validators},
+                    "status": "failed" if failed_validations else "success",
+                    "body": {"passed": not failed_validations, "results": validation_results},
+                    "raw_body": _json_text(validation_results),
+                    "decrypted_body": validation_results,
+                }
+                validator_logs = [
+                    f"assert {item.get('field')} {item.get('operator')}: {item.get('message')}"
+                    for item in validation_results
+                ]
+                response_payload.setdefault("assertions", []).append(validator_result)
+                step_detail["assertions"].append(
+                    _build_tool_log_detail(
+                        "assertions",
+                        {
+                            "id": "standard_validators",
+                            "name": "standard_validators",
+                            "tool_type": "assertion",
+                        },
+                        validator_result,
+                        validator_logs,
+                        {"added": {}, "changed": {}, "removed": {}},
+                        status=str(validator_result.get("status") or "success"),
+                        error_message=str(_as_dict(failed_validations[0]).get("message") if failed_validations else ""),
+                    )
+                )
+                logs.extend(validator_logs)
+                if failed_validations:
+                    assertion_errors.append(str(_as_dict(failed_validations[0]).get("message") or "assertion failed"))
+
+            assert_tools = _tool_entries(step.get("assert_tools"))
+            if not assertion_errors:
+                for tool in assert_tools:
+                    current_source_data = execute_step_tool("assertions", tool, current_source_data)
+                    if assertion_errors:
+                        break
 
             if assertion_errors:
                 status = "failed"
@@ -1922,11 +2027,18 @@ def execute_case_run(
                 error_message = "；".join(assertion_errors)
                 logs.append(f"步骤断言失败，已终止后续步骤: {error_message}")
             else:
-                for tool in _tool_entries(step.get("post_processing")):
+                for tool in _tool_entries(step.get("post_tools")):
                     current_source_data = execute_step_tool("post_processing", tool, current_source_data)
 
                 last_source_data = current_source_data
-                status = "success"
+                if main_request_failed and not standard_validators and not assert_tools:
+                    status = "failed"
+                    overall_status = "failed"
+                    hard_stop = True
+                    error_message = f"接口请求失败，状态码 {main_result.status_code}"
+                    logs.append(error_message)
+                else:
+                    status = "success"
         except Exception as exc:
             status = "failed"
             overall_status = "failed"
@@ -1990,6 +2102,8 @@ def execute_case_run(
         "message": message,
         "started_at": _format_log_time(report_start),
         "ended_at": _format_log_time(report_end),
+        "parameter": parameter_report_info,
+        "compiled_case_ir": compiled_ir_for_log,
         "global_setup": {
             "logs": global_setup_logs,
             "login_request": global_login_result,
@@ -2029,6 +2143,8 @@ def execute_case_run(
                         "failed_steps": failed_steps,
                         "skipped_steps": skipped_steps,
                         "steps": step_summaries,
+                        "parameter": parameter_report_info,
+                        "compiled_case_ir": compiled_ir_for_log,
                         "global_setup": {
                             "logs": global_setup_logs,
                             "login_request": global_login_result,
@@ -2056,7 +2172,93 @@ def execute_case_run(
             "skipped_steps": skipped_steps,
         },
         "steps": step_summaries,
+        "parameter": parameter_report_info,
+        "compiled_case_ir": compiled_ir_for_log,
         "case_outputs": case_outputs,
         "resolved_variables": runtime_variables,
         "execution_log": execution_log,
+    }
+
+
+def execute_case_run(
+    case_snapshot: dict[str, Any],
+    *,
+    create_report: bool = True,
+    trigger_type: str = "manual",
+) -> dict[str, Any]:
+    snapshot = dict(case_snapshot or {})
+    environment = _load_environment(snapshot.get("environment_id"))
+    compiled_ir = compile_case_snapshot_to_ir(snapshot, environment)
+    compiled_ir_for_log = _safe_compiled_ir_for_log(compiled_ir)
+    parameter_instances = _as_list(_as_dict(compiled_ir.get("runtime")).get("parameter_instances"))
+    if not parameter_instances:
+        parameter_instances = [{"enabled": False, "index": None, "label": "", "values": {}, "values_masked": {}}]
+
+    if len(parameter_instances) == 1:
+        return _execute_compiled_case_ir_once(
+            compiled_ir,
+            parameter_instance=_as_dict(parameter_instances[0]),
+            create_report=create_report,
+            trigger_type=trigger_type,
+        )
+
+    results: list[dict[str, Any]] = []
+    for parameter_instance in parameter_instances:
+        results.append(
+            _execute_compiled_case_ir_once(
+                compiled_ir,
+                parameter_instance=_as_dict(parameter_instance),
+                create_report=create_report,
+                trigger_type=trigger_type,
+            )
+        )
+
+    failed_runs = [item for item in results if item.get("status") != "success"]
+    passed_runs = len(results) - len(failed_runs)
+    summary = {
+        "passed_runs": passed_runs,
+        "failed_runs": len(failed_runs),
+        "total_runs": len(results),
+        "passed_steps": sum(_as_dict(item.get("summary")).get("passed_steps") or 0 for item in results),
+        "failed_steps": sum(_as_dict(item.get("summary")).get("failed_steps") or 0 for item in results),
+        "skipped_steps": sum(_as_dict(item.get("summary")).get("skipped_steps") or 0 for item in results),
+    }
+    status = "failed" if failed_runs else "success"
+    message = f"parameterized execution finished: {passed_runs} passed, {len(failed_runs)} failed"
+    return {
+        "report_id": results[0].get("report_id") if results else None,
+        "report_ids": [item.get("report_id") for item in results if item.get("report_id")],
+        "request_id": results[0].get("request_id") if results else _generate_request_id(),
+        "case_id": _as_dict(compiled_ir.get("case")).get("id"),
+        "case_name": _as_dict(compiled_ir.get("case")).get("name") or "",
+        "status": status,
+        "message": message,
+        "summary": summary,
+        "steps": [
+            {
+                "step_order": index + 1,
+                "step_name": str(_as_dict(item.get("parameter")).get("parameter_label") or f"row-{index + 1}"),
+                "status": item.get("status"),
+                "message": item.get("message"),
+            }
+            for index, item in enumerate(results)
+        ],
+        "runs": results,
+        "compiled_case_ir": compiled_ir_for_log,
+        "execution_log": {
+            "status": status,
+            "message": message,
+            "parameterized": True,
+            "compiled_case_ir": compiled_ir_for_log,
+            "runs": [
+                {
+                    "report_id": item.get("report_id"),
+                    "status": item.get("status"),
+                    "parameter": item.get("parameter"),
+                    "message": item.get("message"),
+                    "summary": item.get("summary"),
+                }
+                for item in results
+            ],
+        },
     }
