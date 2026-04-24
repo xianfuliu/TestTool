@@ -13,6 +13,7 @@ const ApiReportPage = () => import("@/modules/interface-auto/ApiReportPage.vue")
 const ApiTestSuitePage = () => import("@/modules/interface-auto/ApiTestSuitePage.vue");
 const ApiTemplatePage = () => import("@/modules/interface-auto/ApiTemplatePage.vue");
 const ApiVariablePage = () => import("@/modules/interface-auto/ApiVariablePage.vue");
+const EnvironmentManagementPage = () => import("@/modules/common/EnvironmentManagementPage.vue");
 const BusinessManagementPage = () => import("@/modules/requirements/BusinessManagementPage.vue");
 const TestDataPage = () => import("@/modules/test-data/TestDataPage.vue");
 const ToolCardsPage = () => import("@/modules/tool-cards/ToolCardsPage.vue");
@@ -254,6 +255,16 @@ const routes: RouteRecordRaw[] = [
           title: "迭代版本",
           subtitle: "按日期维护每周迭代，并关联需求、故事和测试用例。",
           note: "这里可继续接入迭代日期管理、需求关联、用例关联和周计划视图能力。",
+        },
+      },
+      {
+        path: "iterations/environments",
+        name: "iterations-environments",
+        component: EnvironmentManagementPage,
+        meta: {
+          title: "环境管理",
+          subtitle: "统一维护平台环境、请求头和环境变量。",
+          note: "这里集中管理整个平台的环境配置，接口自动化、变量管理和后续能力都直接复用这套环境数据。",
         },
       },
     ],

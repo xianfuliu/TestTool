@@ -15,6 +15,8 @@ import {
 } from "@element-plus/icons-vue";
 
 import { del, get, post, put } from "@/shared/api/client";
+import { fetchEnvironments } from "@/modules/common/environmentApi";
+import type { EnvironmentRecord } from "@/modules/common/environmentTypes";
 import ExecutionLogViewer from "@/shared/components/ExecutionLogViewer.vue";
 import { useBusinessProjectContext } from "@/shared/composables/useBusinessProjectContext";
 import {
@@ -24,6 +26,7 @@ import {
 } from "@/modules/data-assets/api";
 import CommonToolConfigForm from "./CommonToolConfigForm.vue";
 import { fetchGlobalTools } from "./globalToolApi";
+import { fetchGlobalVariables } from "./variableApi";
 import apiToolIcon from "@/assets/interface-auto/tool-icons/api.png";
 import assertionToolIcon from "@/assets/interface-auto/tool-icons/assrt.png";
 import extractionToolIcon from "@/assets/interface-auto/tool-icons/extraction.png";
@@ -47,7 +50,6 @@ import type {
   CaseToolMap,
   CaseToolRecord,
   CascaderOption,
-  EnvironmentRecord,
   GlobalToolRecord,
   GlobalVariableRecord,
   JsonMap,
@@ -251,9 +253,17 @@ const cascaderProps = {
 
 const currentProjectId = computed(() => context.selectedProject.value?.id ?? null);
 const currentProjectName = computed(() => context.selectedProject.value?.name ?? "");
-const visibleGlobalVariables = computed(() =>
-  Array.isArray(globalVariables.value) ? globalVariables.value : [],
+const currentEnvironmentName = computed(() =>
+  environments.value.find((item) => item.id === form.environment_id)?.name ?? "",
 );
+const visibleGlobalVariables = computed(() => {
+  if (!Array.isArray(globalVariables.value) || !form.environment_id) {
+    return [];
+  }
+  return globalVariables.value.filter((item) =>
+    Array.isArray(item.environment_ids) ? item.environment_ids.includes(form.environment_id as number) : false,
+  );
+});
 const enabledDatabaseConnections = computed(() =>
   databaseConnections.value.filter((item) => item.enabled !== false),
 );
@@ -1873,8 +1883,8 @@ async function loadWorkspace() {
       get<TemplateWorkspacePayload>("/api/interface-auto/api-template-workspace/", {
         project_id: currentProjectId.value,
       }),
-      get<EnvironmentRecord[]>("/api/interface-auto/environments/"),
-      get<GlobalVariableRecord[]>("/api/interface-auto/variables/", { project_id: currentProjectId.value }),
+      fetchEnvironments(),
+      fetchGlobalVariables({ project_id: currentProjectId.value }),
       currentProjectId.value
         ? fetchGlobalTools({ visible_project_id: currentProjectId.value })
         : Promise.resolve([] as GlobalToolRecord[]),
@@ -1884,11 +1894,7 @@ async function loadWorkspace() {
     cases.value = caseRows.map((item) => normalizeCase(item));
     apiFolders.value = templateWorkspace.folders;
     templates.value = templateWorkspace.templates.map(normalizeTemplate);
-    environments.value = environmentRows.map((item) => ({
-      ...item,
-      headers: parseMap(item.headers),
-      variables: parseMap(item.variables),
-    }));
+    environments.value = Array.isArray(environmentRows) ? environmentRows : [];
     globalVariables.value = Array.isArray(globalVariableRows) ? globalVariableRows : [];
     globalTools.value = Array.isArray(globalToolRows) ? globalToolRows : [];
     databaseConnections.value = Array.isArray(databaseConnectionRows) ? databaseConnectionRows : [];
@@ -3178,6 +3184,9 @@ onBeforeUnmount(() => {
                   </div>
 
                   <div v-else-if="activeGlobalConfigTab === 'variables'" class="global-config-tab-panel">
+                    <div v-if="form.environment_id && currentEnvironmentName" class="global-variable-caption">
+                      当前环境：{{ currentEnvironmentName }}
+                    </div>
                     <div v-if="visibleGlobalVariables.length" class="global-variable-view">
                       <div
                         v-for="row in visibleGlobalVariables"
@@ -3189,7 +3198,8 @@ onBeforeUnmount(() => {
                         <span class="global-variable-type">{{ row.variable_type || "string" }}</span>
                       </div>
                     </div>
-                    <div v-else class="global-config-empty">暂无全局变量，请在变量管理中配置。</div>
+                    <div v-else-if="!form.environment_id" class="global-config-empty">请先选择环境后查看全局变量。</div>
+                    <div v-else class="global-config-empty">当前项目 / 环境下暂无全局变量，请在变量管理中配置。</div>
                   </div>
 
                   <div v-else-if="activeGlobalConfigTab === 'login_headers'" class="global-config-tab-panel global-config-stack">
@@ -4164,6 +4174,12 @@ onBeforeUnmount(() => {
 .global-variable-view {
   display: grid;
   gap: 6px;
+}
+
+.global-variable-caption {
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .global-variable-item {

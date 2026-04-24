@@ -149,8 +149,6 @@ SCHEMA_SQL = [
         name VARCHAR(100) NOT NULL,
         base_url VARCHAR(500) DEFAULT '',
         description TEXT,
-        headers JSON NULL,
-        variables JSON NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -199,7 +197,7 @@ SCHEMA_SQL = [
     """
     CREATE TABLE IF NOT EXISTS global_variables (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        project_id INT DEFAULT 0,
+        project_id INT NOT NULL,
         name VARCHAR(100) NOT NULL,
         value TEXT,
         variable_type VARCHAR(30) DEFAULT 'string',
@@ -207,7 +205,19 @@ SCHEMA_SQL = [
         created_by VARCHAR(50) DEFAULT 'admin',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_project_var (project_id, name)
+        UNIQUE KEY uniq_project_var (project_id, name),
+        INDEX idx_global_variables_project_id (project_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS global_variable_environments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        variable_id INT NOT NULL,
+        environment_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_global_variable_environment (variable_id, environment_id),
+        INDEX idx_global_variable_scope_variable (variable_id),
+        INDEX idx_global_variable_scope_environment (environment_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """

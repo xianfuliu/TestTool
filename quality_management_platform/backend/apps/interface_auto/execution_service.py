@@ -834,17 +834,18 @@ def _config_enabled(config: dict[str, Any], snake_key: str, camel_key: str) -> b
     return False
 
 
-def _load_project_variables(project_id: Any) -> dict[str, Any]:
-    if not project_id:
+def _load_project_variables(project_id: Any, environment_id: Any) -> dict[str, Any]:
+    if not project_id or not environment_id:
         return {}
     rows = fetch_all(
         """
-        SELECT project_id, name, value, variable_type
-        FROM global_variables
-        WHERE project_id IN (0, %s)
-        ORDER BY project_id ASC, name ASC
+        SELECT gv.project_id, gv.name, gv.value, gv.variable_type
+        FROM global_variables gv
+        INNER JOIN global_variable_environments gve ON gve.variable_id = gv.id
+        WHERE gv.project_id = %s AND gve.environment_id = %s
+        ORDER BY gv.name ASC
         """,
-        (project_id,),
+        (project_id, environment_id),
     )
     result: dict[str, Any] = {}
     for row in rows:
@@ -869,7 +870,7 @@ def _normalise_step(step: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_runtime_variables(case_snapshot: dict[str, Any], environment: dict[str, Any]) -> dict[str, Any]:
-    project_variables = _load_project_variables(case_snapshot.get("project_id"))
+    project_variables = _load_project_variables(case_snapshot.get("project_id"), environment.get("id"))
     environment_variables = _as_dict(environment.get("variables"))
     case_variables = _as_dict(case_snapshot.get("global_vars"))
     request_id = str(case_snapshot.get("request_id") or _generate_request_id())
@@ -881,6 +882,8 @@ def _build_runtime_variables(case_snapshot: dict[str, Any], environment: dict[st
         "case_id": case_snapshot.get("id"),
         "case_name": case_snapshot.get("name") or "",
         "project_id": case_snapshot.get("project_id"),
+        "environment_id": environment.get("id"),
+        "environment_name": environment.get("name") or "",
     }
 
 

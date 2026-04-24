@@ -126,16 +126,38 @@ export type EnvironmentRecord = {
   name: string;
   base_url?: string;
   description?: string;
-  headers?: JsonMap | string | null;
-  variables?: JsonMap | string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type EnvironmentPayload = {
+  name: string;
+  base_url: string;
+  description?: string;
 };
 
 export type GlobalVariableRecord = {
   id: number;
   project_id: number;
+  project_name?: string | null;
+  business_group_id?: number | null;
+  business_group_name?: string | null;
+  environment_ids?: number[];
+  environment_names?: string[];
   name: string;
   value: string;
   variable_type?: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type GlobalVariablePayload = {
+  project_id: number;
+  environment_ids: number[];
+  name: string;
+  value: string;
+  variable_type: string;
   description?: string;
 };
 

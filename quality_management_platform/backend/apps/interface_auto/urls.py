@@ -34,6 +34,4 @@ urlpatterns = [
     path("global-tools/<int:tool_id>/status/", views.global_tool_status),
     path("variables/", views.variables),
     path("variables/<int:variable_id>/", views.variable_detail),
-    path("environments/", views.environments),
-    path("environments/<int:environment_id>/", views.environment_detail),
 ]

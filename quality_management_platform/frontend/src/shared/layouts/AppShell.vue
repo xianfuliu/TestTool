@@ -240,7 +240,7 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: "迭代计划",
+    title: "环境迭代",
     items: [
       {
         type: "item",
@@ -248,6 +248,13 @@ const menuGroups: MenuGroup[] = [
         label: "迭代版本",
         subtitle: "按日期组织每周迭代计划",
         icon: Calendar,
+      },
+      {
+        type: "item",
+        path: "/iterations/environments",
+        label: "环境管理",
+        subtitle: "统一维护平台环境配置",
+        icon: SetUp,
       },
     ],
   },

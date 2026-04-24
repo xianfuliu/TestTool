@@ -3,6 +3,13 @@ from __future__ import annotations
 from django.conf import settings
 
 from .http import api_view, get_int
+from .environment_service import (
+    create_environment,
+    delete_environment,
+    get_environment,
+    list_environments,
+    update_environment,
+)
 from .legacy import get_fastapi_route_catalog
 from test_platform.db import execute, fetch_all, fetch_one
 
@@ -183,3 +190,19 @@ def project_stats(_request, project_id: int, payload=None):
         "api_count": api_count["count"] if api_count else 0,
         "case_count": case_count["count"] if case_count else 0,
     }
+
+
+@api_view
+def environments(request, payload=None):
+    if request.method == "GET":
+        return list_environments()
+    return create_environment(payload or {})
+
+
+@api_view
+def environment_detail(request, environment_id: int, payload=None):
+    if request.method == "GET":
+        return get_environment(environment_id)
+    if request.method == "PUT":
+        return update_environment(environment_id, payload or {})
+    return delete_environment(environment_id)

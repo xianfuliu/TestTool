@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
+from apps.common.environment_service import ensure_environment_schema_ready
 from apps.common.http import api_view, get_int
 from test_platform.db import connect, execute, executemany, fetch_all, fetch_one
 
@@ -14,8 +15,10 @@ from . import template_service
 _CASE_SCHEMA_READY = False
 _SUITE_SCHEMA_READY = False
 _GLOBAL_TOOL_SCHEMA_READY = False
+_VARIABLE_SCHEMA_READY = False
 SUITE_SCHEDULER_SOURCE = "interface_auto.test_suite"
 GLOBAL_TOOL_TYPES = {"http_request", "sql_tool", "python_script"}
+GLOBAL_VARIABLE_TYPES = {"string", "int", "integer", "float", "double", "decimal", "bool", "boolean", "json"}
 
 
 def _json_text(value):
@@ -60,6 +63,11 @@ def _bool_value(value, default: bool = False) -> bool:
 
 def _column_exists(cursor, table_name: str, column_name: str) -> bool:
     cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
+    return cursor.fetchone() is not None
+
+
+def _index_exists(cursor, table_name: str, index_name: str) -> bool:
+    cursor.execute(f"SHOW INDEX FROM {table_name} WHERE Key_name = %s", (index_name,))
     return cursor.fetchone() is not None
 
 
@@ -126,6 +134,25 @@ def _hydrate_global_tool_row(tool_row):
     return hydrated
 
 
+def _hydrate_global_variable_row(variable_row):
+    if not variable_row:
+        return {}
+    hydrated = dict(variable_row)
+    hydrated["project_id"] = get_int(hydrated.get("project_id"))
+    hydrated["business_group_id"] = get_int(hydrated.get("business_group_id"))
+    hydrated["environment_ids"] = [
+        get_int(item)
+        for item in str(hydrated.get("environment_ids_text") or "").split(",")
+        if get_int(item)
+    ]
+    hydrated["environment_names"] = [
+        item
+        for item in str(hydrated.get("environment_names_text") or "").split("||")
+        if item
+    ]
+    return hydrated
+
+
 def _normalise_global_tool_payload(item):
     tool_type = str(item.get("tool_type") or "").strip()
     if tool_type not in GLOBAL_TOOL_TYPES:
@@ -180,6 +207,48 @@ def _normalise_global_tool_payload(item):
         "config": config,
         "enabled": _enabled_by_default(item.get("enabled", True)),
         "is_shared": _bool_value(item.get("is_shared"), False),
+    }
+
+
+def _normalise_global_variable_payload(item):
+    project_id = get_int(item.get("project_id"))
+    if not project_id:
+        raise ValueError("请选择所属项目")
+    project = fetch_one(
+        """
+        SELECT p.id, p.business_group_id
+        FROM projects p
+        WHERE p.id = %s
+        """,
+        (project_id,),
+    )
+    if not project:
+        raise ValueError("所属项目不存在")
+    environment_rows = fetch_all("SELECT id FROM environments ORDER BY id ASC")
+    valid_environment_ids = [get_int(row.get("id")) for row in environment_rows if get_int(row.get("id"))]
+    environment_ids = []
+    for raw_id in item.get("environment_ids") or []:
+        environment_id = get_int(raw_id)
+        if environment_id and environment_id not in environment_ids:
+            environment_ids.append(environment_id)
+    if not environment_ids:
+        environment_ids = list(valid_environment_ids)
+    environment_ids = [environment_id for environment_id in environment_ids if environment_id in valid_environment_ids]
+    if not environment_ids:
+        raise ValueError("请至少选择一个所属环境")
+    name = str(item.get("name") or "").strip()
+    if not name:
+        raise ValueError("变量名称不能为空")
+    variable_type = str(item.get("variable_type") or "string").strip().lower() or "string"
+    if variable_type not in GLOBAL_VARIABLE_TYPES:
+        raise ValueError("变量类型不支持")
+    return {
+        "project_id": project_id,
+        "environment_ids": environment_ids,
+        "name": name,
+        "value": str(item.get("value", "")),
+        "variable_type": variable_type,
+        "description": str(item.get("description") or "").strip(),
     }
 
 
@@ -240,6 +309,132 @@ def _ensure_global_tool_schema_ready():
     _GLOBAL_TOOL_SCHEMA_READY = True
 
 
+def _ensure_global_variable_schema_ready():
+    global _VARIABLE_SCHEMA_READY
+    if _VARIABLE_SCHEMA_READY:
+        return
+    ensure_environment_schema_ready()
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS global_variables (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    project_id INT NOT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    value TEXT,
+                    variable_type VARCHAR(30) DEFAULT 'string',
+                    description TEXT,
+                    created_by VARCHAR(50) DEFAULT 'admin',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uniq_project_var (project_id, name),
+                    INDEX idx_global_variables_project_id (project_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS global_variable_environments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    variable_id INT NOT NULL,
+                    environment_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uniq_global_variable_environment (variable_id, environment_id),
+                    INDEX idx_global_variable_scope_variable (variable_id),
+                    INDEX idx_global_variable_scope_environment (environment_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
+            )
+            has_environment_column = _column_exists(cursor, "global_variables", "environment_id")
+            if _index_exists(cursor, "global_variables", "uniq_project_environment_var"):
+                cursor.execute("ALTER TABLE global_variables DROP INDEX uniq_project_environment_var")
+            if not _index_exists(cursor, "global_variables", "uniq_project_var"):
+                cursor.execute(
+                    """
+                    ALTER TABLE global_variables
+                    ADD UNIQUE KEY uniq_project_var (project_id, name)
+                    """
+                )
+            if not _index_exists(cursor, "global_variables", "idx_global_variables_project_id"):
+                cursor.execute(
+                    """
+                    ALTER TABLE global_variables
+                    ADD INDEX idx_global_variables_project_id (project_id)
+                    """
+                )
+            if not _index_exists(cursor, "global_variable_environments", "idx_global_variable_scope_variable"):
+                cursor.execute(
+                    """
+                    ALTER TABLE global_variable_environments
+                    ADD INDEX idx_global_variable_scope_variable (variable_id)
+                    """
+                )
+            if not _index_exists(cursor, "global_variable_environments", "idx_global_variable_scope_environment"):
+                cursor.execute(
+                    """
+                    ALTER TABLE global_variable_environments
+                    ADD INDEX idx_global_variable_scope_environment (environment_id)
+                    """
+                )
+            if not _index_exists(cursor, "global_variable_environments", "uniq_global_variable_environment"):
+                cursor.execute(
+                    """
+                    ALTER TABLE global_variable_environments
+                    ADD UNIQUE KEY uniq_global_variable_environment (variable_id, environment_id)
+                    """
+                )
+            cursor.execute("SELECT id FROM environments ORDER BY id ASC")
+            environment_rows = cursor.fetchall()
+            all_environment_ids = [
+                get_int(row.get("id"))
+                for row in environment_rows
+                if get_int(row.get("id"))
+            ]
+            if has_environment_column:
+                cursor.execute(
+                    """
+                    SELECT gv.id, gv.environment_id
+                    FROM global_variables gv
+                    LEFT JOIN global_variable_environments gve ON gve.variable_id = gv.id
+                    WHERE gve.variable_id IS NULL
+                    """
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT gv.id
+                    FROM global_variables gv
+                    LEFT JOIN global_variable_environments gve ON gve.variable_id = gv.id
+                    WHERE gve.variable_id IS NULL
+                    """
+                )
+            rows_without_scope = cursor.fetchall()
+            scope_rows = []
+            for row in rows_without_scope:
+                variable_id = get_int(row.get("id"))
+                if not variable_id:
+                    continue
+                raw_environment_id = get_int(row.get("environment_id")) if has_environment_column else 0
+                scope_environment_ids = (
+                    [raw_environment_id]
+                    if raw_environment_id
+                    else list(all_environment_ids)
+                )
+                for environment_id in scope_environment_ids:
+                    scope_rows.append((variable_id, environment_id))
+            if scope_rows:
+                executemany(
+                    """
+                    INSERT IGNORE INTO global_variable_environments (variable_id, environment_id)
+                    VALUES (%s, %s)
+                    """,
+                    scope_rows,
+                )
+        connection.commit()
+    _VARIABLE_SCHEMA_READY = True
+
+
 def _global_tools_select(where_sql: str = "", params=()):
     _ensure_global_tool_schema_ready()
     query = """
@@ -256,6 +451,28 @@ def _global_tools_select(where_sql: str = "", params=()):
         query = f"{query} {where_sql}"
     query = f"{query} ORDER BY gt.updated_at DESC, gt.id DESC"
     return [_hydrate_global_tool_row(row) for row in fetch_all(query, params)]
+
+
+def _global_variables_select(where_sql: str = "", params=()):
+    _ensure_global_variable_schema_ready()
+    query = """
+        SELECT
+            gv.*,
+            p.name AS project_name,
+            p.business_group_id,
+            bg.name AS business_group_name,
+            GROUP_CONCAT(DISTINCT env.id ORDER BY env.id) AS environment_ids_text,
+            GROUP_CONCAT(DISTINCT env.name ORDER BY env.id SEPARATOR '||') AS environment_names_text
+        FROM global_variables gv
+        LEFT JOIN projects p ON p.id = gv.project_id
+        LEFT JOIN business_groups bg ON bg.id = p.business_group_id
+        LEFT JOIN global_variable_environments gve ON gve.variable_id = gv.id
+        LEFT JOIN environments env ON env.id = gve.environment_id
+    """
+    if where_sql:
+        query = f"{query} {where_sql}"
+    query = f"{query} GROUP BY gv.id ORDER BY gv.updated_at DESC, gv.id DESC"
+    return [_hydrate_global_variable_row(row) for row in fetch_all(query, params)]
 
 
 def _list_case_steps(case_id: int):
@@ -684,6 +901,8 @@ def test_suite_detail(request, suite_id: int, payload=None):
 @api_view
 def overview(_request, payload=None):
     _ensure_global_tool_schema_ready()
+    _ensure_global_variable_schema_ready()
+    ensure_environment_schema_ready()
     return {
         "business_groups": fetch_all("SELECT * FROM business_groups ORDER BY created_at ASC"),
         "projects": fetch_all(
@@ -695,7 +914,7 @@ def overview(_request, payload=None):
             """
         ),
         "global_tools": _global_tools_select(),
-        "global_variables": fetch_all("SELECT * FROM global_variables ORDER BY name ASC"),
+        "global_variables": _global_variables_select(),
         "environments": fetch_all("SELECT * FROM environments ORDER BY created_at DESC"),
         "reports": fetch_all("SELECT * FROM test_reports ORDER BY created_at DESC LIMIT 20"),
     }
@@ -1204,37 +1423,96 @@ def global_tool_status(_request, tool_id: int, payload=None):
 
 @api_view
 def variables(request, payload=None):
+    _ensure_global_variable_schema_ready()
     if request.method == "GET":
-        project_id = get_int((payload or {}).get("project_id"), 0)
-        return fetch_all("SELECT * FROM global_variables WHERE project_id = %s ORDER BY name ASC", (project_id,))
-    item = payload or {}
+        payload = payload or {}
+        project_id = get_int(payload.get("project_id"))
+        business_group_id = get_int(payload.get("business_group_id"))
+        environment_id = get_int(payload.get("environment_id"))
+        keyword = str(payload.get("keyword") or "").strip()
+        conditions = []
+        params = []
+        if project_id:
+            conditions.append("gv.project_id = %s")
+            params.append(project_id)
+        if business_group_id:
+            conditions.append("p.business_group_id = %s")
+            params.append(business_group_id)
+        if environment_id:
+            conditions.append(
+                """
+                EXISTS (
+                    SELECT 1
+                    FROM global_variable_environments gvs
+                    WHERE gvs.variable_id = gv.id AND gvs.environment_id = %s
+                )
+                """
+            )
+            params.append(environment_id)
+        if keyword:
+            conditions.append("(gv.name LIKE %s OR gv.value LIKE %s)")
+            fuzzy = f"%{keyword}%"
+            params.extend([fuzzy, fuzzy])
+        where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        return _global_variables_select(where_sql, tuple(params))
+    item = _normalise_global_variable_payload(payload or {})
     variable_id = execute(
         """
         INSERT INTO global_variables (project_id, name, value, variable_type, description, created_by)
         VALUES (%s, %s, %s, %s, %s, %s)
         """,
-        (item.get("project_id", 0), item.get("name"), str(item.get("value", "")), item.get("variable_type", "string"), item.get("description", ""), "admin"),
+        (
+            item["project_id"],
+            item["name"],
+            item["value"],
+            item["variable_type"],
+            item["description"],
+            "admin",
+        ),
+    )
+    executemany(
+        """
+        INSERT INTO global_variable_environments (variable_id, environment_id)
+        VALUES (%s, %s)
+        """,
+        [(variable_id, environment_id) for environment_id in item["environment_ids"]],
     )
     return {"variable_id": variable_id}, 201
 
 
 @api_view
 def variable_detail(request, variable_id: int, payload=None):
+    _ensure_global_variable_schema_ready()
+    if request.method == "GET":
+        rows = _global_variables_select("WHERE gv.id = %s", (variable_id,))
+        return rows[0] if rows else {}
     if request.method == "PUT":
-        item = payload or {}
+        item = _normalise_global_variable_payload(payload or {})
         updated = execute(
-            "UPDATE global_variables SET project_id = %s, name = %s, value = %s, variable_type = %s, description = %s WHERE id = %s",
-            (item.get("project_id", 0), item.get("name"), str(item.get("value", "")), item.get("variable_type", "string"), item.get("description", ""), variable_id),
+            """
+            UPDATE global_variables
+            SET project_id = %s, name = %s, value = %s, variable_type = %s, description = %s
+            WHERE id = %s
+            """,
+            (
+                item["project_id"],
+                item["name"],
+                item["value"],
+                item["variable_type"],
+                item["description"],
+                variable_id,
+            ),
+        )
+        execute("DELETE FROM global_variable_environments WHERE variable_id = %s", (variable_id,))
+        executemany(
+            """
+            INSERT INTO global_variable_environments (variable_id, environment_id)
+            VALUES (%s, %s)
+            """,
+            [(variable_id, environment_id) for environment_id in item["environment_ids"]],
         )
         return {"updated": updated >= 0}
+    execute("DELETE FROM global_variable_environments WHERE variable_id = %s", (variable_id,))
     return {"deleted": execute("DELETE FROM global_variables WHERE id = %s", (variable_id,)) > 0}
 
 
-@api_view
-def environments(_request, payload=None):
-    return fetch_all("SELECT * FROM environments ORDER BY created_at DESC")
-
-
-@api_view
-def environment_detail(_request, environment_id: int, payload=None):
-    return fetch_one("SELECT * FROM environments WHERE id = %s", (environment_id,))
