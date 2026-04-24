@@ -174,7 +174,24 @@ export type CaseToolRecord = {
   tool_label?: string;
   assertion_type?: string;
   output_fields?: string[];
-  extractions?: Array<{ variable: string; path: string; type?: string; source?: string; from?: string; expr?: string }>;
+  extractions?: Array<{
+    variable?: string;
+    var?: string;
+    path?: string;
+    expr?: string;
+    type?: string;
+    source?: string;
+    from?: string;
+  }>;
+  extractors?: Array<{
+    variable?: string;
+    var?: string;
+    path?: string;
+    expr?: string;
+    type?: string;
+    source?: string;
+    from?: string;
+  }>;
   assertions?: Array<{ field: string; operator: string; expected: string }>;
   config?: Record<string, unknown>;
   [key: string]: unknown;

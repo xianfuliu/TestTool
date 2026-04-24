@@ -4,6 +4,37 @@ import type { SchedulerExecutionLogLine } from "@/modules/scheduler/api";
 
 export type ReportStatus = "success" | "failed" | "running" | "skipped" | "pending" | string;
 
+export type ReportParameterInfo = {
+  parameter_index?: number | null;
+  parameter_label?: string;
+  parameter_values_masked?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export type ReportExtractorDetail = {
+  type?: string;
+  from?: string;
+  expr?: string;
+  path?: string;
+  variable?: string;
+  var?: string;
+  matched?: boolean;
+  value?: unknown;
+  error_type?: string;
+  message?: string;
+  [key: string]: unknown;
+};
+
+export type ReportValidatorResult = {
+  field?: string;
+  operator?: string;
+  expected?: unknown;
+  actual?: unknown;
+  passed?: boolean;
+  message?: string;
+  [key: string]: unknown;
+};
+
 export type ReportPagination = {
   total: number;
   page: number;
@@ -32,6 +63,11 @@ export type ReportCaseStep = {
   ended_at?: string;
   execution_time?: number;
   logs?: string[];
+  parameter?: ReportParameterInfo;
+  extractor_details?: ReportExtractorDetail[];
+  validator_results?: ReportValidatorResult[];
+  request_data?: Record<string, unknown>;
+  response_data?: Record<string, unknown>;
   [key: string]: unknown;
 };
 
@@ -52,10 +88,12 @@ export type ReportCaseItem = {
     skipped_steps?: number;
     [key: string]: unknown;
   };
+  parameter?: ReportParameterInfo;
   steps: ReportCaseStep[];
   execution_log?: {
     lines?: SchedulerExecutionLogLine[];
     steps?: ReportCaseStep[];
+    parameter?: ReportParameterInfo;
     [key: string]: unknown;
   };
 };

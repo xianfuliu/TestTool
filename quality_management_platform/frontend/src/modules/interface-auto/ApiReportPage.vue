@@ -490,6 +490,21 @@ function caseSummaryText(caseItem: ReportCaseItem) {
   return `成功 ${passed}，失败 ${failed}，跳过 ${skipped}`;
 }
 
+function caseParameterLabel(caseItem: ReportCaseItem) {
+  const candidates = [caseItem.parameter, caseItem.execution_log?.parameter];
+  for (const item of candidates) {
+    const label = String(item?.parameter_label || "").trim();
+    if (label) {
+      return label;
+    }
+    const index = Number(item?.parameter_index);
+    if (Number.isFinite(index) && index >= 0) {
+      return `#${index + 1}`;
+    }
+  }
+  return "";
+}
+
 function caseDurationLabel(caseItem: ReportCaseItem) {
   const direct = durationFromRecord(caseItem as unknown as Record<string, unknown>);
   if (direct) {
@@ -569,6 +584,7 @@ onMounted(async () => {
                 <div class="case-title">
                   <span class="case-toggle" :class="{ expanded: expandedCaseKeys.includes(caseItem.key) }" aria-hidden="true"></span>
                   <span class="case-name">{{ caseItem.case_name }}</span>
+                  <span v-if="caseParameterLabel(caseItem)" class="case-parameter">{{ caseParameterLabel(caseItem) }}</span>
                   <span class="case-summary">{{ caseSummaryText(caseItem) }}</span>
                   <span v-if="caseDurationLabel(caseItem)" class="case-duration">{{ caseDurationLabel(caseItem) }}</span>
                   <span class="case-status" :class="`status-${caseItem.status || 'pending'}`">
@@ -981,7 +997,7 @@ onMounted(async () => {
   min-width: 0;
   width: 100%;
   align-items: center;
-  grid-template-columns: 20px minmax(190px, 0.82fr) minmax(230px, 1.18fr) max-content max-content;
+  grid-template-columns: 20px minmax(180px, 0.75fr) max-content minmax(220px, 1.05fr) max-content max-content;
   column-gap: 8px;
 }
 
@@ -1035,7 +1051,7 @@ onMounted(async () => {
 }
 
 .case-summary {
-  grid-column: 3;
+  grid-column: 4;
   justify-self: start;
   color: #64748b;
   font-weight: 600;
@@ -1043,8 +1059,22 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.case-parameter {
+  grid-column: 3;
+  width: max-content;
+  justify-self: start;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
 .case-duration {
-  grid-column: 4;
+  grid-column: 5;
   width: max-content;
   justify-self: end;
   border-radius: 999px;
@@ -1058,7 +1088,7 @@ onMounted(async () => {
 }
 
 .case-status {
-  grid-column: 5;
+  grid-column: 6;
   justify-self: end;
   min-width: 76px;
   border-radius: 999px;

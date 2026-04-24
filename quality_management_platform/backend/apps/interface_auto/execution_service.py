@@ -33,6 +33,7 @@ from apps.common.sql_execution import (
 from test_platform.db import execute, fetch_all, fetch_one
 
 from .compiler_service import (
+    compile_case_to_ir,
     compile_case_snapshot_to_ir,
     mask_sensitive_values,
     merge_runtime_variables,
@@ -62,6 +63,7 @@ class AssertionExecutionError(ToolExecutionError):
 
 
 _INTERNAL_RUNTIME_VARIABLE_KEYS = {"current_step_name", "current_step_order"}
+_MINIMAL_CASE_IR_KEYS = {"id", "case_id", "environment_id"}
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -81,6 +83,40 @@ def _log_value(value: Any) -> Any:
         return json.loads(json.dumps(value, ensure_ascii=False, default=str))
     except (TypeError, ValueError):
         return str(value)
+
+
+def _has_meaningful_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    if isinstance(value, (list, dict, tuple, set)):
+        return bool(value)
+    return True
+
+
+def _should_compile_case_from_id(snapshot: dict[str, Any]) -> bool:
+    case_id = _int_value(snapshot.get("id") or snapshot.get("case_id"))
+    if not case_id:
+        return False
+    if _as_list(snapshot.get("steps")):
+        return False
+    meaningful_keys = {
+        str(key)
+        for key, value in snapshot.items()
+        if not str(key).startswith("_") and _has_meaningful_value(value)
+    }
+    return meaningful_keys.issubset(_MINIMAL_CASE_IR_KEYS)
+
+
+def _compile_case_execution_ir(case_snapshot: dict[str, Any]) -> dict[str, Any]:
+    snapshot = dict(case_snapshot or {})
+    if _should_compile_case_from_id(snapshot):
+        case_id = _int_value(snapshot.get("id") or snapshot.get("case_id"))
+        environment_id = _int_value(snapshot.get("environment_id")) or None
+        return compile_case_to_ir(case_id, environment_id=environment_id)
+    environment = _load_environment(snapshot.get("environment_id"))
+    return compile_case_snapshot_to_ir(snapshot, environment)
 
 
 def _short_log_value(value: Any, limit: int = 240) -> str:
@@ -882,36 +918,6 @@ def _load_project_variables(project_id: Any, environment_id: Any) -> dict[str, A
     return result
 
 
-def _normalise_step(step: dict[str, Any]) -> dict[str, Any]:
-    return {
-        **dict(step),
-        "pre_processing": _parse_json_value(step.get("pre_processing"), {}),
-        "post_processing": _parse_json_value(step.get("post_processing"), {}),
-        "assertions": _parse_json_value(step.get("assertions"), {}),
-        "variables": _parse_json_value(step.get("variables"), {}),
-        "enabled": step.get("enabled", True) is not False,
-        "enable_encryption": bool(step.get("enable_encryption")),
-        "use_global_headers": _enabled_by_default(step.get("use_global_headers", True)),
-    }
-
-
-def _build_runtime_variables(case_snapshot: dict[str, Any], environment: dict[str, Any]) -> dict[str, Any]:
-    project_variables = _load_project_variables(case_snapshot.get("project_id"), environment.get("id"))
-    environment_variables = _as_dict(environment.get("variables"))
-    case_variables = _as_dict(case_snapshot.get("global_vars"))
-    request_id = str(case_snapshot.get("request_id") or _generate_request_id())
-    return {
-        **project_variables,
-        **environment_variables,
-        **case_variables,
-        "request_id": request_id,
-        "case_id": case_snapshot.get("id"),
-        "case_name": case_snapshot.get("name") or "",
-        "project_id": case_snapshot.get("project_id"),
-        "environment_id": environment.get("id"),
-        "environment_name": environment.get("name") or "",
-    }
-
 
 def _normalise_output_variables(value: Any) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
@@ -976,53 +982,6 @@ def _coerce_decimal(value: Any) -> Decimal | None:
         except (InvalidOperation, ValueError):
             return None
     return None
-
-
-def _resolve_assertion_subject(field: str, source_data: Any, variables: dict[str, Any]) -> Any:
-    resolved_field = replace_template_text(field, variables, allow_legacy_placeholders=True).strip()
-    if not resolved_field:
-        return None
-    if resolved_field in variables:
-        return variables.get(resolved_field)
-    if resolved_field.startswith(
-        (
-            "$",
-            "headers.",
-            "response_headers.",
-            "body.",
-            "response_body.",
-            "decrypted_body.",
-            "response_decrypted_body.",
-            "raw_body",
-            "status_code",
-        )
-    ):
-        return extract_response_value(source_data, resolved_field)
-    if isinstance(source_data, dict) and resolved_field in source_data:
-        return source_data.get(resolved_field)
-    return variables.get(resolved_field)
-
-
-def _assert_value(actual: Any, operator: str, expected: Any) -> bool:
-    actual_decimal = _coerce_decimal(actual)
-    expected_decimal = _coerce_decimal(expected)
-    if operator == "equal":
-        return actual == expected
-    if operator == "not_equal":
-        return actual != expected
-    if operator == "contains":
-        return str(expected) in str(actual)
-    if operator == "not_contains":
-        return str(expected) not in str(actual)
-    if operator == "greater" and actual_decimal is not None and expected_decimal is not None:
-        return actual_decimal > expected_decimal
-    if operator == "less" and actual_decimal is not None and expected_decimal is not None:
-        return actual_decimal < expected_decimal
-    if operator == "greater_equal" and actual_decimal is not None and expected_decimal is not None:
-        return actual_decimal >= expected_decimal
-    if operator == "less_equal" and actual_decimal is not None and expected_decimal is not None:
-        return actual_decimal <= expected_decimal
-    return False
 
 
 def _extract_response_source(result: dict[str, Any]) -> Any:
@@ -2187,8 +2146,7 @@ def execute_case_run(
     trigger_type: str = "manual",
 ) -> dict[str, Any]:
     snapshot = dict(case_snapshot or {})
-    environment = _load_environment(snapshot.get("environment_id"))
-    compiled_ir = compile_case_snapshot_to_ir(snapshot, environment)
+    compiled_ir = _compile_case_execution_ir(snapshot)
     compiled_ir_for_log = _safe_compiled_ir_for_log(compiled_ir)
     parameter_instances = _as_list(_as_dict(compiled_ir.get("runtime")).get("parameter_instances"))
     if not parameter_instances:
