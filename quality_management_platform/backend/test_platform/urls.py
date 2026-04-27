@@ -10,4 +10,5 @@ urlpatterns = [
     path("api/data-query/", include("apps.data_query.urls")),
     path("api/data-assets/", include("apps.data_assets.urls")),
     path("api/scheduler/", include("apps.scheduler.urls")),
+    path("api/performance/", include("apps.performance.urls")),
 ]

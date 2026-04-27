@@ -1,0 +1,280 @@
+<?xml version='1.0' encoding='utf-8'?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="demo_suite" enabled="true">
+      <stringProp name="TestPlan.comments">demo</stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+        <collectionProp name="Arguments.arguments" />
+      </elementProp>
+      <stringProp name="TestPlan.user_define_classpath" />
+    </TestPlan>
+    <hashTree>
+      <CookieManager guiclass="CookiePanel" testclass="CookieManager" testname="HTTP Cookie Manager" enabled="true">
+        <collectionProp name="CookieManager.cookies" />
+        <boolProp name="CookieManager.clearEachIteration">false</boolProp>
+        <boolProp name="CookieManager.controlledByThreadGroup">false</boolProp>
+      </CookieManager>
+      <hashTree />
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Thread Group - demo_suite" enabled="true">
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.delay" />
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration" />
+      </ThreadGroup>
+      <hashTree>
+        <TransactionController guiclass="TransactionControllerGui" testclass="TransactionController" testname="Case - demo_case" enabled="true">
+          <boolProp name="TransactionController.parent">true</boolProp>
+          <boolProp name="TransactionController.includeTimers">false</boolProp>
+        </TransactionController>
+        <hashTree>
+          <Arguments guiclass="ArgumentsPanel" testclass="Arguments" testname="Case Variables" enabled="true">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="request_id" elementType="Argument">
+                <stringProp name="Argument.name">request_id</stringProp>
+                <stringProp name="Argument.value">${__UUID()}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+              <elementProp name="foo" elementType="Argument">
+                <stringProp name="Argument.name">foo</stringProp>
+                <stringProp name="Argument.value">bar</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </Arguments>
+          <hashTree />
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Step 1 - get" enabled="true">
+            <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+              <collectionProp name="Arguments.arguments">
+                <elementProp name="foo" elementType="HTTPArgument">
+                  <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                  <stringProp name="Argument.name">foo</stringProp>
+                  <stringProp name="Argument.value">$${foo}</stringProp>
+                  <stringProp name="Argument.metadata">=</stringProp>
+                  <boolProp name="HTTPArgument.use_equals">true</boolProp>
+                </elementProp>
+              </collectionProp>
+            </elementProp>
+            <stringProp name="HTTPSampler.domain">httpbin.org</stringProp>
+            <stringProp name="HTTPSampler.port" />
+            <stringProp name="HTTPSampler.protocol">https</stringProp>
+            <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+            <stringProp name="HTTPSampler.path">/get</stringProp>
+            <stringProp name="HTTPSampler.method">GET</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+            <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+            <boolProp name="HTTPSampler.monitor">false</boolProp>
+            <stringProp name="HTTPSampler.embedded_url_re" />
+            <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+            <stringProp name="HTTPSampler.connect_timeout">30</stringProp>
+            <stringProp name="HTTPSampler.response_timeout">30</stringProp>
+          </HTTPSamplerProxy>
+          <hashTree>
+            <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Headers - get" enabled="true">
+              <collectionProp name="HeaderManager.headers">
+                <elementProp name="" elementType="Header">
+                  <stringProp name="Header.name">Accept</stringProp>
+                  <stringProp name="Header.value">application/json</stringProp>
+                </elementProp>
+              </collectionProp>
+            </HeaderManager>
+            <hashTree />
+            <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="Validate - get" enabled="true">
+              <stringProp name="cacheKey">Validate - get</stringProp>
+              <stringProp name="filename" />
+              <stringProp name="parameters" />
+              <stringProp name="scriptLanguage">groovy</stringProp>
+              <stringProp name="script">import groovy.json.JsonSlurper
+
+def rows = new JsonSlurper().parseText('''[{"field": "status_code", "operator": "equal", "expected": 200}]''')
+def bodyText = prev.getResponseDataAsString() ?: ''
+def bodyObject = null
+try {
+    bodyObject = new JsonSlurper().parseText(bodyText)
+} catch (ignored) {
+    bodyObject = null
+}
+def headers = [:]
+(prev.getResponseHeaders() ?: '').split(/\r?\n/).each { line -&gt;
+    def idx = line.indexOf(':')
+    if (idx &gt; 0) {
+        def name = line.substring(0, idx).trim()
+        def value = line.substring(idx + 1).trim()
+        headers[name] = value
+        headers[name.toLowerCase()] = value
+    }
+}
+def pathTokens = { String path -&gt;
+    def cleaned = (path ?: '').trim()
+    if (cleaned.startsWith('$.')) {
+        cleaned = cleaned.substring(2)
+    } else if (cleaned.startsWith('$')) {
+        cleaned = cleaned.substring(1)
+    }
+    ['body.', 'response_body.', 'decrypted_body.', 'response_decrypted_body.'].each { prefix -&gt;
+        if (cleaned.startsWith(prefix)) {
+            cleaned = cleaned.substring(prefix.length())
+        }
+    }
+    def tokens = []
+    cleaned.split(/\./).each { part -&gt;
+        if (!part) {
+            return
+        }
+        def matcher = (part =~ /([^\[]+)|(\[(\d+)\])/)
+        matcher.findAll().each { groups -&gt;
+            if (groups[1]) {
+                tokens &lt;&lt; groups[1]
+            } else if (groups[3]) {
+                tokens &lt;&lt; Integer.parseInt(groups[3])
+            }
+        }
+    }
+    tokens
+}
+def extractPath
+extractPath = { data, String path -&gt;
+    def current = data
+    for (token in pathTokens(path)) {
+        if (token instanceof Integer) {
+            if (!(current instanceof List) || token &gt;= current.size()) {
+                return null
+            }
+            current = current[token]
+        } else {
+            if (!(current instanceof Map) || !current.containsKey(token)) {
+                return null
+            }
+            current = current[token]
+        }
+    }
+    current
+}
+def coerceBool = { value -&gt;
+    if (value == null) {
+        return null
+    }
+    if (value instanceof Boolean) {
+        return value
+    }
+    def text = String.valueOf(value).trim().toLowerCase()
+    if (['true', '1', 'yes', 'y'].contains(text)) {
+        return true
+    }
+    if (['false', '0', 'no', 'n'].contains(text)) {
+        return false
+    }
+    return null
+}
+def coerceNumber = { value -&gt;
+    if (value == null || value == '') {
+        return null
+    }
+    try {
+        return new BigDecimal(String.valueOf(value).trim())
+    } catch (ignored) {
+        return null
+    }
+}
+def resolveField = { String field -&gt;
+    if (!field) {
+        return null
+    }
+    if (field == 'status_code') {
+        return prev.getResponseCode()
+    }
+    if (field == 'raw_body') {
+        return bodyText
+    }
+    if (field.startsWith('headers.') || field.startsWith('response_headers.')) {
+        def key = field.substring(field.indexOf('.') + 1)
+        return headers[key] ?: headers[key.toLowerCase()]
+    }
+    if (field.startsWith('runtime_vars.')) {
+        return vars.get(field.substring('runtime_vars.'.length()))
+    }
+    if (field.startsWith('$') || field.startsWith('body.') || field.startsWith('response_body.') || field.startsWith('decrypted_body.') || field.startsWith('response_decrypted_body.')) {
+        return extractPath(bodyObject, field)
+    }
+    return vars.get(field)
+}
+def compare = { operator, actual, expected -&gt;
+    def actualBool = coerceBool(actual)
+    def expectedBool = coerceBool(expected)
+    if (operator == 'equal') {
+        if (actualBool != null &amp;&amp; expectedBool != null) {
+            return actualBool == expectedBool
+        }
+        return String.valueOf(actual) == String.valueOf(expected)
+    }
+    if (operator == 'not_equal') {
+        if (actualBool != null &amp;&amp; expectedBool != null) {
+            return actualBool != expectedBool
+        }
+        return String.valueOf(actual) != String.valueOf(expected)
+    }
+    if (operator == 'contains') {
+        return String.valueOf(actual).contains(String.valueOf(expected))
+    }
+    if (operator == 'not_contains') {
+        return !String.valueOf(actual).contains(String.valueOf(expected))
+    }
+    if (operator == 'regex_match') {
+        return (String.valueOf(actual) ==~ String.valueOf(expected))
+    }
+    if (operator == 'exists') {
+        return actual != null &amp;&amp; String.valueOf(actual) != ''
+    }
+    if (operator == 'not_exists') {
+        return actual == null || String.valueOf(actual) == ''
+    }
+    def actualNumber = coerceNumber(actual)
+    def expectedNumber = coerceNumber(expected)
+    if (actualNumber == null || expectedNumber == null) {
+        return false
+    }
+    if (operator == 'greater') {
+        return actualNumber &gt; expectedNumber
+    }
+    if (operator == 'less') {
+        return actualNumber &lt; expectedNumber
+    }
+    if (operator == 'greater_equal') {
+        return actualNumber &gt;= expectedNumber
+    }
+    if (operator == 'less_equal') {
+        return actualNumber &lt;= expectedNumber
+    }
+    return false
+}
+for (row in rows) {
+    def field = (row.field ?: '').toString()
+    def operator = (row.operator ?: 'equal').toString()
+    def expected = row.expected
+    def actual = resolveField(field)
+    def passed = compare(operator, actual, expected)
+    if (!passed) {
+        AssertionResult.setFailure(true)
+        AssertionResult.setFailureMessage(field + ' ' + operator + ' failed, expected=' + expected + ', actual=' + actual)
+        return
+    }
+}
+AssertionResult.setFailure(false)</stringProp>
+            </JSR223Assertion>
+            <hashTree />
+          </hashTree>
+        </hashTree>
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

@@ -3668,8 +3668,8 @@ onBeforeUnmount(() => {
                           <span class="global-config-section-title">参数化</span>
                         </label>
                       </div>
-                      <div class="global-config-section-panel">
-                        <div class="global-config-inline-grid two-columns">
+                      <div class="global-config-section-panel parameterize-panel">
+                        <div class="global-config-inline-grid two-columns parameterize-toolbar">
                           <div class="global-config-inline-field compact-inline-field">
                             <span class="global-config-inline-label">来源</span>
                             <el-select
@@ -5618,6 +5618,27 @@ onBeforeUnmount(() => {
 
 .parameterize-editor {
   width: 100%;
+}
+
+.parameterize-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.parameterize-toolbar {
+  align-items: end;
+}
+
+.parameterize-toolbar .global-config-inline-field {
+  min-height: 32px;
+}
+
+.parameterize-editor :deep(.el-textarea__inner) {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff;
 }
 
 .parameterize-validation {

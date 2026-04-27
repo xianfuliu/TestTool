@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "apps.data_query",
     "apps.data_assets",
     "apps.scheduler",
+    "apps.performance",
 ]
 
 MIDDLEWARE = [
